@@ -803,7 +803,7 @@ function findExtensionPositions(
 }
 
 function findContainerPosition(nearPos: RoomPosition): RoomPosition | null {
-  // Find adjacent position that's not blocked
+  // Find adjacent position that's not blocked; allow replacing a road tile for efficient space usage
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       if (dx === 0 && dy === 0) continue;
@@ -813,7 +813,7 @@ function findContainerPosition(nearPos: RoomPosition): RoomPosition | null {
 
       if (x >= 1 && x <= 48 && y >= 1 && y <= 48) {
         const pos = new RoomPosition(x, y, nearPos.roomName);
-        if (isValidBuildPosition(pos)) {
+        if (isValidBuildPosition(pos) || isRoadOrRampartOnly(pos)) {
           return pos;
         }
       }
@@ -821,6 +821,14 @@ function findContainerPosition(nearPos: RoomPosition): RoomPosition | null {
   }
 
   return null;
+}
+
+function isRoadOrRampartOnly(pos: RoomPosition): boolean {
+  const structs = pos.lookFor(LOOK_STRUCTURES);
+  if (structs.length === 0) return false;
+  return structs.every(
+    (s) => s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_RAMPART
+  );
 }
 
 function findTowerPositions(

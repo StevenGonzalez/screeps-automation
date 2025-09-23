@@ -99,7 +99,21 @@ export function executeConstructionPlan(
 
     if (!dependenciesSatisfied(room, task)) continue;
     if (!withinRclLimits(room, task.type)) continue;
-    if (!isBuildable(room, task.pos, task.type)) continue;
+    if (!isBuildable(room, task.pos, task.type)) {
+      // Special case: placing a non-road structure on a road tile; remove the road then retry later
+      if (task.type !== STRUCTURE_ROAD) {
+        const structs = task.pos.lookFor(LOOK_STRUCTURES);
+        const road = structs.find((s) => s.structureType === STRUCTURE_ROAD);
+        if (road) {
+          const res = road.destroy();
+          if (res === OK) {
+            // Skip this tick; placement will be retried in subsequent ticks
+            continue;
+          }
+        }
+      }
+      continue;
+    }
     if (alreadyBuiltOrQueued(room, task.pos, task.type)) continue;
 
     const result = room.createConstructionSite(task.pos, task.type);
