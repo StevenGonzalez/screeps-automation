@@ -49,11 +49,9 @@ export function manageRoomSpawning(
     return;
   }
 
-  // Priority 4: Construction workers (if construction plan exists)
-  if (constructionPlan.priorityQueue?.length > 0) {
-    if (trySpawnConstructionCreeps(spawn, room, constructionPlan)) {
-      return;
-    }
+  // Priority 4: Construction workers (dynamic based on sites and economy)
+  if (trySpawnConstructionCreeps(spawn, room, constructionPlan, intel)) {
+    return;
   }
 }
 
@@ -202,25 +200,68 @@ function trySpawnEconomicCreeps(
 function trySpawnConstructionCreeps(
   spawn: StructureSpawn,
   room: Room,
-  constructionPlan: any
+  constructionPlan: any,
+  intel: any
 ): boolean {
-  const builders = room.find(FIND_MY_CREEPS, {
-    filter: (c) => c.memory.role === "builder",
-  });
+  const counts = getCurrentCreepCounts(room);
+  const rcl = room.controller?.level || 0;
+  const sites = room.find(FIND_CONSTRUCTION_SITES).length;
+  const plannedTasks =
+    (constructionPlan?.queue?.length || 0) +
+    ((constructionPlan?.priorities?.critical?.length || 0) +
+      (constructionPlan?.priorities?.important?.length || 0) +
+      (constructionPlan?.priorities?.normal?.length || 0));
 
-  // Only spawn more builders if we have active construction and few builders
-  if (builders.length < 2 && constructionPlan.priorityQueue.length > 0) {
+  if (sites === 0 && plannedTasks === 0) return false;
+
+  // Economy signals
+  const energyCap = room.energyCapacityAvailable || 300;
+  const energyAvail = room.energyAvailable || 0;
+  const stored =
+    intel?.economy?.energyStored ??
+    (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) || 0);
+  const energyRatio = Math.max(
+    0,
+    Math.min(1, energyAvail / Math.max(1, energyCap))
+  );
+
+  // Dynamic target builders based on construction volume and economy
+  let target = 1;
+  if (sites > 5 || plannedTasks > 10) target = 2;
+  if (sites > 20 || plannedTasks > 40) target = 3;
+
+  // Early-game and economy gating: keep lean if capacity is low or logistics not ready
+  if (energyCap < 400 || counts.harvester < 2 || counts.hauler < 1) {
+    target = Math.min(target, 1);
+  }
+  // If energy is currently very low and storage is empty, avoid spawning extra builders
+  if (energyRatio < 0.3 && stored < 5000) {
+    target = Math.min(target, 1);
+  }
+  // RCL-based cap
+  if (rcl <= 2) target = Math.min(target, 2);
+
+  const currentBuilders = counts.builder;
+  if (currentBuilders < target) {
     const body = getOptimalBody("builder", spawn.room.energyCapacityAvailable);
     const name = `builder_construction_${Game.time}`;
-
     const result = spawn.spawnCreep(body, name, {
       memory: { role: "builder", priority: "construction" },
     });
-
     if (result === OK) {
-      console.log(`🏗️ Spawning extra builder for construction`);
+      console.log(
+        `🏗️ Spawning builder (${
+          currentBuilders + 1
+        }/${target}) for ${sites} sites / ${plannedTasks} tasks`
+      );
       console.log(`🌟 ${CreepPersonality.getSpawnPhrase("builder")}`);
       return true;
+    } else if (result === ERR_NOT_ENOUGH_ENERGY) {
+      if (Game.time % 25 === 0) {
+        console.log(
+          `💸 Not enough energy to add builder (${currentBuilders}/${target})`
+        );
+      }
     }
   }
 
