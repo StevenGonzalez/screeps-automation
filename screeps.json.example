@@ -1,0 +1,6 @@
+{
+  "email": "your-email@example.com",
+  "token": "your-screeps-token-here",
+  "branch": "default",
+  "ptr": false
+}

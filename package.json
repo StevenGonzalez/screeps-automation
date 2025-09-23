@@ -2,17 +2,24 @@
   "name": "screeps-automation",
   "version": "1.0.0",
   "description": "A Screeps project focused on automating gameplay with high-quality code and strategies.",
-  "main": "src/main.ts",
+  "main": "dist/main.js",
   "scripts": {
-    "start": "tsc && node dist/main.js",
-    "deploy": "screeps deploy"
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "deploy": "yarn build && rollup -c",
+    "deploy:sim": "yarn build && rollup -c --environment SERVER:sim",
+    "start": "yarn build && node dist/main.js"
   },
   "dependencies": {
-    "screeps-api": "^1.0.0",
-    "typescript": "^4.0.0"
+    "screeps-api": "^1.0.0"
   },
   "devDependencies": {
-    "@types/screeps": "^3.3.0"
+    "@types/screeps": "^3.3.8",
+    "typescript": "^4.9.5",
+    "rollup": "^2.79.1",
+    "rollup-plugin-clear": "^2.0.7",
+    "rollup-plugin-screeps": "^1.0.1",
+    "rollup-plugin-typescript2": "^0.34.1"
   },
   "repository": {
     "type": "git",
