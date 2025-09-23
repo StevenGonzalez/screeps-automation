@@ -33,7 +33,7 @@ declare global {
  * Creep Personality System - Adds character and voice to your creeps!
  */
 export class CreepPersonality {
-  private static readonly SPEECH_CHANCE = 0.4; // 40% chance to speak on actions
+  private static readonly SPEECH_CHANCE = 0.15; // 15% chance to speak on actions
 
   // Personality phrases by action type
   private static readonly PHRASES = {
@@ -202,9 +202,35 @@ export class CreepPersonality {
     const phrases = this.PHRASES[actionType] || this.PHRASES.idle;
     const phrase = phrases[Math.floor(Math.random() * phrases.length)];
 
-    // Add personality prefix occasionally
+    // Add personality prefix occasionally, but avoid duplicating emojis
     const usePrefix = Math.random() < 0.3;
-    const message = usePrefix ? `${personality.prefix} ${phrase}` : phrase;
+    let message = phrase;
+
+    if (usePrefix) {
+      const alreadyStartsWithPrefix = this.startsWithPrefixEmoji(
+        phrase,
+        personality.prefix
+      );
+      const startsWithAnyEmoji = this.startsWithEmojiLike(phrase);
+
+      if (!alreadyStartsWithPrefix && !startsWithAnyEmoji) {
+        // Try with space, then without, then fallback to phrase
+        const spaced = `${personality.prefix} ${phrase}`;
+        if (this.visibleLength(spaced) <= 10) {
+          message = spaced;
+        } else {
+          const tight = `${personality.prefix}${phrase}`;
+          if (this.visibleLength(tight) <= 10) {
+            message = tight;
+          } else {
+            message = phrase; // prefix would overflow; keep phrase only
+          }
+        }
+      }
+    }
+
+    // Final guard: hard-cap to 10 visible units (code points) to prevent overflow
+    message = this.fitToSayLimit(message, 10);
 
     creep.say(message, true); // true = show to other players
 
@@ -232,7 +258,7 @@ export class CreepPersonality {
     } else if (creep.store.getUsedCapacity() === 0 && role !== "upgrader") {
       this.speak(creep, "frustrated", false);
     } else if (creep.fatigue > 0) {
-      creep.say("😴 Tired...", true);
+      creep.say(this.fitToSayLimit("😴 Tired...", 10), true);
     } else {
       // Random idle chatter
       if (Math.random() < 0.05) {
@@ -265,7 +291,8 @@ export class CreepPersonality {
       "🏆 Victory!",
     ];
     const phrases = roleSpecificPhrases[role] || genericPhrases;
-    return phrases[Math.floor(Math.random() * phrases.length)];
+    const pick = phrases[Math.floor(Math.random() * phrases.length)];
+    return this.fitToSayLimit(pick, 10);
   }
 
   /**
@@ -283,7 +310,7 @@ export class CreepPersonality {
 
     const message =
       celebrations[Math.floor(Math.random() * celebrations.length)];
-    creep.say(message, true);
+    creep.say(this.fitToSayLimit(message, 10), true);
   }
 
   /**
@@ -375,5 +402,31 @@ export class CreepPersonality {
     const globalLevel =
       Memory.personality?.globalChattiness || this.SPEECH_CHANCE;
     return globalLevel;
+  }
+
+  // --- Helpers to respect Screeps' 10-character say limit safely ---
+  private static visibleLength(str: string): number {
+    // Count Unicode code points (avoids splitting surrogate pairs)
+    return Array.from(str).length;
+  }
+
+  private static fitToSayLimit(str: string, max = 10): string {
+    const arr = Array.from(str);
+    if (arr.length <= max) return str;
+    return arr.slice(0, max).join("");
+  }
+
+  private static startsWithPrefixEmoji(text: string, prefix: string): boolean {
+    const t = text.replace(/^\s+/, "");
+    return t.startsWith(prefix) || t.startsWith(prefix + " ");
+  }
+
+  private static startsWithEmojiLike(text: string): boolean {
+    const t = text.replace(/^\s+/, "");
+    if (!t) return false;
+    const cp = t.codePointAt(0);
+    if (cp === undefined) return false;
+    // Heuristic: most pictographs/emojis are > 0x2600; also include some symbols
+    return cp >= 0x2600;
   }
 }

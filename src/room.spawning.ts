@@ -88,7 +88,9 @@ function trySpawnDefenseCreeps(
         console.log(`🌟 ${CreepPersonality.getSpawnPhrase(order.role)}`);
         return true;
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
-        console.log(`💸 Not enough energy for defense ${order.role}`);
+        if (Game.time % 25 === 0) {
+          console.log(`💸 Not enough energy for defense ${order.role}`);
+        }
       }
     }
   }
@@ -129,6 +131,14 @@ function trySpawnEconomicCreeps(
   const current = getCurrentCreepCounts(room);
 
   // Spawn queue in priority order
+  const hasConstruction = room.find(FIND_CONSTRUCTION_SITES).length > 0;
+  const hasContainersOrStorage =
+    room.find(FIND_STRUCTURES, {
+      filter: (s) =>
+        s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_STORAGE,
+    }).length > 0;
+
   const spawnQueue = [
     {
       role: "harvester",
@@ -137,7 +147,8 @@ function trySpawnEconomicCreeps(
     },
     {
       role: "hauler",
-      needed: composition.haulers || 1,
+      // Only spawn haulers when we have something to haul
+      needed: hasContainersOrStorage ? composition.haulers || 1 : 0,
       current: current.hauler,
     },
     {
@@ -147,7 +158,8 @@ function trySpawnEconomicCreeps(
     },
     {
       role: "builder",
-      needed: composition.builders || 1,
+      // Only spawn builders when there are construction sites
+      needed: hasConstruction ? composition.builders || 1 : 0,
       current: current.builder,
     },
   ];
@@ -171,7 +183,9 @@ function trySpawnEconomicCreeps(
         console.log(`🌟 ${CreepPersonality.getSpawnPhrase(item.role)}`);
         return true;
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
-        console.log(`💸 Not enough energy for ${item.role}`);
+        if (Game.time % 25 === 0) {
+          console.log(`💸 Not enough energy for ${item.role}`);
+        }
       }
 
       // Only try to spawn one creep per tick

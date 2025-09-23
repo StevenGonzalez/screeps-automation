@@ -270,11 +270,23 @@ function runHaulerRole(creep: Creep, intel: any): void {
       filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50,
     });
 
-    let target = null;
+    // Also look for tombstones/ruins with energy
+    const tombstones = creep.room.find(FIND_TOMBSTONES, {
+      filter: (t) => t.store.getUsedCapacity(RESOURCE_ENERGY) > 50,
+    });
+    const ruins = creep.room.find(FIND_RUINS, {
+      filter: (r) => r.store.getUsedCapacity(RESOURCE_ENERGY) > 50,
+    });
+
+    let target: any = null;
     if (energySources.length > 0) {
       target = creep.pos.findClosestByPath(energySources);
     } else if (droppedEnergy.length > 0) {
       target = creep.pos.findClosestByPath(droppedEnergy);
+    } else if (tombstones.length > 0) {
+      target = creep.pos.findClosestByPath(tombstones);
+    } else if (ruins.length > 0) {
+      target = creep.pos.findClosestByPath(ruins);
     }
 
     if (target) {
@@ -285,6 +297,14 @@ function runHaulerRole(creep: Creep, intel: any): void {
       } else {
         if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           creep.moveTo(target);
+        }
+      }
+    } else {
+      // Standby near the nearest active source to catch drops
+      const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+      if (source) {
+        if (creep.pos.getRangeTo(source) > 3) {
+          creep.moveTo(source, { visualizePathStyle: { stroke: "#ffaa00" } });
         }
       }
     }
@@ -398,6 +418,22 @@ function runBuilderRole(creep: Creep, constructionPlan: any, intel: any): void {
         creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE
       ) {
         creep.moveTo(target);
+      }
+    } else {
+      // Fallbacks: pick up drops, then harvest directly
+      const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
+        filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50,
+      });
+      if (dropped.length > 0) {
+        const target = creep.pos.findClosestByPath(dropped);
+        if (target && creep.pickup(target) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(target);
+        }
+      } else {
+        const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+        if (source && creep.harvest(source) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(source, { visualizePathStyle: { stroke: "#ffaa00" } });
+        }
       }
     }
   } else {
