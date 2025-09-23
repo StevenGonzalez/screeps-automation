@@ -14,6 +14,7 @@ import { planDefense } from "./room.defense";
 import { manageRoomSpawning } from "./room.spawning";
 import { manageRoomStructures } from "./room.structures";
 import { getRoomMemory } from "./global.memory";
+import { CreepPersonality } from "./creep.personality";
 
 /**
  * Process a single room through all automation systems
@@ -131,6 +132,11 @@ function manageRoomCreeps(room: Room, plans: any, intel: any): void {
     const role = creep.memory.role || "worker";
 
     try {
+      // Add contextual personality every 20-50 ticks randomly
+      if (Game.time % (20 + Math.floor(Math.random() * 30)) === 0) {
+        CreepPersonality.contextualSpeak(creep);
+      }
+
       // Enhanced role-based automation
       switch (role) {
         case "harvester":
@@ -185,13 +191,16 @@ function runHarvesterRole(creep: Creep, intel: any): void {
 
     const source = Game.getObjectById(creep.memory.sourceId) as Source | null;
     if (source) {
-      if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
+      const harvestResult = creep.harvest(source);
+      if (harvestResult === ERR_NOT_IN_RANGE) {
         creep.moveTo(source, { visualizePathStyle: { stroke: "#ffaa00" } });
+      } else if (harvestResult === OK) {
+        CreepPersonality.speak(creep, "harvest");
       }
     }
   } else {
     // Deposit energy to nearby container or spawn/extension
-    const targets = creep.pos.findInRange(FIND_STRUCTURES, 3, {
+    let targets = creep.pos.findInRange(FIND_STRUCTURES, 3, {
       filter: (s) => {
         return (
           (s.structureType === STRUCTURE_CONTAINER ||
@@ -202,8 +211,41 @@ function runHarvesterRole(creep: Creep, intel: any): void {
       },
     });
 
+    // If no targets nearby, find any valid target in the room
+    if (targets.length === 0) {
+      targets = creep.room.find(FIND_MY_STRUCTURES, {
+        filter: (s) => {
+          return (
+            (s.structureType === STRUCTURE_SPAWN ||
+              s.structureType === STRUCTURE_EXTENSION ||
+              s.structureType === STRUCTURE_TOWER) &&
+            s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+          );
+        },
+      });
+
+      // If still no targets, try storage or containers
+      if (targets.length === 0) {
+        targets = creep.room.find(FIND_STRUCTURES, {
+          filter: (s) => {
+            return (
+              (s.structureType === STRUCTURE_CONTAINER ||
+                s.structureType === STRUCTURE_STORAGE) &&
+              s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+            );
+          },
+        });
+      }
+    }
+
     if (targets.length > 0) {
-      creep.transfer(targets[0], RESOURCE_ENERGY);
+      const target = targets[0];
+      const transferResult = creep.transfer(target, RESOURCE_ENERGY);
+      if (transferResult === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: "#ffffff" } });
+      } else if (transferResult === OK) {
+        CreepPersonality.speak(creep, "transfer");
+      }
     }
   }
 }
@@ -262,8 +304,11 @@ function runHaulerRole(creep: Creep, intel: any): void {
     if (targets.length > 0) {
       const target = creep.pos.findClosestByPath(targets);
       if (target) {
-        if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        const transferResult = creep.transfer(target, RESOURCE_ENERGY);
+        if (transferResult === ERR_NOT_IN_RANGE) {
           creep.moveTo(target, { visualizePathStyle: { stroke: "#ffffff" } });
+        } else if (transferResult === OK) {
+          CreepPersonality.speak(creep, "transfer");
         }
       }
     }
@@ -308,13 +353,24 @@ function runUpgraderRole(creep: Creep, intel: any): void {
       ) {
         creep.moveTo(target);
       }
+    } else {
+      // Fallback: Harvest from the nearest source if no stored energy
+      const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+      if (source) {
+        if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(source, { visualizePathStyle: { stroke: "#ffaa00" } });
+        }
+      }
     }
   } else {
     // Upgrade the controller
-    if (creep.upgradeController(creep.room.controller!) === ERR_NOT_IN_RANGE) {
+    const upgradeResult = creep.upgradeController(creep.room.controller!);
+    if (upgradeResult === ERR_NOT_IN_RANGE) {
       creep.moveTo(creep.room.controller!, {
         visualizePathStyle: { stroke: "#ffffff" },
       });
+    } else if (upgradeResult === OK) {
+      CreepPersonality.speak(creep, "upgrade");
     }
   }
 }
