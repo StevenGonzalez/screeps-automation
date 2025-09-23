@@ -1272,30 +1272,31 @@ function generateCoreConnectorTasks(
   const spawns = room.find(FIND_MY_SPAWNS);
   for (const s of spawns) {
     // Direct straight connector to anchor along x then y
-    const path = s.pos.findPathTo(anchor, {
-      ignoreCreeps: true,
-      ignoreRoads: false,
-    });
+    const path = getCachedPath(room, `connector:spawn:${s.id}`, s.pos, anchor);
     for (let i = 0; i < Math.min(4, path.length); i++) {
       const st = path[i];
       connectors.push(new RoomPosition(st.x, st.y, room.name));
     }
   }
   if (core.storage) {
-    const path = core.storage.findPathTo(anchor, {
-      ignoreCreeps: true,
-      ignoreRoads: false,
-    });
+    const path = getCachedPath(
+      room,
+      `connector:storage:${core.storage.x}:${core.storage.y}`,
+      core.storage,
+      anchor
+    );
     for (let i = 0; i < Math.min(3, path.length); i++) {
       const st = path[i];
       connectors.push(new RoomPosition(st.x, st.y, room.name));
     }
   }
   if (core.terminal) {
-    const path = core.terminal.findPathTo(anchor, {
-      ignoreCreeps: true,
-      ignoreRoads: false,
-    });
+    const path = getCachedPath(
+      room,
+      `connector:terminal:${core.terminal.x}:${core.terminal.y}`,
+      core.terminal,
+      anchor
+    );
     for (let i = 0; i < Math.min(3, path.length); i++) {
       const st = path[i];
       connectors.push(new RoomPosition(st.x, st.y, room.name));
@@ -1329,6 +1330,10 @@ function generateHubWideningTasks(
   const tasks: ConstructionTask[] = [];
   const room = Game.rooms[intel.basic.name];
   if (!room) return tasks;
+  // Gate by early RCL/economy so we don't overbuild cosmetic roads too soon
+  if (intel.basic.rcl < 3 || (intel.economy?.energyCapacity || 0) < 550) {
+    return tasks;
+  }
   const widenOffsets: Array<{ x: number; y: number }> = [];
   for (let d = -2; d <= 2; d++) {
     widenOffsets.push({ x: 1, y: d });
@@ -1371,6 +1376,10 @@ function generateCoreLoopTasks(
   const tasks: ConstructionTask[] = [];
   const room = Game.rooms[intel.basic.name];
   if (!room) return tasks;
+  // Gate by RCL/economy to avoid overbuilding too early
+  if (intel.basic.rcl < 3 || (intel.economy?.energyCapacity || 0) < 550) {
+    return tasks;
+  }
   const r = 3;
   for (let dx = -r; dx <= r; dx++) {
     for (let dy = -r; dy <= r; dy++) {
@@ -1394,6 +1403,51 @@ function generateCoreLoopTasks(
         });
       }
     }
+  }
+  return tasks;
+}
+
+// Place labs in a compact cluster near the core, RCL-gated and dedup-safe
+function generateLabTasksNearCore(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const needed =
+    getLabLimit(intel.basic.rcl) - (intel.infrastructure.structures.lab || 0);
+  if (needed <= 0) return tasks;
+
+  // 10-lab cluster offset to top-right quadrant from anchor
+  const labOffsets: Array<{ x: number; y: number }> = [
+    { x: -1, y: -1 },
+    { x: 0, y: -1 },
+    { x: 1, y: -1 },
+    { x: -1, y: 0 },
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: -1, y: 1 },
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 0 },
+  ].map((o) => ({ x: o.x + 4, y: o.y - 4 }));
+
+  for (let i = 0; i < Math.min(needed, labOffsets.length); i++) {
+    const x = anchor.x + labOffsets[i].x;
+    const y = anchor.y + labOffsets[i].y;
+    if (!inBounds(x, y)) continue;
+    const pos = new RoomPosition(x, y, room.name);
+    if (!isValidBuildPosition(pos)) continue;
+    tasks.push({
+      type: STRUCTURE_LAB,
+      pos,
+      priority: 54 - i,
+      reason: "Clustered lab for boosts & reactions",
+      estimatedCost: 50000,
+      dependencies: ["terminal"],
+      urgent: false,
+    });
   }
   return tasks;
 }
@@ -1500,7 +1554,23 @@ function getCachedPath(
       steps.push({ x: p.x, y: p.y, dx, dy, direction } as PathStep);
       last = p;
     }
-    store[key] = { time: now, anchorKey, path: steps.map((s) => [s.x, s.y]) };
+    store[key] = {
+      time: now,
+      anchorKey,
+      path: steps.map((s: PathStep) => [s.x, s.y]),
+    };
+    // Prune path cache to avoid unbounded growth
+    try {
+      const entries = Object.keys(store);
+      const MAX_ENTRIES = 80;
+      if (entries.length > MAX_ENTRIES) {
+        entries
+          .map((k) => ({ k, t: store[k]?.time || 0 }))
+          .sort((a, b) => a.t - b.t)
+          .slice(0, entries.length - MAX_ENTRIES)
+          .forEach((e) => delete store[e.k]);
+      }
+    } catch {}
     return steps;
   }
   const arr: Array<[number, number]> = rec.path;
@@ -1515,48 +1585,7 @@ function getCachedPath(
   return steps;
 }
 
-function generateLabTasksNearCore(
-  intel: RoomIntelligence,
-  anchor: RoomPosition
-): ConstructionTask[] {
-  const tasks: ConstructionTask[] = [];
-  const room = Game.rooms[intel.basic.name];
-  if (!room) return tasks;
-  const needed =
-    getLabLimit(intel.basic.rcl) - intel.infrastructure.structures.lab;
-  if (needed <= 0) return tasks;
-  const labOffsets: Array<{ x: number; y: number }> = [
-    // 10-lab cluster around anchor top-right quadrant
-    { x: -1, y: -1 },
-    { x: 0, y: -1 },
-    { x: 1, y: -1 },
-    { x: -1, y: 0 },
-    { x: 0, y: 0 },
-    { x: 1, y: 0 },
-    { x: -1, y: 1 },
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 2, y: 0 },
-  ].map((o) => ({ x: o.x + 4, y: o.y - 4 }));
-
-  for (let i = 0; i < Math.min(needed, labOffsets.length); i++) {
-    const x = anchor.x + labOffsets[i].x;
-    const y = anchor.y + labOffsets[i].y;
-    if (!inBounds(x, y)) continue;
-    const pos = new RoomPosition(x, y, room.name);
-    if (!isValidBuildPosition(pos)) continue;
-    tasks.push({
-      type: STRUCTURE_LAB,
-      pos,
-      priority: 54 - i,
-      reason: "Clustered lab for boosts & reactions",
-      estimatedCost: 50000,
-      dependencies: ["terminal"],
-      urgent: false,
-    });
-  }
-  return tasks;
-}
+// (Note) Valid implementation of generateLabTasksNearCore exists earlier in the file.
 
 function getFactoryNearCore(anchor: RoomPosition): RoomPosition {
   const x = anchor.x + 2;
