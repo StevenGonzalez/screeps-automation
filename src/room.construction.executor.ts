@@ -32,9 +32,42 @@ export function executeConstructionPlan(
     ...(plan.priorities?.normal || []),
   ];
 
+  // Pre-scan: how many non-road tasks are actually placeable right now?
+  let nonRoadPlaceableRemaining = 0;
+  for (const t of prioritized) {
+    if (t.pos.roomName !== room.name) continue;
+    if (t.type === STRUCTURE_ROAD) continue;
+    if (
+      dependenciesSatisfied(room, t) &&
+      withinRclLimits(room, t.type) &&
+      isBuildable(room, t.pos, t.type) &&
+      !alreadyBuiltOrQueued(room, t.pos, t.type)
+    ) {
+      nonRoadPlaceableRemaining++;
+    }
+  }
+
+  // Compute how many road placements we allow this tick; focus on other structures first
+  let roadQuota = computeRoadQuota(
+    room,
+    intel,
+    budget,
+    nonRoadPlaceableRemaining
+  );
+  let roadsUsed = 0;
+
   for (const task of prioritized) {
     if (budget <= 0) break;
     if (task.pos.roomName !== room.name) continue;
+
+    // If it's a road but we still have non-road tasks we can place and we've hit road quota, skip
+    if (
+      task.type === STRUCTURE_ROAD &&
+      nonRoadPlaceableRemaining > 0 &&
+      roadsUsed >= roadQuota
+    ) {
+      continue;
+    }
 
     if (!dependenciesSatisfied(room, task)) continue;
     if (!withinRclLimits(room, task.type)) continue;
@@ -44,6 +77,11 @@ export function executeConstructionPlan(
     const result = room.createConstructionSite(task.pos, task.type);
     if (result === OK) {
       budget--;
+      if (task.type === STRUCTURE_ROAD) {
+        roadsUsed++;
+      } else if (nonRoadPlaceableRemaining > 0) {
+        nonRoadPlaceableRemaining--;
+      }
       // Optional: log strategic placement
       console.log(
         `📐 ${room.name}: Placed ${task.type} @ ${task.pos.x},${task.pos.y} (${task.reason})`
@@ -53,6 +91,39 @@ export function executeConstructionPlan(
       continue;
     }
   }
+}
+
+function computeRoadQuota(
+  room: Room,
+  intel: any,
+  budget: number,
+  nonRoadPlaceableRemaining: number
+): number {
+  // If there are no non-road tasks, roads can take full budget
+  if (nonRoadPlaceableRemaining <= 0) return budget;
+
+  const energyAvail =
+    intel?.economy?.energyAvailable ?? room.energyAvailable ?? 0;
+  const energyCap =
+    intel?.economy?.energyCapacity ?? room.energyCapacityAvailable ?? 300;
+  const stored =
+    intel?.economy?.energyStored ??
+    (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) || 0);
+  const energyRatio = Math.max(
+    0,
+    Math.min(1, energyAvail / Math.max(1, energyCap))
+  );
+  const storedFactor = Math.max(0.5, Math.min(1.5, stored / 50000));
+
+  // Base quota: small fraction of budget
+  let quota = Math.floor(budget * 0.25);
+  quota = Math.max(0, Math.min(quota, 2));
+
+  // If economy is tight, halt road placements to focus on structures
+  if (energyRatio < 0.5 && storedFactor < 1) return 0;
+
+  // Ensure at least 1 road occasionally if we have budget
+  return Math.max(1, quota);
 }
 
 function computeRoomSiteBudget(

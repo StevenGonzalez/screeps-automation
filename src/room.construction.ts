@@ -95,7 +95,7 @@ function generateConstructionTasks(
 
   // 1) Roads: lay core first for pathing stability
   const coreRoadTasks = core.roads
-    .filter((p) => isValidBuildPosition(p) && !isReserved(p))
+    .filter((p) => isValidBuildPosition(p))
     .map<ConstructionTask>((pos, i) => ({
       type: STRUCTURE_ROAD,
       pos,
@@ -120,7 +120,11 @@ function generateConstructionTasks(
   tasks.push(...generateAdditionalSpawnTasks(intel, anchor));
 
   // 2) Storage/Terminal (RCL gating handled later by executor)
-  if (rcl >= 4 && infrastructure.structures.storage === 0 && core.storage) {
+  if (
+    rcl >= 4 &&
+    (infrastructure.structures.storage || 0) === 0 &&
+    core.storage
+  ) {
     tasks.push({
       type: STRUCTURE_STORAGE,
       pos: core.storage,
@@ -131,7 +135,11 @@ function generateConstructionTasks(
       urgent: intel.economy.energyStored > 10000,
     });
   }
-  if (rcl >= 6 && infrastructure.structures.terminal === 0 && core.terminal) {
+  if (
+    rcl >= 6 &&
+    (infrastructure.structures.terminal || 0) === 0 &&
+    core.terminal
+  ) {
     tasks.push({
       type: STRUCTURE_TERMINAL,
       pos: core.terminal,
@@ -144,7 +152,8 @@ function generateConstructionTasks(
   }
 
   // 3) Towers: strategic around core
-  const neededTowers = getTowerLimit(rcl) - infrastructure.structures.tower;
+  const neededTowers =
+    getTowerLimit(rcl) - (infrastructure.structures.tower || 0);
   if (neededTowers > 0) {
     const towerSpots = core.towerSlots.filter(isValidBuildPosition);
     for (let i = 0; i < Math.min(neededTowers, towerSpots.length); i++) {
@@ -174,7 +183,7 @@ function generateConstructionTasks(
 
   // 6) Extensions using compact rings around core, skipping reserved tiles
   const extensionNeed =
-    getExtensionLimit(rcl) - infrastructure.structures.extension;
+    getExtensionLimit(rcl) - (infrastructure.structures.extension || 0);
   if (extensionNeed > 0) {
     const extensionPositions = findExtensionRingPositions(
       anchor,
@@ -189,7 +198,7 @@ function generateConstructionTasks(
         reason: "Compact ring extension block",
         estimatedCost: 3000,
         dependencies: [],
-        urgent: intel.economy.energyCapacity < 800,
+        urgent: rcl <= 2 || intel.economy.energyCapacity < 800,
       });
     });
   }
@@ -206,7 +215,7 @@ function generateConstructionTasks(
     // Extractor & mineral container for mid-game economy
     tasks.push(...generateExtractorTasks(intel));
   }
-  if (rcl >= 7 && infrastructure.structures.factory === 0) {
+  if (rcl >= 7 && (infrastructure.structures.factory || 0) === 0) {
     const pos = getFactoryNearCore(anchor);
     tasks.push({
       type: STRUCTURE_FACTORY,
@@ -218,7 +227,7 @@ function generateConstructionTasks(
       urgent: false,
     });
   }
-  if (rcl >= 8 && infrastructure.structures.powerSpawn === 0) {
+  if (rcl >= 8 && (infrastructure.structures.powerSpawn || 0) === 0) {
     const pos = getPowerSpawnNearCore(anchor);
     tasks.push({
       type: STRUCTURE_POWER_SPAWN,
@@ -452,7 +461,7 @@ function generateStorageTask(intel: RoomIntelligence): ConstructionTask {
 function generateLinkTasks(intel: RoomIntelligence): ConstructionTask[] {
   const tasks: ConstructionTask[] = [];
   const linkLimit = getLinkLimit(intel.basic.rcl);
-  const currentLinks = intel.infrastructure.structures.link;
+  const currentLinks = intel.infrastructure.structures.link || 0;
 
   if (currentLinks >= linkLimit) return tasks;
 
@@ -519,7 +528,7 @@ function generateTerminalTask(intel: RoomIntelligence): ConstructionTask {
 function generateLabTasks(intel: RoomIntelligence): ConstructionTask[] {
   const tasks: ConstructionTask[] = [];
   const labLimit = getLabLimit(intel.basic.rcl);
-  const currentLabs = intel.infrastructure.structures.lab;
+  const currentLabs = intel.infrastructure.structures.lab || 0;
 
   if (currentLabs >= labLimit) return tasks;
 
