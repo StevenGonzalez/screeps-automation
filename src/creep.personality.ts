@@ -59,7 +59,7 @@ export class CreepPersonality {
     ],
     repair: [
       "🔧 Fixin'",
-      "� Good!",
+      "✅ Good!",
       "💊 Heal",
       "🔨 Patching",
       "⚡ Restore",
@@ -273,11 +273,11 @@ export class CreepPersonality {
    */
   static getSpawnPhrase(role: string): string {
     const roleSpecificPhrases: { [key: string]: string[] } = {
-      harvester: ["⛏️ Harvest!", "💎 Mine!", "🌾 Gather!"],
-      hauler: ["📦 Move!", "🚚 Transport", "📋 Logistics"],
+      harvester: ["⛏️ Harvest", "💎 Mine!", "🌾 Gather!"],
+      hauler: ["📦 Move!", "🚚 Deliver", "📋 Cargo!"],
       upgrader: ["🔧 Upgrade!", "⚡ Boost!", "🆙 Lvl up!"],
-      builder: ["🏗️ Build!", "🔨 Construct", "🏠 Create"],
-      defender: ["⚔️ Guard!", "🛡️ Protect!", "👮 Secure!"],
+      builder: ["🏗️ Build!", "🔨 Raise!", "🏠 Create"],
+      defender: ["⚔️ Guard!", "🛡️ Protect", "👮 Secure!"],
     };
 
     const genericPhrases = [
@@ -286,7 +286,7 @@ export class CreepPersonality {
       "🚀 Mission!",
       "💪 Work!",
       "🎯 On it!",
-      "🔥 Fired up!",
+      "🔥 Amped!",
       "✨ Eager!",
       "🏆 Victory!",
     ];
