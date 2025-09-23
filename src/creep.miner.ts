@@ -97,7 +97,9 @@ function tryAssignUniqueSource(creep: Creep): void {
   }
 }
 
-function getMiningMemory(roomName: string): { assignments: { [sourceId: string]: string } } {
+function getMiningMemory(roomName: string): {
+  assignments: { [sourceId: string]: string };
+} {
   if (!Memory.rooms) Memory.rooms = {} as any;
   if (!Memory.rooms[roomName]) (Memory.rooms as any)[roomName] = {};
   const r = (Memory.rooms as any)[roomName];
