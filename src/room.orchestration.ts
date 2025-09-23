@@ -112,7 +112,7 @@ function executeRoomPlans(room: Room, plans: any, intel: any): void {
   );
 
   // 2. STRUCTURE AUTOMATION - Defensive actions
-  manageRoomStructures(room, plans.defense, plans.construction, plans.economic);
+  manageRoomStructures(room, plans.defense, plans.economic);
 
   // 3. CREEP MANAGEMENT - Role-based automation
   manageRoomCreeps(room, plans, intel);
