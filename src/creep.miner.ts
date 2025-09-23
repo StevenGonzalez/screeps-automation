@@ -8,15 +8,19 @@ import { CreepPersonality } from "./creep.personality";
  * - Harvests until death; does not withdraw/transfer.
  */
 export function runMiner(creep: Creep): void {
-  // Assign source if needed
+  // Assign source if needed, ensuring unique assignments via room memory
   if (!creep.memory.sourceId) {
-    const sources = creep.room.find(FIND_SOURCES);
-    // Prefer sources with a nearby container or construction site for one
-    const choose =
-      sources.find(
-        (s) => hasContainerNear(s.pos) || hasContainerSiteNear(s.pos)
-      ) || sources[0];
-    if (choose) creep.memory.sourceId = choose.id;
+    tryAssignUniqueSource(creep);
+  } else {
+    const mem = getMiningMemory(creep.room.name);
+    // Clean up stale locks
+    for (const sid in mem.assignments) {
+      const name = mem.assignments[sid];
+      if (!Game.creeps[name]) delete mem.assignments[sid];
+    }
+    if (mem.assignments[creep.memory.sourceId] !== creep.name) {
+      tryAssignUniqueSource(creep);
+    }
   }
 
   const source = creep.memory.sourceId
@@ -45,6 +49,61 @@ export function runMiner(creep: Creep): void {
     // Idle but stay put
     CreepPersonality.speak(creep, "idle");
   }
+}
+
+function tryAssignUniqueSource(creep: Creep): void {
+  const room = creep.room;
+  const sources = room.find(FIND_SOURCES);
+  const mem = getMiningMemory(room.name);
+  // Clean up stale
+  for (const sid in mem.assignments) {
+    const name = mem.assignments[sid];
+    if (!Game.creeps[name]) delete mem.assignments[sid];
+  }
+
+  // Prefer eligible, unassigned sources
+  for (const s of sources) {
+    const eligible = hasContainerNear(s.pos) || hasContainerSiteNear(s.pos);
+    if (!eligible) continue;
+    if (!mem.assignments[s.id]) {
+      mem.assignments[s.id] = creep.name;
+      creep.memory.sourceId = s.id;
+      return;
+    }
+  }
+  // Fallback to any unassigned source
+  for (const s of sources) {
+    if (!mem.assignments[s.id]) {
+      mem.assignments[s.id] = creep.name;
+      creep.memory.sourceId = s.id;
+      return;
+    }
+  }
+  // Last resort: pick the least-contested source
+  let best: Source | null = null;
+  let bestCount = Infinity;
+  for (const s of sources) {
+    const count = room.find(FIND_MY_CREEPS, {
+      filter: (c) => c.memory.role === "miner" && c.memory.sourceId === s.id,
+    }).length;
+    if (count < bestCount) {
+      best = s;
+      bestCount = count;
+    }
+  }
+  if (best) {
+    mem.assignments[best.id] = creep.name;
+    creep.memory.sourceId = best.id;
+  }
+}
+
+function getMiningMemory(roomName: string): { assignments: { [sourceId: string]: string } } {
+  if (!Memory.rooms) Memory.rooms = {} as any;
+  if (!Memory.rooms[roomName]) (Memory.rooms as any)[roomName] = {};
+  const r = (Memory.rooms as any)[roomName];
+  if (!r.mining) r.mining = {};
+  if (!r.mining.assignments) r.mining.assignments = {};
+  return r.mining as { assignments: { [sourceId: string]: string } };
 }
 
 function hasContainerNear(pos: RoomPosition): boolean {
