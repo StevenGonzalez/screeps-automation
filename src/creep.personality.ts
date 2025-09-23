@@ -243,10 +243,38 @@ export class CreepPersonality {
   }
 
   /**
-   * Get a motivational phrase for spawning
+   * Get a motivational phrase for spawning based on role
    */
   static getSpawnPhrase(role: string): string {
-    const spawnPhrases = [
+    const roleSpecificPhrases: { [key: string]: string[] } = {
+      harvester: [
+        "⛏️ Ready to harvest!",
+        "💎 Let's mine!",
+        "🌾 Time to gather!",
+      ],
+      hauler: [
+        "📦 Moving supplies!",
+        "🚚 Transport ready!",
+        "📋 Logistics online!",
+      ],
+      upgrader: [
+        "🔧 Upgrading systems!",
+        "⚡ Power boosting!",
+        "🆙 Level up time!",
+      ],
+      builder: [
+        "🏗️ Construction ready!",
+        "🔨 Building dreams!",
+        "🏠 Creating homes!",
+      ],
+      defender: [
+        "⚔️ Guardian mode!",
+        "🛡️ Protection active!",
+        "👮 Security online!",
+      ],
+    };
+
+    const genericPhrases = [
       "🌟 Born to work!",
       "⚡ Ready to serve!",
       "🚀 Let's do this!",
@@ -257,7 +285,8 @@ export class CreepPersonality {
       "🏆 Victory awaits!",
     ];
 
-    return spawnPhrases[Math.floor(Math.random() * spawnPhrases.length)];
+    const phrases = roleSpecificPhrases[role] || genericPhrases;
+    return phrases[Math.floor(Math.random() * phrases.length)];
   }
 
   /**
