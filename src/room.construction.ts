@@ -827,7 +827,9 @@ function isRoadOrRampartOnly(pos: RoomPosition): boolean {
   const structs = pos.lookFor(LOOK_STRUCTURES);
   if (structs.length === 0) return false;
   return structs.every(
-    (s) => s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_RAMPART
+    (s) =>
+      s.structureType === STRUCTURE_ROAD ||
+      s.structureType === STRUCTURE_RAMPART
   );
 }
 
