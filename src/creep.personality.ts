@@ -33,7 +33,7 @@ declare global {
  * Creep Personality System - Adds character and voice to your creeps!
  */
 export class CreepPersonality {
-  private static readonly SPEECH_CHANCE = 0.15; // 15% chance to speak on actions
+  private static readonly SPEECH_CHANCE = 0.05; // 5% chance to speak on actions
 
   // Personality phrases by action type
   private static readonly PHRASES = {
@@ -49,17 +49,17 @@ export class CreepPersonality {
     ],
     build: [
       "🔨 Buildin'",
-      "🏗️ Construct",
+      "🏗 Build",
       "🎪 Magic!",
       "🔧 Crafting",
-      "⚒️ Hammer",
+      "🔨 Hammer",
       "🎨 Art!",
       "🏠 Home",
       "⭐ Master!",
     ],
     repair: [
       "🔧 Fixin'",
-      "🛠️ Good new",
+      "� Good!",
       "💊 Heal",
       "🔨 Patching",
       "⚡ Restore",
@@ -118,7 +118,7 @@ export class CreepPersonality {
       "💫 Recover",
     ],
     move: [
-      "🚶 On my way",
+      "🚶 On way",
       "🏃 Movin'",
       "🎯 Target",
       "⚡ Speed!",
@@ -130,7 +130,7 @@ export class CreepPersonality {
     idle: [
       "🤔 Hmmm...",
       "😴 Zzzz",
-      "🎵 La la la",
+      "🎵 La la",
       "👀 Lookin'",
       "🌟 Shiny!",
       "😊",
@@ -140,9 +140,9 @@ export class CreepPersonality {
     flee: [
       "😱 Run!",
       "💨 Escape!",
-      "🏃 Not today",
+      "🏃 Not now",
       "⚡ Retreat!",
-      "🌪️ Outta here",
+      "🌪️ Outta!",
       "🚀 Zoom!",
       "😵 Danger!",
       "🌟 Safety!",
@@ -152,8 +152,8 @@ export class CreepPersonality {
       "🏆 Winner!",
       "✨ Amazing!",
       "🎊 Party!",
-      "🌟 Fantastic",
-      "💫 Brilliant",
+      "🌟 Great!",
+      "💫 Brill!",
       "🔥 Awesome!",
       "⭐ Perfect!",
     ],
