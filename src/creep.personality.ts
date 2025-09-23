@@ -37,136 +37,19 @@ export class CreepPersonality {
 
   // Personality phrases by action type
   private static readonly PHRASES = {
-    harvest: [
-      "⛏️ Mine",
-      "💎 Shiny!",
-      "🔥 Goods",
-      "⚡ Energy!",
-      "💪 Workin'",
-      "🎯 Jackpot!",
-      "🔋 Power up",
-      "✨ Sweet!",
-    ],
-    build: [
-      "🔨 Buildin'",
-      "🏗 Build",
-      "🎪 Magic!",
-      "🔧 Crafting",
-      "🔨 Hammer",
-      "🎨 Art!",
-      "🏠 Home",
-      "⭐ Master!",
-    ],
-    repair: [
-      "🔧 Fixin'",
-      "✅ Good!",
-      "💊 Heal",
-      "🔨 Patching",
-      "⚡ Restore",
-      "✨ Magic!",
-      "🎯 Perfect",
-      "💪 Strong!",
-    ],
-    upgrade: [
-      "🚀 Lvl up!",
-      "⭐ Progress",
-      "📈 Advance",
-      "🎯 Excel!",
-      "💎 Perfect",
-      "🔥 Power!",
-      "✨ Enhance",
-      "🏆 Victory!",
-    ],
-    transfer: [
-      "📦 Delivery",
-      "🎁 Gift!",
-      "💝 Package",
-      "🚚 Express",
-      "📮 Mail!",
-      "🎪 Comin'",
-      "💫 Supply!",
-      "🔄 Swap!",
-    ],
-    withdraw: [
-      "💰 Payday!",
-      "🎒 Full up",
-      "📥 Collect",
-      "💎 Treasure",
-      "🔋 Refuel",
-      "🎯 Got it!",
-      "💪 Loaded!",
-      "⚡ Charged!",
-    ],
-    attack: [
-      "⚔️ Glory!",
-      "🔥 Burn!",
-      "💥 Boom!",
-      "⚡ Zap!",
-      "🎯 Bullseye",
-      "💪 Smash!",
-      "🌟 Crit!",
-      "🔥 Attack!",
-    ],
-    heal: [
-      "💊 Meds!",
-      "✨ Light!",
-      "❤️ Heal",
-      "🌟 Restore",
-      "💚 Life!",
-      "🔋 Recharge",
-      "⭐ Vibes",
-      "💫 Recover",
-    ],
-    move: [
-      "🚶 On way",
-      "🏃 Movin'",
-      "🎯 Target",
-      "⚡ Speed!",
-      "🌟 Comin'",
-      "🚀 Incoming",
-      "💨 Zoom!",
-      "🎪 Go!",
-    ],
-    idle: [
-      "🤔 Hmmm...",
-      "😴 Zzzz",
-      "🎵 La la",
-      "👀 Lookin'",
-      "🌟 Shiny!",
-      "😊",
-      "🎈",
-      "✨",
-    ],
-    flee: [
-      "😱 Run!",
-      "💨 Escape!",
-      "🏃 Not now",
-      "⚡ Retreat!",
-      "🌪️ Outta!",
-      "🚀 Zoom!",
-      "😵 Danger!",
-      "🌟 Safety!",
-    ],
-    celebrate: [
-      "🎉 Success!",
-      "🏆 Winner!",
-      "✨ Amazing!",
-      "🎊 Party!",
-      "🌟 Great!",
-      "💫 Brill!",
-      "🔥 Awesome!",
-      "⭐ Perfect!",
-    ],
-    frustrated: [
-      "😤 Blocked!",
-      "🙄 Ugh",
-      "😠 Move it!",
-      "🤬 Grrr!",
-      "😑 Really?",
-      "💢 Argh!",
-      "🤦 Oh no!",
-      "😮‍💨 Sigh...",
-    ],
+    harvest: ["⛏️", "💎", "🔥", "⚡", "💪", "🎯", "🔋", "✨"],
+    build: ["🔨", "🏗️", "🎪", "🔧", "🧱", "🎨", "🏠", "⭐"],
+    repair: ["🔧", "🩹", "💊", "�️", "⚡", "✨", "🎯", "💪"],
+    upgrade: ["🚀", "⭐", "📈", "🎯", "💎", "🔥", "✨", "🏆"],
+    transfer: ["📦", "🎁", "💝", "🚚", "📮", "💫", "�", "↔️"],
+    withdraw: ["💰", "🎒", "📥", "💎", "🔋", "🎯", "💪", "⚡"],
+    attack: ["⚔️", "🔥", "💥", "⚡", "🎯", "💪", "🌟", "🏹"],
+    heal: ["💊", "✨", "❤️", "🌟", "💚", "🔋", "⭐", "💫"],
+    move: ["🚶", "🏃", "🎯", "⚡", "🌟", "🚀", "💨", "➡️"],
+    idle: ["🤔", "😴", "🎵", "👀", "🌟", "😊", "🎈", "✨"],
+    flee: ["😱", "💨", "🏃", "⚡", "🌪️", "🚀", "😵", "🛡️"],
+    celebrate: ["🎉", "🏆", "✨", "🎊", "🌟", "💫", "🔥", "⭐"],
+    frustrated: ["😤", "🙄", "😠", "🤬", "😑", "💢", "🤦", "😮‍💨"],
   };
 
   private static readonly ROLE_PERSONALITIES = {
@@ -258,7 +141,7 @@ export class CreepPersonality {
     } else if (creep.store.getUsedCapacity() === 0 && role !== "upgrader") {
       this.speak(creep, "frustrated", false);
     } else if (creep.fatigue > 0) {
-      creep.say(this.fitToSayLimit("😴 Tired...", 10), true);
+      creep.say(this.fitToSayLimit("😴", 10), true);
     } else {
       // Random idle chatter
       if (Math.random() < 0.05) {
@@ -273,23 +156,14 @@ export class CreepPersonality {
    */
   static getSpawnPhrase(role: string): string {
     const roleSpecificPhrases: { [key: string]: string[] } = {
-      harvester: ["⛏️ Harvest", "💎 Mine!", "🌾 Gather!"],
-      hauler: ["📦 Move!", "🚚 Deliver", "📋 Cargo!"],
-      upgrader: ["🔧 Upgrade!", "⚡ Boost!", "🆙 Lvl up!"],
-      builder: ["🏗️ Build!", "🔨 Raise!", "🏠 Create"],
-      defender: ["⚔️ Guard!", "🛡️ Protect", "👮 Secure!"],
+      harvester: ["⛏️", "💎", "🌾"],
+      hauler: ["📦", "🚚", "📋"],
+      upgrader: ["🔧", "⚡", "🆙"],
+      builder: ["🏗️", "🔨", "🏠"],
+      defender: ["⚔️", "🛡️", "👮"],
     };
 
-    const genericPhrases = [
-      "🌟 Ready!",
-      "⚡ Go!",
-      "🚀 Mission!",
-      "💪 Work!",
-      "🎯 On it!",
-      "🔥 Amped!",
-      "✨ Eager!",
-      "🏆 Victory!",
-    ];
+    const genericPhrases = ["🌟", "⚡", "🚀", "💪", "🎯", "🔥", "✨", "🏆"];
     const phrases = roleSpecificPhrases[role] || genericPhrases;
     const pick = phrases[Math.floor(Math.random() * phrases.length)];
     return this.fitToSayLimit(pick, 10);
@@ -299,15 +173,7 @@ export class CreepPersonality {
    * Celebration for completed tasks
    */
   static celebrate(creep: Creep, achievement: string): void {
-    const celebrations = [
-      `🎉 ${achievement}!`,
-      `🏆 Nailed it!`,
-      `⭐ ${achievement}!`,
-      `✨ Success!`,
-      `💫 Done!`,
-      `🔥 Boom!`,
-    ];
-
+    const celebrations = ["🎉", "🏆", "⭐", "✨", "💫", "🔥", "🎊", "🌟"];
     const message =
       celebrations[Math.floor(Math.random() * celebrations.length)];
     creep.say(this.fitToSayLimit(message, 10), true);
