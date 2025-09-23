@@ -33,7 +33,7 @@ declare global {
  * Creep Personality System - Adds character and voice to your creeps!
  */
 export class CreepPersonality {
-  private static readonly SPEECH_CHANCE = 0.05; // 5% chance to speak on actions
+  private static readonly SPEECH_CHANCE = 0.15; // 5% chance to speak on actions
 
   // Personality phrases by action type
   private static readonly PHRASES = {
