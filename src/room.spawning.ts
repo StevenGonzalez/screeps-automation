@@ -127,6 +127,32 @@ function trySpawnEconomicCreeps(
   if (!composition) return false;
 
   const current = getCurrentCreepCounts(room);
+  const sources = room.find(FIND_SOURCES);
+  const containersOrSites = (pos: RoomPosition) => {
+    const hasStruct = room
+      .lookForAtArea(
+        LOOK_STRUCTURES,
+        pos.y - 1,
+        pos.x - 1,
+        pos.y + 1,
+        pos.x + 1,
+        true
+      )
+      .some((i) => i.structure.structureType === STRUCTURE_CONTAINER);
+    if (hasStruct) return true;
+    const hasSite = room
+      .lookForAtArea(
+        LOOK_CONSTRUCTION_SITES,
+        pos.y - 1,
+        pos.x - 1,
+        pos.y + 1,
+        pos.x + 1,
+        true
+      )
+      .some((i) => i.constructionSite.structureType === STRUCTURE_CONTAINER);
+    return hasSite;
+  };
+  const minerTargets = sources.filter((s) => containersOrSites(s.pos)).length;
 
   // Spawn queue in priority order
   const hasConstruction = room.find(FIND_CONSTRUCTION_SITES).length > 0;
@@ -139,14 +165,23 @@ function trySpawnEconomicCreeps(
 
   const spawnQueue = [
     {
+      role: "miner",
+      // Aim for one miner per source that has a container (or one planned)
+      needed: minerTargets,
+      current: current.miner,
+    },
+    {
       role: "harvester",
-      needed: composition.harvesters || 2,
+      // Reduce harvesters as miners come online
+      needed: Math.max(0, (composition.harvesters || 2) - current.miner),
       current: current.harvester,
     },
     {
       role: "hauler",
       // Only spawn haulers when we have something to haul
-      needed: hasContainersOrStorage ? composition.haulers || 1 : 0,
+      needed: hasContainersOrStorage
+        ? Math.max(composition.haulers || 1, Math.min(2, current.miner))
+        : 0,
       current: current.hauler,
     },
     {
@@ -273,6 +308,9 @@ function trySpawnConstructionCreeps(
  */
 function getCurrentCreepCounts(room: Room): { [role: string]: number } {
   return {
+    miner: room.find(FIND_MY_CREEPS, {
+      filter: (c) => c.memory.role === "miner",
+    }).length,
     harvester: room.find(FIND_MY_CREEPS, {
       filter: (c) => c.memory.role === "harvester",
     }).length,
@@ -303,6 +341,13 @@ function getOptimalBody(
   if (energyAvailable < 200) return basic;
 
   switch (role) {
+    case "miner":
+      // Static miner: prioritize WORK parts and a couple of MOVE
+      if (energyAvailable >= 800)
+        return [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE];
+      if (energyAvailable >= 550) return [WORK, WORK, WORK, WORK, WORK, MOVE];
+      if (energyAvailable >= 400) return [WORK, WORK, WORK, MOVE];
+      return [WORK, WORK, MOVE];
     case "harvester":
       if (energyAvailable >= 800)
         return [
@@ -416,6 +461,8 @@ function getEmergencyBody(
   if (energyAvailable < 200) {
     // Absolute minimum
     switch (role) {
+      case "miner":
+        return energyAvailable >= 150 ? [WORK, MOVE] : [WORK];
       case "harvester":
         return energyAvailable >= 150 ? [WORK, MOVE] : [WORK];
       case "hauler":

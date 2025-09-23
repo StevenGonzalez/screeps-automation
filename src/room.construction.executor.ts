@@ -60,6 +60,34 @@ export function executeConstructionPlan(
     if (budget <= 0) break;
     if (task.pos.roomName !== room.name) continue;
 
+    // At low RCL, hard-block roads until essentials exist: at least one extension and source containers
+    if (
+      (task.type === STRUCTURE_ROAD || task.type === STRUCTURE_RAMPART) &&
+      room.controller &&
+      room.controller.level <= 3
+    ) {
+      const haveSomeExtensions =
+        (getStructureCounts(room)[STRUCTURE_EXTENSION] || 0) > 0;
+      const haveSourceContainers = room
+        .find(FIND_SOURCES)
+        .every((s) =>
+          room
+            .lookForAtArea(
+              LOOK_STRUCTURES,
+              s.pos.y - 1,
+              s.pos.x - 1,
+              s.pos.y + 1,
+              s.pos.x + 1,
+              true
+            )
+            .some((i) => i.structure.structureType === STRUCTURE_CONTAINER)
+        );
+      if (!haveSomeExtensions || !haveSourceContainers) {
+        // Defer cosmetic/surface infrastructure until essentials exist
+        continue;
+      }
+    }
+
     // If it's a road but we still have non-road tasks we can place and we've hit road quota, skip
     if (
       task.type === STRUCTURE_ROAD &&

@@ -170,7 +170,7 @@ function generateConstructionTasks(
     }
   }
 
-  // 4) Containers near sources and controller
+  // 4) Containers near sources and controller (early and urgent for economy)
   tasks.push(...generateContainerTasks(intel));
 
   // 5) Links: controller + source links at RCL5+
@@ -302,11 +302,12 @@ function generateContainerTasks(intel: RoomIntelligence): ConstructionTask[] {
         tasks.push({
           type: STRUCTURE_CONTAINER,
           pos,
-          priority: 85,
+          priority: 88,
           reason: `Container for source at ${source.pos.x},${source.pos.y}`,
           estimatedCost: 5000,
           dependencies: [],
-          urgent: intel.basic.rcl >= 3,
+          // Make source containers urgent at low RCL to accelerate bootstrap
+          urgent: intel.basic.rcl <= 3,
         });
       }
     }
@@ -314,7 +315,7 @@ function generateContainerTasks(intel: RoomIntelligence): ConstructionTask[] {
 
   // Controller container
   const controller = room?.controller;
-  if (controller && intel.basic.rcl >= 3) {
+  if (controller) {
     const containerNearby = room
       ?.lookForAtArea(
         LOOK_STRUCTURES,
@@ -332,11 +333,12 @@ function generateContainerTasks(intel: RoomIntelligence): ConstructionTask[] {
         tasks.push({
           type: STRUCTURE_CONTAINER,
           pos,
-          priority: 75,
+          priority: 82,
           reason: "Controller container for upgraders",
           estimatedCost: 5000,
           dependencies: [],
-          urgent: false,
+          // Helpful early for upgraders; not as critical as source containers
+          urgent: intel.basic.rcl <= 3,
         });
       }
     }

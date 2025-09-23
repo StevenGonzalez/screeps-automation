@@ -23,6 +23,7 @@ import { runBuilder } from "./creep.builder";
 import { runDefender } from "./creep.defender";
 import { runRepairer } from "./creep.repairer";
 import { runWorker } from "./creep.worker";
+import { runMiner } from "./creep.miner";
 
 /**
  * Process a single room through all automation systems
@@ -150,6 +151,9 @@ function manageRoomCreeps(room: Room, plans: any, intel: any): void {
 
       // Enhanced role-based automation
       switch (role) {
+        case "miner":
+          runMiner(creep);
+          break;
         case "harvester":
           runHarvester(creep, intel);
           break;
