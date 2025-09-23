@@ -15,6 +15,7 @@ import { manageRoomSpawning } from "./room.spawning";
 import { manageRoomStructures } from "./room.structures";
 import { getRoomMemory } from "./global.memory";
 import { CreepPersonality } from "./creep.personality";
+import { executeConstructionPlan } from "./room.construction.executor";
 import { runHarvester } from "./creep.harvester";
 import { runHauler } from "./creep.hauler";
 import { runUpgrader } from "./creep.upgrader";
@@ -122,6 +123,9 @@ function executeRoomPlans(room: Room, plans: any, intel: any): void {
   // 2. STRUCTURE AUTOMATION - Defensive actions
   manageRoomStructures(room, plans.defense, plans.economic);
 
+  // 2.5. CONSTRUCTION EXECUTION - Create sites from construction plan
+  executeConstructionPlan(room, plans.construction, intel);
+
   // 3. CREEP MANAGEMENT - Role-based automation
   manageRoomCreeps(room, plans, intel);
 
@@ -217,7 +221,9 @@ function monitorRoomPerformance(room: Room, intel: any, plans: any): void {
   // Log performance metrics occasionally
   if (Game.time % 100 === 0) {
     const energyPercent = Math.round(
-      (intel.energy.available / intel.energy.capacity) * 100
+      (intel.economy.energyAvailable /
+        Math.max(1, intel.economy.energyCapacity)) *
+        100
     );
     console.log(
       `📊 ${room.name}: RCL ${room.controller?.level}, Energy ${energyPercent}%, Creeps ${intel.creeps.total}`

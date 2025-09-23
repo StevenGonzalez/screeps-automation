@@ -8,6 +8,7 @@
 /// <reference types="@types/screeps" />
 
 import { RoomIntelligence } from "./room.intelligence";
+import { getRoomMemory } from "./global.memory";
 
 export interface ConstructionPlan {
   queue: ConstructionTask[];
@@ -74,59 +75,154 @@ function generateConstructionTasks(
   intel: RoomIntelligence
 ): ConstructionTask[] {
   const tasks: ConstructionTask[] = [];
-  const { basic, infrastructure, economy } = intel;
+  const { basic, infrastructure } = intel;
   const rcl = basic.rcl;
+  const room = Game.rooms[basic.name];
+  if (!room) return tasks;
 
-  // Extensions - highest priority for energy capacity
-  const neededExtensions =
-    getExtensionLimit(rcl) - infrastructure.structures.extension;
-  if (neededExtensions > 0) {
-    tasks.push(...generateExtensionTasks(intel, neededExtensions));
+  // Determine a high-quality anchor for a compact, efficient base
+  const anchor = findBaseAnchor(room);
+  const reserved = new Set<string>();
+  const reserve = (pos: RoomPosition) => reserved.add(posKey(pos));
+  const isReserved = (pos: RoomPosition) => reserved.has(posKey(pos));
+
+  // Core stamp (roads + storage/terminal/spawn-adj link areas)
+  const core = getCoreStamp(anchor);
+  for (const r of core.roads) reserve(r);
+  if (core.storage) reserve(core.storage);
+  if (core.terminal) reserve(core.terminal);
+  for (const t of core.towerSlots) reserve(t);
+
+  // 1) Roads: lay core first for pathing stability
+  const coreRoadTasks = core.roads
+    .filter((p) => isValidBuildPosition(p) && !isReserved(p))
+    .map<ConstructionTask>((pos, i) => ({
+      type: STRUCTURE_ROAD,
+      pos,
+      priority: 92 - i * 0.1,
+      reason: "Core walkways for compact base",
+      estimatedCost: 300,
+      dependencies: [],
+      urgent: true,
+    }));
+  tasks.push(...coreRoadTasks);
+
+  // 1.5) Additional spawns at higher RCLs
+  tasks.push(...generateAdditionalSpawnTasks(intel, anchor));
+
+  // 2) Storage/Terminal (RCL gating handled later by executor)
+  if (rcl >= 4 && infrastructure.structures.storage === 0 && core.storage) {
+    tasks.push({
+      type: STRUCTURE_STORAGE,
+      pos: core.storage,
+      priority: 90,
+      reason: "Central storage at hub",
+      estimatedCost: 30000,
+      dependencies: [],
+      urgent: intel.economy.energyStored > 10000,
+    });
+  }
+  if (rcl >= 6 && infrastructure.structures.terminal === 0 && core.terminal) {
+    tasks.push({
+      type: STRUCTURE_TERMINAL,
+      pos: core.terminal,
+      priority: 76,
+      reason: "Terminal adjacent to storage",
+      estimatedCost: 100000,
+      dependencies: ["storage"],
+      urgent: false,
+    });
   }
 
-  // Containers for sources
-  tasks.push(...generateContainerTasks(intel));
-
-  // Roads for efficiency
-  tasks.push(...generateRoadTasks(intel));
-
-  // Towers for defense
+  // 3) Towers: strategic around core
   const neededTowers = getTowerLimit(rcl) - infrastructure.structures.tower;
   if (neededTowers > 0) {
-    tasks.push(...generateTowerTasks(intel, neededTowers));
+    const towerSpots = core.towerSlots.filter(isValidBuildPosition);
+    for (let i = 0; i < Math.min(neededTowers, towerSpots.length); i++) {
+      const pos = towerSpots[i];
+      tasks.push({
+        type: STRUCTURE_TOWER,
+        pos,
+        priority: 84 - i * 2,
+        reason: "Defensive tower overlooking hub",
+        estimatedCost: 5000,
+        dependencies: [],
+        urgent: intel.military.safetyScore < 50,
+      });
+    }
   }
 
-  // Storage at RCL 4+
-  if (rcl >= 4 && infrastructure.structures.storage === 0) {
-    tasks.push(generateStorageTask(intel));
-  }
+  // 4) Containers near sources and controller
+  tasks.push(...generateContainerTasks(intel));
 
-  // Links at RCL 5+
+  // 5) Links: controller + source links at RCL5+
   if (rcl >= 5) {
+    // Storage-side link first for logistics hub efficiency
+    const storageLink = generateStorageLinkTask(intel, anchor, core.storage);
+    if (storageLink) tasks.push(storageLink);
     tasks.push(...generateLinkTasks(intel));
   }
 
-  // Terminal at RCL 6+
-  if (rcl >= 6 && infrastructure.structures.terminal === 0) {
-    tasks.push(generateTerminalTask(intel));
+  // 6) Extensions using compact rings around core, skipping reserved tiles
+  const extensionNeed =
+    getExtensionLimit(rcl) - infrastructure.structures.extension;
+  if (extensionNeed > 0) {
+    const extensionPositions = findExtensionRingPositions(
+      anchor,
+      extensionNeed,
+      reserved
+    );
+    extensionPositions.forEach((pos, index) => {
+      tasks.push({
+        type: STRUCTURE_EXTENSION,
+        pos,
+        priority: 82 - index * 0.2,
+        reason: "Compact ring extension block",
+        estimatedCost: 3000,
+        dependencies: [],
+        urgent: intel.economy.energyCapacity < 800,
+      });
+    });
   }
 
-  // Labs at RCL 6+
+  // 7) Roads to sources and controller from core anchor (prefer after core)
+  tasks.push(...generateRoadTasksFromAnchor(intel, anchor));
+
+  // 8) Terminal/Labs/Factory/Power Spawn via strategic offsets from core
   if (rcl >= 6) {
-    tasks.push(...generateLabTasks(intel));
+    tasks.push(...generateLabTasksNearCore(intel, anchor));
+    // Extractor & mineral container for mid-game economy
+    tasks.push(...generateExtractorTasks(intel));
   }
-
-  // Factory at RCL 7+
   if (rcl >= 7 && infrastructure.structures.factory === 0) {
-    tasks.push(generateFactoryTask(intel));
+    const pos = getFactoryNearCore(anchor);
+    tasks.push({
+      type: STRUCTURE_FACTORY,
+      pos,
+      priority: 52,
+      reason: "Factory near storage/terminal",
+      estimatedCost: 100000,
+      dependencies: ["terminal", "storage"],
+      urgent: false,
+    });
   }
-
-  // Power spawn at RCL 8
   if (rcl >= 8 && infrastructure.structures.powerSpawn === 0) {
-    tasks.push(generatePowerSpawnTask(intel));
+    const pos = getPowerSpawnNearCore(anchor);
+    tasks.push({
+      type: STRUCTURE_POWER_SPAWN,
+      pos,
+      priority: 48,
+      reason: "Power spawn in hub sector",
+      estimatedCost: 100000,
+      dependencies: ["terminal", "storage"],
+      urgent: false,
+    });
+    // Observer & Nuker planning for late-game capabilities
+    tasks.push(...generateObserverTasks(intel, anchor));
+    tasks.push(...generateNukerTasks(intel, anchor));
   }
 
-  // Walls and ramparts for defense
+  // 9) Defensive ramparts on key hub tiles (optional but strategic)
   tasks.push(...generateDefensiveTasks(intel));
 
   return tasks;
@@ -139,26 +235,23 @@ function generateExtensionTasks(
   intel: RoomIntelligence,
   count: number
 ): ConstructionTask[] {
+  // Legacy fallback (unused by new ring planner). Kept for compatibility.
   const tasks: ConstructionTask[] = [];
   const room = Game.rooms[intel.basic.name];
   const spawn = room?.find(FIND_MY_SPAWNS)[0];
   if (!spawn) return tasks;
-
-  // Find positions near spawn in a compact formation
   const positions = findExtensionPositions(spawn.pos, count);
-
   positions.forEach((pos, index) => {
     tasks.push({
       type: STRUCTURE_EXTENSION,
       pos,
-      priority: 90 - index, // First extensions are highest priority
-      reason: "Increase energy capacity for larger creeps",
+      priority: 80 - index,
+      reason: "Increase energy capacity",
       estimatedCost: 3000,
       dependencies: [],
       urgent: intel.economy.energyCapacity < 800,
     });
   });
-
   return tasks;
 }
 
@@ -235,6 +328,7 @@ function generateContainerTasks(intel: RoomIntelligence): ConstructionTask[] {
  * Generate road construction tasks
  */
 function generateRoadTasks(intel: RoomIntelligence): ConstructionTask[] {
+  // Legacy fallback used when anchor cannot be computed
   const tasks: ConstructionTask[] = [];
   const room = Game.rooms[intel.basic.name];
   const spawn = room?.find(FIND_MY_SPAWNS)[0];
@@ -245,13 +339,9 @@ function generateRoadTasks(intel: RoomIntelligence): ConstructionTask[] {
     const path = spawn.pos.findPathTo(source.pos);
     path.forEach((step: PathStep, index: number) => {
       const pos = new RoomPosition(step.x, step.y, intel.basic.name);
-
-      // Check if road already exists
-      const structures = pos.lookFor(LOOK_STRUCTURES);
-      const hasRoad = structures.some(
-        (s) => s.structureType === STRUCTURE_ROAD
-      );
-
+      const hasRoad = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_ROAD);
       if (!hasRoad) {
         tasks.push({
           type: STRUCTURE_ROAD,
@@ -272,12 +362,9 @@ function generateRoadTasks(intel: RoomIntelligence): ConstructionTask[] {
     const path = spawn.pos.findPathTo(controller.pos);
     path.forEach((step: PathStep, index: number) => {
       const pos = new RoomPosition(step.x, step.y, intel.basic.name);
-
-      const structures = pos.lookFor(LOOK_STRUCTURES);
-      const hasRoad = structures.some(
-        (s) => s.structureType === STRUCTURE_ROAD
-      );
-
+      const hasRoad = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_ROAD);
       if (!hasRoad) {
         tasks.push({
           type: STRUCTURE_ROAD,
@@ -291,7 +378,6 @@ function generateRoadTasks(intel: RoomIntelligence): ConstructionTask[] {
       }
     });
   }
-
   return tasks;
 }
 
@@ -497,19 +583,27 @@ function generateDefensiveTasks(intel: RoomIntelligence): ConstructionTask[] {
   const threatLevel = intel.military.safetyScore < 50 ? 100 : 0;
 
   if (threatLevel > 30 || intel.basic.rcl >= 3) {
-    // Add some basic rampart tasks for key structures
-    const spawns = room?.find(FIND_MY_SPAWNS);
-    spawns?.forEach((spawn: StructureSpawn) => {
-      tasks.push({
-        type: STRUCTURE_RAMPART,
-        pos: spawn.pos,
-        priority: 35,
-        reason: "Protect spawn structure",
-        estimatedCost: 1000,
-        dependencies: [],
-        urgent: threatLevel > 70,
+    // Add ramparts over key structures (spawn, storage, terminal, towers)
+    const protectTypes: StructureConstant[] = [
+      STRUCTURE_SPAWN,
+      STRUCTURE_STORAGE,
+      STRUCTURE_TERMINAL,
+      STRUCTURE_TOWER,
+    ];
+    const structures = room?.find(FIND_MY_STRUCTURES) || [];
+    structures
+      .filter((s) => protectTypes.includes(s.structureType))
+      .forEach((s, i) => {
+        tasks.push({
+          type: STRUCTURE_RAMPART,
+          pos: s.pos,
+          priority: 36 - i * 0.1,
+          reason: `Protect ${s.structureType}`,
+          estimatedCost: 1000,
+          dependencies: [],
+          urgent: threatLevel > 70,
+        });
       });
-    });
   }
 
   return tasks;
@@ -834,4 +928,510 @@ function getLabLimit(rcl: number): number {
   if (rcl < 7) return 3;
   if (rcl < 8) return 6;
   return 10;
+}
+
+// ===== Enhanced strategic layout helpers =====
+
+function posKey(pos: RoomPosition): string {
+  return `${pos.roomName}:${pos.x}:${pos.y}`;
+}
+
+function inBounds(x: number, y: number): boolean {
+  return x > 0 && x < 49 && y > 0 && y < 49;
+}
+
+function findBaseAnchor(room: Room): RoomPosition {
+  // Cached anchor to reduce CPU
+  const mem = getRoomMemory(room.name);
+  const cached = mem?.construction?.anchor;
+  if (cached && typeof cached.x === "number" && typeof cached.y === "number") {
+    const pos = new RoomPosition(cached.x, cached.y, room.name);
+    if (
+      inBounds(pos.x, pos.y) &&
+      room.getTerrain().get(pos.x, pos.y) !== TERRAIN_MASK_WALL
+    ) {
+      return pos;
+    }
+  }
+
+  // Prefer around room center, away from exits and walls, with low wall density in radius 4-5
+  const center = new RoomPosition(25, 25, room.name);
+  const candidates: RoomPosition[] = [];
+  for (let dx = -5; dx <= 5; dx++) {
+    for (let dy = -5; dy <= 5; dy++) {
+      const x = center.x + dx;
+      const y = center.y + dy;
+      if (!inBounds(x, y)) continue;
+      candidates.push(new RoomPosition(x, y, room.name));
+    }
+  }
+  const terrain = room.getTerrain();
+  let best: { pos: RoomPosition; score: number } | null = null;
+  const controller = room.controller;
+  const spawn = room.find(FIND_MY_SPAWNS)[0];
+  const sources = room.find(FIND_SOURCES);
+
+  for (const pos of candidates) {
+    if (terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) continue;
+
+    // Score based on: distance to exits (keep >= 6), low nearby walls, proximity to controller/sources
+    const minExitDist = Math.min(pos.x, pos.y, 49 - pos.x, 49 - pos.y);
+    if (minExitDist < 6) continue;
+
+    let wallPenalty = 0;
+    for (let rx = -4; rx <= 4; rx++) {
+      for (let ry = -4; ry <= 4; ry++) {
+        if (!inBounds(pos.x + rx, pos.y + ry)) continue;
+        if (terrain.get(pos.x + rx, pos.y + ry) === TERRAIN_MASK_WALL)
+          wallPenalty += 1;
+      }
+    }
+
+    const ctrlDist = controller ? pos.getRangeTo(controller.pos) : 20;
+    const spawnDist = spawn ? pos.getRangeTo(spawn.pos) : 10;
+    const avgSourceDist = sources.length
+      ? sources.reduce((s, src) => s + pos.getRangeTo(src.pos), 0) /
+        sources.length
+      : 20;
+
+    // Weight towards being reasonably close to spawn while balanced to controller/sources
+    const score =
+      minExitDist * 2 -
+      wallPenalty -
+      (ctrlDist + avgSourceDist) * 0.1 -
+      spawnDist * 0.2;
+    if (!best || score > best.score) best = { pos, score };
+  }
+
+  const anchor = best?.pos || center;
+  // Store in memory for future ticks
+  mem.construction = mem.construction || {};
+  mem.construction.anchor = { x: anchor.x, y: anchor.y };
+  return anchor;
+}
+
+function generateAdditionalSpawnTasks(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const rcl = intel.basic.rcl;
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const existing = intel.infrastructure.structures.spawn || 0;
+  const limit = rcl < 7 ? 1 : rcl < 8 ? 2 : 3;
+  const need = Math.max(0, limit - existing);
+  if (need <= 0) return tasks;
+
+  // Choose slots around anchor in a small ring not blocking core roads
+  const offsets: Array<{ x: number; y: number }> = [
+    { x: -2, y: 1 },
+    { x: 2, y: -1 },
+    { x: -2, y: -1 },
+  ];
+  let placed = 0;
+  for (const o of offsets) {
+    if (placed >= need) break;
+    const x = anchor.x + o.x;
+    const y = anchor.y + o.y;
+    if (!inBounds(x, y)) continue;
+    const pos = new RoomPosition(x, y, room.name);
+    if (!isValidBuildPosition(pos)) continue;
+    tasks.push({
+      type: STRUCTURE_SPAWN,
+      pos,
+      priority: 88 - placed,
+      reason: "Additional spawn near hub",
+      estimatedCost: 15000,
+      dependencies: [],
+      urgent: false,
+    });
+    placed++;
+  }
+  return tasks;
+}
+
+function getCoreStamp(anchor: RoomPosition): {
+  roads: RoomPosition[];
+  storage: RoomPosition | null;
+  terminal: RoomPosition | null;
+  towerSlots: RoomPosition[];
+} {
+  const r: RoomPosition[] = [];
+  const roomName = anchor.roomName;
+  // Cross roads
+  for (let d = -2; d <= 2; d++) {
+    if (inBounds(anchor.x + d, anchor.y))
+      r.push(new RoomPosition(anchor.x + d, anchor.y, roomName));
+    if (inBounds(anchor.x, anchor.y + d))
+      r.push(new RoomPosition(anchor.x, anchor.y + d, roomName));
+  }
+  // Ring roads at radius 2
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dy = -2; dy <= 2; dy++) {
+      if (Math.abs(dx) === 2 || Math.abs(dy) === 2) {
+        const x = anchor.x + dx;
+        const y = anchor.y + dy;
+        if (inBounds(x, y)) r.push(new RoomPosition(x, y, roomName));
+      }
+    }
+  }
+  // Strategic core placements near center
+  const storage = inBounds(anchor.x + 1, anchor.y)
+    ? new RoomPosition(anchor.x + 1, anchor.y, roomName)
+    : null;
+  const terminal = inBounds(anchor.x - 1, anchor.y)
+    ? new RoomPosition(anchor.x - 1, anchor.y, roomName)
+    : null;
+  const towerSlots: RoomPosition[] = [];
+  const tOffsets = [
+    { x: -3, y: -1 },
+    { x: -1, y: -3 },
+    { x: 1, y: -3 },
+    { x: 3, y: -1 },
+    { x: 3, y: 1 },
+    { x: -1, y: 3 },
+  ];
+  for (const o of tOffsets) {
+    const x = anchor.x + o.x;
+    const y = anchor.y + o.y;
+    if (inBounds(x, y)) towerSlots.push(new RoomPosition(x, y, roomName));
+  }
+  return { roads: r, storage, terminal, towerSlots };
+}
+
+function findExtensionRingPositions(
+  anchor: RoomPosition,
+  count: number,
+  reserved: Set<string>
+): RoomPosition[] {
+  const results: RoomPosition[] = [];
+  const room = Game.rooms[anchor.roomName];
+  if (!room) return results;
+  const terrain = room.getTerrain();
+  const taken = new Set<string>(reserved);
+
+  let radius = 3; // start just beyond core ring
+  while (results.length < count && radius <= 10) {
+    for (let dx = -radius; dx <= radius && results.length < count; dx++) {
+      for (let dy = -radius; dy <= radius && results.length < count; dy++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue; // outer ring only
+        const x = anchor.x + dx;
+        const y = anchor.y + dy;
+        if (!inBounds(x, y)) continue;
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+        const pos = new RoomPosition(x, y, anchor.roomName);
+        const key = posKey(pos);
+        if (taken.has(key)) continue;
+        // Avoid controller, sources tiles
+        const tileHasImportant = pos.look() as LookAtResult[];
+        if (
+          tileHasImportant.some(
+            (t) =>
+              t.type === LOOK_STRUCTURES || t.type === LOOK_CONSTRUCTION_SITES
+          )
+        )
+          continue;
+        // Prefer plains over swamps for extensions; allow roads later to be placed in between
+        results.push(pos);
+        taken.add(key);
+      }
+    }
+    radius++;
+  }
+  return results;
+}
+
+function generateRoadTasksFromAnchor(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const sources = room.find(FIND_SOURCES);
+  const controller = room.controller;
+  const mineral = room.find(FIND_MINERALS)[0];
+
+  // Path to sources
+  for (const src of sources) {
+    const path = anchor.findPathTo(src.pos, {
+      ignoreCreeps: true,
+      ignoreRoads: false,
+    });
+    path.forEach((step, i) => {
+      const pos = new RoomPosition(step.x, step.y, room.name);
+      const hasRoad = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_ROAD);
+      if (!hasRoad) {
+        tasks.push({
+          type: STRUCTURE_ROAD,
+          pos,
+          priority: 62 - i * 0.05,
+          reason: `Road from hub to source`,
+          estimatedCost: 300,
+          dependencies: [],
+          urgent: false,
+        });
+      }
+    });
+  }
+
+  // Path to controller
+  if (controller) {
+    const path = anchor.findPathTo(controller.pos, {
+      ignoreCreeps: true,
+      ignoreRoads: false,
+    });
+    path.forEach((step, i) => {
+      const pos = new RoomPosition(step.x, step.y, room.name);
+      const hasRoad = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_ROAD);
+      if (!hasRoad) {
+        tasks.push({
+          type: STRUCTURE_ROAD,
+          pos,
+          priority: 58 - i * 0.05,
+          reason: `Road from hub to controller`,
+          estimatedCost: 300,
+          dependencies: [],
+          urgent: false,
+        });
+      }
+    });
+  }
+
+  // Path to mineral (optional; low priority)
+  if (mineral) {
+    const path = anchor.findPathTo(mineral.pos, {
+      ignoreCreeps: true,
+      ignoreRoads: false,
+    });
+    path.forEach((step, i) => {
+      const pos = new RoomPosition(step.x, step.y, room.name);
+      const hasRoad = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_ROAD);
+      if (!hasRoad) {
+        tasks.push({
+          type: STRUCTURE_ROAD,
+          pos,
+          priority: 50 - i * 0.05,
+          reason: `Road from hub to mineral`,
+          estimatedCost: 300,
+          dependencies: [],
+          urgent: false,
+        });
+      }
+    });
+  }
+
+  return tasks;
+}
+
+function generateLabTasksNearCore(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const needed =
+    getLabLimit(intel.basic.rcl) - intel.infrastructure.structures.lab;
+  if (needed <= 0) return tasks;
+  const labOffsets: Array<{ x: number; y: number }> = [
+    // 10-lab cluster around anchor top-right quadrant
+    { x: -1, y: -1 },
+    { x: 0, y: -1 },
+    { x: 1, y: -1 },
+    { x: -1, y: 0 },
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: -1, y: 1 },
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 0 },
+  ].map((o) => ({ x: o.x + 4, y: o.y - 4 }));
+
+  for (let i = 0; i < Math.min(needed, labOffsets.length); i++) {
+    const x = anchor.x + labOffsets[i].x;
+    const y = anchor.y + labOffsets[i].y;
+    if (!inBounds(x, y)) continue;
+    const pos = new RoomPosition(x, y, room.name);
+    if (!isValidBuildPosition(pos)) continue;
+    tasks.push({
+      type: STRUCTURE_LAB,
+      pos,
+      priority: 54 - i,
+      reason: "Clustered lab for boosts & reactions",
+      estimatedCost: 50000,
+      dependencies: ["terminal"],
+      urgent: false,
+    });
+  }
+  return tasks;
+}
+
+function getFactoryNearCore(anchor: RoomPosition): RoomPosition {
+  const x = anchor.x + 2;
+  const y = anchor.y + 2;
+  return new RoomPosition(
+    Math.min(48, Math.max(1, x)),
+    Math.min(48, Math.max(1, y)),
+    anchor.roomName
+  );
+}
+
+// ===== New strategic tasks =====
+
+function generateStorageLinkTask(
+  intel: RoomIntelligence,
+  anchor: RoomPosition,
+  storagePos: RoomPosition | null
+): ConstructionTask | null {
+  const rcl = intel.basic.rcl;
+  const room = Game.rooms[intel.basic.name];
+  if (!room || !storagePos) return null;
+  if (getLinkLimit(rcl) <= (intel.infrastructure.structures.link || 0))
+    return null;
+  // Choose an adjacent tile to storage for the hub link
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (!dx && !dy) continue;
+      const x = storagePos.x + dx;
+      const y = storagePos.y + dy;
+      if (!inBounds(x, y)) continue;
+      const pos = new RoomPosition(x, y, room.name);
+      // Avoid placing over storage tile; allow empty tile only
+      if (!isValidBuildPosition(pos)) continue;
+      // Ensure not already a link nearby
+      const hasLink = pos
+        .findInRange(FIND_STRUCTURES, 1)
+        .some((s) => s.structureType === STRUCTURE_LINK);
+      if (hasLink) continue;
+      return {
+        type: STRUCTURE_LINK,
+        pos,
+        priority: 72,
+        reason: "Storage-side link for fast energy routing",
+        estimatedCost: 5000,
+        dependencies: ["storage"],
+        urgent: false,
+      };
+    }
+  }
+  return null;
+}
+
+function generateExtractorTasks(intel: RoomIntelligence): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const rcl = intel.basic.rcl;
+  if (rcl < 6) return tasks;
+
+  const mineral = room.find(FIND_MINERALS)[0];
+  if (!mineral) return tasks;
+
+  const existingExtractor = room.find(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
+  }).length;
+  if (existingExtractor === 0) {
+    tasks.push({
+      type: STRUCTURE_EXTRACTOR,
+      pos: mineral.pos,
+      priority: 53,
+      reason: "Enable mineral harvesting",
+      estimatedCost: 5000,
+      dependencies: [],
+      urgent: false,
+    });
+  }
+
+  // Add a container near mineral if missing
+  const hasContainer = mineral.pos
+    .findInRange(FIND_STRUCTURES, 1)
+    .some((s) => s.structureType === STRUCTURE_CONTAINER);
+  if (!hasContainer) {
+    const cpos = findContainerPosition(mineral.pos);
+    if (cpos) {
+      tasks.push({
+        type: STRUCTURE_CONTAINER,
+        pos: cpos,
+        priority: 52,
+        reason: "Container at mineral site",
+        estimatedCost: 5000,
+        dependencies: [],
+        urgent: false,
+      });
+    }
+  }
+
+  return tasks;
+}
+
+function generateObserverTasks(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  if (intel.basic.rcl < 8) return tasks;
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const existing = intel.infrastructure.structures.observer || 0;
+  if (existing > 0) return tasks;
+  const x = anchor.x + 4;
+  const y = anchor.y + 0;
+  if (!inBounds(x, y)) return tasks;
+  const pos = new RoomPosition(x, y, room.name);
+  if (!isValidBuildPosition(pos)) return tasks;
+  tasks.push({
+    type: STRUCTURE_OBSERVER,
+    pos,
+    priority: 46,
+    reason: "Observer near hub for remote scouting",
+    estimatedCost: 8000,
+    dependencies: ["terminal"],
+    urgent: false,
+  });
+  return tasks;
+}
+
+function generateNukerTasks(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  if (intel.basic.rcl < 8) return tasks;
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const existing = intel.infrastructure.structures.nuker || 0;
+  if (existing > 0) return tasks;
+  const x = anchor.x - 4;
+  const y = anchor.y + 0;
+  if (!inBounds(x, y)) return tasks;
+  const pos = new RoomPosition(x, y, room.name);
+  if (!isValidBuildPosition(pos)) return tasks;
+  tasks.push({
+    type: STRUCTURE_NUKER,
+    pos,
+    priority: 44,
+    reason: "Nuker positioned with logistics access",
+    estimatedCost: 100000,
+    dependencies: ["terminal", "storage"],
+    urgent: false,
+  });
+  return tasks;
+}
+
+function getPowerSpawnNearCore(anchor: RoomPosition): RoomPosition {
+  const x = anchor.x - 2;
+  const y = anchor.y + 2;
+  return new RoomPosition(
+    Math.min(48, Math.max(1, x)),
+    Math.min(48, Math.max(1, y)),
+    anchor.roomName
+  );
 }
