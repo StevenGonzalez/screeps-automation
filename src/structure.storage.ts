@@ -248,11 +248,35 @@ function manageContainers(
  * Maintain container health and efficiency
  */
 function maintainContainer(container: StructureContainer, room: Room): void {
-  // Check if container needs repair
-  if (container.hits < container.hitsMax * 0.8) {
+  // Check if container needs repair with rate-limited logging
+  const health = container.hits / Math.max(1, container.hitsMax);
+  const log = getContainerRepairLog(room);
+  const entry = (log[container.id] as {
+    lastLog: number;
+    lastHits: number;
+  }) || {
+    lastLog: 0,
+    lastHits: container.hits,
+  };
+
+  // Update lastHits baseline if repaired
+  if (container.hits > entry.lastHits) entry.lastHits = container.hits;
+
+  // Only log if severely damaged or has dropped significantly since last log, and respect cooldown
+  const severeDamage = health <= 0.5; // 50%
+  const significantDrop = entry.lastHits - container.hits >= 25000; // 25k hits drop
+  const cooldown = severeDamage ? 200 : 600; // shorter cooldown for severe
+
+  if (
+    (severeDamage || significantDrop) &&
+    Game.time - entry.lastLog >= cooldown
+  ) {
     console.log(
       `🔧 Container ${container.id} needs repair (${container.hits}/${container.hitsMax})`
     );
+    entry.lastLog = Game.time;
+    entry.lastHits = container.hits;
+    log[container.id] = entry;
   }
 
   // Report container efficiency
@@ -264,6 +288,19 @@ function maintainContainer(container: StructureContainer, room: Room): void {
       `📊 Container ${container.id}: ${Math.round(fillRatio * 100)}% full`
     );
   }
+}
+
+function getContainerRepairLog(room: Room): {
+  [id: string]: { lastLog: number; lastHits: number };
+} {
+  if (!Memory.rooms) Memory.rooms = {} as any;
+  if (!Memory.rooms[room.name]) (Memory.rooms as any)[room.name] = {};
+  const r = (Memory.rooms as any)[room.name];
+  if (!r.storage) r.storage = {};
+  if (!r.storage.containerRepairLog) r.storage.containerRepairLog = {};
+  return r.storage.containerRepairLog as {
+    [id: string]: { lastLog: number; lastHits: number };
+  };
 }
 
 /**
