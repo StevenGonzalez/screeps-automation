@@ -107,6 +107,15 @@ function generateConstructionTasks(
     }));
   tasks.push(...coreRoadTasks);
 
+  // 1a) Ensure clean connectors from each spawn and existing storage/terminal to the hub
+  tasks.push(...generateCoreConnectorTasks(intel, anchor, core));
+
+  // 1b) Slightly widen the hub trunk near anchor for less bumping, and add a small redundancy loop
+  tasks.push(
+    ...generateHubWideningTasks(intel, anchor),
+    ...generateCoreLoopTasks(intel, anchor)
+  );
+
   // 1.5) Additional spawns at higher RCLs
   tasks.push(...generateAdditionalSpawnTasks(intel, anchor));
 
@@ -187,6 +196,9 @@ function generateConstructionTasks(
 
   // 7) Roads to sources and controller from core anchor (prefer after core)
   tasks.push(...generateRoadTasksFromAnchor(intel, anchor));
+
+  // 7a) Small endpoint pads near sources/controller/mineral (last-step spurs)
+  tasks.push(...generateEndpointPadRoads(intel, anchor));
 
   // 8) Terminal/Labs/Factory/Power Spawn via strategic offsets from core
   if (rcl >= 6) {
@@ -1155,11 +1167,8 @@ function generateRoadTasksFromAnchor(
 
   // Path to sources
   for (const src of sources) {
-    const path = anchor.findPathTo(src.pos, {
-      ignoreCreeps: true,
-      ignoreRoads: false,
-    });
-    path.forEach((step, i) => {
+    const path = getCachedPath(room, `to:source:${src.id}`, anchor, src.pos);
+    path.forEach((step: PathStep, i: number) => {
       const pos = new RoomPosition(step.x, step.y, room.name);
       const hasRoad = pos
         .lookFor(LOOK_STRUCTURES)
@@ -1180,11 +1189,13 @@ function generateRoadTasksFromAnchor(
 
   // Path to controller
   if (controller) {
-    const path = anchor.findPathTo(controller.pos, {
-      ignoreCreeps: true,
-      ignoreRoads: false,
-    });
-    path.forEach((step, i) => {
+    const path = getCachedPath(
+      room,
+      `to:controller:${controller.id}`,
+      anchor,
+      controller.pos
+    );
+    path.forEach((step: PathStep, i: number) => {
       const pos = new RoomPosition(step.x, step.y, room.name);
       const hasRoad = pos
         .lookFor(LOOK_STRUCTURES)
@@ -1205,11 +1216,13 @@ function generateRoadTasksFromAnchor(
 
   // Path to mineral (optional; low priority)
   if (mineral) {
-    const path = anchor.findPathTo(mineral.pos, {
-      ignoreCreeps: true,
-      ignoreRoads: false,
-    });
-    path.forEach((step, i) => {
+    const path = getCachedPath(
+      room,
+      `to:mineral:${mineral.id}`,
+      anchor,
+      mineral.pos
+    );
+    path.forEach((step: PathStep, i: number) => {
       const pos = new RoomPosition(step.x, step.y, room.name);
       const hasRoad = pos
         .lookFor(LOOK_STRUCTURES)
@@ -1229,6 +1242,268 @@ function generateRoadTasksFromAnchor(
   }
 
   return tasks;
+}
+
+// Ensure short connectors from spawns/storage/terminal to the core cross, so haulers don't get stuck on last tiles
+function generateCoreConnectorTasks(
+  intel: RoomIntelligence,
+  anchor: RoomPosition,
+  core: {
+    roads: RoomPosition[];
+    storage: RoomPosition | null;
+    terminal: RoomPosition | null;
+    towerSlots: RoomPosition[];
+  }
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const connectors: RoomPosition[] = [];
+
+  const spawns = room.find(FIND_MY_SPAWNS);
+  for (const s of spawns) {
+    // Direct straight connector to anchor along x then y
+    const path = s.pos.findPathTo(anchor, {
+      ignoreCreeps: true,
+      ignoreRoads: false,
+    });
+    for (let i = 0; i < Math.min(4, path.length); i++) {
+      const st = path[i];
+      connectors.push(new RoomPosition(st.x, st.y, room.name));
+    }
+  }
+  if (core.storage) {
+    const path = core.storage.findPathTo(anchor, {
+      ignoreCreeps: true,
+      ignoreRoads: false,
+    });
+    for (let i = 0; i < Math.min(3, path.length); i++) {
+      const st = path[i];
+      connectors.push(new RoomPosition(st.x, st.y, room.name));
+    }
+  }
+  if (core.terminal) {
+    const path = core.terminal.findPathTo(anchor, {
+      ignoreCreeps: true,
+      ignoreRoads: false,
+    });
+    for (let i = 0; i < Math.min(3, path.length); i++) {
+      const st = path[i];
+      connectors.push(new RoomPosition(st.x, st.y, room.name));
+    }
+  }
+
+  for (const pos of connectors) {
+    const hasRoad = pos
+      .lookFor(LOOK_STRUCTURES)
+      .some((s) => s.structureType === STRUCTURE_ROAD);
+    if (!hasRoad && isValidBuildPosition(pos)) {
+      tasks.push({
+        type: STRUCTURE_ROAD,
+        pos,
+        priority: 91.5,
+        reason: "Connector to hub",
+        estimatedCost: 300,
+        dependencies: [],
+        urgent: true,
+      });
+    }
+  }
+  return tasks;
+}
+
+// Widen the trunk near the anchor to reduce congestion (small 2-wide segment on N/S/E/W for 3 tiles)
+function generateHubWideningTasks(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const widenOffsets: Array<{ x: number; y: number }> = [];
+  for (let d = -2; d <= 2; d++) {
+    widenOffsets.push({ x: 1, y: d });
+    widenOffsets.push({ x: -1, y: d });
+    widenOffsets.push({ x: d, y: 1 });
+    widenOffsets.push({ x: d, y: -1 });
+  }
+  const added = new Set<string>();
+  for (const o of widenOffsets) {
+    const x = anchor.x + o.x;
+    const y = anchor.y + o.y;
+    if (!inBounds(x, y)) continue;
+    const pos = new RoomPosition(x, y, room.name);
+    const key = posKey(pos);
+    if (added.has(key)) continue;
+    const hasRoad = pos
+      .lookFor(LOOK_STRUCTURES)
+      .some((s) => s.structureType === STRUCTURE_ROAD);
+    if (!hasRoad && isValidBuildPosition(pos)) {
+      tasks.push({
+        type: STRUCTURE_ROAD,
+        pos,
+        priority: 91.2,
+        reason: "Widen hub trunk",
+        estimatedCost: 300,
+        dependencies: [],
+        urgent: false,
+      });
+      added.add(key);
+    }
+  }
+  return tasks;
+}
+
+// Add a small redundancy loop around the core cross (ring at radius 3 around anchor)
+function generateCoreLoopTasks(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const r = 3;
+  for (let dx = -r; dx <= r; dx++) {
+    for (let dy = -r; dy <= r; dy++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = anchor.x + dx;
+      const y = anchor.y + dy;
+      if (!inBounds(x, y)) continue;
+      const pos = new RoomPosition(x, y, room.name);
+      const hasRoad = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_ROAD);
+      if (!hasRoad && isValidBuildPosition(pos)) {
+        tasks.push({
+          type: STRUCTURE_ROAD,
+          pos,
+          priority: 60,
+          reason: "Core redundancy loop",
+          estimatedCost: 300,
+          dependencies: [],
+          urgent: false,
+        });
+      }
+    }
+  }
+  return tasks;
+}
+
+// Create short spur roads around the endpoint tiles for sources, controller, and mineral
+function generateEndpointPadRoads(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room) return tasks;
+  const poi: RoomPosition[] = [];
+  const sources = room.find(FIND_SOURCES);
+  for (const s of sources) poi.push(s.pos);
+  if (room.controller) poi.push(room.controller.pos);
+  const mineral = room.find(FIND_MINERALS)[0];
+  if (mineral) poi.push(mineral.pos);
+
+  const seen = new Set<string>();
+  for (const p of poi) {
+    // Find path to get the last step near the POI
+    const path = anchor.findPathTo(p, {
+      ignoreCreeps: true,
+      ignoreRoads: false,
+    });
+    if (path.length === 0) continue;
+    const last = path[path.length - 1];
+    const end = new RoomPosition(last.x, last.y, room.name);
+    // Cross of four tiles around the endpoint (not including the POI tile itself)
+    const offsets = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ];
+    for (const o of offsets) {
+      const x = end.x + o.x;
+      const y = end.y + o.y;
+      if (!inBounds(x, y)) continue;
+      const pos = new RoomPosition(x, y, room.name);
+      const key = posKey(pos);
+      if (seen.has(key)) continue;
+      const hasRoad = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_ROAD);
+      if (!hasRoad && isValidBuildPosition(pos)) {
+        tasks.push({
+          type: STRUCTURE_ROAD,
+          pos,
+          priority: 57,
+          reason: "Endpoint pad spur",
+          estimatedCost: 300,
+          dependencies: [],
+          urgent: false,
+        });
+        seen.add(key);
+      }
+    }
+  }
+  return tasks;
+}
+
+// Cache room paths to reduce CPU; invalidates with TTL or anchor change
+function getCachedPath(
+  room: Room,
+  key: string,
+  from: RoomPosition,
+  to: RoomPosition,
+  ttl: number = 5000
+): PathStep[] {
+  const mem = getRoomMemory(room.name);
+  mem.construction = mem.construction || ({} as any);
+  const anchorKey = `${from.x}:${from.y}`;
+  if (!mem.construction.paths) (mem.construction as any).paths = {};
+  const store: any = (mem.construction as any).paths;
+  const rec = store[key];
+  const now = Game.time;
+  const needsRecalc =
+    !rec ||
+    !rec.path ||
+    rec.anchorKey !== anchorKey ||
+    now - (rec.time || 0) > ttl;
+  if (needsRecalc) {
+    const result = PathFinder.search(
+      from,
+      { pos: to, range: 1 },
+      {
+        plainCost: 2,
+        swampCost: 5,
+        maxOps: 2000,
+        roomCallback: (name) => {
+          if (name !== room.name) return false as any;
+          return new PathFinder.CostMatrix();
+        },
+      }
+    );
+    const steps: PathStep[] = [];
+    let last = from;
+    for (const p of result.path) {
+      const dx = p.x - last.x;
+      const dy = p.y - last.y;
+      const direction = last.getDirectionTo(p);
+      steps.push({ x: p.x, y: p.y, dx, dy, direction } as PathStep);
+      last = p;
+    }
+    store[key] = { time: now, anchorKey, path: steps.map((s) => [s.x, s.y]) };
+    return steps;
+  }
+  const arr: Array<[number, number]> = rec.path;
+  let lastPos = from;
+  const steps: PathStep[] = arr.map(([x, y]) => {
+    const dx = x - lastPos.x;
+    const dy = y - lastPos.y;
+    const direction = lastPos.getDirectionTo(new RoomPosition(x, y, room.name));
+    lastPos = new RoomPosition(x, y, room.name);
+    return { x, y, dx, dy, direction } as PathStep;
+  });
+  return steps;
 }
 
 function generateLabTasksNearCore(

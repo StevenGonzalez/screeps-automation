@@ -3,8 +3,8 @@ import { ConstructionPlan, ConstructionTask } from "./room.construction";
 
 // Max construction sites per player is 100. Keep a buffer.
 const GLOBAL_SITE_BUFFER = 5;
-// Limit number of sites we try to place per room per tick
-const SITES_PER_TICK = 3;
+// Baseline per-room site budget; actual budget is computed dynamically
+const BASE_SITES_PER_TICK = 2;
 
 export function executeConstructionPlan(
   room: Room,
@@ -19,8 +19,11 @@ export function executeConstructionPlan(
   const remainingGlobal = Math.max(0, 100 - GLOBAL_SITE_BUFFER - totalSites);
   if (remainingGlobal <= 0) return;
 
-  // Determine how many to place this tick in this room
-  let budget = Math.min(SITES_PER_TICK, remainingGlobal);
+  // Determine how many to place this tick in this room (dynamic pacing)
+  let budget = Math.min(
+    computeRoomSiteBudget(room, plan, intel),
+    remainingGlobal
+  );
 
   // Prioritize tasks based on plan.priorities (critical -> important -> normal)
   const prioritized: ConstructionTask[] = [
@@ -50,6 +53,40 @@ export function executeConstructionPlan(
       continue;
     }
   }
+}
+
+function computeRoomSiteBudget(
+  room: Room,
+  plan: ConstructionPlan,
+  intel: any
+): number {
+  const builders = (intel?.creeps?.byRole?.builder as number) || 0;
+  const energyAvail =
+    intel?.economy?.energyAvailable ?? room.energyAvailable ?? 0;
+  const energyCap =
+    intel?.economy?.energyCapacity ?? room.energyCapacityAvailable ?? 300;
+  const stored =
+    intel?.economy?.energyStored ??
+    (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) || 0);
+
+  const energyRatio = Math.max(
+    0,
+    Math.min(1, energyAvail / Math.max(1, energyCap))
+  );
+  const storedFactor = Math.max(0.5, Math.min(1.5, stored / 50000)); // small boost if well-stocked
+
+  // Start with baseline, add capacity with more builders
+  let target = BASE_SITES_PER_TICK + Math.floor(builders / 2);
+  // Scale by current energy availability and stock
+  target = Math.floor(target * (0.5 + 0.5 * energyRatio) * storedFactor);
+
+  // Keep within sane bounds
+  if (room.controller) {
+    const rcl = room.controller.level;
+    const cap = rcl <= 3 ? 2 : rcl <= 5 ? 3 : 5;
+    target = Math.min(target, cap);
+  }
+  return Math.max(1, target);
 }
 
 function dependenciesSatisfied(room: Room, task: ConstructionTask): boolean {
