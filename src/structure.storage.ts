@@ -158,9 +158,14 @@ function fillCriticalStructures(storage: StructureStorage, room: Room): void {
 
   // This creates demand that haulers will fulfill
   if (criticalStructures.length > 0) {
-    console.log(
-      `🏪 Storage: ${criticalStructures.length} structures need energy`
-    );
+    const throttle = getStorageLogThrottle(room);
+    const cooldown = 100; // log at most once per 100 ticks per room
+    if (Game.time - throttle.room.criticalStructuresLast >= cooldown) {
+      console.log(
+        `🏪 Storage: ${criticalStructures.length} structures need energy`
+      );
+      throttle.room.criticalStructuresLast = Game.time;
+    }
   }
 }
 
@@ -186,12 +191,21 @@ function balanceContainerEnergy(
       fillRatio > 0.8 &&
       storage.store.getFreeCapacity(RESOURCE_ENERGY) > 10000
     ) {
-      // Haulers will handle the actual transfer
-      console.log(
-        `📦 Container ${container.id} needs emptying (${Math.round(
-          fillRatio * 100
-        )}% full)`
-      );
+      // Haulers will handle the actual transfer; throttle repetitive logs
+      const state = getContainerLogState(room, container.id);
+      const cooldown = 300;
+      if (!state.overfull || Game.time - state.lastEmptying >= cooldown) {
+        console.log(
+          `📦 Container ${container.id} needs emptying (${Math.round(
+            fillRatio * 100
+          )}% full)`
+        );
+        state.lastEmptying = Game.time;
+      }
+      state.overfull = true;
+    } else {
+      const state = getContainerLogState(room, container.id);
+      state.overfull = false;
     }
 
     // Move energy from storage to underfull source containers
@@ -200,11 +214,20 @@ function balanceContainerEnergy(
       isSourceContainer(container) &&
       storage.store.getUsedCapacity(RESOURCE_ENERGY) > 100000
     ) {
-      console.log(
-        `📦 Source container ${container.id} needs filling (${Math.round(
-          fillRatio * 100
-        )}% full)`
-      );
+      const state = getContainerLogState(room, container.id);
+      const cooldown = 300;
+      if (!state.needsFill || Game.time - state.lastFilling >= cooldown) {
+        console.log(
+          `📦 Source container ${container.id} needs filling (${Math.round(
+            fillRatio * 100
+          )}% full)`
+        );
+        state.lastFilling = Game.time;
+      }
+      state.needsFill = true;
+    } else if (isSourceContainer(container)) {
+      const state = getContainerLogState(room, container.id);
+      state.needsFill = false;
     }
   }
 }
@@ -218,15 +241,31 @@ function handleStorageOverflow(storage: StructureStorage, room: Room): void {
     storage.store.getCapacity(RESOURCE_ENERGY);
 
   if (energyRatio > 0.95) {
-    console.log(
-      `🚨 Storage overflow warning! (${Math.round(energyRatio * 100)}% full)`
-    );
+    const throttle = getStorageLogThrottle(room);
+    const cooldown = 300; // avoid spamming while above threshold
+    if (
+      !throttle.room.overflowActive ||
+      Game.time - throttle.room.overflowLast >= cooldown
+    ) {
+      console.log(
+        `🚨 Storage overflow warning! (${Math.round(energyRatio * 100)}% full)`
+      );
+      throttle.room.overflowLast = Game.time;
+    }
+    throttle.room.overflowActive = true;
 
     // Emergency: boost upgrader work if controller isn't maxed
     const controller = room.controller;
     if (controller && controller.level < 8) {
-      console.log(`⚡ Boosting controller upgrade due to energy overflow`);
+      const boostCooldown = 500;
+      if (Game.time - throttle.room.boostLast >= boostCooldown) {
+        console.log(`⚡ Boosting controller upgrade due to energy overflow`);
+        throttle.room.boostLast = Game.time;
+      }
     }
+  } else {
+    const throttle = getStorageLogThrottle(room);
+    throttle.room.overflowActive = false;
   }
 }
 
@@ -282,11 +321,17 @@ function maintainContainer(container: StructureContainer, room: Room): void {
   // Report container efficiency
   const fillRatio =
     container.store.getUsedCapacity() / container.store.getCapacity();
-  if (Game.time % 100 === 0) {
-    // Report every 100 ticks
+  // Sample this per room, not per container, to reduce spam
+  const sampleThrottle = getStorageLogThrottle(room);
+  const sampleCooldown = 300;
+  if (
+    Game.time - sampleThrottle.room.containerFillSampleLast >=
+    sampleCooldown
+  ) {
     console.log(
       `📊 Container ${container.id}: ${Math.round(fillRatio * 100)}% full`
     );
+    sampleThrottle.room.containerFillSampleLast = Game.time;
   }
 }
 
@@ -301,6 +346,45 @@ function getContainerRepairLog(room: Room): {
   return r.storage.containerRepairLog as {
     [id: string]: { lastLog: number; lastHits: number };
   };
+}
+
+// Room-level storage log throttles/state
+function getStorageLogThrottle(room: Room): any {
+  if (!Memory.rooms) Memory.rooms = {} as any;
+  if (!Memory.rooms[room.name]) (Memory.rooms as any)[room.name] = {};
+  const r = (Memory.rooms as any)[room.name];
+  if (!r.storage) r.storage = {};
+  if (!r.storage.logThrottle) r.storage.logThrottle = {};
+  if (!r.storage.logThrottle.room)
+    r.storage.logThrottle.room = {
+      criticalStructuresLast: 0,
+      overflowLast: 0,
+      overflowActive: false,
+      boostLast: 0,
+      containerFillSampleLast: 0,
+    };
+  if (!r.storage.logThrottle.containers) r.storage.logThrottle.containers = {};
+  return r.storage.logThrottle;
+}
+
+// Per-container log state holder (not yet used everywhere)
+function getContainerLogState(
+  room: Room,
+  id: Id<StructureContainer> | string
+): any {
+  const throttle = getStorageLogThrottle(room);
+  if (!throttle.containers[id])
+    throttle.containers[id] = {
+      lastEmptying: 0,
+      lastFilling: 0,
+      overfull: false,
+      needsFill: false,
+      sourceState: "normal" as "full" | "empty" | "normal",
+      lastSourceExtrema: 0,
+      controllerLow: false,
+      lastControllerLow: 0,
+    };
+  return throttle.containers[id];
 }
 
 /**
@@ -334,12 +418,22 @@ function manageSourceContainer(
     container.store.getUsedCapacity(RESOURCE_ENERGY) /
     container.store.getCapacity(RESOURCE_ENERGY);
 
-  if (fillRatio > 0.9) {
-    console.log(`⛏️ Source container full - need more haulers`);
-  }
+  const state = getContainerLogState(room, container.id);
+  const prev = state.sourceState || "normal";
+  let next: "full" | "empty" | "normal" = "normal";
+  if (fillRatio > 0.9) next = "full";
+  else if (fillRatio < 0.1) next = "empty";
 
-  if (fillRatio < 0.1) {
-    console.log(`⛏️ Source container empty - harvesters may be idle`);
+  if (next !== prev) {
+    const cooldown = 300;
+    if (Game.time - state.lastSourceExtrema >= cooldown) {
+      if (next === "full")
+        console.log(`⛏️ Source container full - need more haulers`);
+      if (next === "empty")
+        console.log(`⛏️ Source container empty - harvesters may be idle`);
+      state.lastSourceExtrema = Game.time;
+    }
+    state.sourceState = next;
   }
 }
 
@@ -354,8 +448,20 @@ function manageControllerContainer(
     container.store.getUsedCapacity(RESOURCE_ENERGY) /
     container.store.getCapacity(RESOURCE_ENERGY);
 
-  if (fillRatio < 0.3 && room.controller && room.controller.level < 8) {
-    console.log(`🏛️ Controller container low - upgraders may idle soon`);
+  const state = getContainerLogState(room, container.id);
+  const low = fillRatio < 0.3 && room.controller && room.controller.level < 8;
+  const cooldown = 300;
+  if (low) {
+    if (
+      !state.controllerLow ||
+      Game.time - state.lastControllerLow >= cooldown
+    ) {
+      console.log(`🏛️ Controller container low - upgraders may idle soon`);
+      state.lastControllerLow = Game.time;
+    }
+    state.controllerLow = true;
+  } else {
+    state.controllerLow = false;
   }
 }
 
