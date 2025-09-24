@@ -231,6 +231,9 @@ function generateConstructionTasks(
     }
   }
 
+  // 6a) Controller connector spur: short road from controller-side container (or nearest tile) back to hub
+  tasks.push(...generateControllerConnectorSpur(intel, anchor));
+
   // 7) Roads to sources and controller from core anchor (prefer after core)
   tasks.push(...generateRoadTasksFromAnchor(intel, anchor));
 
@@ -1546,6 +1549,68 @@ function generateEndpointPadRoads(
         });
         seen.add(key);
       }
+    }
+  }
+  return tasks;
+}
+
+// Create a short connector from controller's container (or nearest step) back to the hub trunk
+function generateControllerConnectorSpur(
+  intel: RoomIntelligence,
+  anchor: RoomPosition
+): ConstructionTask[] {
+  const tasks: ConstructionTask[] = [];
+  const room = Game.rooms[intel.basic.name];
+  if (!room || !room.controller) return tasks;
+  const ctrl = room.controller;
+
+  // Prefer a container tile adjacent to the controller
+  let start: RoomPosition | null = null;
+  const nearContainers = ctrl.pos
+    .findInRange(FIND_STRUCTURES, 2)
+    .filter((s) => s.structureType === STRUCTURE_CONTAINER);
+  if (nearContainers.length) start = nearContainers[0].pos;
+  if (!start) {
+    // Otherwise, pick a walkable tile near controller edge
+    const terrain = room.getTerrain();
+    for (let dx = -1; dx <= 1 && !start; dx++) {
+      for (let dy = -1; dy <= 1 && !start; dy++) {
+        const x = ctrl.pos.x + dx;
+        const y = ctrl.pos.y + dy;
+        if (!inBounds(x, y)) continue;
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+        const pos = new RoomPosition(x, y, room.name);
+        // Avoid placing directly on controller tile
+        if (pos.isEqualTo(ctrl.pos)) continue;
+        start = pos;
+      }
+    }
+  }
+  if (!start) return tasks;
+
+  // Short path segment from start → anchor
+  const path = getCachedPath(
+    room,
+    `connector:controller:${start.x}:${start.y}`,
+    start,
+    anchor
+  );
+  for (let i = 0; i < Math.min(3, path.length); i++) {
+    const st = path[i];
+    const p = new RoomPosition(st.x, st.y, room.name);
+    const hasRoad = p
+      .lookFor(LOOK_STRUCTURES)
+      .some((s) => s.structureType === STRUCTURE_ROAD);
+    if (!hasRoad && isValidBuildPosition(p)) {
+      tasks.push({
+        type: STRUCTURE_ROAD,
+        pos: p,
+        priority: 83.2 - i * 0.1,
+        reason: "Controller connector spur",
+        estimatedCost: 300,
+        dependencies: [],
+        urgent: intel.basic.rcl <= 3,
+      });
     }
   }
   return tasks;
