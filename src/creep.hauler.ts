@@ -3,7 +3,17 @@ import { CreepPersonality } from "./creep.personality";
 
 export function runHauler(creep: Creep, intel: any): void {
   if (creep.store.getUsedCapacity() === 0) {
-    // Acquire
+    // New acquire cycle: clear last withdraw memory to avoid over-filtering
+    if (creep.memory.lastWithdrawId) delete creep.memory.lastWithdrawId;
+
+    // Urgent: drain near-full source containers first to unblock miners
+    const urgentSource = creep.room.find(FIND_STRUCTURES, {
+      filter: (s: AnyStructure) =>
+        s.structureType === STRUCTURE_CONTAINER &&
+        isSourceContainer(s as StructureContainer) &&
+        (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) <= 100,
+    }) as StructureContainer[];
+
     const containers = creep.room.find(FIND_STRUCTURES, {
       filter: (s: AnyStructure) => {
         const hasEnergy =
@@ -29,6 +39,7 @@ export function runHauler(creep: Creep, intel: any): void {
     });
 
     let target: any =
+      creep.pos.findClosestByPath(urgentSource) ||
       creep.pos.findClosestByPath(containers) ||
       creep.pos.findClosestByPath(dropped) ||
       creep.pos.findClosestByPath(tombs) ||
@@ -84,6 +95,17 @@ export function runHauler(creep: Creep, intel: any): void {
       }
     }
     if (!target) {
+      // Then deliver to controller container to feed upgraders
+      const ctrlContainers = creep.room.find(FIND_STRUCTURES, {
+        filter: (s: AnyStructure) =>
+          s.structureType === STRUCTURE_CONTAINER &&
+          isControllerContainer(s as StructureContainer) &&
+          (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+          s.id !== creep.memory.lastWithdrawId,
+      }) as AnyStoreStructure[];
+      target = creep.pos.findClosestByPath(ctrlContainers) || null;
+    }
+    if (!target) {
       // Fallback to non-controller, non-source containers; avoid putting back to where we withdrew
       const storeTargets = creep.room.find(FIND_STRUCTURES, {
         filter: (s: AnyStructure) =>
@@ -100,7 +122,11 @@ export function runHauler(creep: Creep, intel: any): void {
       if (res === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, { visualizePathStyle: { stroke: "#ffffff" } });
         CreepPersonality.speak(creep, "move");
-      } else if (res === OK) CreepPersonality.speak(creep, "transfer");
+      } else if (res === OK) {
+        // Successful drop-off; allow future deposits anywhere again
+        if (creep.memory.lastWithdrawId) delete creep.memory.lastWithdrawId;
+        CreepPersonality.speak(creep, "transfer");
+      }
     } else {
       CreepPersonality.speak(creep, "frustrated");
     }
@@ -109,7 +135,7 @@ export function runHauler(creep: Creep, intel: any): void {
 
 function isControllerContainer(container: StructureContainer): boolean {
   const ctrl = container.room.controller;
-  return !!ctrl && container.pos.inRangeTo(ctrl.pos, 2);
+  return !!ctrl && container.pos.inRangeTo(ctrl.pos, 3);
 }
 
 function isSourceContainer(container: StructureContainer): boolean {
