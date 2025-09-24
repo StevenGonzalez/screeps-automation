@@ -5,10 +5,18 @@ export function runHauler(creep: Creep, intel: any): void {
   if (creep.store.getUsedCapacity() === 0) {
     // Acquire
     const containers = creep.room.find(FIND_STRUCTURES, {
-      filter: (s: AnyStructure) =>
-        (s.structureType === STRUCTURE_CONTAINER ||
-          s.structureType === STRUCTURE_STORAGE) &&
-        (s as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) > 100,
+      filter: (s: AnyStructure) => {
+        const hasEnergy =
+          (s as AnyStoreStructure).store?.getUsedCapacity?.(RESOURCE_ENERGY) >
+          100;
+        if (!hasEnergy) return false;
+        if (s.structureType === STRUCTURE_STORAGE) return true;
+        if (s.structureType === STRUCTURE_CONTAINER) {
+          // Avoid controller container on pickup; let upgraders use it
+          return !isControllerContainer(s as StructureContainer);
+        }
+        return false;
+      },
     });
     const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
       filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50,
@@ -39,7 +47,11 @@ export function runHauler(creep: Creep, intel: any): void {
         if (res === ERR_NOT_IN_RANGE) {
           creep.moveTo(target);
           CreepPersonality.speak(creep, "move");
-        } else if (res === OK) CreepPersonality.speak(creep, "withdraw");
+        } else if (res === OK) {
+          // Remember source to avoid depositing back into the same structure
+          creep.memory.lastWithdrawId = (target as Structure).id;
+          CreepPersonality.speak(creep, "withdraw");
+        }
       }
     } else {
       const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
@@ -61,11 +73,25 @@ export function runHauler(creep: Creep, intel: any): void {
     }) as AnyStoreStructure[];
     let target = creep.pos.findClosestByPath(fillTargets);
     if (!target) {
+      // Prefer storage first
+      const storage = creep.room.storage;
+      if (
+        storage &&
+        storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+        storage.id !== creep.memory.lastWithdrawId
+      ) {
+        target = storage as AnyStoreStructure;
+      }
+    }
+    if (!target) {
+      // Fallback to non-controller, non-source containers; avoid putting back to where we withdrew
       const storeTargets = creep.room.find(FIND_STRUCTURES, {
         filter: (s: AnyStructure) =>
-          (s.structureType === STRUCTURE_CONTAINER ||
-            s.structureType === STRUCTURE_STORAGE) &&
-          (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+          s.structureType === STRUCTURE_CONTAINER &&
+          !isControllerContainer(s as StructureContainer) &&
+          !isSourceContainer(s as StructureContainer) &&
+          (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+          s.id !== creep.memory.lastWithdrawId,
       }) as AnyStoreStructure[];
       target = creep.pos.findClosestByPath(storeTargets) || null;
     }
@@ -79,4 +105,17 @@ export function runHauler(creep: Creep, intel: any): void {
       CreepPersonality.speak(creep, "frustrated");
     }
   }
+}
+
+function isControllerContainer(container: StructureContainer): boolean {
+  const ctrl = container.room.controller;
+  return !!ctrl && container.pos.inRangeTo(ctrl.pos, 2);
+}
+
+function isSourceContainer(container: StructureContainer): boolean {
+  const room = container.room;
+  const near = room.find(FIND_SOURCES, {
+    filter: (s) => container.pos.isNearTo(s.pos),
+  });
+  return near.length > 0;
 }
