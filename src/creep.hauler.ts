@@ -1,4 +1,5 @@
 /// <reference types="@types/screeps" />
+import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
 
 export function runHauler(creep: Creep, intel: any): void {
@@ -67,7 +68,7 @@ export function runHauler(creep: Creep, intel: any): void {
     } else {
       const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
       if (source && creep.pos.getRangeTo(source) > 3) {
-        creep.moveTo(source, { visualizePathStyle: { stroke: "#ffaa00" } });
+        creep.moveTo(source, { visualizePathStyle: style("harvest") });
         CreepPersonality.speak(creep, "move");
       } else {
         CreepPersonality.speak(creep, "idle");
@@ -120,7 +121,7 @@ export function runHauler(creep: Creep, intel: any): void {
     if (target) {
       const res = creep.transfer(target, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: "#ffffff" } });
+        creep.moveTo(target, { visualizePathStyle: style("transfer") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         // Successful drop-off; allow future deposits anywhere again

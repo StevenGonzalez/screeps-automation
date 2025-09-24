@@ -1,4 +1,5 @@
 /// <reference types="@types/screeps" />
+import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
 
 export function runHarvester(creep: Creep, intel: any): void {
@@ -24,7 +25,7 @@ export function runHarvester(creep: Creep, intel: any): void {
     if (source) {
       const res = creep.harvest(source);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(source, { visualizePathStyle: { stroke: "#ffaa00" } });
+        creep.moveTo(source, { visualizePathStyle: style("harvest") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         CreepPersonality.speak(creep, "harvest");
@@ -60,7 +61,7 @@ export function runHarvester(creep: Creep, intel: any): void {
       if (target) {
         const res = creep.transfer(target, RESOURCE_ENERGY);
         if (res === ERR_NOT_IN_RANGE) {
-          creep.moveTo(target, { visualizePathStyle: { stroke: "#ffffff" } });
+          creep.moveTo(target, { visualizePathStyle: style("transfer") });
           CreepPersonality.speak(creep, "move");
         } else if (res === OK) CreepPersonality.speak(creep, "transfer");
       }
@@ -68,7 +69,7 @@ export function runHarvester(creep: Creep, intel: any): void {
       // No valid dropoff: hover near spawn to await capacity
       const spawn = creep.pos.findClosestByPath(FIND_MY_SPAWNS);
       if (spawn) {
-        creep.moveTo(spawn, { visualizePathStyle: { stroke: "#888888" } });
+        creep.moveTo(spawn, { visualizePathStyle: style("transfer") });
         CreepPersonality.speak(creep, "move");
       } else {
         CreepPersonality.speak(creep, "frustrated");

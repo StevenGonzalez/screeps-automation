@@ -8,6 +8,7 @@
 /// <reference types="@types/screeps" />
 
 import { CreepPersonality } from "./creep.personality";
+import { style } from "./path.styles";
 
 // Extend global interfaces for our custom memory properties
 declare global {
@@ -48,7 +49,7 @@ export class CreepActions {
     options: ActionOptions = {}
   ): ActionResult {
     const defaultOptions: ActionOptions = {
-      visualizePathStyle: { stroke: "#ffffff" },
+      visualizePathStyle: style("move"),
       reusePath: 10,
       serializeMemory: true,
       maxOps: 4000,
@@ -111,9 +112,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, source, {
-          visualizePathStyle: { stroke: "#ffaa00" },
-        });
+        this.moveTo(creep, source, { visualizePathStyle: style("harvest") });
         if (!options.silent && Math.random() < 0.1) {
           CreepPersonality.speak(creep, "move");
         }
@@ -165,7 +164,7 @@ export class CreepActions {
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
         this.moveTo(creep, structure, {
-          visualizePathStyle: { stroke: "#00ff00" },
+          visualizePathStyle: style("transfer"),
         });
         return ActionResult.IN_PROGRESS;
       case ERR_FULL:
@@ -216,7 +215,7 @@ export class CreepActions {
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
         this.moveTo(creep, structure, {
-          visualizePathStyle: { stroke: "#0000ff" },
+          visualizePathStyle: style("withdraw"),
         });
         return ActionResult.IN_PROGRESS;
       case ERR_FULL:
@@ -257,9 +256,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, site, {
-          visualizePathStyle: { stroke: "#ffffff" },
-        });
+        this.moveTo(creep, site, { visualizePathStyle: style("build") });
         return ActionResult.IN_PROGRESS;
       case ERR_NOT_ENOUGH_RESOURCES:
         return ActionResult.NO_RESOURCES;
@@ -303,9 +300,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, structure, {
-          visualizePathStyle: { stroke: "#00ffff" },
-        });
+        this.moveTo(creep, structure, { visualizePathStyle: style("repair") });
         return ActionResult.IN_PROGRESS;
       case ERR_NOT_ENOUGH_RESOURCES:
         return ActionResult.NO_RESOURCES;
@@ -345,7 +340,7 @@ export class CreepActions {
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
         this.moveTo(creep, controller, {
-          visualizePathStyle: { stroke: "#ff00ff" },
+          visualizePathStyle: style("upgrade"),
         });
         return ActionResult.IN_PROGRESS;
       case ERR_NOT_ENOUGH_RESOURCES:
@@ -385,9 +380,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, target, {
-          visualizePathStyle: { stroke: "#ff0000" },
-        });
+        this.moveTo(creep, target, { visualizePathStyle: style("attack") });
         return ActionResult.IN_PROGRESS;
       case ERR_INVALID_TARGET:
         return ActionResult.TARGET_NOT_FOUND;
@@ -438,9 +431,7 @@ export class CreepActions {
           return ActionResult.SUCCESS;
         }
 
-        this.moveTo(creep, target, {
-          visualizePathStyle: { stroke: "#00ff00" },
-        });
+        this.moveTo(creep, target, { visualizePathStyle: style("heal") });
         return ActionResult.IN_PROGRESS;
       case ERR_INVALID_TARGET:
         return ActionResult.TARGET_NOT_FOUND;
@@ -608,9 +599,7 @@ export class CreepActions {
     if (safePos) {
       // Creep panics when fleeing
       CreepPersonality.speak(creep, "flee", true); // Force speech when fleeing
-      return this.moveTo(creep, safePos, {
-        visualizePathStyle: { stroke: "#ff0000", strokeWidth: 0.3 },
-      });
+      return this.moveTo(creep, safePos, { visualizePathStyle: style("flee") });
     }
 
     return ActionResult.FAILED;

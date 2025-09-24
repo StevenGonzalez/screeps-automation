@@ -1,4 +1,5 @@
 /// <reference types="@types/screeps" />
+import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
 
 export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
@@ -8,7 +9,7 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
     if (target) {
       const res = creep.attack(target);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: "#ff0000" } });
+        creep.moveTo(target, { visualizePathStyle: style("attack") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         CreepPersonality.speak(creep, "attack");
