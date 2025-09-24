@@ -1,4 +1,5 @@
 /// <reference types="@types/screeps" />
+import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
 
 export function runWorker(creep: Creep, intel: any): void {
@@ -8,7 +9,7 @@ export function runWorker(creep: Creep, intel: any): void {
     if (source) {
       const res = creep.harvest(source);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(source);
+        creep.moveTo(source, { visualizePathStyle: style("harvest") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         CreepPersonality.speak(creep, "harvest");
@@ -20,7 +21,7 @@ export function runWorker(creep: Creep, intel: any): void {
     if (target) {
       const res = creep.build(target);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target);
+        creep.moveTo(target, { visualizePathStyle: style("build") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         CreepPersonality.speak(creep, "build");
@@ -28,7 +29,9 @@ export function runWorker(creep: Creep, intel: any): void {
     } else if (creep.room.controller) {
       const res = creep.upgradeController(creep.room.controller);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(creep.room.controller);
+        creep.moveTo(creep.room.controller, {
+          visualizePathStyle: style("upgrade"),
+        });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         CreepPersonality.speak(creep, "upgrade");

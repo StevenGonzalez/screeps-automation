@@ -40,7 +40,7 @@ export function runBuilder(
     const target = creep.pos.findClosestByPath(sites);
     if (target) {
       if (creep.build(target) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target);
+        creep.moveTo(target, { visualizePathStyle: style("build") });
         CreepPersonality.speak(creep, "move");
       } else {
         CreepPersonality.speak(creep, "build");
@@ -70,7 +70,7 @@ export function runBuilder(
     if (target) {
       const res = creep.withdraw(target, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target);
+        creep.moveTo(target, { visualizePathStyle: style("withdraw") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         CreepPersonality.speak(creep, "withdraw");
@@ -82,7 +82,7 @@ export function runBuilder(
       const d = creep.pos.findClosestByPath(dropped);
       if (d) {
         if (creep.pickup(d) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(d);
+          creep.moveTo(d, { visualizePathStyle: style("withdraw") });
           CreepPersonality.speak(creep, "move");
         } else {
           CreepPersonality.speak(creep, "withdraw");

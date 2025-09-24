@@ -1,4 +1,5 @@
 /// <reference types="@types/screeps" />
+import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
 
 export function runRepairer(creep: Creep, intel: any): void {
@@ -65,7 +66,7 @@ export function runRepairer(creep: Creep, intel: any): void {
     if (target) {
       const res = creep.repair(target);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: "#00ff00" } });
+        creep.moveTo(target, { visualizePathStyle: style("repair") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         CreepPersonality.speak(creep, "repair");
@@ -77,10 +78,14 @@ export function runRepairer(creep: Creep, intel: any): void {
       );
       if (site) {
         const res = creep.build(site);
-        if (res === ERR_NOT_IN_RANGE) creep.moveTo(site);
+        if (res === ERR_NOT_IN_RANGE)
+          creep.moveTo(site, { visualizePathStyle: style("build") });
       } else if (creep.room.controller) {
         const res = creep.upgradeController(creep.room.controller);
-        if (res === ERR_NOT_IN_RANGE) creep.moveTo(creep.room.controller);
+        if (res === ERR_NOT_IN_RANGE)
+          creep.moveTo(creep.room.controller, {
+            visualizePathStyle: style("upgrade"),
+          });
       }
     }
   }

@@ -49,7 +49,7 @@ export function runHauler(creep: Creep, intel: any): void {
     if (target) {
       if (target instanceof Resource) {
         if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(target);
+          creep.moveTo(target, { visualizePathStyle: style("withdraw") });
           CreepPersonality.speak(creep, "move");
         } else {
           CreepPersonality.speak(creep, "withdraw");
@@ -57,7 +57,7 @@ export function runHauler(creep: Creep, intel: any): void {
       } else {
         const res = creep.withdraw(target, RESOURCE_ENERGY);
         if (res === ERR_NOT_IN_RANGE) {
-          creep.moveTo(target);
+          creep.moveTo(target, { visualizePathStyle: style("withdraw") });
           CreepPersonality.speak(creep, "move");
         } else if (res === OK) {
           // Remember source to avoid depositing back into the same structure

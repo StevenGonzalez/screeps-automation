@@ -22,7 +22,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
     const res = creep.upgradeController(creep.room.controller!);
     if (res === ERR_NOT_IN_RANGE) {
       creep.moveTo(creep.room.controller!, {
-        visualizePathStyle: { stroke: "#ffffff" },
+        visualizePathStyle: style("upgrade"),
       });
       CreepPersonality.speak(creep, "move");
     } else if (res === OK) {
@@ -38,7 +38,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
     if (link) {
       const w = creep.withdraw(link, RESOURCE_ENERGY);
       if (w === ERR_NOT_IN_RANGE) {
-        creep.moveTo(link);
+        creep.moveTo(link, { visualizePathStyle: style("withdraw") });
         CreepPersonality.speak(creep, "move");
       } else if (w === OK) {
         CreepPersonality.speak(creep, "withdraw");
@@ -55,7 +55,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
     ) {
       const w = creep.withdraw(ctrlContainer, RESOURCE_ENERGY);
       if (w === ERR_NOT_IN_RANGE) {
-        creep.moveTo(ctrlContainer);
+        creep.moveTo(ctrlContainer, { visualizePathStyle: style("withdraw") });
         CreepPersonality.speak(creep, "move");
       } else if (w === OK) {
         CreepPersonality.speak(creep, "withdraw");
@@ -72,7 +72,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
     ) {
       const w = creep.withdraw(storage, RESOURCE_ENERGY);
       if (w === ERR_NOT_IN_RANGE) {
-        creep.moveTo(storage);
+        creep.moveTo(storage, { visualizePathStyle: style("withdraw") });
         CreepPersonality.speak(creep, "move");
       } else if (w === OK) {
         CreepPersonality.speak(creep, "withdraw");
@@ -93,7 +93,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
       if (tgt) {
         const w = creep.withdraw(tgt, RESOURCE_ENERGY);
         if (w === ERR_NOT_IN_RANGE) {
-          creep.moveTo(tgt);
+          creep.moveTo(tgt, { visualizePathStyle: style("withdraw") });
           CreepPersonality.speak(creep, "move");
         } else if (w === OK) {
           CreepPersonality.speak(creep, "withdraw");
@@ -111,7 +111,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
       if (dropped) {
         const p = creep.pickup(dropped);
         if (p === ERR_NOT_IN_RANGE) {
-          creep.moveTo(dropped);
+          creep.moveTo(dropped, { visualizePathStyle: style("withdraw") });
           CreepPersonality.speak(creep, "move");
         } else if (p === OK) {
           CreepPersonality.speak(creep, "withdraw");
@@ -124,7 +124,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
     if (source) {
       const h = creep.harvest(source);
       if (h === ERR_NOT_IN_RANGE) {
-        creep.moveTo(source, { visualizePathStyle: { stroke: "#ffaa00" } });
+        creep.moveTo(source, { visualizePathStyle: style("harvest") });
         CreepPersonality.speak(creep, "move");
       } else if (h === OK) {
         CreepPersonality.speak(creep, "harvest");
