@@ -165,7 +165,10 @@ function generateConstructionTasks(
         reason: "Defensive tower overlooking hub",
         estimatedCost: 5000,
         dependencies: [],
-        urgent: intel.military.safetyScore < 50,
+        // Make the first tower urgent as soon as RCL >= 3 to avoid delays
+        urgent:
+          intel.military.safetyScore < 50 ||
+          (rcl >= 3 && (infrastructure.structures.tower || 0) === 0),
       });
     }
   }

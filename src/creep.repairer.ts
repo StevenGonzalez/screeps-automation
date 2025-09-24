@@ -1,8 +1,15 @@
 /// <reference types="@types/screeps" />
 import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
+import { getTowersInRoom } from "./structure.tower";
 
 export function runRepairer(creep: Creep, intel: any): void {
+  // If towers are well-stocked, let them handle most emergency repairs.
+  const towers = getTowersInRoom(creep.room);
+  const towerHighEnergy = towers.some(
+    (t) => t.store.getUsedCapacity(RESOURCE_ENERGY) >= 700
+  );
+
   if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
     const stores = creep.room.find(FIND_STRUCTURES, {
       filter: (s: AnyStructure) =>
@@ -24,9 +31,11 @@ export function runRepairer(creep: Creep, intel: any): void {
     }
   } else {
     // 1) Prioritize truly critical non-fortification structures
+    // If towers are high on energy, tighten threshold so towers take most of this load
+    const criticalThreshold = towerHighEnergy ? 0.2 : 0.3;
     const critical = creep.room.find(FIND_STRUCTURES, {
       filter: (s) =>
-        s.hits < s.hitsMax * 0.3 &&
+        s.hits < s.hitsMax * criticalThreshold &&
         s.structureType !== STRUCTURE_WALL &&
         s.structureType !== STRUCTURE_RAMPART,
     });
@@ -56,7 +65,8 @@ export function runRepairer(creep: Creep, intel: any): void {
     }
 
     // 4) Any other structure needing repair (excluding thick walls)
-    if (!target) {
+    // If towers are well-stocked, skip small top-offs and let towers handle emergencies
+    if (!target && !towerHighEnergy) {
       const any = creep.room.find(FIND_STRUCTURES, {
         filter: (s) => s.hits < s.hitsMax && s.structureType !== STRUCTURE_WALL,
       });

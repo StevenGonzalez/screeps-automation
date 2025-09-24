@@ -101,8 +101,9 @@ export function executeConstructionPlan(
     if (!dependenciesSatisfied(room, task)) continue;
     if (!withinRclLimits(room, task.type)) continue;
     if (!isBuildable(room, task.pos, task.type)) {
-      // Special case: placing a non-road structure on a road tile; remove the road then retry later
+      // Special case: if placing a non-road structure and a road (structure or site) blocks it, remove it and retry later
       if (task.type !== STRUCTURE_ROAD) {
+        // Destroy existing road structure
         const structs = task.pos.lookFor(LOOK_STRUCTURES);
         const road = structs.find((s) => s.structureType === STRUCTURE_ROAD);
         if (road) {
@@ -111,6 +112,13 @@ export function executeConstructionPlan(
             // Skip this tick; placement will be retried in subsequent ticks
             continue;
           }
+        }
+        // Remove road construction site if present
+        const sites = task.pos.lookFor(LOOK_CONSTRUCTION_SITES);
+        const roadSite = sites.find((s) => s.structureType === STRUCTURE_ROAD);
+        if (roadSite) {
+          roadSite.remove();
+          continue;
         }
       }
       continue;
