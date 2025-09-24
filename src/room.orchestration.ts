@@ -24,6 +24,7 @@ import { runDefender } from "./creep.defender";
 import { runRepairer } from "./creep.repairer";
 import { runWorker } from "./creep.worker";
 import { runMiner } from "./creep.miner";
+import { drawRoomHUD } from "./room.visuals";
 
 /**
  * Process a single room through all automation systems
@@ -132,6 +133,9 @@ function executeRoomPlans(room: Room, plans: any, intel: any): void {
 
   // 4. LOGISTICS - Resource movement and optimization
   manageRoomLogistics(room, plans, intel);
+
+  // 5. VISUALS - Lightweight HUD for quick status
+  drawRoomHUD(room, intel);
 }
 
 /**
