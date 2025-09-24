@@ -256,6 +256,22 @@ function trySpawnConstructionCreeps(
 
   if (sites === 0 && plannedTasks === 0) return false;
 
+  // Extra guard: if there are no active sites and all planned tasks are roads (often deferred early), skip spawning builders
+  if (sites === 0) {
+    const pri = constructionPlan?.priorities;
+    const prioritized: any[] = [
+      ...(pri?.critical || []),
+      ...(pri?.important || []),
+      ...(pri?.normal || []),
+    ];
+    const nonRoadPlanned = prioritized.filter(
+      (t) => t && t.type && t.type !== STRUCTURE_ROAD
+    ).length;
+    if (nonRoadPlanned === 0) {
+      return false;
+    }
+  }
+
   // Economy signals
   const energyCap = room.energyCapacityAvailable || 300;
   const energyAvail = room.energyAvailable || 0;
