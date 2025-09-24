@@ -35,11 +35,11 @@ export function manageRoomSpawning(
   }
 
   // Priority 2: Emergency economy (no harvesters)
-  const harvesters = room.find(FIND_MY_CREEPS, {
-    filter: (c) => c.memory.role === "harvester",
-  });
-  if (harvesters.length === 0) {
+  const counts = getCurrentCreepCounts(room);
+  if (counts.harvester === 0 && counts.miner === 0) {
+    // True bootstrap: nothing harvesting in any form
     if (tryEmergencySpawn(spawn, "harvester")) {
+      console.log(`🚨 Emergency harvester due to 0 harvesters and 0 miners`);
       return;
     }
   }
