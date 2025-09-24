@@ -49,13 +49,40 @@ function logStructureStatus(room: Room, storageStatus?: any): void {
 
   // Log storage status if available
   if (storageStatus && storageStatus.distributionPlan) {
-    console.log(
-      `🏪 Storage: ${Math.round(storageStatus.fillRatio * 100)}% full, needs ${
-        storageStatus.distributionPlan.recommendedHaulers
-      } haulers`
-    );
+    const pct = Math.round(storageStatus.fillRatio * 100);
+    const haulers = storageStatus.distributionPlan.recommendedHaulers;
+    const state = getRoomStructureLogState(room);
+    const cooldown = 150; // ticks
+    const significantPctDelta = 3; // % change threshold to log sooner
+    const pctDelta = Math.abs((state.storage?.lastPct ?? pct) - pct);
+    const haulersChanged = (state.storage?.lastHaulers ?? haulers) !== haulers;
+    const crossedOverflowEdge =
+      (state.storage?.lastPct ?? pct) < 95 && pct >= 95;
+
+    if (
+      Game.time - (state.storage?.lastLogTick ?? 0) >= cooldown ||
+      haulersChanged ||
+      pctDelta >= significantPctDelta ||
+      crossedOverflowEdge
+    ) {
+      console.log(`🏪 Storage: ${pct}% full, needs ${haulers} haulers`);
+      state.storage = {
+        lastLogTick: Game.time,
+        lastPct: pct,
+        lastHaulers: haulers,
+      };
+    }
   }
 
   // Extension status is logged within manageEnergyDistribution
   // Tower and link status can be accessed via their respective modules
+}
+
+function getRoomStructureLogState(room: Room): any {
+  if (!Memory.rooms) Memory.rooms = {} as any;
+  if (!Memory.rooms[room.name]) (Memory.rooms as any)[room.name] = {};
+  const r = (Memory.rooms as any)[room.name];
+  if (!r._structLogs) r._structLogs = {};
+  if (!r._structLogs.storage) r._structLogs.storage = null;
+  return r._structLogs;
 }
