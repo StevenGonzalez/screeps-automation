@@ -25,6 +25,7 @@ import { runRepairer } from "./creep.repairer";
 import { runWorker } from "./creep.worker";
 import { runMiner } from "./creep.miner";
 import { drawRoomHUD } from "./room.visuals";
+import { updateRoomTraffic } from "./room.traffic";
 
 /**
  * Process a single room through all automation systems
@@ -127,6 +128,9 @@ function executeRoomPlans(room: Room, plans: any, intel: any): void {
 
   // 2.5. CONSTRUCTION EXECUTION - Create sites from construction plan
   executeConstructionPlan(room, plans.construction, intel);
+
+  // 2.6. TRAFFIC UPDATE - record movement for heatmap-driven roads
+  updateRoomTraffic(room);
 
   // 3. CREEP MANAGEMENT - Role-based automation
   manageRoomCreeps(room, plans, intel);

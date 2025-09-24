@@ -1,5 +1,6 @@
 /// <reference types="@types/screeps" />
 import { ConstructionPlan, ConstructionTask } from "./room.construction";
+import { getHotTrafficTiles } from "./room.traffic";
 
 // Max construction sites per player is 100. Keep a buffer.
 const GLOBAL_SITE_BUFFER = 5;
@@ -131,6 +132,43 @@ export function executeConstructionPlan(
     } else if (result === ERR_INVALID_TARGET || result === ERR_FULL) {
       // Skip bad target or local site limit reached
       continue;
+    }
+  }
+
+  // After running planned tasks, try a tiny number of heatmap roads if we still have budget
+  if (budget > 0) {
+    const rcl = room.controller?.level || 0;
+    const energyAvail =
+      intel?.economy?.energyAvailable ?? room.energyAvailable ?? 0;
+    const energyCap =
+      intel?.economy?.energyCapacity ?? room.energyCapacityAvailable ?? 300;
+    const stored =
+      intel?.economy?.energyStored ??
+      (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) || 0);
+    const energyRatio = Math.max(
+      0,
+      Math.min(1, energyAvail / Math.max(1, energyCap))
+    );
+    const wellStocked = stored > 10000 || energyRatio > 0.6;
+    // Gate: don't place heat roads early or when economy is weak
+    if (rcl >= 3 && wellStocked) {
+      const maxHot = Math.min(2, budget);
+      // Threshold scales with room level to avoid noise; e.g., 8 at RCL3, 15 at RCL5
+      const threshold = Math.max(6, Math.min(20, 5 + rcl * 3));
+      const hot = getHotTrafficTiles(room, threshold, maxHot);
+      for (const pos of hot) {
+        if (budget <= 0) break;
+        if (!withinRclLimits(room, STRUCTURE_ROAD)) break;
+        if (!isBuildable(room, pos, STRUCTURE_ROAD)) continue;
+        if (alreadyBuiltOrQueued(room, pos, STRUCTURE_ROAD)) continue;
+        const res = room.createConstructionSite(pos, STRUCTURE_ROAD);
+        if (res === OK) {
+          budget--;
+          console.log(
+            `🛣️ ${room.name}: Placed heatmap road @ ${pos.x},${pos.y}`
+          );
+        }
+      }
     }
   }
 }
