@@ -127,6 +127,7 @@ function trySpawnEconomicCreeps(
   if (!composition) return false;
 
   const current = getCurrentCreepCounts(room);
+  const repairDemand = assessRepairDemand(room);
   const sources = room.find(FIND_SOURCES);
   const containersOrSites = (pos: RoomPosition) => {
     const hasStruct = room
@@ -194,6 +195,12 @@ function trySpawnEconomicCreeps(
       // Only spawn builders when there are construction sites
       needed: hasConstruction ? composition.builders || 1 : 0,
       current: current.builder,
+    },
+    {
+      role: "repairer",
+      // Spawn repairers when there is meaningful decay/damage and economy is not starved
+      needed: repairDemand.recommendedRepairers,
+      current: current.repairer || 0,
     },
   ];
 
@@ -326,7 +333,41 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
     defender: room.find(FIND_MY_CREEPS, {
       filter: (c) => c.memory.role === "defender",
     }).length,
+    repairer: room.find(FIND_MY_CREEPS, {
+      filter: (c) => c.memory.role === "repairer",
+    }).length,
   };
+}
+
+function assessRepairDemand(room: Room): { recommendedRepairers: number } {
+  // Scan for damaged structures and decaying roads/containers
+  const critical = room.find(FIND_STRUCTURES, {
+    filter: (s) =>
+      (s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_ROAD ||
+        s.structureType === STRUCTURE_SPAWN ||
+        s.structureType === STRUCTURE_TOWER ||
+        s.structureType === STRUCTURE_STORAGE ||
+        s.structureType === STRUCTURE_TERMINAL) &&
+      s.hits < s.hitsMax * 0.5,
+  }).length;
+
+  const rampartsLow = room.find(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 5000,
+  }).length;
+
+  const roadsMedium = room.find(FIND_STRUCTURES, {
+    filter: (s) =>
+      s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.5,
+  }).length;
+
+  let score =
+    critical * 2 +
+    Math.min(5, Math.floor(rampartsLow / 5)) +
+    Math.min(5, Math.floor(roadsMedium / 20));
+  // Economy-aware cap: do not over-spawn repairers
+  const recommended = score === 0 ? 0 : score <= 2 ? 1 : score <= 5 ? 2 : 3;
+  return { recommendedRepairers: recommended };
 }
 
 /**
