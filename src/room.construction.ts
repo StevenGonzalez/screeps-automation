@@ -201,6 +201,34 @@ function generateConstructionTasks(
         urgent: rcl <= 2 || intel.economy.energyCapacity < 800,
       });
     });
+    // Add a short connector spur from first extension back into the hub trunk for easy delivery
+    if (extensionPositions.length > 0) {
+      const first = extensionPositions[0];
+      const path = getCachedPath(
+        room,
+        `connector:ext:${first.x}:${first.y}`,
+        first,
+        anchor
+      );
+      for (let i = 0; i < Math.min(3, path.length); i++) {
+        const st = path[i];
+        const p = new RoomPosition(st.x, st.y, room.name);
+        const hasRoad = p
+          .lookFor(LOOK_STRUCTURES)
+          .some((s) => s.structureType === STRUCTURE_ROAD);
+        if (!hasRoad && isValidBuildPosition(p)) {
+          tasks.push({
+            type: STRUCTURE_ROAD,
+            pos: p,
+            priority: 83.5 - i * 0.1,
+            reason: "Extension connector spur",
+            estimatedCost: 300,
+            dependencies: [],
+            urgent: rcl <= 3,
+          });
+        }
+      }
+    }
   }
 
   // 7) Roads to sources and controller from core anchor (prefer after core)

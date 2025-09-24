@@ -11,7 +11,11 @@
  * Execute tower actions from defense plan
  */
 export function executeTowerActions(room: Room, defensePlan: any): void {
-  if (!defensePlan.towerActions?.length) return;
+  if (!defensePlan.towerActions?.length) {
+    // Fallback basic AI when no explicit plan provided
+    runBasicTowerAI(room);
+    return;
+  }
 
   defensePlan.towerActions.forEach((action: any) => {
     const tower = Game.getObjectById<StructureTower>(action.towerId);
@@ -23,7 +27,7 @@ export function executeTowerActions(room: Room, defensePlan: any): void {
           const target = Game.getObjectById<Creep>(action.targetId);
           if (target && target.owner && !target.my) {
             const result = tower.attack(target);
-            if (result === OK) {
+            if (result === OK && Game.time % 50 === 0) {
               console.log(
                 `🏹 Tower attacking ${target.owner.username}'s ${
                   target.body[0]?.type || "creep"
@@ -39,7 +43,7 @@ export function executeTowerActions(room: Room, defensePlan: any): void {
           const target = Game.getObjectById<Creep>(action.targetId);
           if (target && target.my && target.hits < target.hitsMax) {
             const result = tower.heal(target);
-            if (result === OK) {
+            if (result === OK && Game.time % 50 === 0) {
               console.log(
                 `💚 Tower healing ${target.name} (${target.hits}/${target.hitsMax} HP)`
               );
@@ -53,7 +57,7 @@ export function executeTowerActions(room: Room, defensePlan: any): void {
           const target = Game.getObjectById<Structure>(action.targetId);
           if (target && target.hits < target.hitsMax) {
             const result = tower.repair(target);
-            if (result === OK) {
+            if (result === OK && Game.time % 200 === 0) {
               console.log(`🔧 Tower repairing ${target.structureType}`);
             }
           }
@@ -118,7 +122,11 @@ export function performAutoRepair(room: Room): void {
       );
 
       const result = tower.repair(target);
-      if (result === OK) {
+      if (
+        result === OK &&
+        (Game.time % 200 === 0 ||
+          Math.round((target.hits / target.hitsMax) * 100) < 20)
+      ) {
         const healthPercent = Math.round((target.hits / target.hitsMax) * 100);
         console.log(
           `🔧 Auto-repair: ${target.structureType} (${healthPercent}%)`
@@ -135,6 +143,64 @@ export function getTowersInRoom(room: Room): StructureTower[] {
   return room.find(FIND_MY_STRUCTURES, {
     filter: (s) => s.structureType === STRUCTURE_TOWER,
   }) as StructureTower[];
+}
+
+// Simple built-in tower AI when no defense plan issues orders
+function runBasicTowerAI(room: Room): void {
+  const towers = getTowersInRoom(room);
+  for (const tower of towers) {
+    // 1) Attack closest hostile
+    const hostile = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+    if (hostile) {
+      const res = tower.attack(hostile);
+      if (res === OK && Game.time % 50 === 0) {
+        console.log(`🏹 Tower ${tower.pos.x},${tower.pos.y} attacking hostile`);
+      }
+      continue;
+    }
+
+    // 2) Heal friendly creeps if injured
+    const wounded = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
+      filter: (c) => c.hits < c.hitsMax,
+    });
+    if (wounded) {
+      const res = tower.heal(wounded);
+      if (res === OK && Game.time % 100 === 0) {
+        console.log(
+          `💚 Tower ${tower.pos.x},${tower.pos.y} healing ${wounded.name}`
+        );
+      }
+      continue;
+    }
+
+    // 3) Frugal auto-repair using existing logic
+    if (tower.store.getUsedCapacity(RESOURCE_ENERGY) >= 700) {
+      const critical = tower.pos.findInRange(FIND_STRUCTURES, 20, {
+        filter: (s) => {
+          const hp = s.hits / s.hitsMax;
+          if (hp < 0.3)
+            return (
+              s.structureType === STRUCTURE_SPAWN ||
+              s.structureType === STRUCTURE_TOWER ||
+              s.structureType === STRUCTURE_STORAGE ||
+              s.structureType === STRUCTURE_TERMINAL
+            );
+          if (hp < 0.6)
+            return (
+              s.structureType === STRUCTURE_SPAWN ||
+              s.structureType === STRUCTURE_TOWER
+            );
+          return false;
+        },
+      });
+      if (critical.length) {
+        const target = critical.reduce((a, b) =>
+          a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b
+        );
+        tower.repair(target);
+      }
+    }
+  }
 }
 
 /**
