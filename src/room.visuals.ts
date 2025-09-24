@@ -4,8 +4,10 @@ import { getRoomMemory } from "./global.memory";
 export function drawRoomHUD(room: Room, intel: any): void {
   if (!room.controller?.my) return;
   const mem = getRoomMemory(room.name);
-  const period = Math.max(1, mem?.ui?.hudPeriod ?? 5);
-  if (mem?.ui?.hudDisabled) return;
+  const ui = mem?.ui || {};
+  // Off by default: require explicit enable
+  if (!ui.hudEnabled) return;
+  const period = Math.max(1, ui.hudPeriod ?? 5);
   // Draw infrequently to keep CPU low
   if (Game.time % period !== 0) return;
   const vis = new RoomVisual(room.name);
