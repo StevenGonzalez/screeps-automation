@@ -18,7 +18,9 @@ export function runMiner(creep: Creep): void {
       const name = mem.assignments[sid];
       if (!Game.creeps[name]) delete mem.assignments[sid];
     }
-    if (mem.assignments[creep.memory.sourceId] !== creep.name) {
+    // If we've issued a handoff, don't re-lock; keep working without owning the lock
+    const handoff = (creep.memory as any).handoff === true;
+    if (!handoff && mem.assignments[creep.memory.sourceId] !== creep.name) {
       tryAssignUniqueSource(creep);
     }
   }
@@ -28,13 +30,22 @@ export function runMiner(creep: Creep): void {
     : null;
   if (!source) return;
 
-  // Target spot: a container next to the source (or its construction site); otherwise the best open tile
-  let targetPos: RoomPosition | null = findContainerSpotNear(source.pos);
-  if (!targetPos) {
-    // fallback to any walkable adjacent tile
-    targetPos = findOpenAdjacent(source.pos);
-  }
+  // Target seat: per-source reserved tile (container/site preferred), cached in room memory
+  let targetPos: RoomPosition | null = getSeatForSource(creep.room, source);
   if (!targetPos) return;
+
+  // Near-death handoff: release the lock early so the next miner can claim this source
+  const ttl = creep.ticksToLive ?? 1500;
+  if (ttl <= 50 && !(creep.memory as any).handoff) {
+    const miningMem = getMiningMemory(creep.room.name);
+    if (
+      creep.memory.sourceId &&
+      miningMem.assignments[creep.memory.sourceId] === creep.name
+    ) {
+      delete miningMem.assignments[creep.memory.sourceId];
+    }
+    (creep.memory as any).handoff = true;
+  }
 
   if (!creep.pos.isEqualTo(targetPos)) {
     creep.moveTo(targetPos, { visualizePathStyle: { stroke: "#ffaa00" } });
@@ -99,13 +110,18 @@ function tryAssignUniqueSource(creep: Creep): void {
 
 function getMiningMemory(roomName: string): {
   assignments: { [sourceId: string]: string };
+  seats?: { [sourceId: string]: { x: number; y: number } };
 } {
   if (!Memory.rooms) Memory.rooms = {} as any;
   if (!Memory.rooms[roomName]) (Memory.rooms as any)[roomName] = {};
   const r = (Memory.rooms as any)[roomName];
   if (!r.mining) r.mining = {};
   if (!r.mining.assignments) r.mining.assignments = {};
-  return r.mining as { assignments: { [sourceId: string]: string } };
+  if (!r.mining.seats) r.mining.seats = {};
+  return r.mining as {
+    assignments: { [sourceId: string]: string };
+    seats: { [sourceId: string]: { x: number; y: number } };
+  };
 }
 
 function hasContainerNear(pos: RoomPosition): boolean {
@@ -174,6 +190,24 @@ function findOpenAdjacent(pos: RoomPosition): RoomPosition | null {
         );
       if (!blocking) return tile;
     }
+  }
+  return null;
+}
+
+function getSeatForSource(room: Room, source: Source): RoomPosition | null {
+  const mem = getMiningMemory(room.name);
+  if (!mem.seats) (mem as any).seats = {} as any;
+  const seatMap = mem.seats as { [id: string]: { x: number; y: number } };
+  const seat = seatMap[source.id];
+  if (seat && seat.x !== undefined && seat.y !== undefined) {
+    return new RoomPosition(seat.x, seat.y, room.name);
+  }
+  // Determine and store a new seat
+  let pos = findContainerSpotNear(source.pos);
+  if (!pos) pos = findOpenAdjacent(source.pos);
+  if (pos) {
+    seatMap[source.id] = { x: pos.x, y: pos.y } as any;
+    return pos;
   }
   return null;
 }
