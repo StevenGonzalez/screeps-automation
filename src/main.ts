@@ -56,6 +56,9 @@ export const loop = (): void => {
 function processGlobalOperations(): void {
   // Market operations, inter-room logistics, etc.
 
+  // Pixel generation - generate pixels when CPU bucket is high enough
+  processPixelGeneration();
+
   // CPU monitoring
   const cpuUsed = Game.cpu.getUsed();
   const cpuLimit = Game.cpu.limit;
@@ -71,6 +74,41 @@ function processGlobalOperations(): void {
   // Bucket monitoring
   if (Game.cpu.bucket < 1000) {
     console.log(`🪣 Low CPU bucket: ${Game.cpu.bucket}/10000`);
+  }
+}
+
+/**
+ * Process pixel generation when CPU bucket is sufficiently high
+ */
+function processPixelGeneration(): void {
+  // Generate pixels if bucket is high enough
+  // Safe threshold: keep at least 5000 bucket for normal operations
+  const PIXEL_GENERATION_THRESHOLD = 5000;
+  const PIXEL_COST = 5000; // Cost to generate 1 pixel
+
+  if (Game.cpu.bucket >= PIXEL_GENERATION_THRESHOLD + PIXEL_COST) {
+    const result = Game.cpu.generatePixel();
+    if (result === OK) {
+      console.log(`💎 Generated 1 pixel! Bucket: ${Game.cpu.bucket}/10000`);
+
+      // Track pixel generation in memory for stats
+      if (!(Memory as any).stats) (Memory as any).stats = {};
+      if (!(Memory as any).stats.pixels)
+        (Memory as any).stats.pixels = { generated: 0, lastGenerated: 0 };
+      (Memory as any).stats.pixels.generated++;
+      (Memory as any).stats.pixels.lastGenerated = Game.time;
+    }
+  }
+
+  // Log pixel status occasionally
+  if (Game.time % 1000 === 0 && (Memory as any).stats?.pixels) {
+    const pixelStats = (Memory as any).stats.pixels;
+    const timeSinceLastPixel = pixelStats.lastGenerated
+      ? Game.time - pixelStats.lastGenerated
+      : "never";
+    console.log(
+      `💎 Pixels generated: ${pixelStats.generated}, Last: ${timeSinceLastPixel} ticks ago`
+    );
   }
 }
 
