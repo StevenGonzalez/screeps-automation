@@ -155,7 +155,15 @@ function generateConstructionTasks(
   const neededTowers =
     getTowerLimit(rcl) - (infrastructure.structures.tower || 0);
   if (neededTowers > 0) {
-    const towerSpots = core.towerSlots.filter(isValidBuildPosition);
+    let towerSpots = core.towerSlots.filter(isValidBuildPosition);
+    // Fallback: if all core slots are blocked, use basic positions around the spawn
+    if (towerSpots.length === 0) {
+      const spawn = room.find(FIND_MY_SPAWNS)[0];
+      if (spawn) {
+        const fallback = findTowerPositions(spawn.pos, neededTowers);
+        towerSpots = fallback.filter(isValidBuildPosition);
+      }
+    }
     for (let i = 0; i < Math.min(neededTowers, towerSpots.length); i++) {
       const pos = towerSpots[i];
       tasks.push({

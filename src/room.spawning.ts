@@ -164,6 +164,75 @@ function trySpawnEconomicCreeps(
         s.structureType === STRUCTURE_STORAGE,
     }).length > 0;
 
+  // Bootstrap rescue: if spawn is starved but there is energy in containers, force a small hauler
+  if (current.hauler === 0) {
+    const containersWithEnergy = room.find(FIND_STRUCTURES, {
+      filter: (s: AnyStructure) =>
+        (s.structureType === STRUCTURE_CONTAINER ||
+          s.structureType === STRUCTURE_STORAGE) &&
+        (s as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) > 0,
+    }).length;
+    if (containersWithEnergy > 0) {
+      const emergencyHauler = getEmergencyBody(
+        "hauler",
+        spawn.room.energyAvailable
+      );
+      if (emergencyHauler.length > 0) {
+        const name = `hauler_boot_${Game.time}`;
+        const res = spawn.spawnCreep(emergencyHauler, name, {
+          memory: { role: "hauler", priority: "bootstrap" },
+        });
+        if (res === OK) {
+          console.log(
+            `🚚 Bootstrap hauler spawned to pull from containers (${containersWithEnergy})`
+          );
+          console.log(`🌟 ${CreepPersonality.getSpawnPhrase("hauler")}`);
+          return true;
+        }
+      }
+    }
+  }
+
+  // If no harvesters and energy is low, spawn a tiny harvester even if a miner exists
+  if (current.harvester === 0 && spawn.room.energyAvailable >= 100) {
+    const emergencyHarvester = getEmergencyBody(
+      "harvester",
+      spawn.room.energyAvailable
+    );
+    if (emergencyHarvester.length > 0) {
+      const name = `harvester_boot_${Game.time}`;
+      const res = spawn.spawnCreep(emergencyHarvester, name, {
+        memory: { role: "harvester", priority: "bootstrap" },
+      });
+      if (res === OK) {
+        console.log(
+          `⛏️ Bootstrap harvester spawned due to 0 harvesters and low energy`
+        );
+        console.log(`🌟 ${CreepPersonality.getSpawnPhrase("harvester")}`);
+        return true;
+      }
+    }
+  }
+
+  // If no upgraders exist, try to spawn a tiny upgrader to avoid stalling controller progress
+  if (current.upgrader === 0 && spawn.room.energyAvailable >= 100) {
+    const emergencyUpgrader = getEmergencyBody(
+      "upgrader",
+      spawn.room.energyAvailable
+    );
+    if (emergencyUpgrader.length > 0) {
+      const name = `upgrader_boot_${Game.time}`;
+      const res = spawn.spawnCreep(emergencyUpgrader, name, {
+        memory: { role: "upgrader", priority: "bootstrap" },
+      });
+      if (res === OK) {
+        console.log(`⚙️ Bootstrap upgrader spawned due to 0 upgraders`);
+        console.log(`🌟 ${CreepPersonality.getSpawnPhrase("upgrader")}`);
+        return true;
+      }
+    }
+  }
+
   const spawnQueue = [
     {
       role: "miner",
@@ -187,7 +256,8 @@ function trySpawnEconomicCreeps(
     },
     {
       role: "upgrader",
-      needed: composition.upgraders || 1,
+      // Always keep at least 1 upgrader if we have a controller
+      needed: Math.max(1, composition.upgraders || 1),
       current: current.upgrader,
     },
     {
@@ -212,7 +282,7 @@ function trySpawnEconomicCreeps(
       );
       const name = `${item.role}_${Game.time}`;
 
-      const result = spawn.spawnCreep(body, name, {
+      let result = spawn.spawnCreep(body, name, {
         memory: { role: item.role, priority: "economy" },
       });
 
@@ -223,12 +293,31 @@ function trySpawnEconomicCreeps(
         console.log(`🌟 ${CreepPersonality.getSpawnPhrase(item.role)}`);
         return true;
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
-        if (Game.time % 25 === 0) {
-          console.log(`💸 Not enough energy for ${item.role}`);
+        // Fallback: try an emergency-sized body using current energy
+        const fallback = getEmergencyBody(
+          item.role,
+          spawn.room.energyAvailable
+        );
+        if (fallback.length > 0) {
+          result = spawn.spawnCreep(fallback, name, {
+            memory: { role: item.role, priority: "economy" },
+          });
+          if (result === OK) {
+            console.log(
+              `🪫 Low-energy ${item.role} spawned with emergency body`
+            );
+            console.log(`🌟 ${CreepPersonality.getSpawnPhrase(item.role)}`);
+            return true;
+          }
         }
+        // Not enough energy for fallback either; try next role rather than blocking
+        if (Game.time % 25 === 0) {
+          console.log(`💸 Not enough energy for ${item.role} (even fallback)`);
+        }
+        continue;
       }
 
-      // Only try to spawn one creep per tick
+      // Only try to spawn one creep per tick when a spawn attempt was made and not energy-limited
       break;
     }
   }
