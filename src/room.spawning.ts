@@ -242,8 +242,8 @@ function trySpawnEconomicCreeps(
     },
     {
       role: "harvester",
-      // Reduce harvesters as miners come online
-      needed: Math.max(0, (composition.harvesters || 2) - current.miner),
+      // Only spawn harvesters for sources WITHOUT containers, or as backup when miners are insufficient
+      needed: Math.max(0, sources.length - minerTargets - current.miner),
       current: current.harvester,
     },
     {
