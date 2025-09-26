@@ -35,31 +35,31 @@ declare global {
 export class CreepPersonality {
   private static readonly SPEECH_CHANCE = 0.15; // 5% chance to speak on actions
 
-  // Personality phrases by action type
+  // Personality phrases by action type (face-only, widely supported)
   private static readonly PHRASES = {
-    harvest: ["⛏️", "💎", "🔥", "⚡", "💪", "🎯", "🔋", "✨"],
-    build: ["🔨", "🏗️", "🎪", "🔧", "🧱", "🎨", "🏠", "⭐"],
-    repair: ["🔧", "🩹", "💊", "�️", "⚡", "✨", "🎯", "💪"],
-    upgrade: ["🚀", "⭐", "📈", "🎯", "💎", "🔥", "✨", "🏆"],
-    transfer: ["📦", "🎁", "💝", "🚚", "📮", "💫", "�", "↔️"],
-    withdraw: ["💰", "🎒", "📥", "💎", "🔋", "🎯", "💪", "⚡"],
-    attack: ["⚔️", "🔥", "💥", "⚡", "🎯", "💪", "🌟", "🏹"],
-    heal: ["💊", "✨", "❤️", "🌟", "💚", "🔋", "⭐", "💫"],
-    move: ["🚶", "🏃", "🎯", "⚡", "🌟", "🚀", "💨", "➡️"],
-    idle: ["🤔", "😴", "🎵", "👀", "🌟", "😊", "🎈", "✨"],
-    flee: ["😱", "💨", "🏃", "⚡", "🌪️", "🚀", "😵", "🛡️"],
-    celebrate: ["🎉", "🏆", "✨", "🎊", "🌟", "💫", "🔥", "⭐"],
-    frustrated: ["😤", "🙄", "😠", "🤬", "😑", "💢", "🤦", "😮‍💨"],
+    harvest: ["😀", "😃", "😄", "😁", "🙂", "😊", "😉", "😎"],
+    build: ["😀", "😃", "😄", "😁", "🙂", "😊", "😉", "😎"],
+    repair: ["🙂", "😊", "😌", "😀", "😃", "😉", "😁", "😎"],
+    upgrade: ["😀", "😃", "😄", "😁", "🙂", "😊", "😉", "😎"],
+    transfer: ["🙂", "😊", "😉", "😀", "😃", "😁", "😎", "😌"],
+    withdraw: ["🙂", "😊", "😉", "😀", "😃", "😁", "😎", "😌"],
+    attack: ["😠", "😡", "😤", "😒", "😐", "😑", "😬", "😕"],
+    heal: ["🙂", "😊", "😌", "😀", "😃", "😉", "😁", "😎"],
+    move: ["🙂", "😊", "😉", "😎", "😌", "😀", "😃", "😁"],
+    idle: ["🙂", "😊", "😌", "😴", "😉", "😀", "😃", "😁"],
+    flee: ["😱", "😰", "😨", "😧", "😦", "😳", "😬", "😵"],
+    celebrate: ["😀", "😃", "😄", "😁", "😊", "🙂", "😉", "😎"],
+    frustrated: ["😤", "🙄", "😠", "😡", "😑", "😒", "😬", "😫"],
   };
 
   private static readonly ROLE_PERSONALITIES = {
-    harvester: { mood: "hardworking", prefix: "⛏️", energy: 0.8 },
-    builder: { mood: "creative", prefix: "🔨", energy: 0.9 },
-    upgrader: { mood: "ambitious", prefix: "🚀", energy: 0.7 },
-    hauler: { mood: "reliable", prefix: "📦", energy: 0.6 },
-    defender: { mood: "heroic", prefix: "⚔️", energy: 1.0 },
-    attacker: { mood: "aggressive", prefix: "💥", energy: 1.2 },
-    scout: { mood: "curious", prefix: "👁️", energy: 0.5 },
+    harvester: { mood: "hardworking", prefix: "😤", energy: 0.8 },
+    builder: { mood: "creative", prefix: "🤓", energy: 0.9 },
+    upgrader: { mood: "ambitious", prefix: "🤯", energy: 0.7 },
+    hauler: { mood: "reliable", prefix: "😊", energy: 0.6 },
+    defender: { mood: "heroic", prefix: "😠", energy: 1.0 },
+    attacker: { mood: "aggressive", prefix: "😡", energy: 1.2 },
+    scout: { mood: "curious", prefix: "🤔", energy: 0.5 },
   };
 
   /**
