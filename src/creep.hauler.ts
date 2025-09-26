@@ -15,19 +15,24 @@ export function runHauler(creep: Creep, intel: any): void {
         (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) <= 100,
     }) as StructureContainer[];
 
-    const containers = creep.room.find(FIND_STRUCTURES, {
+    // Prefer non-storage, non-controller containers for pickup; storage as last resort
+    const pickupContainers = creep.room.find(FIND_STRUCTURES, {
       filter: (s: AnyStructure) => {
         const hasEnergy =
           (s as AnyStoreStructure).store?.getUsedCapacity?.(RESOURCE_ENERGY) >
           100;
         if (!hasEnergy) return false;
-        if (s.structureType === STRUCTURE_STORAGE) return true;
         if (s.structureType === STRUCTURE_CONTAINER) {
           // Avoid controller container on pickup; let upgraders use it
           return !isControllerContainer(s as StructureContainer);
         }
         return false;
       },
+    });
+    const storagesWithEnergy = creep.room.find(FIND_STRUCTURES, {
+      filter: (s: AnyStructure) =>
+        s.structureType === STRUCTURE_STORAGE &&
+        (s as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) > 200,
     });
     const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
       filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50,
@@ -41,10 +46,11 @@ export function runHauler(creep: Creep, intel: any): void {
 
     let target: any =
       creep.pos.findClosestByPath(urgentSource) ||
-      creep.pos.findClosestByPath(containers) ||
+      creep.pos.findClosestByPath(pickupContainers) ||
       creep.pos.findClosestByPath(dropped) ||
       creep.pos.findClosestByPath(tombs) ||
-      creep.pos.findClosestByPath(ruins);
+      creep.pos.findClosestByPath(ruins) ||
+      creep.pos.findClosestByPath(storagesWithEnergy);
 
     if (target) {
       if (target instanceof Resource) {
@@ -84,8 +90,24 @@ export function runHauler(creep: Creep, intel: any): void {
         (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
     }) as AnyStoreStructure[];
     let target = creep.pos.findClosestByPath(fillTargets);
+
+    // Next: keep the controller container buffered before touching storage
     if (!target) {
-      // Prefer storage first
+      const CONTROLLER_BUFFER_TARGET = 1000; // desired energy in controller container
+      const ctrlContainers = creep.room.find(FIND_STRUCTURES, {
+        filter: (s: AnyStructure) =>
+          s.structureType === STRUCTURE_CONTAINER &&
+          isControllerContainer(s as StructureContainer) &&
+          (s as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) <
+            CONTROLLER_BUFFER_TARGET &&
+          (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+          s.id !== creep.memory.lastWithdrawId,
+      }) as AnyStoreStructure[];
+      target = creep.pos.findClosestByPath(ctrlContainers) || null;
+    }
+
+    // After controller buffer, deposit excess into storage
+    if (!target) {
       const storage = creep.room.storage;
       if (
         storage &&
@@ -94,17 +116,6 @@ export function runHauler(creep: Creep, intel: any): void {
       ) {
         target = storage as AnyStoreStructure;
       }
-    }
-    if (!target) {
-      // Then deliver to controller container to feed upgraders
-      const ctrlContainers = creep.room.find(FIND_STRUCTURES, {
-        filter: (s: AnyStructure) =>
-          s.structureType === STRUCTURE_CONTAINER &&
-          isControllerContainer(s as StructureContainer) &&
-          (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-          s.id !== creep.memory.lastWithdrawId,
-      }) as AnyStoreStructure[];
-      target = creep.pos.findClosestByPath(ctrlContainers) || null;
     }
     if (!target) {
       // Fallback to non-controller, non-source containers; avoid putting back to where we withdrew
