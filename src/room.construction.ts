@@ -1207,6 +1207,9 @@ function findExtensionRingPositions(
           )
         )
           continue;
+        // New: ensure at least one adjacent walkable tile and reachability from anchor
+        if (!hasAccessibleAdjacentTile(pos)) continue;
+        if (!isReachableFromAnchor(anchor, pos)) continue;
         // Prefer plains over swamps for extensions; allow roads later to be placed in between
         results.push(pos);
         taken.add(key);
@@ -1215,6 +1218,81 @@ function findExtensionRingPositions(
     radius++;
   }
   return results;
+}
+
+// Check if there is at least one adjacent walkable tile (non-wall and not blocked by non-walkable structures)
+function hasAccessibleAdjacentTile(pos: RoomPosition): boolean {
+  const room = Game.rooms[pos.roomName];
+  if (!room) return false;
+  const terrain = room.getTerrain();
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = pos.x + dx;
+      const y = pos.y + dy;
+      if (x <= 0 || x >= 49 || y <= 0 || y >= 49) continue;
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      const here = new RoomPosition(x, y, pos.roomName);
+      const structs = here.lookFor(LOOK_STRUCTURES);
+      const blocked = structs.some((s) => {
+        if (s.structureType === STRUCTURE_ROAD) return false;
+        if (s.structureType === STRUCTURE_CONTAINER) return false;
+        if (s.structureType === STRUCTURE_RAMPART) return false; // assume our ramparts are passable
+        return true;
+      });
+      if (!blocked) return true;
+    }
+  }
+  return false;
+}
+
+// Verify there is a viable path from anchor to target position (range 1)
+function isReachableFromAnchor(
+  anchor: RoomPosition,
+  target: RoomPosition
+): boolean {
+  if (anchor.roomName !== target.roomName) return false;
+  const room = Game.rooms[anchor.roomName];
+  if (!room) return false;
+  const result = PathFinder.search(
+    anchor,
+    { pos: target, range: 1 },
+    {
+      maxRooms: 1,
+      maxOps: 2000,
+      roomCallback: (roomName: string) => {
+        if (roomName !== room.name) return false as any;
+        const costs = new PathFinder.CostMatrix();
+        const terrain = room.getTerrain();
+        for (let y = 1; y < 49; y++) {
+          for (let x = 1; x < 49; x++) {
+            const t = terrain.get(x, y);
+            if (t === TERRAIN_MASK_WALL) {
+              costs.set(x, y, 0xff);
+            }
+          }
+        }
+        // Make existing non-walkable structures very costly
+        const structs = room.find(FIND_STRUCTURES);
+        for (const s of structs) {
+          const { x, y } = s.pos;
+          if (
+            s.structureType === STRUCTURE_ROAD ||
+            s.structureType === STRUCTURE_CONTAINER ||
+            s.structureType === STRUCTURE_RAMPART
+          ) {
+            // treat roads as cheap
+            if (s.structureType === STRUCTURE_ROAD) costs.set(x, y, 1);
+            continue;
+          }
+          costs.set(x, y, 0xff);
+        }
+        return costs;
+      },
+    }
+  );
+  // Consider reachable if not incomplete (found a path) and path length reasonable
+  return !result.incomplete && result.path.length > 0;
 }
 
 function generateRoadTasksFromAnchor(
