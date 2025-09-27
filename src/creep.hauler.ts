@@ -69,6 +69,23 @@ export function runHauler(creep: Creep, intel: any): void {
           // Remember source to avoid depositing back into the same structure
           creep.memory.lastWithdrawId = (target as Structure).id;
           CreepPersonality.speak(creep, "withdraw");
+
+          // Opportunistic: if we just withdrew from a source container and there's an adjacent link, feed it immediately
+          if (
+            (target as AnyStructure).structureType === STRUCTURE_CONTAINER &&
+            isSourceContainer(target as StructureContainer)
+          ) {
+            const nearLink = creep.pos.findInRange(FIND_MY_STRUCTURES, 1, {
+              filter: (s) =>
+                s.structureType === STRUCTURE_LINK &&
+                (s as StructureLink).store.getFreeCapacity(RESOURCE_ENERGY) >
+                  0 &&
+                !(s as StructureLink).cooldown,
+            })[0] as StructureLink | undefined;
+            if (nearLink && creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+              creep.transfer(nearLink, RESOURCE_ENERGY);
+            }
+          }
         }
       }
     } else {

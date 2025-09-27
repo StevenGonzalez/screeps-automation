@@ -57,6 +57,8 @@ export function runMiner(creep: Creep): void {
   const res = creep.harvest(source);
   if (res === OK) {
     CreepPersonality.speak(creep, "harvest");
+    // Opportunistic: if there's a link adjacent and the adjacent container is near full, feed the link
+    tryFeedAdjacentLink(creep, source);
   } else if (res === ERR_NOT_ENOUGH_RESOURCES) {
     // Idle but stay put
     CreepPersonality.speak(creep, "idle");
@@ -211,4 +213,46 @@ function getSeatForSource(room: Room, source: Source): RoomPosition | null {
     return pos;
   }
   return null;
+}
+
+/**
+ * If miner is seated by the source and there is a container and a link adjacent,
+ * and the container is nearly full, move some energy from the container into the link.
+ * This keeps source containers from clogging and kickstarts the link network.
+ */
+function tryFeedAdjacentLink(creep: Creep, source: Source): void {
+  // Only attempt every few ticks to reduce CPU
+  if (Game.time % 5 !== 0) return;
+  // Must be on our reserved seat near the source
+  if (!creep.memory.sourceId || creep.memory.sourceId !== source.id) return;
+  // Look for adjacent container and link
+  const structs = creep.pos.findInRange(FIND_STRUCTURES, 1) as AnyStructure[];
+  const container = structs.find(
+    (s) => s.structureType === STRUCTURE_CONTAINER
+  ) as StructureContainer | undefined;
+  const link = structs.find((s) => s.structureType === STRUCTURE_LINK) as
+    | StructureLink
+    | undefined;
+  if (!container || !link) return;
+
+  const containerEnergy = container.store.getUsedCapacity(RESOURCE_ENERGY);
+  // Thresholds: if container is getting full and link has room, transfer some energy
+  if (
+    containerEnergy >= 1500 &&
+    link.store.getFreeCapacity(RESOURCE_ENERGY) >= 100 &&
+    !link.cooldown
+  ) {
+    // Withdraw from container then transfer to link
+    if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+      const w = creep.withdraw(container, RESOURCE_ENERGY);
+      if (w === ERR_NOT_IN_RANGE) {
+        // Shouldn't happen if seated, but just in case
+        creep.moveTo(container);
+        return;
+      }
+    }
+    if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+      creep.transfer(link, RESOURCE_ENERGY);
+    }
+  }
 }

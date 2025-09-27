@@ -24,16 +24,17 @@ export function manageLinks(room: Room, economicPlan: any): void {
 
   links.forEach((link) => {
     // Check if link is near a source (source link)
+    // Allow slightly more relaxed range to accommodate terrain-constrained placements
     const nearSource = sources.some(
-      (source) => link.pos.getRangeTo(source) <= 2
+      (source) => link.pos.getRangeTo(source) <= 3
     );
 
     if (nearSource) {
       sourceLinks.push(link);
     } else {
       // Check if link is near spawn or controller (sink link)
-      const nearSpawn = spawns.some((spawn) => link.pos.getRangeTo(spawn) <= 2);
-      const nearController = controller && link.pos.getRangeTo(controller) <= 2;
+      const nearSpawn = spawns.some((spawn) => link.pos.getRangeTo(spawn) <= 3);
+      const nearController = controller && link.pos.getRangeTo(controller) <= 3;
 
       if (nearSpawn || nearController) {
         sinkLinks.push(link);
@@ -42,11 +43,18 @@ export function manageLinks(room: Room, economicPlan: any): void {
   });
 
   // Transfer energy from full source links to empty sink links
+  // Prefer sending to the controller-side sink first when available
+  const sortedSinks = sinkLinks.sort((a, b) => {
+    const aCtrl = controller ? a.pos.getRangeTo(controller) : 99;
+    const bCtrl = controller ? b.pos.getRangeTo(controller) : 99;
+    return aCtrl - bCtrl;
+  });
+
   sourceLinks.forEach((sourceLink) => {
-    if (sourceLink.store.getUsedCapacity(RESOURCE_ENERGY) >= 400) {
-      const targetLink = sinkLinks.find(
+    if (sourceLink.store.getUsedCapacity(RESOURCE_ENERGY) >= 200) {
+      const targetLink = sortedSinks.find(
         (sinkLink) =>
-          sinkLink.store.getFreeCapacity(RESOURCE_ENERGY) >= 400 &&
+          sinkLink.store.getFreeCapacity(RESOURCE_ENERGY) >= 200 &&
           !sinkLink.cooldown
       );
 
