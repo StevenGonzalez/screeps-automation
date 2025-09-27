@@ -36,8 +36,23 @@ export function runBuilder(
         return;
       }
     }
-    const sites = creep.room.find(FIND_CONSTRUCTION_SITES);
-    const target = creep.pos.findClosestByPath(sites);
+    let sites = creep.room.find(FIND_CONSTRUCTION_SITES);
+    let target = creep.pos.findClosestByPath(sites);
+    // If no path to any site, try to clean up unreachable sites (e.g., trapped in wall pockets)
+    if (!target && sites.length > 0) {
+      for (const s of sites) {
+        if (!hasAccessibleAdjacent(s.pos)) {
+          // Remove once; it's our site so it's safe to clean up
+          s.remove();
+          // Optional: could log, but avoid spamming logs
+        }
+      }
+      // Recompute after cleanup
+      sites = creep.room.find(FIND_CONSTRUCTION_SITES);
+      target =
+        creep.pos.findClosestByPath(sites) ||
+        creep.pos.findClosestByRange(sites);
+    }
     if (target) {
       if (creep.build(target) === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, { visualizePathStyle: style("build") });
@@ -103,4 +118,32 @@ export function runBuilder(
       }
     }
   }
+}
+
+// A construction site is only buildable if a creep can stand on an adjacent tile.
+// Guard against positions that are walkable themselves but surrounded by walls/obstacles.
+function hasAccessibleAdjacent(pos: RoomPosition): boolean {
+  const room = Game.rooms[pos.roomName];
+  if (!room) return false;
+  const terrain = room.getTerrain();
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = pos.x + dx;
+      const y = pos.y + dy;
+      if (x <= 0 || x >= 49 || y <= 0 || y >= 49) continue;
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      const here = new RoomPosition(x, y, pos.roomName);
+      const structs = here.lookFor(LOOK_STRUCTURES);
+      // Treat roads and containers as walkable; ramparts are walkable when ours/public (assume own room)
+      const blocked = structs.some((s) => {
+        if (s.structureType === STRUCTURE_ROAD) return false;
+        if (s.structureType === STRUCTURE_CONTAINER) return false;
+        if (s.structureType === STRUCTURE_RAMPART) return false; // our ramparts are passable
+        return true;
+      });
+      if (!blocked) return true;
+    }
+  }
+  return false;
 }
