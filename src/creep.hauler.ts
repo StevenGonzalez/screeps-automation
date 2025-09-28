@@ -99,6 +99,41 @@ export function runHauler(creep: Creep, intel: any): void {
     }
   } else {
     // Deliver
+    // First, if we just withdrew from a source container and it's still nearly full,
+    // feed a nearby source link before heading back. This helps prevent container overflow.
+    if (creep.memory.lastWithdrawId) {
+      const srcStruct = Game.getObjectById<Structure>(
+        creep.memory.lastWithdrawId as Id<Structure>
+      );
+      if (srcStruct && srcStruct.structureType === STRUCTURE_CONTAINER) {
+        const cont = srcStruct as StructureContainer;
+        if (isSourceContainer(cont)) {
+          const nearLink = cont.pos.findInRange(FIND_MY_STRUCTURES, 2, {
+            filter: (s) =>
+              s.structureType === STRUCTURE_LINK &&
+              (s as StructureLink).store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+              !(s as StructureLink).cooldown,
+          })[0] as StructureLink | undefined;
+          const containerNearlyFull =
+            cont.store.getFreeCapacity(RESOURCE_ENERGY) <= 400;
+          if (nearLink && containerNearlyFull) {
+            if (!creep.pos.isNearTo(nearLink)) {
+              creep.moveTo(nearLink, { visualizePathStyle: style("transfer") });
+              CreepPersonality.speak(creep, "move");
+              return;
+            } else if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
+              const t = creep.transfer(nearLink, RESOURCE_ENERGY);
+              if (t === OK) {
+                CreepPersonality.speak(creep, "transfer");
+                // After seeding the link, proceed with normal delivery next tick
+                return;
+              }
+            }
+          }
+        }
+      }
+    }
+
     const fillTargets = creep.room.find(FIND_STRUCTURES, {
       filter: (s: AnyStructure) =>
         (s.structureType === STRUCTURE_SPAWN ||

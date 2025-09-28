@@ -223,6 +223,8 @@ function getSeatForSource(room: Room, source: Source): RoomPosition | null {
 function tryFeedAdjacentLink(creep: Creep, source: Source): void {
   // Only attempt every few ticks to reduce CPU
   if (Game.time % 5 !== 0) return;
+  // Require the ability to carry energy; otherwise skip
+  if (!creep.getActiveBodyparts(CARRY)) return;
   // Must be on our reserved seat near the source
   if (!creep.memory.sourceId || creep.memory.sourceId !== source.id) return;
   // Look for adjacent container and link
