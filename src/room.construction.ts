@@ -155,13 +155,13 @@ function generateConstructionTasks(
   const neededTowers =
     getTowerLimit(rcl) - (infrastructure.structures.tower || 0);
   if (neededTowers > 0) {
-    let towerSpots = core.towerSlots.filter(isValidBuildPosition);
+    let towerSpots = core.towerSlots.filter(isPlaceableForTower);
     // Fallback: if all core slots are blocked, use basic positions around the spawn
     if (towerSpots.length === 0) {
       const spawn = room.find(FIND_MY_SPAWNS)[0];
       if (spawn) {
         const fallback = findTowerPositions(spawn.pos, neededTowers);
-        towerSpots = fallback.filter(isValidBuildPosition);
+        towerSpots = fallback.filter(isPlaceableForTower);
       }
     }
     for (let i = 0; i < Math.min(neededTowers, towerSpots.length); i++) {
@@ -974,6 +974,22 @@ function isValidBuildPosition(pos: RoomPosition): boolean {
 
   const structures = pos.lookFor(LOOK_STRUCTURES);
   return structures.length === 0;
+}
+
+// Towers can replace roads/ramparts; allow those tiles during planning
+function isPlaceableForTower(pos: RoomPosition): boolean {
+  const room = Game.rooms[pos.roomName];
+  if (!room) return false;
+  const terrain = room.getTerrain();
+  if (terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
+  const structs = pos.lookFor(LOOK_STRUCTURES);
+  if (structs.length === 0) return true;
+  // Allow tower plan on road or rampart; executor will remove conflicting road/site
+  return structs.every(
+    (s) =>
+      s.structureType === STRUCTURE_ROAD ||
+      s.structureType === STRUCTURE_RAMPART
+  );
 }
 
 // Structure limits by RCL
