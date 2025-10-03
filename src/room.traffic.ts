@@ -81,13 +81,24 @@ export function getHotTrafficTiles(
   const traffic = getTrafficMem(room.name);
   const entries = Object.entries(traffic.counts);
   if (entries.length === 0) return [];
-  const hot = entries
-    .filter(([, v]) => v >= minCount)
-    .sort((a, b) => (b[1] as number) - (a[1] as number))
-    .slice(0, maxTiles * 3); // take extras before filtering out non-buildable/duplicates
-
+  // Partial selection instead of full sort for CPU efficiency
+  const target = maxTiles * 3;
+  const heap: Array<[string, number]> = [];
+  for (const [k, v] of entries) {
+    if (v < minCount) continue;
+    if (heap.length < target) {
+      heap.push([k, v]);
+      continue;
+    }
+    // Replace smallest if current is larger; linear scan since target is tiny
+    let minIdx = 0;
+    for (let i = 1; i < heap.length; i++)
+      if (heap[i][1] < heap[minIdx][1]) minIdx = i;
+    if (heap[minIdx][1] < v) heap[minIdx] = [k, v];
+  }
+  heap.sort((a, b) => b[1] - a[1]);
   const results: RoomPosition[] = [];
-  for (const [k] of hot) {
+  for (const [k] of heap) {
     const [sx, sy] = k.split(":");
     const x = Number(sx);
     const y = Number(sy);

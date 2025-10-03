@@ -57,15 +57,102 @@ export interface LayoutPlan {
  * Generate comprehensive construction plan for the room
  */
 export function planConstruction(intel: RoomIntelligence): ConstructionPlan {
+  const room = Game.rooms[intel.basic.name];
+  if (!room) {
+    return {
+      queue: [],
+      priorities: { critical: [], important: [], normal: [], deferred: [] },
+      recommendations: { immediate: [], shortTerm: [], longTerm: [] },
+      metrics: {
+        totalTasks: 0,
+        estimatedCost: 0,
+        estimatedTime: 0,
+        completionRate: 100,
+      },
+    };
+  }
+  const mem = getRoomMemory(room.name);
+  mem.construction = mem.construction || ({} as any);
+
+  const sig = computeConstructionSignature(intel, room);
+  const cached = (mem.construction as any).cachedPlan as
+    | { sig: string; time: number; plan: ConstructionPlan }
+    | undefined;
+  const MAX_AGE = 50; // ticks before forced refresh
+  if (cached && cached.sig === sig && Game.time - cached.time < MAX_AGE) {
+    return hydrateConstructionPlan(cached.plan);
+  }
+
   const tasks = generateConstructionTasks(intel);
   const prioritized = prioritizeTasks(tasks, intel);
-
-  return {
+  const plan: ConstructionPlan = {
     queue: tasks,
     priorities: prioritized,
     recommendations: generateRecommendations(intel, tasks),
     metrics: calculateConstructionMetrics(tasks, intel),
   };
+  (mem.construction as any).cachedPlan = { sig, time: Game.time, plan };
+  return plan;
+}
+
+function hydrateConstructionPlan(plan: ConstructionPlan): ConstructionPlan {
+  for (const t of plan.queue) {
+    if (t && t.pos && !(t.pos instanceof RoomPosition)) {
+      const raw: any = t.pos;
+      if (
+        raw &&
+        typeof raw.x === "number" &&
+        typeof raw.y === "number" &&
+        raw.roomName
+      ) {
+        t.pos = new RoomPosition(raw.x, raw.y, raw.roomName);
+      }
+    }
+  }
+  const cats = plan.priorities;
+  for (const arr of [
+    cats.critical,
+    cats.important,
+    cats.normal,
+    cats.deferred,
+  ]) {
+    for (const t of arr) {
+      if (t && t.pos && !(t.pos instanceof RoomPosition)) {
+        const raw: any = t.pos;
+        if (
+          raw &&
+          typeof raw.x === "number" &&
+          typeof raw.y === "number" &&
+          raw.roomName
+        ) {
+          t.pos = new RoomPosition(raw.x, raw.y, raw.roomName);
+        }
+      }
+    }
+  }
+  return plan;
+}
+
+function computeConstructionSignature(
+  intel: RoomIntelligence,
+  room: Room
+): string {
+  // Include: RCL, key structure counts, # sites, intent flags
+  const rcl = room.controller?.level || 0;
+  const counts = intel.infrastructure.structures;
+  const keys: StructureConstant[] = [
+    STRUCTURE_SPAWN,
+    STRUCTURE_EXTENSION,
+    STRUCTURE_TOWER,
+    STRUCTURE_STORAGE,
+    STRUCTURE_TERMINAL,
+    STRUCTURE_LINK,
+    STRUCTURE_LAB,
+    STRUCTURE_FACTORY,
+  ];
+  const part = keys.map((k) => `${k[0]}:${counts[k] || 0}`).join("|");
+  const siteCount = intel.infrastructure.constructionSites.length;
+  return `${rcl}|${part}|s:${siteCount}`;
 }
 
 /**
@@ -110,11 +197,13 @@ function generateConstructionTasks(
   // 1a) Ensure clean connectors from each spawn and existing storage/terminal to the hub
   tasks.push(...generateCoreConnectorTasks(intel, anchor, core));
 
-  // 1b) Slightly widen the hub trunk near anchor for less bumping, and add a small redundancy loop
-  tasks.push(
-    ...generateHubWideningTasks(intel, anchor),
-    ...generateCoreLoopTasks(intel, anchor)
-  );
+  // 1b) Cosmetic / redundancy roads behind CPU gate
+  if (Game.cpu.getUsed() < Game.cpu.limit * 0.6) {
+    tasks.push(
+      ...generateHubWideningTasks(intel, anchor),
+      ...generateCoreLoopTasks(intel, anchor)
+    );
+  }
 
   // 1.5) Additional spawns at higher RCLs
   tasks.push(...generateAdditionalSpawnTasks(intel, anchor));
@@ -251,11 +340,14 @@ function generateConstructionTasks(
   // 7a) Small endpoint pads near sources/controller/mineral (last-step spurs)
   tasks.push(...generateEndpointPadRoads(intel, anchor));
 
-  // 8) Terminal/Labs/Factory/Power Spawn via strategic offsets from core
+  // 8) Terminal/Labs/Factory/Power Spawn via strategic offsets from core (labs & extractor gated by CPU)
   if (rcl >= 6) {
-    tasks.push(...generateLabTasksNearCore(intel, anchor));
-    // Extractor & mineral container for mid-game economy
-    tasks.push(...generateExtractorTasks(intel));
+    if (Game.cpu.getUsed() < Game.cpu.limit * 0.7) {
+      tasks.push(...generateLabTasksNearCore(intel, anchor));
+    }
+    if (Game.cpu.getUsed() < Game.cpu.limit * 0.75) {
+      tasks.push(...generateExtractorTasks(intel));
+    }
   }
   if (rcl >= 7 && (infrastructure.structures.factory || 0) === 0) {
     const pos = getFactoryNearCore(anchor);
@@ -285,8 +377,10 @@ function generateConstructionTasks(
     tasks.push(...generateNukerTasks(intel, anchor));
   }
 
-  // 9) Defensive ramparts on key hub tiles (optional but strategic)
-  tasks.push(...generateDefensiveTasks(intel));
+  // 9) Defensive ramparts on key hub tiles (skip if tight CPU)
+  if (Game.cpu.getUsed() < Game.cpu.limit * 0.85) {
+    tasks.push(...generateDefensiveTasks(intel));
+  }
 
   return tasks;
 }
@@ -1202,6 +1296,30 @@ function findExtensionRingPositions(
   const terrain = room.getTerrain();
   const taken = new Set<string>(reserved);
 
+  // Simple cache of previously accepted extension tiles this session (reduces repeated validation cost)
+  const mem = getRoomMemory(anchor.roomName) as any;
+  mem.construction = mem.construction || {};
+  const cache: Record<string, 1> = (mem.construction.extCache =
+    mem.construction.extCache || {});
+  // If cache entries exist and still free, reuse them first
+  const reused: RoomPosition[] = [];
+  for (const key in cache) {
+    if (reused.length >= count) break;
+    const [, xStr, yStr] = key.split(":");
+    const x = Number(xStr);
+    const y = Number(yStr);
+    if (!inBounds(x, y)) continue;
+    const pos = new RoomPosition(x, y, anchor.roomName);
+    if (taken.has(key)) continue;
+    // Revalidate lightweight (terrain & no blocking structure)
+    if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+    const structs = pos.lookFor(LOOK_STRUCTURES);
+    if (structs.length) continue; // keep simple; planner can add roads later
+    results.push(pos);
+    taken.add(key);
+  }
+  if (results.length >= count) return results.slice(0, count);
+
   let radius = 3; // start just beyond core ring
   while (results.length < count && radius <= 10) {
     for (let dx = -radius; dx <= radius && results.length < count; dx++) {
@@ -1223,12 +1341,16 @@ function findExtensionRingPositions(
           )
         )
           continue;
-        // New: ensure at least one adjacent walkable tile and reachability from anchor
+        // New: ensure at least one adjacent walkable tile
         if (!hasAccessibleAdjacentTile(pos)) continue;
-        if (!isReachableFromAnchor(anchor, pos)) continue;
+        // Reachability check: skip if CPU is already moderately used this tick
+        if (Game.cpu.getUsed() < Game.cpu.limit * 0.55) {
+          if (!isReachableFromAnchor(anchor, pos)) continue;
+        }
         // Prefer plains over swamps for extensions; allow roads later to be placed in between
         results.push(pos);
         taken.add(key);
+        cache[posKey(pos)] = 1; // record in cache for future reuse
       }
     }
     radius++;
@@ -1270,45 +1392,54 @@ function isReachableFromAnchor(
   if (anchor.roomName !== target.roomName) return false;
   const room = Game.rooms[anchor.roomName];
   if (!room) return false;
+  // Memory cache (TTL based) to avoid repeated expensive searches
+  const mem = getRoomMemory(room.name) as any;
+  mem.construction = mem.construction || {};
+  const reach = (mem.construction.reach = mem.construction.reach || {});
+  const key = `${target.x}:${target.y}`;
+  const rec = reach[key];
+  const REACH_TTL = 5000;
+  if (rec && Game.time - rec.t < REACH_TTL) return rec.ok;
+
+  // Reuse or build a static cost matrix infrequently
+  let baseCosts = mem.construction.reachCosts;
+  if (!baseCosts || Game.time - (baseCosts.t || 0) > 10000) {
+    const matrix = new PathFinder.CostMatrix();
+    const terrain = room.getTerrain();
+    for (let y = 1; y < 49; y++) {
+      for (let x = 1; x < 49; x++) {
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) matrix.set(x, y, 0xff);
+      }
+    }
+    // Mark non-walkable structures
+    const structs = room.find(FIND_STRUCTURES);
+    for (const s of structs) {
+      if (
+        s.structureType === STRUCTURE_ROAD ||
+        s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_RAMPART
+      )
+        continue;
+      matrix.set(s.pos.x, s.pos.y, 0xff);
+    }
+    baseCosts = { m: matrix.serialize(), t: Game.time };
+    mem.construction.reachCosts = baseCosts;
+  }
+  const deser = PathFinder.CostMatrix.deserialize(baseCosts.m);
   const result = PathFinder.search(
     anchor,
     { pos: target, range: 1 },
     {
       maxRooms: 1,
-      maxOps: 2000,
-      roomCallback: (roomName: string) => {
-        if (roomName !== room.name) return false as any;
-        const costs = new PathFinder.CostMatrix();
-        const terrain = room.getTerrain();
-        for (let y = 1; y < 49; y++) {
-          for (let x = 1; x < 49; x++) {
-            const t = terrain.get(x, y);
-            if (t === TERRAIN_MASK_WALL) {
-              costs.set(x, y, 0xff);
-            }
-          }
-        }
-        // Make existing non-walkable structures very costly
-        const structs = room.find(FIND_STRUCTURES);
-        for (const s of structs) {
-          const { x, y } = s.pos;
-          if (
-            s.structureType === STRUCTURE_ROAD ||
-            s.structureType === STRUCTURE_CONTAINER ||
-            s.structureType === STRUCTURE_RAMPART
-          ) {
-            // treat roads as cheap
-            if (s.structureType === STRUCTURE_ROAD) costs.set(x, y, 1);
-            continue;
-          }
-          costs.set(x, y, 0xff);
-        }
-        return costs;
-      },
+      maxOps: 800,
+      roomCallback: (roomName: string) =>
+        roomName === room.name ? deser : (false as any),
     }
   );
   // Consider reachable if not incomplete (found a path) and path length reasonable
-  return !result.incomplete && result.path.length > 0;
+  const ok = !result.incomplete && result.path.length > 0;
+  reach[key] = { ok, t: Game.time };
+  return ok;
 }
 
 function generateRoadTasksFromAnchor(

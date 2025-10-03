@@ -5,6 +5,8 @@
  * No side effects, just pure data analysis and intelligence gathering.
  */
 
+import { getRoomMemory } from "./global.memory";
+
 /// <reference types="@types/screeps" />
 
 export interface RoomIntelligence {
@@ -268,7 +270,7 @@ function analyzeInfrastructure(room: Room): RoomIntelligence["infrastructure"] {
   const damagedRoads = roads.filter(
     (road) => road.hits < road.hitsMax * 0.8
   ).length;
-  const roadCoverage = calculateRoadCoverage(room, roads);
+  const roadCoverage = getCachedRoadCoverage(room, roads);
 
   // Analyze layout
   const spawn = room.find(FIND_MY_SPAWNS)[0];
@@ -301,6 +303,19 @@ function analyzeInfrastructure(room: Room): RoomIntelligence["infrastructure"] {
       compactness,
     },
   };
+}
+
+// Cache road coverage for 50 ticks to avoid repeated path calculations
+function getCachedRoadCoverage(room: Room, roads: StructureRoad[]): number {
+  const mem = getRoomMemory(room.name) as any;
+  mem._infra = mem._infra || {};
+  const rec = mem._infra.roadCoverage;
+  const NEEDS =
+    !rec || Game.time - rec.time > 50 || rec.roadCount !== roads.length;
+  if (!NEEDS) return rec.val;
+  const val = calculateRoadCoverage(room, roads);
+  mem._infra.roadCoverage = { val, time: Game.time, roadCount: roads.length };
+  return val;
 }
 
 /**
