@@ -33,6 +33,14 @@ export function executeConstructionPlan(
     ...(plan.priorities?.normal || []),
   ];
 
+  // Collect reserved structure tiles (non-road planned structures) to avoid placing roads there (core oscillation fix)
+  const reservedForStructures = new Set<string>();
+  for (const t of prioritized) {
+    if (t.pos.roomName !== room.name) continue;
+    if (t.type === STRUCTURE_ROAD || t.type === STRUCTURE_RAMPART) continue;
+    reservedForStructures.add(`${t.pos.x}:${t.pos.y}`);
+  }
+
   // Pre-scan: how many non-road tasks are actually placeable right now?
   let nonRoadPlaceableRemaining = 0;
   for (const t of prioritized) {
@@ -167,6 +175,8 @@ export function executeConstructionPlan(
       for (const pos of hot) {
         if (budget <= 0) break;
         if (!withinRclLimits(room, STRUCTURE_ROAD)) break;
+        // Skip heatmap road if tile reserved for a future structure
+        if (reservedForStructures.has(`${pos.x}:${pos.y}`)) continue;
         if (!isBuildable(room, pos, STRUCTURE_ROAD)) continue;
         if (alreadyBuiltOrQueued(room, pos, STRUCTURE_ROAD)) continue;
         const res = room.createConstructionSite(pos, STRUCTURE_ROAD);
