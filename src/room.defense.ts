@@ -559,28 +559,7 @@ function assignMaintenanceTasks(
       return;
     }
 
-    // Look for damaged structures
-    const damagedStructures = room.find(FIND_STRUCTURES, {
-      filter: (structure: Structure) => {
-        return (
-          structure.hits < structure.hitsMax * 0.8 &&
-          tower.pos.getRangeTo(structure) <= 20 &&
-          structure.structureType !== STRUCTURE_WALL
-        );
-      },
-    });
-
-    if (damagedStructures.length > 0) {
-      const target = damagedStructures.sort((a, b) => a.hits - b.hits)[0];
-      actions.push({
-        towerId: tower.id,
-        action: "REPAIR",
-        targetId: target.id,
-        priority: 40,
-        reason: `Repairing ${target.structureType}`,
-      });
-      return;
-    }
+    // No structure REPAIR orders here; centralized auto-repair handles structures
 
     actions.push({
       towerId: tower.id,
@@ -622,31 +601,7 @@ function findRepairTarget(
   tower: StructureTower,
   room: Room | undefined
 ): DefensePlan["towerActions"][0] | null {
-  if (!room || tower.store.energy < 100) return null;
-
-  const criticalStructures = room.find(FIND_STRUCTURES, {
-    filter: (structure: Structure) => {
-      return (
-        structure.hits < structure.hitsMax * 0.5 &&
-        tower.pos.getRangeTo(structure) <= 20 &&
-        (structure.structureType === STRUCTURE_RAMPART ||
-          structure.structureType === STRUCTURE_TOWER ||
-          structure.structureType === STRUCTURE_SPAWN)
-      );
-    },
-  });
-
-  if (criticalStructures.length > 0) {
-    const target = criticalStructures.sort((a, b) => a.hits - b.hits)[0];
-    return {
-      towerId: tower.id,
-      action: "REPAIR",
-      targetId: target.id,
-      priority: 50,
-      reason: `Critical repair of ${target.structureType}`,
-    };
-  }
-
+  // Disable REPAIR via defense plan; structure repairs are coordinated in performAutoRepair
   return null;
 }
 

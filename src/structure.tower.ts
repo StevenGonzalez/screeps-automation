@@ -4,6 +4,34 @@
  * Handles tower automation including attack, heal, and repair operations.
  * Executes defense plans and provides auto-repair functionality.
  */
+// Debug/telemetry
+const DEBUG_TOWER_REPAIR = false;
+
+// Thresholds and targets (tune here)
+const TOWER_REPAIR_CFG = {
+  floorNoThreat: 400,
+  floorThreat: 800,
+  minWallsRepairEnergy: 950, // only top defenses when very full
+};
+
+function getTowerFloor(hostile: boolean): number {
+  return hostile
+    ? TOWER_REPAIR_CFG.floorThreat
+    : TOWER_REPAIR_CFG.floorNoThreat;
+}
+
+function getRampartTarget(rcl: number): number {
+  if (rcl < 4) return 3000;
+  if (rcl < 6) return 10000;
+  if (rcl < 8) return 30000;
+  return 100000;
+}
+
+function getWallTarget(rcl: number): number {
+  if (rcl < 6) return 5000;
+  if (rcl < 8) return 20000;
+  return 50000;
+}
 
 /// <reference types="@types/screeps" />
 
@@ -74,16 +102,26 @@ export function performAutoRepair(room: Room): void {
   const towers = getTowersInRoom(room);
   if (towers.length === 0) return;
 
+  // Per-tick guard to avoid multiple towers repairing the same target
+  if (!Memory.rooms) Memory.rooms = {} as any;
+  if (!Memory.rooms[room.name]) (Memory.rooms as any)[room.name] = {};
+  const r = (Memory.rooms as any)[room.name];
+  if (!r.towerRepair) r.towerRepair = {};
+  const roomMem = r.towerRepair as any;
+  if (roomMem.lastTick !== Game.time) {
+    roomMem.lastTick = Game.time;
+    roomMem.targets = {};
+  }
+
   // One auto-repair action per room per tick to conserve energy
   // Prefer the fullest-energy tower so others stay buffered
   const hostile = room.find(FIND_HOSTILE_CREEPS).length > 0;
   const rcl = room.controller?.level || 0;
-  const towerFloor = hostile ? 800 : 400; // keep above this; aligned with hauler policy
-  const minCriticalRepair = Math.min(900, towerFloor + 100); // 500 (no threat) or 900 (threat)
-  const minWallsRepair = 950; // only when very full
-  const rampartTarget =
-    rcl < 4 ? 3000 : rcl < 6 ? 10000 : rcl < 8 ? 30000 : 100000;
-  const wallTarget = rcl < 6 ? 5000 : rcl < 8 ? 20000 : 50000;
+  const towerFloor = getTowerFloor(hostile);
+  const minCriticalRepair = Math.min(900, towerFloor + 100);
+  const minWallsRepair = TOWER_REPAIR_CFG.minWallsRepairEnergy;
+  const rampartTarget = getRampartTarget(rcl);
+  const wallTarget = getWallTarget(rcl);
 
   const sorted = [...towers].sort(
     (a, b) =>
@@ -121,26 +159,41 @@ export function performAutoRepair(room: Room): void {
       const target = critical.reduce((a, b) =>
         a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b
       );
+      // Skip if already handled this tick or already full
+      if (roomMem.targets[target.id]) continue;
+      if (target.hits >= target.hitsMax) continue;
       const res = tower.repair(target);
-      if (res === OK && Game.time % 200 === 0) {
+      if (res === OK && DEBUG_TOWER_REPAIR && Game.time % 200 === 0) {
         const pct = Math.round((target.hits / target.hitsMax) * 100);
         console.log(`🔧 Auto-repair: ${target.structureType} (${pct}%)`);
       }
-      repaired = res === OK;
+      if (res === OK) {
+        roomMem.targets[target.id] = true;
+        repaired = true;
+      }
       continue;
     }
 
     // 2) Ramparts (light topping) when very full and no hostiles
-    if (!hostile && energy >= minWallsRepair) {
+    if (
+      !hostile &&
+      energy >= minWallsRepair &&
+      room.storage &&
+      room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 50000
+    ) {
       const ramparts = tower.pos.findInRange(FIND_STRUCTURES, 20, {
-        filter: (s) =>
-          s.structureType === STRUCTURE_RAMPART && s.hits < rampartTarget,
+        filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 2000,
       }) as StructureRampart[];
       if (ramparts.length > 0) {
         const target = ramparts.reduce((a, b) => (a.hits < b.hits ? a : b));
+        if (roomMem.targets[target.id]) continue;
+        if (target.hits >= target.hitsMax) continue;
         const res = tower.repair(target);
-        repaired = res === OK;
-        if (res === OK && Game.time % 400 === 0) {
+        if (res === OK) {
+          roomMem.targets[target.id] = true;
+          repaired = true;
+        }
+        if (res === OK && DEBUG_TOWER_REPAIR && Game.time % 400 === 0) {
           console.log(`🛡️ Tower topped rampart to ${target.hits}`);
         }
         continue;
@@ -148,14 +201,18 @@ export function performAutoRepair(room: Room): void {
 
       // 3) Walls (only extreme lows) when very full and no hostiles
       const walls = tower.pos.findInRange(FIND_STRUCTURES, 20, {
-        filter: (s) =>
-          s.structureType === STRUCTURE_WALL && s.hits < wallTarget,
+        filter: (s) => s.structureType === STRUCTURE_WALL && s.hits < 5000,
       }) as StructureWall[];
       if (walls.length > 0) {
         const target = walls.reduce((a, b) => (a.hits < b.hits ? a : b));
+        if (roomMem.targets[target.id]) continue;
+        if (target.hits >= target.hitsMax) continue;
         const res = tower.repair(target);
-        repaired = res === OK;
-        if (res === OK && Game.time % 600 === 0) {
+        if (res === OK) {
+          roomMem.targets[target.id] = true;
+          repaired = true;
+        }
+        if (res === OK && DEBUG_TOWER_REPAIR && Game.time % 600 === 0) {
           console.log(`🧱 Tower nudged wall to ${target.hits}`);
         }
       }
