@@ -134,14 +134,35 @@ export function runHauler(creep: Creep, intel: any): void {
       }
     }
 
-    const fillTargets = creep.room.find(FIND_STRUCTURES, {
+    // Prioritize towers to a safety floor before general filling
+    const threatActive =
+      (intel?.military?.hostiles?.length || 0) > 0 ||
+      (intel?.military?.safetyScore ?? 100) < 60;
+    const towerFloor = threatActive ? 800 : 400; // keep towers at this minimum
+    const lowTowers = creep.room.find(FIND_MY_STRUCTURES, {
       filter: (s: AnyStructure) =>
-        (s.structureType === STRUCTURE_SPAWN ||
-          s.structureType === STRUCTURE_EXTENSION ||
-          s.structureType === STRUCTURE_TOWER) &&
+        s.structureType === STRUCTURE_TOWER &&
+        (s as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) <
+          towerFloor &&
         (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
     }) as AnyStoreStructure[];
-    let target = creep.pos.findClosestByPath(fillTargets);
+
+    let target: AnyStoreStructure | null = null;
+    if (lowTowers.length > 0) {
+      target = creep.pos.findClosestByPath(lowTowers) || null;
+    }
+
+    // If towers are at/above floor (or none exist), fill spawns/extensions/towers normally
+    if (!target) {
+      const fillTargets = creep.room.find(FIND_STRUCTURES, {
+        filter: (s: AnyStructure) =>
+          (s.structureType === STRUCTURE_SPAWN ||
+            s.structureType === STRUCTURE_EXTENSION ||
+            s.structureType === STRUCTURE_TOWER) &&
+          (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+      }) as AnyStoreStructure[];
+      target = creep.pos.findClosestByPath(fillTargets) || null;
+    }
 
     // Next: keep the controller container buffered before touching storage
     if (!target) {

@@ -72,68 +72,95 @@ export function executeTowerActions(room: Room, defensePlan: any): void {
  */
 export function performAutoRepair(room: Room): void {
   const towers = getTowersInRoom(room);
+  if (towers.length === 0) return;
 
-  towers.forEach((tower) => {
-    // Only use towers for repair if they have plenty of energy
-    if (tower.store.getUsedCapacity(RESOURCE_ENERGY) < 600) return;
+  // One auto-repair action per room per tick to conserve energy
+  // Prefer the fullest-energy tower so others stay buffered
+  const hostile = room.find(FIND_HOSTILE_CREEPS).length > 0;
+  const rcl = room.controller?.level || 0;
+  const towerFloor = hostile ? 800 : 400; // keep above this; aligned with hauler policy
+  const minCriticalRepair = Math.min(900, towerFloor + 100); // 500 (no threat) or 900 (threat)
+  const minWallsRepair = 950; // only when very full
+  const rampartTarget =
+    rcl < 4 ? 3000 : rcl < 6 ? 10000 : rcl < 8 ? 30000 : 100000;
+  const wallTarget = rcl < 6 ? 5000 : rcl < 8 ? 20000 : 50000;
 
-    // Priority repair targets
-    const criticalTargets = tower.pos.findInRange(FIND_STRUCTURES, 20, {
+  const sorted = [...towers].sort(
+    (a, b) =>
+      b.store.getUsedCapacity(RESOURCE_ENERGY) -
+      a.store.getUsedCapacity(RESOURCE_ENERGY)
+  );
+
+  let repaired = false;
+  for (const tower of sorted) {
+    if (repaired) break;
+    const energy = tower.store.getUsedCapacity(RESOURCE_ENERGY);
+    if (energy < minCriticalRepair) continue; // preserve buffer
+
+    // 1) Critical core structures at low HP
+    const critical = tower.pos.findInRange(FIND_STRUCTURES, 20, {
       filter: (s) => {
-        const healthPercent = s.hits / s.hitsMax;
-
-        // Critical structures need immediate repair
-        if (healthPercent < 0.3) {
+        const hp = s.hits / s.hitsMax;
+        if (hp < 0.35)
           return (
             s.structureType === STRUCTURE_SPAWN ||
             s.structureType === STRUCTURE_TOWER ||
             s.structureType === STRUCTURE_STORAGE ||
-            s.structureType === STRUCTURE_TERMINAL
+            s.structureType === STRUCTURE_TERMINAL ||
+            s.structureType === STRUCTURE_EXTENSION
           );
-        }
-
-        // Important structures at medium damage
-        if (healthPercent < 0.6) {
+        if (hp < 0.6)
           return (
             s.structureType === STRUCTURE_SPAWN ||
             s.structureType === STRUCTURE_TOWER
           );
-        }
-
-        // Minor repairs for walls/ramparts only if tower is very full
-        if (
-          healthPercent < 0.8 &&
-          tower.store.getUsedCapacity(RESOURCE_ENERGY) > 800
-        ) {
-          return (
-            s.structureType === STRUCTURE_WALL ||
-            s.structureType === STRUCTURE_RAMPART
-          );
-        }
-
         return false;
       },
     });
-
-    // Repair the most damaged critical structure first
-    if (criticalTargets.length > 0) {
-      const target = criticalTargets.reduce((prev, curr) =>
-        prev.hits / prev.hitsMax < curr.hits / curr.hitsMax ? prev : curr
+    if (critical.length > 0) {
+      const target = critical.reduce((a, b) =>
+        a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b
       );
+      const res = tower.repair(target);
+      if (res === OK && Game.time % 200 === 0) {
+        const pct = Math.round((target.hits / target.hitsMax) * 100);
+        console.log(`🔧 Auto-repair: ${target.structureType} (${pct}%)`);
+      }
+      repaired = res === OK;
+      continue;
+    }
 
-      const result = tower.repair(target);
-      if (
-        result === OK &&
-        (Game.time % 200 === 0 ||
-          Math.round((target.hits / target.hitsMax) * 100) < 20)
-      ) {
-        const healthPercent = Math.round((target.hits / target.hitsMax) * 100);
-        console.log(
-          `🔧 Auto-repair: ${target.structureType} (${healthPercent}%)`
-        );
+    // 2) Ramparts (light topping) when very full and no hostiles
+    if (!hostile && energy >= minWallsRepair) {
+      const ramparts = tower.pos.findInRange(FIND_STRUCTURES, 20, {
+        filter: (s) =>
+          s.structureType === STRUCTURE_RAMPART && s.hits < rampartTarget,
+      }) as StructureRampart[];
+      if (ramparts.length > 0) {
+        const target = ramparts.reduce((a, b) => (a.hits < b.hits ? a : b));
+        const res = tower.repair(target);
+        repaired = res === OK;
+        if (res === OK && Game.time % 400 === 0) {
+          console.log(`🛡️ Tower topped rampart to ${target.hits}`);
+        }
+        continue;
+      }
+
+      // 3) Walls (only extreme lows) when very full and no hostiles
+      const walls = tower.pos.findInRange(FIND_STRUCTURES, 20, {
+        filter: (s) =>
+          s.structureType === STRUCTURE_WALL && s.hits < wallTarget,
+      }) as StructureWall[];
+      if (walls.length > 0) {
+        const target = walls.reduce((a, b) => (a.hits < b.hits ? a : b));
+        const res = tower.repair(target);
+        repaired = res === OK;
+        if (res === OK && Game.time % 600 === 0) {
+          console.log(`🧱 Tower nudged wall to ${target.hits}`);
+        }
       }
     }
-  });
+  }
 }
 
 /**

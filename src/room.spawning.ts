@@ -248,9 +248,9 @@ function trySpawnEconomicCreeps(
     },
     {
       role: "hauler",
-      // Only spawn haulers when we have something to haul
+      // Dynamically scale haulers based on source container fullness and needy structures
       needed: hasContainersOrStorage
-        ? Math.max(composition.haulers || 1, Math.min(2, current.miner))
+        ? computeHaulerTarget(spawn.room, composition, current)
         : 0,
       current: current.hauler,
     },
@@ -323,6 +323,63 @@ function trySpawnEconomicCreeps(
   }
 
   return false;
+}
+
+/**
+ * Compute dynamic hauler target based on:
+ * - Baseline from economic plan
+ * - Number of miners (throughput to move)
+ * - Overfull source containers (fill ratio > 80%)
+ * - Count of needy structures (spawns/extensions/towers needing energy)
+ */
+function computeHaulerTarget(
+  room: Room,
+  composition: any,
+  current: Record<string, number>
+): number {
+  const base = Math.max(1, composition.haulers || 1);
+  const byMiners = Math.max(1, Math.min(3, current.miner));
+
+  const containers = room.find(FIND_STRUCTURES, {
+    filter: (s: AnyStructure) => s.structureType === STRUCTURE_CONTAINER,
+  }) as StructureContainer[];
+  const sourceContainers = containers.filter(
+    (c) =>
+      room.find(FIND_SOURCES, { filter: (src) => c.pos.isNearTo(src) }).length >
+      0
+  );
+  const overfullSources = sourceContainers.filter((c) => {
+    const cap = c.store.getCapacity(RESOURCE_ENERGY) || 2000;
+    const used = c.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+    return used / cap > 0.8;
+  }).length;
+
+  const needyStructures = room.find(FIND_MY_STRUCTURES, {
+    filter: (s: AnyStructure) =>
+      (s.structureType === STRUCTURE_SPAWN ||
+        s.structureType === STRUCTURE_EXTENSION ||
+        s.structureType === STRUCTURE_TOWER) &&
+      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+  }).length;
+
+  // Heuristics:
+  // - Ensure at least 2 haulers when there are needy structures and containers exist
+  // - Add capacity for each overfull source container, up to +2
+  // - Cap to prevent runaway; we can revisit once links/storage stabilize
+  let target = Math.max(base, byMiners);
+  if (needyStructures > 0) target = Math.max(target, 2);
+  if (overfullSources > 0)
+    target = Math.max(target, Math.min(2 + overfullSources, 4));
+
+  // If storage exists and is healthy, allow one more hauler to accelerate distribution at mid-game
+  if (
+    room.storage &&
+    room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 10000
+  ) {
+    target = Math.min(5, Math.max(target, 3));
+  }
+
+  return target;
 }
 
 /**
@@ -516,6 +573,24 @@ function getOptimalBody(
       return basic;
 
     case "hauler":
+      if (energyAvailable >= 800)
+        return [
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY, // 10 CARRY (capacity 500)
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE, // 5 MOVE (on roads, 2:1 ratio is fine)
+        ];
       if (energyAvailable >= 600)
         return [
           CARRY,
