@@ -42,12 +42,6 @@ export const loop = (): void => {
   } catch (error) {
     console.log(`💥 Critical error in main loop: ${error}`);
   }
-
-  // Performance reporting
-  const cpuUsed = Game.cpu.getUsed() - startCpu;
-  if (Game.time % 10 === 0) {
-    console.log(`⚡ CPU Usage: ${cpuUsed.toFixed(2)} / ${Game.cpu.limit}`);
-  }
 };
 
 /**
