@@ -1,7 +1,7 @@
 /**
  * MineralMiner: Best-practice mineral harvesting automation.
  * - Assigns mineral deposit and extractor.
- * - Moves to mineral, waits for cooldown, harvests efficiently.
+ * - Moves adjacent to mineral, waits for cooldown, harvests efficiently.
  * - Transfers minerals to adjacent container or storage.
  * - Handles errors, logs actions, and supports future expansion.
  */
@@ -13,7 +13,7 @@ export function runMineralMiner(creep: Creep): void {
   // Find extractor structure
   const extractor = creep.room.find(FIND_STRUCTURES, {
     filter: (s) =>
-      s.structureType === STRUCTURE_EXTRACTOR && s.pos.isNearTo(mineral.pos),
+      s.structureType === STRUCTURE_EXTRACTOR && s.pos.isEqualTo(mineral.pos),
   })[0] as StructureExtractor | undefined;
   if (!extractor) {
     if (Game.time % 100 === 0) {
@@ -24,63 +24,47 @@ export function runMineralMiner(creep: Creep): void {
     return;
   }
 
-  // Find adjacent container or storage
-  const container = creep.pos.findInRange(FIND_STRUCTURES, 1, {
-    filter: (s) =>
-      s.structureType === STRUCTURE_CONTAINER ||
-      s.structureType === STRUCTURE_STORAGE,
-  })[0] as StructureContainer | StructureStorage | undefined;
+  // Check if creep is full
+  const isFull = creep.store.getFreeCapacity() === 0;
 
-  // Move to mineral deposit
-  if (!creep.pos.isEqualTo(mineral.pos)) {
+  // If full, find container or storage to transfer to
+  if (isFull) {
+    const target = creep.pos.findClosestByRange(FIND_STRUCTURES, {
+      filter: (s) =>
+        (s.structureType === STRUCTURE_CONTAINER ||
+          s.structureType === STRUCTURE_STORAGE) &&
+        s.store.getFreeCapacity(mineral.mineralType) > 0,
+    }) as StructureContainer | StructureStorage | undefined;
+
+    if (target) {
+      if (creep.pos.isNearTo(target)) {
+        creep.transfer(target, mineral.mineralType);
+      } else {
+        creep.moveTo(target, { visualizePathStyle: { stroke: "#ffaa00" } });
+      }
+      return;
+    }
+  }
+
+  // Move adjacent to mineral deposit (not on top, since extractor is there)
+  if (!creep.pos.isNearTo(mineral.pos)) {
     creep.moveTo(mineral.pos, { visualizePathStyle: { stroke: "#ffaa00" } });
     return;
   }
 
-  // Harvest mineral if extractor is ready and mineral is available
-  if (extractor.cooldown === 0 && mineral.mineralAmount > 0) {
+  // Harvest mineral if not at cooldown and mineral is available
+  if (mineral.mineralAmount > 0) {
     const res = creep.harvest(mineral);
-    switch (res) {
-      case OK:
-        if (Game.time % 50 === 0) {
-          console.log(
-            `[MineralMiner] Harvested ${mineral.mineralType} in ${creep.room.name}`
-          );
-        }
-        break;
-      case ERR_NOT_ENOUGH_RESOURCES:
-        if (Game.time % 200 === 0) {
-          console.log(`[MineralMiner] Mineral depleted in ${creep.room.name}`);
-        }
-        break;
-      case ERR_NOT_OWNER:
-      case ERR_BUSY:
-      case ERR_NOT_FOUND:
-      case ERR_NOT_ENOUGH_RESOURCES:
-      case ERR_INVALID_TARGET:
-      case ERR_NOT_IN_RANGE:
-      case ERR_TIRED:
-      case ERR_NO_BODYPART:
-        if (Game.time % 100 === 0) {
-          console.log(
-            `[MineralMiner] Harvest error ${res} in ${creep.room.name}`
-          );
-        }
-        break;
+    if (res === ERR_TIRED) {
+      // Extractor on cooldown, this is normal - wait
+      return;
     }
-  } else if (extractor.cooldown > 0 && Game.time % 50 === 0) {
-    console.log(
-      `[MineralMiner] Waiting for extractor cooldown (${extractor.cooldown}) in ${creep.room.name}`
-    );
-  }
-
-  // Transfer minerals to container/storage if carrying any
-  if (container && creep.store.getUsedCapacity(mineral.mineralType) > 0) {
-    const res = creep.transfer(container, mineral.mineralType);
-    if (res === OK && Game.time % 50 === 0) {
-      console.log(
-        `[MineralMiner] Transferred ${mineral.mineralType} to container/storage in ${creep.room.name}`
-      );
+    if (
+      res !== OK &&
+      res !== ERR_NOT_ENOUGH_RESOURCES &&
+      Game.time % 100 === 0
+    ) {
+      console.log(`[MineralMiner] Harvest error ${res} in ${creep.room.name}`);
     }
   }
 }

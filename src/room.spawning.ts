@@ -496,6 +496,9 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
     repairer: room.find(FIND_MY_CREEPS, {
       filter: (c) => c.memory.role === "repairer",
     }).length,
+    mineralminer: room.find(FIND_MY_CREEPS, {
+      filter: (c) => c.memory.role === "mineralminer",
+    }).length,
   };
 }
 
