@@ -70,11 +70,6 @@ function processGlobalOperations(): void {
       )}%)`
     );
   }
-
-  // Bucket monitoring
-  if (Game.cpu.bucket < 1000) {
-    console.log(`🪣 Low CPU bucket: ${Game.cpu.bucket}/10000`);
-  }
 }
 
 /**

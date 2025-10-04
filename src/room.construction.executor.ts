@@ -34,13 +34,6 @@ export function executeConstructionPlan(
     ...(plan.priorities?.deferred || []),
   ];
 
-  const mineralRoadCount = prioritized.filter(
-    (t) => t.reason && t.reason.includes("mineral")
-  ).length;
-  console.log(
-    `[MineralRoad] Room ${room.name}: ${prioritized.length} total tasks, ${mineralRoadCount} mineral roads`
-  );
-
   // Collect reserved structure tiles (non-road planned structures) to avoid placing roads there (core oscillation fix)
   const reservedForStructures = new Set<string>();
   for (const t of prioritized) {
