@@ -267,6 +267,12 @@ function trySpawnEconomicCreeps(
       needed: repairDemand.recommendedRepairers,
       current: current.repairer || 0,
     },
+    {
+      role: "mineralminer",
+      // Spawn mineral miner when extractor exists and mineral has resources
+      needed: shouldSpawnMineralMiner(spawn.room) ? 1 : 0,
+      current: current.mineralminer || 0,
+    },
   ];
 
   for (const item of spawnQueue) {
@@ -642,6 +648,32 @@ function getOptimalBody(
       if (energyAvailable >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
       return basic;
 
+    case "mineralminer":
+      // Mineral miner: WORK parts for mining minerals
+      if (energyAvailable >= 1200)
+        return [
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+        ];
+      if (energyAvailable >= 800)
+        return [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE];
+      if (energyAvailable >= 550)
+        return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE];
+      return [WORK, WORK, WORK, MOVE];
+
     case "defender":
       if (energyAvailable >= 780)
         return [ATTACK, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE];
@@ -660,6 +692,26 @@ function getOptimalBody(
     default:
       return basic;
   }
+}
+
+/**
+ * Check if mineral miner should be spawned
+ */
+function shouldSpawnMineralMiner(room: Room): boolean {
+  // Only spawn if RCL >= 6 and extractor exists
+  if (!room.controller || room.controller.level < 6) return false;
+
+  const extractor = room.find(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
+  })[0];
+
+  if (!extractor) return false;
+
+  // Check if mineral has resources available
+  const mineral = room.find(FIND_MINERALS)[0];
+  if (!mineral || mineral.mineralAmount === 0) return false;
+
+  return true;
 }
 
 /**
