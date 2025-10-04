@@ -178,6 +178,7 @@ function manageRoomCreeps(room: Room, plans: any, intel: any): void {
       switch (role) {
         case "miner":
           runMiner(creep);
+          break;
         case "mineralminer":
           runMineralMiner(creep);
           break;
