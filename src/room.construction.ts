@@ -78,7 +78,7 @@ export function planConstruction(intel: RoomIntelligence): ConstructionPlan {
   const cached = (mem.construction as any).cachedPlan as
     | { sig: string; time: number; plan: ConstructionPlan }
     | undefined;
-  const MAX_AGE = 50; // ticks before forced refresh
+  const MAX_AGE = 1; // ticks before forced refresh (immediate responsiveness)
   if (cached && cached.sig === sig && Game.time - cached.time < MAX_AGE) {
     return hydrateConstructionPlan(cached.plan);
   }
@@ -1989,10 +1989,15 @@ function generateExtractorTasks(intel: RoomIntelligence): ConstructionTask[] {
   const mineral = room.find(FIND_MINERALS)[0];
   if (!mineral) return tasks;
 
-  const existingExtractor = room.find(FIND_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
-  }).length;
-  if (existingExtractor === 0) {
+  const hasExtractorStructure =
+    room.find(FIND_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
+    }).length > 0;
+  const hasExtractorSite =
+    room.find(FIND_CONSTRUCTION_SITES, {
+      filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
+    }).length > 0;
+  if (!hasExtractorStructure && !hasExtractorSite) {
     tasks.push({
       type: STRUCTURE_EXTRACTOR,
       pos: mineral.pos,

@@ -111,17 +111,14 @@ export function executeConstructionPlan(
     if (!isBuildable(room, task.pos, task.type)) {
       // Special case: if placing a non-road structure and a road (structure or site) blocks it, remove it and retry later
       if (task.type !== STRUCTURE_ROAD) {
-        // Destroy existing road structure
         const structs = task.pos.lookFor(LOOK_STRUCTURES);
         const road = structs.find((s) => s.structureType === STRUCTURE_ROAD);
         if (road) {
           const res = road.destroy();
           if (res === OK) {
-            // Skip this tick; placement will be retried in subsequent ticks
             continue;
           }
         }
-        // Remove road construction site if present
         const sites = task.pos.lookFor(LOOK_CONSTRUCTION_SITES);
         const roadSite = sites.find((s) => s.structureType === STRUCTURE_ROAD);
         if (roadSite) {
@@ -142,11 +139,8 @@ export function executeConstructionPlan(
         nonRoadPlaceableRemaining--;
       }
       // Optional: log strategic placement
-      console.log(
-        `📐 ${room.name}: Placed ${task.type} @ ${task.pos.x},${task.pos.y} (${task.reason})`
-      );
+      // console.log(`📐 ${room.name}: Placed ${task.type} @ ${task.pos.x},${task.pos.y} (${task.reason})`);
     } else if (result === ERR_INVALID_TARGET || result === ERR_FULL) {
-      // Skip bad target or local site limit reached
       continue;
     }
   }
@@ -296,6 +290,7 @@ function withinRclLimits(
     [STRUCTURE_CONTAINER]: 5, // soft cap; game allows many but we control via planner
     [STRUCTURE_ROAD]: 2500, // practical large limit
     [STRUCTURE_RAMPART]: 300,
+    [STRUCTURE_EXTRACTOR]: rcl >= 6 ? 1 : 0,
   };
 
   const limit = limits[type] ?? 0;
@@ -331,12 +326,18 @@ function isBuildable(
   // Avoid walls, respect bounds, and avoid blocking controller/exit tiles
   if (pos.x <= 0 || pos.x >= 49 || pos.y <= 0 || pos.y >= 49) return false;
   const terrain = room.getTerrain();
-  if (terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
-
   const sites = pos.lookFor(LOOK_CONSTRUCTION_SITES);
   if (sites.length > 0) return false;
 
   const structs = pos.lookFor(LOOK_STRUCTURES);
+  if (type === STRUCTURE_EXTRACTOR) {
+    // Allow extractor on wall terrain if mineral is present and no structure/site exists
+    const mineral = pos.lookFor(LOOK_MINERALS)[0];
+    if (!mineral) return false;
+    if (structs.length > 0) return false;
+    return true;
+  }
+  if (terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
   if (type === STRUCTURE_RAMPART) {
     // Ramparts may be placed over existing structures to protect them
     return true;
