@@ -26,6 +26,7 @@ import { runDefender } from "./creep.defender";
 import { runRepairer } from "./creep.repairer";
 import { runWorker } from "./creep.worker";
 import { runMiner } from "./creep.miner";
+import { runMineralMiner } from "./creep.mineralminer";
 import { drawRoomHUD } from "./room.visuals";
 import { updateRoomTraffic } from "./room.traffic";
 
@@ -177,6 +178,9 @@ function manageRoomCreeps(room: Room, plans: any, intel: any): void {
       switch (role) {
         case "miner":
           runMiner(creep);
+        case "mineralminer":
+          runMineralMiner(creep);
+          break;
           break;
         case "harvester":
           runHarvester(creep, intel);
