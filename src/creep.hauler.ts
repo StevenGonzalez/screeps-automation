@@ -7,6 +7,12 @@ export function runHauler(creep: Creep, intel: any): void {
     // New acquire cycle: clear last withdraw memory to avoid over-filtering
     if (creep.memory.lastWithdrawId) delete creep.memory.lastWithdrawId;
 
+    // Check if energy needs are urgent (low spawn/extension energy or critical towers)
+    const energyRatio =
+      creep.room.energyAvailable /
+      Math.max(1, creep.room.energyCapacityAvailable);
+    const energyUrgent = energyRatio < 0.7;
+
     // Urgent: drain near-full source containers first to unblock miners
     const urgentSource = creep.room.find(FIND_STRUCTURES, {
       filter: (s: AnyStructure) =>
@@ -44,12 +50,37 @@ export function runHauler(creep: Creep, intel: any): void {
       filter: (r) => r.store.getUsedCapacity(RESOURCE_ENERGY) > 50,
     });
 
+    // Check for mineral-filled containers if energy needs are not urgent
+    let mineralContainers: StructureContainer[] = [];
+    if (!energyUrgent) {
+      mineralContainers = creep.room.find(FIND_STRUCTURES, {
+        filter: (s: AnyStructure) => {
+          if (s.structureType !== STRUCTURE_CONTAINER) return false;
+          const container = s as StructureContainer;
+          // Look for containers near minerals (not sources or controller)
+          if (isSourceContainer(container) || isControllerContainer(container))
+            return false;
+          // Check if container has minerals and is getting full
+          for (const resourceType in container.store) {
+            if (resourceType === RESOURCE_ENERGY) continue;
+            const amount =
+              container.store[resourceType as ResourceConstant] || 0;
+            if (amount > 1000 || container.store.getFreeCapacity() < 500) {
+              return true;
+            }
+          }
+          return false;
+        },
+      }) as StructureContainer[];
+    }
+
     let target: any =
       creep.pos.findClosestByPath(urgentSource) ||
       creep.pos.findClosestByPath(pickupContainers) ||
       creep.pos.findClosestByPath(dropped) ||
       creep.pos.findClosestByPath(tombs) ||
       creep.pos.findClosestByPath(ruins) ||
+      creep.pos.findClosestByPath(mineralContainers) ||
       creep.pos.findClosestByPath(storagesWithEnergy);
 
     if (target) {
@@ -61,7 +92,25 @@ export function runHauler(creep: Creep, intel: any): void {
           CreepPersonality.speak(creep, "withdraw");
         }
       } else {
-        const res = creep.withdraw(target, RESOURCE_ENERGY);
+        // Withdraw from structure - handle both energy and minerals
+        let resourceType: ResourceConstant = RESOURCE_ENERGY;
+
+        // If target is a mineral container, find the mineral type to withdraw
+        if (
+          (target as AnyStoreStructure).structureType === STRUCTURE_CONTAINER
+        ) {
+          for (const res in (target as AnyStoreStructure).store) {
+            if (
+              res !== RESOURCE_ENERGY &&
+              (target as AnyStoreStructure).store[res as ResourceConstant] > 0
+            ) {
+              resourceType = res as ResourceConstant;
+              break;
+            }
+          }
+        }
+
+        const res = creep.withdraw(target, resourceType);
         if (res === ERR_NOT_IN_RANGE) {
           creep.moveTo(target, { visualizePathStyle: style("withdraw") });
           CreepPersonality.speak(creep, "move");
@@ -98,7 +147,52 @@ export function runHauler(creep: Creep, intel: any): void {
       }
     }
   } else {
-    // Deliver
+    // Deliver - check if carrying minerals or energy
+    const carryingMinerals = Object.keys(creep.store).some(
+      (res) =>
+        res !== RESOURCE_ENERGY && creep.store[res as ResourceConstant] > 0
+    );
+
+    if (carryingMinerals) {
+      // Deliver minerals to terminal first, then storage
+      let target: AnyStoreStructure | null = null;
+
+      const terminal = creep.room.terminal;
+      if (terminal && terminal.store.getFreeCapacity() > 0) {
+        target = terminal;
+      } else if (
+        creep.room.storage &&
+        creep.room.storage.store.getFreeCapacity() > 0
+      ) {
+        target = creep.room.storage;
+      }
+
+      if (target) {
+        // Transfer all mineral types
+        for (const resourceType in creep.store) {
+          if (resourceType === RESOURCE_ENERGY) continue;
+          const amount = creep.store[resourceType as ResourceConstant];
+          if (amount > 0) {
+            const res = creep.transfer(
+              target,
+              resourceType as ResourceConstant
+            );
+            if (res === ERR_NOT_IN_RANGE) {
+              creep.moveTo(target, { visualizePathStyle: style("transfer") });
+              CreepPersonality.speak(creep, "move");
+            } else if (res === OK) {
+              CreepPersonality.speak(creep, "transfer");
+            }
+            return; // Only transfer one resource type per tick
+          }
+        }
+      } else {
+        CreepPersonality.speak(creep, "frustrated");
+      }
+      return;
+    }
+
+    // Deliver energy (existing logic)
     // First, if we just withdrew from a source container and it's still nearly full,
     // feed a nearby source link before heading back. This helps prevent container overflow.
     if (creep.memory.lastWithdrawId) {
@@ -227,6 +321,14 @@ function isSourceContainer(container: StructureContainer): boolean {
   const room = container.room;
   const near = room.find(FIND_SOURCES, {
     filter: (s) => container.pos.isNearTo(s.pos),
+  });
+  return near.length > 0;
+}
+
+function isMineralContainer(container: StructureContainer): boolean {
+  const room = container.room;
+  const near = room.find(FIND_MINERALS, {
+    filter: (m) => container.pos.inRangeTo(m.pos, 2),
   });
   return near.length > 0;
 }
