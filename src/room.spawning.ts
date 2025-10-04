@@ -83,7 +83,6 @@ function trySpawnDefenseCreeps(
             order.count
           })`
         );
-        console.log(`🌟 ${CreepPersonality.getSpawnPhrase(order.role)}`);
         return true;
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
         if (Game.time % 25 === 0) {
@@ -108,7 +107,6 @@ function tryEmergencySpawn(spawn: StructureSpawn, role: string): boolean {
 
   if (result === OK) {
     console.log(`🚨 Emergency spawning ${role}!`);
-    console.log(`🌟 ${CreepPersonality.getSpawnPhrase(role)}`);
     return true;
   }
 
@@ -186,7 +184,6 @@ function trySpawnEconomicCreeps(
           console.log(
             `🚚 Bootstrap hauler spawned to pull from containers (${containersWithEnergy})`
           );
-          console.log(`🌟 ${CreepPersonality.getSpawnPhrase("hauler")}`);
           return true;
         }
       }
@@ -208,7 +205,6 @@ function trySpawnEconomicCreeps(
         console.log(
           `⛏️ Bootstrap harvester spawned due to 0 harvesters and low energy`
         );
-        console.log(`🌟 ${CreepPersonality.getSpawnPhrase("harvester")}`);
         return true;
       }
     }
@@ -227,7 +223,6 @@ function trySpawnEconomicCreeps(
       });
       if (res === OK) {
         console.log(`⚙️ Bootstrap upgrader spawned due to 0 upgraders`);
-        console.log(`🌟 ${CreepPersonality.getSpawnPhrase("upgrader")}`);
         return true;
       }
     }
@@ -290,7 +285,6 @@ function trySpawnEconomicCreeps(
         console.log(
           `👷 Spawning ${item.role} (${item.current + 1}/${item.needed})`
         );
-        console.log(`🌟 ${CreepPersonality.getSpawnPhrase(item.role)}`);
         return true;
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
         // Fallback: try an emergency-sized body using current energy
@@ -306,7 +300,6 @@ function trySpawnEconomicCreeps(
             console.log(
               `🪫 Low-energy ${item.role} spawned with emergency body`
             );
-            console.log(`🌟 ${CreepPersonality.getSpawnPhrase(item.role)}`);
             return true;
           }
         }
@@ -458,7 +451,6 @@ function trySpawnConstructionCreeps(
           currentBuilders + 1
         }/${target}) for ${sites} sites / ${plannedTasks} tasks`
       );
-      console.log(`🌟 ${CreepPersonality.getSpawnPhrase("builder")}`);
       return true;
     } else if (result === ERR_NOT_ENOUGH_ENERGY) {
       if (Game.time % 25 === 0) {
