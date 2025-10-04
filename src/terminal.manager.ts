@@ -1,4 +1,3 @@
-// Screeps mineral constants
 declare const RESOURCE_OH: ResourceConstant;
 
 /**
