@@ -8,6 +8,8 @@
 /// <reference types="@types/screeps" />
 
 import { analyzeRoom } from "./room.intelligence";
+import { runTerminalManager } from "./terminal.manager";
+import { runLabManager } from "./lab.manager";
 import { planEconomy } from "./room.economy";
 import { planConstruction } from "./room.construction";
 import { planDefense } from "./room.defense";
@@ -131,6 +133,20 @@ function executeRoomPlans(room: Room, plans: any, intel: any): void {
 
   // 2.6. TRAFFIC UPDATE - record movement for heatmap-driven roads
   updateRoomTraffic(room);
+
+  // 2.7. TERMINAL AUTOMATION
+  try {
+    runTerminalManager(room);
+  } catch (err) {
+    console.log(`❌ Terminal manager error in ${room.name}: ${err}`);
+  }
+
+  // 2.8. LAB AUTOMATION
+  try {
+    runLabManager(room);
+  } catch (err) {
+    console.log(`❌ Lab manager error in ${room.name}: ${err}`);
+  }
 
   // 3. CREEP MANAGEMENT - Role-based automation
   manageRoomCreeps(room, plans, intel);

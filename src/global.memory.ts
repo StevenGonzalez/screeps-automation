@@ -1,3 +1,17 @@
+declare global {
+  interface RoomMemory {
+    labAssignments?: {
+      inputA: Id<StructureLab>;
+      inputB: Id<StructureLab>;
+      output: Id<StructureLab>;
+    };
+    lastScanned?: number;
+    economy?: any;
+    construction?: any;
+    defense?: any;
+    spawning?: any;
+  }
+}
 /**
  * Memory Management
  *
@@ -6,6 +20,12 @@
  */
 
 /// <reference types="@types/screeps" />
+
+declare global {
+  interface Memory {
+    terminalHub?: any;
+  }
+}
 
 /**
  * Clean up memory for dead creeps and obsolete data
