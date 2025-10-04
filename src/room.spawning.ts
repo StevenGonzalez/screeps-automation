@@ -471,34 +471,54 @@ function trySpawnConstructionCreeps(
 }
 
 /**
- * Get current creep counts by role
+ * Get current creep counts by role (including spawning creeps)
  */
 function getCurrentCreepCounts(room: Room): { [role: string]: number } {
+  // Count spawning creeps
+  const spawningCounts: { [role: string]: number } = {};
+  room.find(FIND_MY_SPAWNS).forEach((spawn) => {
+    if (spawn.spawning) {
+      const spawningCreep = Game.creeps[spawn.spawning.name];
+      if (spawningCreep && spawningCreep.memory.role) {
+        spawningCounts[spawningCreep.memory.role] =
+          (spawningCounts[spawningCreep.memory.role] || 0) + 1;
+      }
+    }
+  });
+
   return {
-    miner: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "miner",
-    }).length,
-    harvester: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "harvester",
-    }).length,
-    hauler: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "hauler",
-    }).length,
-    upgrader: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "upgrader",
-    }).length,
-    builder: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "builder",
-    }).length,
-    defender: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "defender",
-    }).length,
-    repairer: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "repairer",
-    }).length,
-    mineralminer: room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.memory.role === "mineralminer",
-    }).length,
+    miner:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "miner",
+      }).length + (spawningCounts.miner || 0),
+    harvester:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "harvester",
+      }).length + (spawningCounts.harvester || 0),
+    hauler:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "hauler",
+      }).length + (spawningCounts.hauler || 0),
+    upgrader:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "upgrader",
+      }).length + (spawningCounts.upgrader || 0),
+    builder:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "builder",
+      }).length + (spawningCounts.builder || 0),
+    defender:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "defender",
+      }).length + (spawningCounts.defender || 0),
+    repairer:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "repairer",
+      }).length + (spawningCounts.repairer || 0),
+    mineralminer:
+      room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.memory.role === "mineralminer",
+      }).length + (spawningCounts.mineralminer || 0),
   };
 }
 
