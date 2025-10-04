@@ -72,13 +72,10 @@ export function runTerminalManager(room: Room) {
     }
   }
   // 3. Auto-buy reagents if needed for labs, with cooldown and transaction cost check
-  if (
-    !terminal.cooldown &&
-    (terminal.store[RESOURCE_OH as ResourceConstant] || 0) < 1000
-  ) {
+  if (!terminal.cooldown && (terminal.store["OH"] || 0) < 1000) {
     const orders = Game.market.getAllOrders({
       type: ORDER_SELL,
-      resourceType: RESOURCE_OH as MarketResourceConstant,
+      resourceType: "OH",
     });
     if (orders.length) {
       const best = orders.reduce((a, b) => (a.price < b.price ? a : b));
@@ -90,7 +87,7 @@ export function runTerminalManager(room: Room) {
       if (terminal.store.energy > cost) {
         Game.market.deal(best.id, 500, room.name);
         console.log(
-          `[Terminal] Bought 500 ${RESOURCE_OH} at ${best.price} for ${room.name}. Cost: ${cost}`
+          `[Terminal] Bought 500 OH at ${best.price} for ${room.name}. Cost: ${cost}`
         );
         return;
       }

@@ -28,11 +28,11 @@ export function runLabManager(room: Room) {
 
   // 2. Auto-run reaction for UH + O -> UHO2 (defense boost), with cooldown check
   if (
-    inputA.mineralType === RESOURCE_UH &&
-    inputB.mineralType === RESOURCE_O &&
+    inputA.mineralType === "UH" &&
+    inputB.mineralType === "O" &&
     output.cooldown === 0 &&
-    inputA.store[RESOURCE_UH] > 0 &&
-    inputB.store[RESOURCE_O] > 0
+    inputA.store["UH"] > 0 &&
+    inputB.store["O"] > 0
   ) {
     output.runReaction(inputA, inputB);
     console.log(`[Lab] Ran reaction UH + O -> UHO2 in ${room.name}`);
@@ -43,10 +43,7 @@ export function runLabManager(room: Room) {
 
   // 4. Auto-boost creeps with UHO2 if available, with cooldown and energy check
   const boostLab = labs.find(
-    (l) =>
-      l.mineralType === RESOURCE_UHO2 &&
-      l.store.energy > 100 &&
-      l.cooldown === 0
+    (l) => l.mineralType === "UHO2" && l.store.energy > 100 && l.cooldown === 0
   );
   if (boostLab) {
     const creeps = room.find(FIND_MY_CREEPS, {
