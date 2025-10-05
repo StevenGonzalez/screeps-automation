@@ -38,39 +38,63 @@ export function runTerminalManager(room: Room) {
     }
   }
   // 2. Auto-sell surplus minerals if price is good, with dynamic pricing and cooldown check
-  for (const mineral of Object.keys(terminal.store)) {
-    if (mineral === RESOURCE_ENERGY) continue;
-    if (!(mineral in terminal.store)) continue;
-    const amount = terminal.store[mineral as ResourceConstant];
-    if (amount > 500 && !terminal.cooldown) {
+  if (!terminal.cooldown) {
+    for (const mineral of Object.keys(terminal.store)) {
+      if (mineral === RESOURCE_ENERGY) continue;
+
+      const amount = terminal.store[mineral as ResourceConstant] || 0;
+      if (amount <= 500) continue; // Need more than 500 to sell
+
       const orders = Game.market.getAllOrders({
         type: ORDER_BUY,
         resourceType: mineral as MarketResourceConstant,
       });
-      if (orders.length) {
-        // Dynamic pricing: prefer highest price, but only sell if above 10% of average
-        const best = orders.reduce((a, b) => (a.price > b.price ? a : b));
-        const history = Game.market.getHistory(
-          mineral as MarketResourceConstant
-        )[0];
-        const avg = history?.avgPrice || 0;
-        if (best.price > avg * 1.1) {
-          const dealAmount = Math.min(amount, best.remainingAmount);
-          const result = Game.market.deal(best.id, dealAmount, room.name);
 
-          if (result === OK) {
-            console.log(
-              `[Terminal] ✅ Sold ${dealAmount} ${mineral} at ${best.price.toFixed(
-                3
-              )} (avg: ${avg.toFixed(3)}) in ${room.name}`
-            );
-          } else {
-            console.log(
-              `[Terminal] ❌ Failed to sell ${mineral}: ${result} (Error code)`
-            );
-          }
-          return;
+      if (orders.length === 0) continue;
+
+      // Dynamic pricing: prefer highest price, but only sell if above 10% of average
+      const best = orders.reduce((a, b) => (a.price > b.price ? a : b));
+      const history = Game.market.getHistory(
+        mineral as MarketResourceConstant
+      )[0];
+      const avg = history?.avgPrice || 0;
+
+      if (best.price > avg * 1.1) {
+        // Calculate safe deal amount - can't sell more than we have
+        const dealAmount = Math.min(
+          amount,
+          best.remainingAmount,
+          1000 // Max 1000 per deal to avoid depleting instantly
+        );
+
+        // Verify we actually have this much
+        const actualAmount =
+          terminal.store.getUsedCapacity(mineral as ResourceConstant) || 0;
+        if (actualAmount < dealAmount) {
+          console.log(
+            `[Terminal] ⚠️ Skipping ${mineral} sale - insufficient stock (have ${actualAmount}, need ${dealAmount})`
+          );
+          continue;
         }
+
+        const result = Game.market.deal(best.id, dealAmount, room.name);
+
+        if (result === OK) {
+          console.log(
+            `[Terminal] ✅ Sold ${dealAmount} ${mineral} at ${best.price.toFixed(
+              3
+            )} (avg: ${avg.toFixed(3)}) in ${room.name}`
+          );
+        } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
+          console.log(
+            `[Terminal] ⚠️ Not enough ${mineral} to sell (tried ${dealAmount}, have ${actualAmount})`
+          );
+        } else {
+          console.log(
+            `[Terminal] ❌ Failed to sell ${mineral}: ${result} (Error code)`
+          );
+        }
+        return; // Only one deal per tick
       }
     }
   }
