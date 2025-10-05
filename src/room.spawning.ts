@@ -698,8 +698,20 @@ function getOptimalBody(
       return [WORK, WORK, WORK, MOVE];
 
     case "defender":
+      // Mix of melee and ranged for versatility against kiters/healers
+      if (energyAvailable >= 1000)
+        return [
+          RANGED_ATTACK,
+          RANGED_ATTACK,
+          ATTACK,
+          ATTACK,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+        ];
       if (energyAvailable >= 780)
-        return [ATTACK, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE];
+        return [RANGED_ATTACK, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE];
       if (energyAvailable >= 580)
         return [ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE];
       if (energyAvailable >= 390) return [ATTACK, ATTACK, MOVE, MOVE];

@@ -55,17 +55,20 @@ export function runTerminalManager(room: Room) {
         )[0];
         const avg = history?.avgPrice || 0;
         if (best.price > avg * 1.1) {
-          Game.market.deal(
-            best.id,
-            Math.min(amount, best.remainingAmount),
-            room.name
-          );
-          console.log(
-            `[Terminal] Sold ${Math.min(
-              amount,
-              best.remainingAmount
-            )} ${mineral} at ${best.price} (avg: ${avg}) in ${room.name}`
-          );
+          const dealAmount = Math.min(amount, best.remainingAmount);
+          const result = Game.market.deal(best.id, dealAmount, room.name);
+
+          if (result === OK) {
+            console.log(
+              `[Terminal] ✅ Sold ${dealAmount} ${mineral} at ${best.price.toFixed(
+                3
+              )} (avg: ${avg.toFixed(3)}) in ${room.name}`
+            );
+          } else {
+            console.log(
+              `[Terminal] ❌ Failed to sell ${mineral}: ${result} (Error code)`
+            );
+          }
           return;
         }
       }
@@ -85,10 +88,17 @@ export function runTerminalManager(room: Room) {
         best.roomName || room.name
       );
       if (terminal.store.energy > cost) {
-        Game.market.deal(best.id, 500, room.name);
-        console.log(
-          `[Terminal] Bought 500 OH at ${best.price} for ${room.name}. Cost: ${cost}`
-        );
+        const result = Game.market.deal(best.id, 500, room.name);
+
+        if (result === OK) {
+          console.log(
+            `[Terminal] ✅ Bought 500 OH at ${best.price.toFixed(3)} for ${
+              room.name
+            }. Cost: ${cost}`
+          );
+        } else {
+          console.log(`[Terminal] ❌ Failed to buy OH: ${result} (Error code)`);
+        }
         return;
       }
     }
