@@ -233,8 +233,55 @@ export function getTowersInRoom(room: Room): StructureTower[] {
 function runBasicTowerAI(room: Room): void {
   const towers = getTowersInRoom(room);
   for (const tower of towers) {
-    // 1) Attack closest hostile
-    const hostile = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+    // 1) Attack closest hostile, but filter out kiters
+    const hostiles = room.find(FIND_HOSTILE_CREEPS);
+    const viableHostiles = hostiles.filter((hostile) => {
+      // Filter out harassment/kiting targets
+      const healParts = hostile.body.filter((p) => p.type === HEAL).length;
+      const moveParts = hostile.body.filter((p) => p.type === MOVE).length;
+      const attackParts = hostile.body.filter(
+        (p) => p.type === ATTACK || p.type === RANGED_ATTACK
+      ).length;
+      const distance = tower.pos.getRangeTo(hostile.pos);
+
+      const isFastCreep = moveParts >= hostile.body.length * 0.4;
+      const nearEdge =
+        hostile.pos.x <= 5 ||
+        hostile.pos.x >= 44 ||
+        hostile.pos.y <= 5 ||
+        hostile.pos.y >= 44;
+      const isHealerKiter =
+        healParts > 0 && attackParts <= 3 && healParts >= attackParts * 0.75;
+
+      // Skip if it's a kiter that can outheal us or has mostly heals
+      if (healParts > 0 && (isHealerKiter || isFastCreep) && nearEdge) {
+        // Tower damage formula: 600 at range <=5, linear falloff to 150 at range 20+
+        let towerDamage = 600;
+        if (distance > 5) {
+          towerDamage = Math.max(150, 600 - (distance - 5) * 30);
+        }
+        const healRate = healParts * 12;
+        const netDamage = towerDamage - healRate;
+
+        if (netDamage <= 200) {
+          // Need at least 200 net damage - otherwise takes too many hits
+          if (Game.time % 100 === 0) {
+            console.log(
+              `🚫 Ignoring kiter ${
+                hostile.owner.username
+              }: ${healParts} HEAL vs ${Math.round(
+                towerDamage
+              )} dmg (net: ${Math.round(netDamage)})`
+            );
+          }
+          return false; // Don't waste energy
+        }
+      }
+
+      return true;
+    });
+
+    const hostile = tower.pos.findClosestByRange(viableHostiles);
     if (hostile) {
       const res = tower.attack(hostile);
       if (res === OK && Game.time % 50 === 0) {

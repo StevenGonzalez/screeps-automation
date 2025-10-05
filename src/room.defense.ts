@@ -507,8 +507,67 @@ function findBestTargetForTower(
 ): DefenseTarget | null {
   if (targets.length === 0) return null;
 
+  // Filter out harassment/kiting targets (low commitment, quick exit strategy)
+  const viableTargets = targets.filter((target) => {
+    const creep = Game.getObjectById<Creep>(target.id);
+    if (!creep) return false;
+
+    // Check if this is a harassment pattern:
+    // 1. Creep has significant heal parts (can outheal tower damage)
+    const healParts = creep.body.filter((p) => p.type === HEAL).length;
+    const toughParts = creep.body.filter((p) => p.type === TOUGH).length;
+    const moveParts = creep.body.filter((p) => p.type === MOVE).length;
+    const attackParts = creep.body.filter(
+      (p) => p.type === ATTACK || p.type === RANGED_ATTACK
+    ).length;
+
+    // 2. High mobility (can escape quickly)
+    const isFastCreep = moveParts >= creep.body.length * 0.4;
+
+    // 3. Near edge of room (easy escape)
+    const nearEdge =
+      creep.pos.x <= 5 ||
+      creep.pos.x >= 44 ||
+      creep.pos.y <= 5 ||
+      creep.pos.y >= 44;
+
+    // 4. Low attack capability relative to healing
+    const isHealerKiter =
+      healParts > 0 && attackParts <= 3 && healParts >= attackParts * 0.75;
+
+    // Detect harassment: fast healer near edge with low attack capability
+    if (healParts > 0 && (isHealerKiter || isFastCreep) && nearEdge) {
+      // This is likely a kiting harasser - only target if we can kill it quickly
+      const distance = tower.pos.getRangeTo(creep.pos);
+      // Tower damage formula: 600 at range <=5, linear falloff to 150 at range 20+
+      let towerDamage = 600;
+      if (distance > 5) {
+        towerDamage = Math.max(150, 600 - (distance - 5) * 30);
+      }
+      const healRate = healParts * 12; // HEAL parts heal 12/tick
+      const netDamage = towerDamage - healRate;
+
+      // If we can't overcome heal rate significantly, don't waste energy
+      if (netDamage <= 200) {
+        // Need at least 200 net damage - otherwise takes too many hits
+        if (Game.time % 100 === 0) {
+          console.log(
+            `🚫 Ignoring kiter ${
+              creep.owner.username
+            }: ${healParts} HEAL vs ${Math.round(
+              towerDamage
+            )} dmg (net: ${Math.round(netDamage)})`
+          );
+        }
+        return false;
+      }
+    }
+
+    return true;
+  });
+
   // Score targets based on tower position and capabilities
-  const scoredTargets = targets.map((target) => {
+  const scoredTargets = viableTargets.map((target) => {
     const distance = tower.pos.getRangeTo(target.pos);
     const effectiveness = Math.max(0.3, 1 - (distance - 5) * 0.05); // Tower effectiveness by distance
     const score = target.priority * effectiveness;
