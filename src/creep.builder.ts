@@ -36,8 +36,48 @@ export function runBuilder(
         return;
       }
     }
+
+    // Prioritize construction sites by importance:
+    // 1. Containers (critical for economy)
+    // 2. Spawns, extensions, towers (critical structures)
+    // 3. Storage, terminal, labs (important structures)
+    // 4. Roads (low priority - can wait)
     let sites = creep.room.find(FIND_CONSTRUCTION_SITES);
-    let target = creep.pos.findClosestByPath(sites);
+
+    // Priority 1: Containers
+    let target = creep.pos.findClosestByPath(
+      sites.filter((s) => s.structureType === STRUCTURE_CONTAINER)
+    );
+
+    // Priority 2: Critical structures
+    if (!target) {
+      target = creep.pos.findClosestByPath(
+        sites.filter(
+          (s) =>
+            s.structureType === STRUCTURE_SPAWN ||
+            s.structureType === STRUCTURE_EXTENSION ||
+            s.structureType === STRUCTURE_TOWER
+        )
+      );
+    }
+
+    // Priority 3: Important structures
+    if (!target) {
+      target = creep.pos.findClosestByPath(
+        sites.filter(
+          (s) =>
+            s.structureType === STRUCTURE_STORAGE ||
+            s.structureType === STRUCTURE_TERMINAL ||
+            s.structureType === STRUCTURE_LAB ||
+            s.structureType === STRUCTURE_LINK
+        )
+      );
+    }
+
+    // Priority 4: Everything else (including roads)
+    if (!target) {
+      target = creep.pos.findClosestByPath(sites);
+    }
     // If no path to any site, try to clean up unreachable sites (e.g., trapped in wall pockets)
     if (!target && sites.length > 0) {
       for (const s of sites) {
