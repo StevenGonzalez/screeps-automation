@@ -133,7 +133,26 @@ export function performAutoRepair(room: Room): void {
   for (const tower of sorted) {
     if (repaired) break;
     const energy = tower.store.getUsedCapacity(RESOURCE_ENERGY);
-    if (energy < minCriticalRepair) continue; // preserve buffer
+
+    // CRITICAL: Save dying ramparts first - they decay to 0!
+    const dyingRamparts = tower.pos.findInRange(FIND_STRUCTURES, 20, {
+      filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 300,
+    }) as StructureRampart[];
+
+    if (dyingRamparts.length > 0 && energy >= 10) {
+      const target = dyingRamparts.reduce((a, b) => (a.hits < b.hits ? a : b));
+      if (!roomMem.targets[target.id]) {
+        const res = tower.repair(target);
+        if (res === OK) {
+          console.log(`🚨 Emergency repair: Rampart at ${target.hits} HP`);
+          roomMem.targets[target.id] = true;
+          repaired = true;
+          continue;
+        }
+      }
+    }
+
+    if (energy < minCriticalRepair) continue; // preserve buffer for other repairs
 
     // 1) Critical core structures at low HP
     const critical = tower.pos.findInRange(FIND_STRUCTURES, 20, {
