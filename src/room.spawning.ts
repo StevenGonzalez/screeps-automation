@@ -327,7 +327,7 @@ function trySpawnEconomicCreeps(
 /**
  * Compute dynamic hauler target based on:
  * - Baseline from economic plan
- * - Number of miners (throughput to move)
+ * - Number of miners (throughput to move) including mineral miners
  * - Overfull source containers (fill ratio > 80%)
  * - Count of needy structures (spawns/extensions/towers needing energy)
  */
@@ -337,7 +337,9 @@ function computeHaulerTarget(
   current: Record<string, number>
 ): number {
   const base = Math.max(1, composition.haulers || 1);
-  const byMiners = Math.max(1, Math.min(3, current.miner));
+  // Include both energy miners and mineral miners for hauler calculation
+  const totalMiners = (current.miner || 0) + (current.mineralminer || 0);
+  const byMiners = Math.max(1, Math.min(3, totalMiners));
 
   const containers = room.find(FIND_STRUCTURES, {
     filter: (s: AnyStructure) => s.structureType === STRUCTURE_CONTAINER,
@@ -347,9 +349,17 @@ function computeHaulerTarget(
       room.find(FIND_SOURCES, { filter: (src) => c.pos.isNearTo(src) }).length >
       0
   );
-  const overfullSources = sourceContainers.filter((c) => {
-    const cap = c.store.getCapacity(RESOURCE_ENERGY) || 2000;
-    const used = c.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+
+  // Also check mineral containers
+  const mineralContainers = containers.filter((c) => {
+    const mineral = room.find(FIND_MINERALS)[0];
+    return mineral && c.pos.isNearTo(mineral);
+  });
+
+  const allMiningContainers = [...sourceContainers, ...mineralContainers];
+  const overfullContainers = allMiningContainers.filter((c) => {
+    const cap = c.store.getCapacity() || 2000;
+    const used = c.store.getUsedCapacity() || 0;
     return used / cap > 0.8;
   }).length;
 
@@ -363,12 +373,12 @@ function computeHaulerTarget(
 
   // Heuristics:
   // - Ensure at least 2 haulers when there are needy structures and containers exist
-  // - Add capacity for each overfull source container, up to +2
+  // - Add capacity for each overfull container, up to +2
   // - Cap to prevent runaway; we can revisit once links/storage stabilize
   let target = Math.max(base, byMiners);
   if (needyStructures > 0) target = Math.max(target, 2);
-  if (overfullSources > 0)
-    target = Math.max(target, Math.min(2 + overfullSources, 4));
+  if (overfullContainers > 0)
+    target = Math.max(target, Math.min(2 + overfullContainers, 4));
 
   // If storage exists and is healthy, allow one more hauler to accelerate distribution at mid-game
   if (
@@ -393,16 +403,21 @@ function trySpawnConstructionCreeps(
   const counts = getCurrentCreepCounts(room);
   const rcl = room.controller?.level || 0;
   const sites = room.find(FIND_CONSTRUCTION_SITES).length;
-  const plannedTasks =
-    (constructionPlan?.queue?.length || 0) +
-    ((constructionPlan?.priorities?.critical?.length || 0) +
-      (constructionPlan?.priorities?.important?.length || 0) +
-      (constructionPlan?.priorities?.normal?.length || 0));
 
-  if (sites === 0 && plannedTasks === 0) return false;
+  // Only count non-deferred tasks (things builders will actually work on now)
+  const activeTasks =
+    (constructionPlan?.priorities?.critical?.length || 0) +
+    (constructionPlan?.priorities?.important?.length || 0) +
+    (constructionPlan?.priorities?.normal?.length || 0);
 
-  // Extra guard: if there are no active sites and all planned tasks are roads (often deferred early), skip spawning builders
-  if (sites === 0) {
+  // No construction sites and no active tasks? Don't spawn builders
+  if (sites === 0 && activeTasks === 0) {
+    return false;
+  }
+
+  // Extra guard: if there are no active sites and all planned tasks are roads, skip spawning builders
+  // (Roads are low priority and can wait)
+  if (sites === 0 && activeTasks > 0) {
     const pri = constructionPlan?.priorities;
     const prioritized: any[] = [
       ...(pri?.critical || []),
@@ -413,6 +428,9 @@ function trySpawnConstructionCreeps(
       (t) => t && t.type && t.type !== STRUCTURE_ROAD
     ).length;
     if (nonRoadPlanned === 0) {
+      if (Game.time % 100 === 0) {
+        console.log(`⏸️ Skipping builder spawn - only roads queued (can wait)`);
+      }
       return false;
     }
   }
@@ -430,8 +448,8 @@ function trySpawnConstructionCreeps(
 
   // Dynamic target builders based on construction volume and economy
   let target = 1;
-  if (sites > 5 || plannedTasks > 10) target = 2;
-  if (sites > 20 || plannedTasks > 40) target = 3;
+  if (sites > 5 || activeTasks > 10) target = 2;
+  if (sites > 20 || activeTasks > 40) target = 3;
 
   // Early-game and economy gating: keep lean if capacity is low or logistics not ready
   if (energyCap < 400 || counts.harvester < 2 || counts.hauler < 1) {
@@ -455,7 +473,7 @@ function trySpawnConstructionCreeps(
       console.log(
         `🏗️ Spawning builder (${
           currentBuilders + 1
-        }/${target}) for ${sites} sites / ${plannedTasks} tasks`
+        }/${target}) for ${sites} sites / ${activeTasks} tasks`
       );
       return true;
     } else if (result === ERR_NOT_ENOUGH_ENERGY) {
