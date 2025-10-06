@@ -7,6 +7,22 @@ declare const RESOURCE_OH: ResourceConstant;
 export function runTerminalManager(room: Room) {
   const terminal = room.terminal;
   if (!terminal) return;
+
+  // Economy check: Don't use terminal if room economy is struggling
+  const storage = room.storage;
+  const storageEnergy = storage?.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+  const MIN_STORAGE_FOR_TERMINAL = 20000; // Need at least 20k in storage
+  const MIN_STORAGE_FOR_BUYING = 50000; // Need at least 50k to buy resources
+
+  const economyHealthy = storageEnergy >= MIN_STORAGE_FOR_TERMINAL;
+  const economyStrong = storageEnergy >= MIN_STORAGE_FOR_BUYING;
+
+  if (!economyHealthy && Game.time % 500 === 0) {
+    console.log(
+      `[Terminal] ⚠️ Pausing terminal operations - storage at ${storageEnergy}/${MIN_STORAGE_FOR_TERMINAL}`
+    );
+  }
+
   // 1. Auto-send excess energy and minerals to hub room
   const HUB_ROOM = Memory.terminalHub || "W1N1";
 
@@ -14,7 +30,7 @@ export function runTerminalManager(room: Room) {
   const hubRoom = Game.rooms[HUB_ROOM];
   const hubHasTerminal = hubRoom?.terminal;
 
-  if (!terminal.cooldown && hubHasTerminal) {
+  if (!terminal.cooldown && hubHasTerminal && economyHealthy) {
     if (terminal.store.energy > 20000) {
       const cost = Game.market.calcTransactionCost(5000, room.name, HUB_ROOM);
       if (terminal.store.energy > 20000 + cost) {
@@ -66,7 +82,7 @@ export function runTerminalManager(room: Room) {
     }
   }
   // 2. Auto-sell surplus minerals if price is good, with dynamic pricing and cooldown check
-  if (!terminal.cooldown) {
+  if (!terminal.cooldown && economyHealthy) {
     for (const mineral of Object.keys(terminal.store)) {
       if (mineral === RESOURCE_ENERGY) continue;
 
@@ -153,7 +169,8 @@ export function runTerminalManager(room: Room) {
     }
   }
   // 3. Auto-buy reagents if needed for labs, with cooldown and transaction cost check
-  if (!terminal.cooldown) {
+  // Only buy if economy is strong (50k+ in storage)
+  if (!terminal.cooldown && economyStrong) {
     // Auto-buy strategy: maintain minimum amounts of lab compounds and base minerals
     const MIN_LAB_COMPOUND = 1000; // Keep 1k of each lab compound
     const MIN_BASE_MINERAL = 3000; // Keep 3k of base minerals (H, O, U, L, K, Z, X)
