@@ -669,6 +669,27 @@ function getOptimalBody(
       if (energyAvailable >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
       return basic;
 
+    case "repairer":
+      // Same as builder - needs WORK to repair and CARRY to haul energy
+      if (energyAvailable >= 800)
+        return [
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          CARRY,
+          CARRY,
+          CARRY,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+        ];
+      if (energyAvailable >= 600)
+        return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
+      if (energyAvailable >= 400) return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
+      return basic;
+
     case "mineralminer":
       // Mineral miner: WORK parts for mining minerals
       if (energyAvailable >= 1200)
@@ -765,6 +786,9 @@ function getEmergencyBody(
         return energyAvailable >= 150 ? [WORK, MOVE] : [WORK];
       case "hauler":
         return energyAvailable >= 100 ? [CARRY, MOVE] : [CARRY];
+      case "repairer":
+      case "builder":
+        return energyAvailable >= 150 ? [WORK, MOVE] : [WORK];
       default:
         return energyAvailable >= 50 ? [MOVE] : [];
     }
