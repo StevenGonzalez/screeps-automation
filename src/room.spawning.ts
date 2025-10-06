@@ -190,26 +190,6 @@ function trySpawnEconomicCreeps(
     }
   }
 
-  // If no harvesters and energy is low, spawn a tiny harvester even if a miner exists
-  if (current.harvester === 0 && spawn.room.energyAvailable >= 100) {
-    const emergencyHarvester = getEmergencyBody(
-      "harvester",
-      spawn.room.energyAvailable
-    );
-    if (emergencyHarvester.length > 0) {
-      const name = `harvester_boot_${Game.time}`;
-      const res = spawn.spawnCreep(emergencyHarvester, name, {
-        memory: { role: "harvester", priority: "bootstrap" },
-      });
-      if (res === OK) {
-        console.log(
-          `⛏️ Bootstrap harvester spawned due to 0 harvesters and low energy`
-        );
-        return true;
-      }
-    }
-  }
-
   // If no upgraders exist, try to spawn a tiny upgrader to avoid stalling controller progress
   if (current.upgrader === 0 && spawn.room.energyAvailable >= 100) {
     const emergencyUpgrader = getEmergencyBody(
