@@ -73,7 +73,17 @@ export function runBuilder(
       }
     }
   } else {
-    // Refill like hauler
+    // Refill - but don't compete with haulers for critical energy
+    // Check if spawn/extensions need energy (haulers should handle this first)
+    const needyStructures = creep.room.find(FIND_MY_STRUCTURES, {
+      filter: (s: AnyStructure) =>
+        (s.structureType === STRUCTURE_SPAWN ||
+          s.structureType === STRUCTURE_EXTENSION) &&
+        (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+    });
+
+    // Only pull from storage/containers, not from dropped resources if extensions need filling
+    // This prevents builders from competing with haulers for critical energy
     const stores = creep.room.find(FIND_STRUCTURES, {
       filter: (s: AnyStructure) =>
         (s.structureType === STRUCTURE_CONTAINER ||
@@ -90,7 +100,9 @@ export function runBuilder(
       } else if (res === OK) {
         CreepPersonality.speak(creep, "withdraw");
       }
-    } else {
+    } else if (needyStructures.length === 0) {
+      // Only pick up dropped resources if spawn/extensions are full
+      // This prevents builders from stealing energy haulers need
       const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
         filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50,
       });
@@ -103,6 +115,7 @@ export function runBuilder(
           CreepPersonality.speak(creep, "withdraw");
         }
       } else {
+        // Last resort: harvest from sources (only if no dropped energy and extensions are full)
         const src = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
         if (src) {
           const res = creep.harvest(src);
@@ -115,6 +128,20 @@ export function runBuilder(
         } else {
           CreepPersonality.speak(creep, "frustrated");
         }
+      }
+    } else {
+      // Extensions need energy - wait for haulers to handle it, or harvest as last resort
+      const src = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+      if (src) {
+        const res = creep.harvest(src);
+        if (res === ERR_NOT_IN_RANGE) {
+          creep.moveTo(src, { visualizePathStyle: style("harvest") });
+          CreepPersonality.speak(creep, "move");
+        } else if (res === OK) {
+          CreepPersonality.speak(creep, "harvest");
+        }
+      } else {
+        CreepPersonality.speak(creep, "frustrated");
       }
     }
   }
