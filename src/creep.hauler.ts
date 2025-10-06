@@ -258,21 +258,19 @@ export function runHauler(creep: Creep, intel: any): void {
       target = creep.pos.findClosestByPath(fillTargets) || null;
     }
 
-    // Keep terminal filled with minimum energy for market operations
+    // Build up storage reserves first - strong economy before trading
     if (!target) {
-      const terminal = creep.room.terminal;
-      const TERMINAL_ENERGY_TARGET = 10000; // Keep 10k energy for market transactions
+      const storage = creep.room.storage;
       if (
-        terminal &&
-        terminal.store.getUsedCapacity(RESOURCE_ENERGY) <
-          TERMINAL_ENERGY_TARGET &&
-        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+        storage &&
+        storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+        storage.id !== creep.memory.lastWithdrawId
       ) {
-        target = terminal;
+        target = storage as AnyStoreStructure;
       }
     }
 
-    // Next: keep the controller container buffered before touching storage
+    // Keep the controller container buffered for steady upgrading
     if (!target) {
       const CONTROLLER_BUFFER_TARGET = 1000; // desired energy in controller container
       const ctrlContainers = creep.room.find(FIND_STRUCTURES, {
@@ -287,15 +285,17 @@ export function runHauler(creep: Creep, intel: any): void {
       target = creep.pos.findClosestByPath(ctrlContainers) || null;
     }
 
-    // After controller buffer, deposit excess into storage
+    // Terminal gets filled last - only when we have surplus economy
     if (!target) {
-      const storage = creep.room.storage;
+      const terminal = creep.room.terminal;
+      const TERMINAL_ENERGY_TARGET = 10000; // Keep 10k energy for market transactions
       if (
-        storage &&
-        storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-        storage.id !== creep.memory.lastWithdrawId
+        terminal &&
+        terminal.store.getUsedCapacity(RESOURCE_ENERGY) <
+          TERMINAL_ENERGY_TARGET &&
+        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
       ) {
-        target = storage as AnyStoreStructure;
+        target = terminal;
       }
     }
     if (!target) {
