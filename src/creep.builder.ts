@@ -1,6 +1,7 @@
 /// <reference types="@types/screeps" />
 import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
+import { RoomCache } from "./room.cache";
 
 export function runBuilder(
   creep: Creep,
@@ -42,7 +43,7 @@ export function runBuilder(
     // 2. Spawns, extensions, towers (critical structures)
     // 3. Storage, terminal, labs (important structures)
     // 4. Roads (low priority - can wait)
-    let sites = creep.room.find(FIND_CONSTRUCTION_SITES);
+    let sites = RoomCache.constructionSites(creep.room);
 
     // Priority 1: Containers
     let target = creep.pos.findClosestByPath(
@@ -88,7 +89,7 @@ export function runBuilder(
         }
       }
       // Recompute after cleanup
-      sites = creep.room.find(FIND_CONSTRUCTION_SITES);
+      sites = RoomCache.constructionSites(creep.room);
       target =
         creep.pos.findClosestByPath(sites) ||
         creep.pos.findClosestByRange(sites);

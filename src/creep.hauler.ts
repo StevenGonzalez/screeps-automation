@@ -1,6 +1,7 @@
 /// <reference types="@types/screeps" />
 import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
+import { RoomCache } from "./room.cache";
 
 export function runHauler(creep: Creep, intel: any): void {
   if (creep.store.getUsedCapacity() === 0) {
@@ -14,35 +15,29 @@ export function runHauler(creep: Creep, intel: any): void {
     const energyUrgent = energyRatio < 0.7;
 
     // Urgent: drain near-full source containers first to unblock miners
-    const urgentSource = creep.room.find(FIND_STRUCTURES, {
-      filter: (s: AnyStructure) =>
-        s.structureType === STRUCTURE_CONTAINER &&
+    const urgentSource = RoomCache.containers(creep.room).filter(
+      (s) =>
         isSourceContainer(s as StructureContainer) &&
-        (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) <= 100,
-    }) as StructureContainer[];
+        (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) <= 100
+    ) as StructureContainer[];
 
     // Prefer non-storage, non-controller containers for pickup; storage as last resort
-    const pickupContainers = creep.room.find(FIND_STRUCTURES, {
-      filter: (s: AnyStructure) => {
-        const hasEnergy =
-          (s as AnyStoreStructure).store?.getUsedCapacity?.(RESOURCE_ENERGY) >
-          100;
-        if (!hasEnergy) return false;
-        if (s.structureType === STRUCTURE_CONTAINER) {
-          // Avoid controller container on pickup; let upgraders use it
-          return !isControllerContainer(s as StructureContainer);
-        }
-        return false;
-      },
+    const pickupContainers = RoomCache.containers(creep.room).filter((s) => {
+      const hasEnergy =
+        (s as AnyStoreStructure).store?.getUsedCapacity?.(RESOURCE_ENERGY) >
+        100;
+      if (!hasEnergy) return false;
+      // Avoid controller container on pickup; let upgraders use it
+      return !isControllerContainer(s as StructureContainer);
     });
     const storagesWithEnergy = creep.room.find(FIND_STRUCTURES, {
       filter: (s: AnyStructure) =>
         s.structureType === STRUCTURE_STORAGE &&
         (s as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) > 200,
     });
-    const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
-      filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50,
-    });
+    const dropped = RoomCache.droppedResources(creep.room).filter(
+      (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+    );
     const tombs = creep.room.find(FIND_TOMBSTONES, {
       filter: (t) => t.store.getUsedCapacity(RESOURCE_ENERGY) > 50,
     });
@@ -53,25 +48,19 @@ export function runHauler(creep: Creep, intel: any): void {
     // Check for mineral-filled containers if energy needs are not urgent
     let mineralContainers: StructureContainer[] = [];
     if (!energyUrgent) {
-      mineralContainers = creep.room.find(FIND_STRUCTURES, {
-        filter: (s: AnyStructure) => {
-          if (s.structureType !== STRUCTURE_CONTAINER) return false;
-          const container = s as StructureContainer;
-          // Look for containers near minerals (not sources or controller)
-          if (isSourceContainer(container) || isControllerContainer(container))
-            return false;
-          // Check if container has minerals and is getting full
-          for (const resourceType in container.store) {
-            if (resourceType === RESOURCE_ENERGY) continue;
-            const amount =
-              container.store[resourceType as ResourceConstant] || 0;
-            if (amount > 1000 || container.store.getFreeCapacity() < 500) {
-              return true;
-            }
+      mineralContainers = RoomCache.containers(creep.room).filter((c) => {
+        // Look for containers near minerals (not sources or controller)
+        if (isSourceContainer(c) || isControllerContainer(c)) return false;
+        // Check if container has minerals and is getting full
+        for (const resourceType in c.store) {
+          if (resourceType === RESOURCE_ENERGY) continue;
+          const amount = c.store[resourceType as ResourceConstant] || 0;
+          if (amount > 1000 || c.store.getFreeCapacity() < 500) {
+            return true;
           }
-          return false;
-        },
-      }) as StructureContainer[];
+        }
+        return false;
+      });
     }
 
     let target: any =
@@ -233,13 +222,12 @@ export function runHauler(creep: Creep, intel: any): void {
       (intel?.military?.hostiles?.length || 0) > 0 ||
       (intel?.military?.safetyScore ?? 100) < 60;
     const towerFloor = threatActive ? 800 : 400; // keep towers at this minimum
-    const lowTowers = creep.room.find(FIND_MY_STRUCTURES, {
-      filter: (s: AnyStructure) =>
-        s.structureType === STRUCTURE_TOWER &&
+    const lowTowers = RoomCache.towers(creep.room).filter(
+      (s) =>
         (s as AnyStoreStructure).store.getUsedCapacity(RESOURCE_ENERGY) <
           towerFloor &&
-        (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-    }) as AnyStoreStructure[];
+        (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    ) as AnyStoreStructure[];
 
     let target: AnyStoreStructure | null = null;
     if (lowTowers.length > 0) {

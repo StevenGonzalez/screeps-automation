@@ -1,9 +1,10 @@
 /// <reference types="@types/screeps" />
 import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
+import { RoomCache } from "./room.cache";
 
 export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
-  const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+  const hostiles = RoomCache.hostileCreeps(creep.room);
 
   if (hostiles.length > 0) {
     // Prioritize targets: Healers > Close threats > Wounded enemies
@@ -135,7 +136,7 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
       return;
     } else if (hostiles.length > 0) {
       // All hostiles are kiters - guard spawn instead of chasing
-      const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
+      const spawn = RoomCache.mySpawns(creep.room)[0];
       if (spawn) {
         if (creep.pos.getRangeTo(spawn) > 3) {
           creep.moveTo(spawn, {

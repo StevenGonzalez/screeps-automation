@@ -34,6 +34,7 @@ function getWallTarget(rcl: number): number {
 }
 
 /// <reference types="@types/screeps" />
+import { RoomCache } from "./room.cache";
 
 /**
  * Execute tower actions from defense plan
@@ -115,7 +116,7 @@ export function performAutoRepair(room: Room): void {
 
   // One auto-repair action per room per tick to conserve energy
   // Prefer the fullest-energy tower so others stay buffered
-  const hostile = room.find(FIND_HOSTILE_CREEPS).length > 0;
+  const hostile = RoomCache.hostileCreeps(room).length > 0;
   const rcl = room.controller?.level || 0;
   const towerFloor = getTowerFloor(hostile);
   const minCriticalRepair = Math.min(900, towerFloor + 100);
@@ -247,9 +248,7 @@ export function performAutoRepair(room: Room): void {
  * Get all towers in a room
  */
 export function getTowersInRoom(room: Room): StructureTower[] {
-  return room.find(FIND_MY_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_TOWER,
-  }) as StructureTower[];
+  return RoomCache.towers(room);
 }
 
 // Simple built-in tower AI when no defense plan issues orders
@@ -257,7 +256,7 @@ function runBasicTowerAI(room: Room): void {
   const towers = getTowersInRoom(room);
   for (const tower of towers) {
     // 1) Attack closest hostile, but filter out kiters
-    const hostiles = room.find(FIND_HOSTILE_CREEPS);
+    const hostiles = RoomCache.hostileCreeps(room);
     const viableHostiles = hostiles.filter((hostile) => {
       // Filter out harassment/kiting targets
       const healParts = hostile.body.filter((p) => p.type === HEAL).length;

@@ -2,6 +2,7 @@
 import { style } from "./path.styles";
 import { CreepPersonality } from "./creep.personality";
 import { getTowersInRoom } from "./structure.tower";
+import { RoomCache } from "./room.cache";
 
 export function runRepairer(creep: Creep, intel: any): void {
   // If towers are well-stocked, let them handle most emergency repairs.
@@ -92,7 +93,7 @@ export function runRepairer(creep: Creep, intel: any): void {
     } else {
       // Fallback: help with building or upgrading
       const site = creep.pos.findClosestByPath(
-        creep.room.find(FIND_CONSTRUCTION_SITES)
+        RoomCache.constructionSites(creep.room)
       );
       if (site) {
         const res = creep.build(site);

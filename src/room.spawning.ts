@@ -6,6 +6,7 @@
  */
 
 /// <reference types="@types/screeps" />
+import { RoomCache } from "./room.cache";
 
 import { CreepPersonality } from "./creep.personality";
 
@@ -126,7 +127,7 @@ function trySpawnEconomicCreeps(
 
   const current = getCurrentCreepCounts(room);
   const repairDemand = assessRepairDemand(room);
-  const sources = room.find(FIND_SOURCES);
+  const sources = RoomCache.sources(room);
   const containersOrSites = (pos: RoomPosition) => {
     const hasStruct = room
       .lookForAtArea(
@@ -154,7 +155,7 @@ function trySpawnEconomicCreeps(
   const minerTargets = sources.filter((s) => containersOrSites(s.pos)).length;
 
   // Spawn queue in priority order
-  const hasConstruction = room.find(FIND_CONSTRUCTION_SITES).length > 0;
+  const hasConstruction = RoomCache.constructionSites(room).length > 0;
   const hasContainersOrStorage =
     room.find(FIND_STRUCTURES, {
       filter: (s) =>
@@ -321,18 +322,16 @@ function computeHaulerTarget(
   const totalMiners = (current.miner || 0) + (current.mineralminer || 0);
   const byMiners = Math.max(1, Math.min(3, totalMiners));
 
-  const containers = room.find(FIND_STRUCTURES, {
-    filter: (s: AnyStructure) => s.structureType === STRUCTURE_CONTAINER,
-  }) as StructureContainer[];
-  const sourceContainers = containers.filter(
-    (c) =>
-      room.find(FIND_SOURCES, { filter: (src) => c.pos.isNearTo(src) }).length >
-      0
+  const containers = RoomCache.containers(room);
+  const sources = RoomCache.sources(room);
+  const sourceContainers = containers.filter((c) =>
+    sources.some((src) => c.pos.isNearTo(src))
   );
 
   // Also check mineral containers
+  const minerals_all = RoomCache.minerals(room);
   const mineralContainers = containers.filter((c) => {
-    const mineral = room.find(FIND_MINERALS)[0];
+    const mineral = minerals_all[0];
     return mineral && c.pos.isNearTo(mineral);
   });
 
@@ -382,7 +381,7 @@ function trySpawnConstructionCreeps(
 ): boolean {
   const counts = getCurrentCreepCounts(room);
   const rcl = room.controller?.level || 0;
-  const sites = room.find(FIND_CONSTRUCTION_SITES).length;
+  const sites = RoomCache.constructionSites(room).length;
 
   // Only count non-deferred tasks (things builders will actually work on now)
   const activeTasks =
@@ -476,7 +475,7 @@ function trySpawnConstructionCreeps(
 function getCurrentCreepCounts(room: Room): { [role: string]: number } {
   // Count spawning creeps
   const spawningCounts: { [role: string]: number } = {};
-  room.find(FIND_MY_SPAWNS).forEach((spawn) => {
+  RoomCache.mySpawns(room).forEach((spawn) => {
     if (spawn.spawning) {
       const spawningCreep = Game.creeps[spawn.spawning.name];
       if (spawningCreep && spawningCreep.memory.role) {
@@ -488,37 +487,29 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
 
   return {
     miner:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "miner",
-      }).length + (spawningCounts.miner || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "miner").length +
+      (spawningCounts.miner || 0),
     harvester:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "harvester",
-      }).length + (spawningCounts.harvester || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "harvester")
+        .length + (spawningCounts.harvester || 0),
     hauler:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "hauler",
-      }).length + (spawningCounts.hauler || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "hauler")
+        .length + (spawningCounts.hauler || 0),
     upgrader:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "upgrader",
-      }).length + (spawningCounts.upgrader || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "upgrader")
+        .length + (spawningCounts.upgrader || 0),
     builder:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "builder",
-      }).length + (spawningCounts.builder || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "builder")
+        .length + (spawningCounts.builder || 0),
     defender:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "defender",
-      }).length + (spawningCounts.defender || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "defender")
+        .length + (spawningCounts.defender || 0),
     repairer:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "repairer",
-      }).length + (spawningCounts.repairer || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "repairer")
+        .length + (spawningCounts.repairer || 0),
     mineralminer:
-      room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.memory.role === "mineralminer",
-      }).length + (spawningCounts.mineralminer || 0),
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "mineralminer")
+        .length + (spawningCounts.mineralminer || 0),
   };
 }
 
@@ -764,7 +755,7 @@ function shouldSpawnMineralMiner(room: Room): boolean {
   if (!extractor) return false;
 
   // Check if mineral has resources available
-  const mineral = room.find(FIND_MINERALS)[0];
+  const mineral = RoomCache.minerals(room)[0];
   if (!mineral || mineral.mineralAmount === 0) return false;
 
   return true;

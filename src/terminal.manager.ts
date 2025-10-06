@@ -1,5 +1,7 @@
 declare const RESOURCE_OH: ResourceConstant;
 
+import { RoomCache } from "./room.cache";
+
 /**
  * Terminal Manager: Handles resource sending, market trading, cooldown, transaction cost, and logging.
  */
@@ -186,9 +188,7 @@ export function runTerminalManager(room: Room) {
     ];
 
     // Check active labs to see what compounds they're using
-    const labs = room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_LAB,
-    }) as StructureLab[];
+    const labs = RoomCache.labs(room);
 
     const neededResources: { [key: string]: number } = {};
 
