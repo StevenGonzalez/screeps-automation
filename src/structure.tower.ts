@@ -152,6 +152,10 @@ export function performAutoRepair(room: Room): void {
             s.structureType === STRUCTURE_SPAWN ||
             s.structureType === STRUCTURE_TOWER
           );
+        // Emergency: ramparts with < 100 HP will decay and die!
+        if (s.structureType === STRUCTURE_RAMPART && s.hits < 100) {
+          return true;
+        }
         return false;
       },
     });
