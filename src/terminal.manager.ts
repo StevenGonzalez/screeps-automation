@@ -71,9 +71,27 @@ export function runTerminalManager(room: Room) {
         const actualAmount =
           terminal.store.getUsedCapacity(mineral as ResourceConstant) || 0;
         if (actualAmount < dealAmount) {
-          console.log(
-            `[Terminal] ⚠️ Skipping ${mineral} sale - insufficient stock (have ${actualAmount}, need ${dealAmount})`
-          );
+          if (Game.time % 100 === 0) {
+            console.log(
+              `[Terminal] ⚠️ Skipping ${mineral} sale - insufficient stock (have ${actualAmount}, need ${dealAmount})`
+            );
+          }
+          continue;
+        }
+
+        // Check if we have enough credits for the transaction
+        const transactionCost = Game.market.calcTransactionCost(
+          dealAmount,
+          room.name,
+          best.roomName || ""
+        );
+
+        if (terminal.store.energy < transactionCost) {
+          if (Game.time % 100 === 0) {
+            console.log(
+              `[Terminal] ⚠️ Not enough energy for ${mineral} sale - need ${transactionCost}, have ${terminal.store.energy}`
+            );
+          }
           continue;
         }
 
@@ -83,12 +101,20 @@ export function runTerminalManager(room: Room) {
           console.log(
             `[Terminal] ✅ Sold ${dealAmount} ${mineral} at ${best.price.toFixed(
               3
-            )} (avg: ${avg.toFixed(3)}) in ${room.name}`
+            )} (avg: ${avg.toFixed(3)}) in ${
+              room.name
+            } [Cost: ${transactionCost} energy]`
           );
         } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
           console.log(
-            `[Terminal] ⚠️ Not enough ${mineral} to sell (tried ${dealAmount}, have ${actualAmount})`
+            `[Terminal] ⚠️ Failed to sell ${mineral}: Not enough resources (Credits: ${Game.market.credits}, Energy: ${terminal.store.energy}, Need: ${transactionCost})`
           );
+        } else if (result === ERR_INVALID_ARGS) {
+          if (Game.time % 100 === 0) {
+            console.log(
+              `[Terminal] ⚠️ Order ${best.id} for ${mineral} is no longer valid`
+            );
+          }
         } else {
           console.log(
             `[Terminal] ❌ Failed to sell ${mineral}: ${result} (Error code)`

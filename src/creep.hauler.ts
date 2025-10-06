@@ -258,6 +258,20 @@ export function runHauler(creep: Creep, intel: any): void {
       target = creep.pos.findClosestByPath(fillTargets) || null;
     }
 
+    // Keep terminal filled with minimum energy for market operations
+    if (!target) {
+      const terminal = creep.room.terminal;
+      const TERMINAL_ENERGY_TARGET = 10000; // Keep 10k energy for market transactions
+      if (
+        terminal &&
+        terminal.store.getUsedCapacity(RESOURCE_ENERGY) <
+          TERMINAL_ENERGY_TARGET &&
+        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      ) {
+        target = terminal;
+      }
+    }
+
     // Next: keep the controller container buffered before touching storage
     if (!target) {
       const CONTROLLER_BUFFER_TARGET = 1000; // desired energy in controller container
