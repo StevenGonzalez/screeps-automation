@@ -427,9 +427,11 @@ function trySpawnConstructionCreeps(
   );
 
   // Dynamic target builders based on construction volume and economy
+  // Scale more reasonably: 1 builder per ~3-5 construction sites or ~8-10 active tasks
   let target = 1;
-  if (sites > 5 || activeTasks > 10) target = 2;
-  if (sites > 20 || activeTasks > 40) target = 3;
+  if (sites >= 3 || activeTasks >= 8) target = 2;
+  if (sites >= 8 || activeTasks >= 20) target = 3;
+  if (sites >= 15 || activeTasks >= 40) target = 4;
 
   // Early-game and economy gating: keep lean if capacity is low or logistics not ready
   if (energyCap < 400 || counts.harvester < 2 || counts.hauler < 1) {
