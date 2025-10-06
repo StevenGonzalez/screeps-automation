@@ -779,20 +779,28 @@ function getEmergencyBody(
 ): BodyPartConstant[] {
   const basic: BodyPartConstant[] = [WORK, CARRY, MOVE];
 
+  // Never spawn single-part creeps - they're useless
+  // Minimum 100 energy for any functional creep (2 parts minimum)
+  if (energyAvailable < 100) {
+    return []; // Don't spawn useless creeps
+  }
+
   if (energyAvailable < 200) {
-    // Absolute minimum
+    // Absolute minimum functional creeps
     switch (role) {
       case "miner":
-        return energyAvailable >= 150 ? [WORK, MOVE] : [WORK];
+        return [WORK, MOVE]; // 150 energy
       case "harvester":
-        return energyAvailable >= 150 ? [WORK, MOVE] : [WORK];
+        return [WORK, MOVE]; // 150 energy
       case "hauler":
-        return energyAvailable >= 100 ? [CARRY, MOVE] : [CARRY];
+        return [CARRY, MOVE]; // 100 energy
       case "repairer":
       case "builder":
-        return energyAvailable >= 150 ? [WORK, MOVE] : [WORK];
+        return [WORK, MOVE]; // 150 energy
+      case "upgrader":
+        return [WORK, MOVE]; // 150 energy
       default:
-        return energyAvailable >= 50 ? [MOVE] : [];
+        return [MOVE, CARRY]; // 100 energy minimum
     }
   }
 

@@ -53,18 +53,26 @@ export function runRepairer(creep: Creep, intel: any): void {
       if (lowRamparts.length) target = pickMostDamaged(lowRamparts);
     }
 
-    // 3) Roads/containers medium damage
+    // 3) Containers medium damage (prioritize over roads)
     if (!target) {
-      const paths = creep.room.find(FIND_STRUCTURES, {
+      const containers = creep.room.find(FIND_STRUCTURES, {
         filter: (s) =>
-          (s.structureType === STRUCTURE_ROAD ||
-            s.structureType === STRUCTURE_CONTAINER) &&
-          s.hits < s.hitsMax * 0.6,
+          s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.6,
       });
-      if (paths.length) target = pickMostDamaged(paths);
+      if (containers.length) target = pickMostDamaged(containers);
     }
 
-    // 4) Any other structure needing repair (excluding thick walls)
+    // 4) Roads - only if significantly damaged (40% or less)
+    // Roads decay constantly so we only repair when really needed
+    if (!target) {
+      const roads = creep.room.find(FIND_STRUCTURES, {
+        filter: (s) =>
+          s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.4,
+      });
+      if (roads.length) target = pickMostDamaged(roads);
+    }
+
+    // 5) Any other structure needing repair (excluding thick walls)
     // If towers are well-stocked, skip small top-offs and let towers handle emergencies
     if (!target && !towerHighEnergy) {
       const any = creep.room.find(FIND_STRUCTURES, {
