@@ -9,14 +9,25 @@ export function runTerminalManager(room: Room) {
   if (!terminal) return;
   // 1. Auto-send excess energy and minerals to hub room
   const HUB_ROOM = Memory.terminalHub || "W1N1";
-  if (!terminal.cooldown) {
+
+  // Check if hub room exists and has a terminal
+  const hubRoom = Game.rooms[HUB_ROOM];
+  const hubHasTerminal = hubRoom?.terminal;
+
+  if (!terminal.cooldown && hubHasTerminal) {
     if (terminal.store.energy > 20000) {
       const cost = Game.market.calcTransactionCost(5000, room.name, HUB_ROOM);
       if (terminal.store.energy > 20000 + cost) {
-        terminal.send(RESOURCE_ENERGY, 5000, HUB_ROOM);
-        console.log(
-          `[Terminal] Sent 5000 energy from ${room.name} to ${HUB_ROOM}. Cost: ${cost}`
-        );
+        const result = terminal.send(RESOURCE_ENERGY, 5000, HUB_ROOM);
+        if (result === OK) {
+          console.log(
+            `[Terminal] ✅ Sent 5000 energy from ${room.name} to ${HUB_ROOM}. Cost: ${cost}`
+          );
+        } else {
+          console.log(
+            `[Terminal] ❌ Failed to send energy to ${HUB_ROOM}: ${result}`
+          );
+        }
         return;
       }
     }
@@ -28,13 +39,30 @@ export function runTerminalManager(room: Room) {
       if (amount > 1000) {
         const cost = Game.market.calcTransactionCost(500, room.name, HUB_ROOM);
         if (terminal.store.energy > cost) {
-          terminal.send(mineral as ResourceConstant, 500, HUB_ROOM);
-          console.log(
-            `[Terminal] Sent 500 ${mineral} from ${room.name} to ${HUB_ROOM}. Cost: ${cost}`
+          const result = terminal.send(
+            mineral as ResourceConstant,
+            500,
+            HUB_ROOM
           );
+          if (result === OK) {
+            console.log(
+              `[Terminal] ✅ Sent 500 ${mineral} from ${room.name} to ${HUB_ROOM}. Cost: ${cost}`
+            );
+          } else {
+            console.log(
+              `[Terminal] ❌ Failed to send ${mineral} to ${HUB_ROOM}: ${result}`
+            );
+          }
           return;
         }
       }
+    }
+  } else if (!terminal.cooldown && !hubHasTerminal) {
+    // Log this occasionally so user knows why sending isn't working
+    if (Game.time % 500 === 0) {
+      console.log(
+        `[Terminal] ⚠️ Hub room ${HUB_ROOM} doesn't exist or has no terminal - skipping auto-send`
+      );
     }
   }
   // 2. Auto-sell surplus minerals if price is good, with dynamic pricing and cooldown check
