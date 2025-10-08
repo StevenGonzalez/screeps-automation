@@ -532,20 +532,27 @@ function assessRepairDemand(room: Room): { recommendedRepairers: number } {
 
   const roadsMedium = room.find(FIND_STRUCTURES, {
     filter: (s) =>
-      s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.3, // Only very damaged roads
+      s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.3,
   }).length;
 
-  let score =
-    critical * 2 + // Critical structures are high priority
-    Math.min(3, Math.floor(rampartsLow / 10)) + // Need 10+ low ramparts for +1 score
-    Math.min(2, Math.floor(roadsMedium / 40)); // Need 40+ damaged roads for +1 score
+  // Very strict scoring - repairers should be rare
+  // Only spawn when there's substantial damage, not just minor decay
+  let recommended = 0;
 
-  // Economy-aware cap: do not over-spawn repairers
-  // Much more conservative - only spawn when there's real work to do
-  const recommended = score === 0 ? 0 : score <= 3 ? 1 : score <= 7 ? 2 : 3;
+  if (critical > 0) {
+    // Critical structures need immediate attention
+    recommended = 1;
+  } else if (rampartsLow > 20 || roadsMedium > 50) {
+    // Significant rampart/road decay
+    recommended = 1;
+  } else if (rampartsLow > 50 && roadsMedium > 100) {
+    // Massive decay across many structures
+    recommended = 2;
+  }
+  // Never spawn 3 repairers - 2 is the maximum
+
   return { recommendedRepairers: recommended };
 }
-
 /**
  * Calculate optimal body parts for a given role and energy
  */
