@@ -63,8 +63,25 @@ export function runHauler(creep: Creep, intel: any): void {
       });
     }
 
+    // Cleanup: check for misplaced minerals in controller containers
+    // These should be removed so upgraders can use the container
+    const mineralInControllerContainer = RoomCache.containers(
+      creep.room
+    ).filter((c) => {
+      if (!isControllerContainer(c)) return false;
+      // Check if it has any non-energy resources
+      for (const resourceType in c.store) {
+        if (resourceType === RESOURCE_ENERGY) continue;
+        if (c.store[resourceType as ResourceConstant] > 0) {
+          return true;
+        }
+      }
+      return false;
+    });
+
     let target: any =
       creep.pos.findClosestByPath(urgentSource) ||
+      creep.pos.findClosestByPath(mineralInControllerContainer) ||
       creep.pos.findClosestByPath(pickupContainers) ||
       creep.pos.findClosestByPath(dropped) ||
       creep.pos.findClosestByPath(tombs) ||
@@ -246,21 +263,10 @@ export function runHauler(creep: Creep, intel: any): void {
       target = creep.pos.findClosestByPath(fillTargets) || null;
     }
 
-    // Build up storage reserves first - strong economy before trading
+    // Keep the controller container buffered for steady upgrading - HIGH PRIORITY
+    // Controller container should be filled BEFORE storage to ensure steady upgrading
     if (!target) {
-      const storage = creep.room.storage;
-      if (
-        storage &&
-        storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-        storage.id !== creep.memory.lastWithdrawId
-      ) {
-        target = storage as AnyStoreStructure;
-      }
-    }
-
-    // Keep the controller container buffered for steady upgrading
-    if (!target) {
-      const CONTROLLER_BUFFER_TARGET = 1000; // desired energy in controller container
+      const CONTROLLER_BUFFER_TARGET = 2000; // Increased from 1000 - keep upgraders busy
       const ctrlContainers = creep.room.find(FIND_STRUCTURES, {
         filter: (s: AnyStructure) =>
           s.structureType === STRUCTURE_CONTAINER &&
@@ -273,17 +279,37 @@ export function runHauler(creep: Creep, intel: any): void {
       target = creep.pos.findClosestByPath(ctrlContainers) || null;
     }
 
-    // Terminal gets filled last - only when we have surplus economy
+    // Build up storage reserves - but AFTER controller is buffered
+    // Fill storage to 100k, then prioritize terminal, then continue filling storage
     if (!target) {
+      const storage = creep.room.storage;
       const terminal = creep.room.terminal;
-      const TERMINAL_ENERGY_TARGET = 10000; // Keep 10k energy for market transactions
-      if (
+      const storageEnergy =
+        storage?.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+      const terminalEnergy =
+        terminal?.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+
+      const STORAGE_COMFORTABLE = 100000;
+      const TERMINAL_ENERGY_TARGET = 10000;
+
+      // Priority: Storage to 100k → Terminal to 10k → Storage beyond 100k
+      const shouldFillStorage =
+        storage &&
+        storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+        storage.id !== creep.memory.lastWithdrawId &&
+        (storageEnergy < STORAGE_COMFORTABLE ||
+          terminalEnergy >= TERMINAL_ENERGY_TARGET);
+
+      const shouldFillTerminal =
         terminal &&
-        terminal.store.getUsedCapacity(RESOURCE_ENERGY) <
-          TERMINAL_ENERGY_TARGET &&
-        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-      ) {
+        terminalEnergy < TERMINAL_ENERGY_TARGET &&
+        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+        storageEnergy >= STORAGE_COMFORTABLE;
+
+      if (shouldFillTerminal) {
         target = terminal;
+      } else if (shouldFillStorage) {
+        target = storage as AnyStoreStructure;
       }
     }
     if (!target) {
