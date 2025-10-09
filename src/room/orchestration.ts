@@ -7,28 +7,28 @@
 
 /// <reference types="@types/screeps" />
 
-import { analyzeRoom } from "./room.intelligence";
-import { runTerminalManager } from "./terminal.manager";
-import { runLabManager } from "./lab.manager";
-import { planEconomy } from "./room.economy";
-import { planConstruction } from "./room.construction";
-import { planDefense } from "./room.defense";
-import { manageRoomSpawning } from "./room.spawning";
-import { manageRoomStructures } from "./room.structures";
-import { getRoomMemory } from "./global.memory";
-import { CreepPersonality } from "./creep.personality";
-import { executeConstructionPlan } from "./room.construction.executor";
-import { runHarvester } from "./creep.harvester";
-import { runHauler } from "./creep.hauler";
-import { runUpgrader } from "./creep.upgrader";
-import { runBuilder } from "./creep.builder";
-import { runDefender } from "./creep.defender";
-import { runRepairer } from "./creep.repairer";
-import { runWorker } from "./creep.worker";
-import { runMiner } from "./creep.miner";
-import { runMineralMiner } from "./creep.mineralminer";
-import { drawRoomHUD } from "./room.visuals";
-import { updateRoomTraffic } from "./room.traffic";
+import { analyzeRoom } from "./intelligence";
+import { runTerminalManager } from "../structure/terminal.manager";
+import { runLabManager } from "../structure/lab.manager";
+import { planEconomy } from "./economy";
+import { planConstruction } from "./construction";
+import { planDefense } from "./defense";
+import { manageRoomSpawning } from "./spawning";
+import { manageRoomStructures } from "./structures";
+import { getRoomMemory } from "../global.memory";
+import { CreepPersonality } from "../creep/personality";
+import { executeConstructionPlan } from "./construction.executor";
+import { runHarvester } from "../creep/harvester";
+import { runHauler } from "../creep/hauler";
+import { runUpgrader } from "../creep/upgrader";
+import { runBuilder } from "../creep/builder";
+import { runDefender } from "../creep/defender";
+import { runRepairer } from "../creep/repairer";
+import { runWorker } from "../creep/worker";
+import { runMiner } from "../creep/miner";
+import { runMineralMiner } from "../creep/mineralminer";
+import { drawRoomHUD } from "./visuals";
+import { updateRoomTraffic } from "./traffic";
 
 /**
  * Process a single room through all automation systems

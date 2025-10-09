@@ -5,7 +5,7 @@
  * No side effects, just pure data analysis and intelligence gathering.
  */
 
-import { getRoomMemory } from "./global.memory";
+import { getRoomMemory } from "../global.memory";
 
 /// <reference types="@types/screeps" />
 

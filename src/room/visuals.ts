@@ -1,5 +1,5 @@
 /// <reference types="@types/screeps" />
-import { getRoomMemory } from "./global.memory";
+import { getRoomMemory } from "../global.memory";
 
 export function drawRoomHUD(room: Room, intel: any): void {
   if (!room.controller?.my) return;

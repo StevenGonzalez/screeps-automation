@@ -1,6 +1,6 @@
 /// <reference types="@types/screeps" />
 
-import { getRoomMemory } from "./global.memory";
+import { getRoomMemory } from "../global.memory";
 
 type TrafficMem = {
   counts: Record<string, number>;

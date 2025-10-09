@@ -1,6 +1,6 @@
 /// <reference types="@types/screeps" />
-import { CreepPersonality } from "./creep.personality";
-import { style } from "./path.styles";
+import { CreepPersonality } from "./personality";
+import { style } from "../path.styles";
 
 export function runUpgrader(creep: Creep, intel: any): void {
   // Toggle state

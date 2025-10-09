@@ -34,7 +34,7 @@ function getWallTarget(rcl: number): number {
 }
 
 /// <reference types="@types/screeps" />
-import { RoomCache } from "./room.cache";
+import { RoomCache } from "../room/cache";
 
 /**
  * Execute tower actions from defense plan
@@ -257,12 +257,16 @@ function runBasicTowerAI(room: Room): void {
   for (const tower of towers) {
     // 1) Attack closest hostile, but filter out kiters
     const hostiles = RoomCache.hostileCreeps(room);
-    const viableHostiles = hostiles.filter((hostile) => {
+    const viableHostiles = hostiles.filter((hostile: Creep) => {
       // Filter out harassment/kiting targets
-      const healParts = hostile.body.filter((p) => p.type === HEAL).length;
-      const moveParts = hostile.body.filter((p) => p.type === MOVE).length;
+      const healParts = hostile.body.filter(
+        (p: BodyPartDefinition) => p.type === HEAL
+      ).length;
+      const moveParts = hostile.body.filter(
+        (p: BodyPartDefinition) => p.type === MOVE
+      ).length;
       const attackParts = hostile.body.filter(
-        (p) => p.type === ATTACK || p.type === RANGED_ATTACK
+        (p: BodyPartDefinition) => p.type === ATTACK || p.type === RANGED_ATTACK
       ).length;
       const distance = tower.pos.getRangeTo(hostile.pos);
 
@@ -303,7 +307,9 @@ function runBasicTowerAI(room: Room): void {
       return true;
     });
 
-    const hostile = tower.pos.findClosestByRange(viableHostiles);
+    const hostile = tower.pos.findClosestByRange(
+      viableHostiles
+    ) as Creep | null;
     if (hostile) {
       const res = tower.attack(hostile);
       if (res === OK && Game.time % 50 === 0) {

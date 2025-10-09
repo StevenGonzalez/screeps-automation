@@ -7,7 +7,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { RoomIntelligence } from "./room.intelligence";
+import { RoomIntelligence } from "./intelligence";
 
 export interface DefensePlan {
   threatAssessment: {

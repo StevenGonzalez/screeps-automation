@@ -7,11 +7,11 @@
 
 /// <reference types="@types/screeps" />
 
-import { executeTowerActions, performAutoRepair } from "./structure.tower";
-import { manageLinks } from "./structure.link";
-import { manageEnergyDistribution } from "./structure.extension";
-import { logSpawnStatus } from "./structure.spawn";
-import { manageStorageStructures } from "./structure.storage";
+import { executeTowerActions, performAutoRepair } from "../structure/tower";
+import { manageLinks } from "../structure/link";
+import { manageEnergyDistribution } from "../structure/extension";
+import { logSpawnStatus } from "../structure/spawn";
+import { manageStorageStructures } from "../structure/storage";
 
 /**
  * Manage all structures in a room based on plans

@@ -1,6 +1,6 @@
 /// <reference types="@types/screeps" />
-import { style } from "./path.styles";
-import { CreepPersonality } from "./creep.personality";
+import { style } from "../path.styles";
+import { CreepPersonality } from "./personality";
 
 export function runWorker(creep: Creep, intel: any): void {
   if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {

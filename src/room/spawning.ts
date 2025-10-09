@@ -6,9 +6,9 @@
  */
 
 /// <reference types="@types/screeps" />
-import { RoomCache } from "./room.cache";
+import { RoomCache } from "./cache";
 
-import { CreepPersonality } from "./creep.personality";
+import { CreepPersonality } from "../creep/personality";
 
 /**
  * Manage spawning for a room based on all active plans

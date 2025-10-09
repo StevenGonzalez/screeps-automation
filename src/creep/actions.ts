@@ -7,8 +7,8 @@
 
 /// <reference types="@types/screeps" />
 
-import { CreepPersonality } from "./creep.personality";
-import { style } from "./path.styles";
+import { CreepPersonality } from "./personality";
+import { style } from "../path.styles";
 
 // Extend global interfaces for our custom memory properties
 declare global {

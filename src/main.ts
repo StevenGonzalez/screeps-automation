@@ -7,7 +7,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { processRoom } from "./room.orchestration";
+import { processRoom } from "./room/orchestration";
 import {
   cleanupMemory,
   initializeMemory,

@@ -1,6 +1,6 @@
 /// <reference types="@types/screeps" />
-import { style } from "./path.styles";
-import { CreepPersonality } from "./creep.personality";
+import { style } from "../path.styles";
+import { CreepPersonality } from "./personality";
 
 /**
  * Miner: static harvester designed to sit on a container by a source and mine continuously.

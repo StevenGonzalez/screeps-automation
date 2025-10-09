@@ -1,14 +1,14 @@
 /// <reference types="@types/screeps" />
-import { style } from "./path.styles";
-import { CreepPersonality } from "./creep.personality";
-import { getTowersInRoom } from "./structure.tower";
-import { RoomCache } from "./room.cache";
+import { style } from "../path.styles";
+import { CreepPersonality } from "./personality";
+import { getTowersInRoom } from "../structure/tower";
+import { RoomCache } from "../room/cache";
 
 export function runRepairer(creep: Creep, intel: any): void {
   // If towers are well-stocked, let them handle most emergency repairs.
   const towers = getTowersInRoom(creep.room);
   const towerHighEnergy = towers.some(
-    (t) => t.store.getUsedCapacity(RESOURCE_ENERGY) >= 700
+    (t: StructureTower) => t.store.getUsedCapacity(RESOURCE_ENERGY) >= 700
   );
 
   if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
@@ -96,7 +96,7 @@ export function runRepairer(creep: Creep, intel: any): void {
         RoomCache.constructionSites(creep.room)
       );
       if (site) {
-        const res = creep.build(site);
+        const res = creep.build(site as ConstructionSite);
         if (res === ERR_NOT_IN_RANGE)
           creep.moveTo(site, { visualizePathStyle: style("build") });
       } else if (creep.room.controller) {

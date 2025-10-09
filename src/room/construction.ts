@@ -7,8 +7,8 @@
 
 /// <reference types="@types/screeps" />
 
-import { RoomIntelligence } from "./room.intelligence";
-import { getRoomMemory } from "./global.memory";
+import { RoomIntelligence } from "./intelligence";
+import { getRoomMemory } from "../global.memory";
 
 export interface ConstructionPlan {
   queue: ConstructionTask[];

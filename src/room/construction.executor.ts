@@ -1,6 +1,6 @@
 /// <reference types="@types/screeps" />
-import { ConstructionPlan, ConstructionTask } from "./room.construction";
-import { getHotTrafficTiles } from "./room.traffic";
+import { ConstructionPlan, ConstructionTask } from "./construction";
+import { getHotTrafficTiles } from "./traffic";
 
 // Max construction sites per player is 100. Keep a buffer.
 const GLOBAL_SITE_BUFFER = 5;

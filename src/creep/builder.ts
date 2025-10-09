@@ -1,7 +1,7 @@
 /// <reference types="@types/screeps" />
-import { style } from "./path.styles";
-import { CreepPersonality } from "./creep.personality";
-import { RoomCache } from "./room.cache";
+import { style } from "../path.styles";
+import { CreepPersonality } from "./personality";
+import { RoomCache } from "../room/cache";
 
 export function runBuilder(
   creep: Creep,
@@ -47,14 +47,16 @@ export function runBuilder(
 
     // Priority 1: Containers
     let target = creep.pos.findClosestByPath(
-      sites.filter((s) => s.structureType === STRUCTURE_CONTAINER)
+      sites.filter(
+        (s: ConstructionSite) => s.structureType === STRUCTURE_CONTAINER
+      )
     );
 
     // Priority 2: Critical structures
     if (!target) {
       target = creep.pos.findClosestByPath(
         sites.filter(
-          (s) =>
+          (s: ConstructionSite) =>
             s.structureType === STRUCTURE_SPAWN ||
             s.structureType === STRUCTURE_EXTENSION ||
             s.structureType === STRUCTURE_TOWER
@@ -66,7 +68,7 @@ export function runBuilder(
     if (!target) {
       target = creep.pos.findClosestByPath(
         sites.filter(
-          (s) =>
+          (s: ConstructionSite) =>
             s.structureType === STRUCTURE_STORAGE ||
             s.structureType === STRUCTURE_TERMINAL ||
             s.structureType === STRUCTURE_LAB ||
@@ -95,7 +97,7 @@ export function runBuilder(
         creep.pos.findClosestByRange(sites);
     }
     if (target) {
-      if (creep.build(target) === ERR_NOT_IN_RANGE) {
+      if (creep.build(target as ConstructionSite) === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, { visualizePathStyle: style("build") });
         CreepPersonality.speak(creep, "move");
       } else {

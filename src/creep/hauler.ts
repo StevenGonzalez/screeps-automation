@@ -1,7 +1,7 @@
 /// <reference types="@types/screeps" />
-import { style } from "./path.styles";
-import { CreepPersonality } from "./creep.personality";
-import { RoomCache } from "./room.cache";
+import { style } from "../path.styles";
+import { CreepPersonality } from "./personality";
+import { RoomCache } from "../room/cache";
 
 export function runHauler(creep: Creep, intel: any): void {
   if (creep.store.getUsedCapacity() === 0) {

@@ -1,6 +1,6 @@
 declare const RESOURCE_OH: ResourceConstant;
 
-import { RoomCache } from "./room.cache";
+import { RoomCache } from "../room/cache";
 
 /**
  * Terminal Manager: Handles resource sending, market trading, cooldown, transaction cost, and logging.
@@ -204,7 +204,8 @@ export function runTerminalManager(room: Room) {
     for (const lab of labs) {
       const mineralType = lab.mineralType;
       if (mineralType) {
-        const current = terminal.store[mineralType] || 0;
+        const current =
+          (terminal.store[mineralType as ResourceConstant] as number) || 0;
         // Determine target based on whether it's a base mineral or compound
         const isBaseMiner = baseMinerals.includes(
           mineralType as ResourceConstant

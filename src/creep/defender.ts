@@ -1,7 +1,7 @@
 /// <reference types="@types/screeps" />
-import { style } from "./path.styles";
-import { CreepPersonality } from "./creep.personality";
-import { RoomCache } from "./room.cache";
+import { style } from "../path.styles";
+import { CreepPersonality } from "./personality";
+import { RoomCache } from "../room/cache";
 
 export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
   const hostiles = RoomCache.hostileCreeps(creep.room);
@@ -11,20 +11,24 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
     let target: Creep | null = null;
 
     // Find healers (high priority)
-    const healers = hostiles.filter((h) => h.body.some((p) => p.type === HEAL));
+    const healers = hostiles.filter((h: Creep) =>
+      h.body.some((p: BodyPartDefinition) => p.type === HEAL)
+    );
 
     // Find threats near critical structures
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     const storage = creep.room.storage;
-    const criticalThreats = hostiles.filter((h) => {
+    const criticalThreats = hostiles.filter((h: Creep) => {
       if (spawn && h.pos.getRangeTo(spawn) <= 5) return true;
       if (storage && h.pos.getRangeTo(storage) <= 5) return true;
       return false;
     });
 
     // Filter out kiters near edges (let towers handle them)
-    const viableTargets = hostiles.filter((h) => {
-      const healParts = h.body.filter((p) => p.type === HEAL).length;
+    const viableTargets = hostiles.filter((h: Creep) => {
+      const healParts = h.body.filter(
+        (p: BodyPartDefinition) => p.type === HEAL
+      ).length;
       const nearEdge =
         h.pos.x <= 3 || h.pos.x >= 46 || h.pos.y <= 3 || h.pos.y >= 46;
 
@@ -40,7 +44,7 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
 
     // Target priority: Critical threats with heals > Healers > Critical threats > Wounded > Closest
     if (criticalThreats.length > 0) {
-      const healersNearCritical = criticalThreats.filter((h) =>
+      const healersNearCritical = criticalThreats.filter((h: Creep) =>
         healers.includes(h)
       );
       if (healersNearCritical.length > 0) {
@@ -50,14 +54,14 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
       }
     } else if (
       healers.length > 0 &&
-      viableTargets.some((v) => healers.includes(v))
+      viableTargets.some((v: Creep) => healers.includes(v))
     ) {
       target = creep.pos.findClosestByRange(
-        healers.filter((h) => viableTargets.includes(h))
+        healers.filter((h: Creep) => viableTargets.includes(h))
       );
     } else if (viableTargets.length > 0) {
       // Target wounded enemies first
-      const wounded = viableTargets.filter((h) => h.hits < h.hitsMax);
+      const wounded = viableTargets.filter((h: Creep) => h.hits < h.hitsMax);
       if (wounded.length > 0) {
         target = creep.pos.findClosestByRange(wounded);
       } else {

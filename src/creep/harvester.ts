@@ -1,6 +1,6 @@
 /// <reference types="@types/screeps" />
-import { style } from "./path.styles";
-import { CreepPersonality } from "./creep.personality";
+import { style } from "../path.styles";
+import { CreepPersonality } from "./personality";
 
 export function runHarvester(creep: Creep, intel: any): void {
   // State: harvesting when not full, delivering when full
