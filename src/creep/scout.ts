@@ -32,7 +32,9 @@ export function runScout(creep: Creep): void {
   // Emergency fix: if scout has no target and no cooldown, set one now to break loops
   if (!targetRoom && !(creep.memory as any).scoutCooldown) {
     (creep.memory as any).scoutCooldown = Game.time + 20;
-    console.log(`🔍 [Scout] ${creep.name}: Applied emergency cooldown to break loop`);
+    console.log(
+      `🔍 [Scout] ${creep.name}: Applied emergency cooldown to break loop`
+    );
   }
 
   if (!targetRoom) {
