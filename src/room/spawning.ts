@@ -218,7 +218,16 @@ function trySpawnEconomicCreeps(
   // Check remote mining needs
   const remoteNeeds = getRemoteMiningNeeds(room);
 
+  // Check scout needs (before remote operations)
+  const scoutNeeds = getScoutNeeds(room);
+
   const spawnQueue = [
+    // Scout (highest priority - provides vision for remote mining)
+    {
+      role: "scout",
+      needed: scoutNeeds.scouts,
+      current: current.scout || 0,
+    },
     // Remote mining creeps (high priority for expansion)
     {
       role: "remoteminer",
@@ -297,6 +306,11 @@ function trySpawnEconomicCreeps(
         console.log(
           `👷 Spawning ${item.role} (${item.current + 1}/${item.needed})`
         );
+
+        // Assign scout to target room
+        if (item.role === "scout") {
+          assignScoutToRoom(name, room);
+        }
 
         // Assign remote creeps to operations
         if (
@@ -554,6 +568,9 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
     remotereserver:
       RoomCache.myCreeps(room).filter((c) => c.memory.role === "remotereserver")
         .length + (spawningCounts.remotereserver || 0),
+    scout:
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "scout").length +
+      (spawningCounts.scout || 0),
   };
 }
 
@@ -762,6 +779,10 @@ function getOptimalBody(
         return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE];
       return [WORK, WORK, WORK, MOVE];
 
+    case "scout":
+      // Scout: cheapest possible - just needs to move and provide vision
+      return [MOVE];
+
     case "remoteminer":
       // Remote miner: focus on WORK for mining, MOVE for travel
       if (energyAvailable >= 800)
@@ -910,6 +931,65 @@ function shouldSpawnMineralMiner(room: Room): boolean {
 }
 
 /**
+ * Get scout needs for a room
+ */
+function getScoutNeeds(room: Room): { scouts: number } {
+  const rcl = room.controller?.level || 0;
+
+  // Only spawn scouts at RCL 4+ (when remote mining is available)
+  if (rcl < 4) {
+    return { scouts: 0 };
+  }
+
+  // Check if we have any scout already
+  const existingScouts = room.find(FIND_MY_CREEPS, {
+    filter: (c) =>
+      c.memory.role === "scout" && (c.memory as any).homeRoom === room.name,
+  }).length;
+
+  // Get adjacent rooms that need scouting
+  const mem = room.memory as any;
+  if (!mem.remote) mem.remote = {};
+  if (!mem.remote.roomsToScout) mem.remote.roomsToScout = [];
+
+  // Update rooms to scout list periodically
+  if (!mem.remote.lastScoutScan || Game.time - mem.remote.lastScoutScan > 500) {
+    mem.remote.lastScoutScan = Game.time;
+    mem.remote.roomsToScout = [];
+
+    // Get all adjacent rooms
+    const exits = Game.map.describeExits(room.name);
+    if (exits) {
+      for (const dir in exits) {
+        const adjacentRoom = exits[dir as keyof typeof exits];
+        if (adjacentRoom) {
+          // Check if we have recent vision (last 1000 ticks)
+          const adjacentMem = Memory.rooms?.[adjacentRoom];
+          if (
+            !adjacentMem ||
+            !adjacentMem.lastScanned ||
+            Game.time - adjacentMem.lastScanned > 1000
+          ) {
+            // Need to scout this room
+            if (!mem.remote.roomsToScout.includes(adjacentRoom)) {
+              mem.remote.roomsToScout.push(adjacentRoom);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Spawn 1 scout if we have rooms to scout and no scout exists
+  const roomsToScout = mem.remote.roomsToScout || [];
+  if (roomsToScout.length > 0 && existingScouts === 0) {
+    return { scouts: 1 };
+  }
+
+  return { scouts: 0 };
+}
+
+/**
  * Get remote mining needs for a room
  */
 function getRemoteMiningNeeds(room: Room): {
@@ -998,6 +1078,37 @@ function assignRemoteCreep(creepName: string, role: string, room: Room): void {
       return;
     }
   }
+}
+
+/**
+ * Assign a scout to explore a target room
+ */
+function assignScoutToRoom(creepName: string, room: Room): void {
+  const mem = room.memory as any;
+  const roomsToScout = mem.remote?.roomsToScout || [];
+
+  if (roomsToScout.length === 0) {
+    console.log(`⚠️ [Scout] No rooms to scout for ${creepName}`);
+    return;
+  }
+
+  // Assign to first room in list
+  const targetRoom = roomsToScout[0];
+
+  // Assign on next tick when creep exists
+  setTimeout(() => {
+    const creep = Game.creeps[creepName];
+    if (creep) {
+      (creep.memory as any).targetRoom = targetRoom;
+      (creep.memory as any).homeRoom = room.name;
+      console.log(`🔍 [Scout] ${creepName} assigned to scout ${targetRoom}`);
+
+      // Remove from list
+      mem.remote.roomsToScout = roomsToScout.filter(
+        (r: string) => r !== targetRoom
+      );
+    }
+  }, 10);
 }
 
 /**

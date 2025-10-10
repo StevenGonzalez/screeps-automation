@@ -16,7 +16,8 @@ export type PathIntent =
   | "upgrade" // controller upgrades
   | "attack" // offensive actions
   | "heal" // medical aid
-  | "flee"; // emergency retreat
+  | "flee" // emergency retreat
+  | "scout"; // exploring rooms
 
 // Central palette (WCAG-friendly-ish on dark terrain)
 // Feel free to tweak to taste. Avoid too many similar hues.
@@ -31,6 +32,7 @@ export const PATH_STYLES: Record<PathIntent, PolyStyle> = {
   attack: { stroke: "#ff3b30", opacity: 0.25, strokeWidth: 0.2 }, // red
   heal: { stroke: "#34c759", opacity: 0.25, strokeWidth: 0.18 }, // lime green
   flee: { stroke: "#ff0000", opacity: 0.25, strokeWidth: 0.12 }, // thin urgent red
+  scout: { stroke: "#00ff00", opacity: 0.25, strokeWidth: 0.15 }, // bright green
 };
 
 export function style(intent: PathIntent): PolyStyle {

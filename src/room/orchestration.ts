@@ -33,6 +33,7 @@ import { runRemoteManager } from "./remote.manager";
 import { runRemoteMiner } from "../creep/remote.miner";
 import { runRemoteHauler } from "../creep/remote.hauler";
 import { runRemoteReserver } from "../creep/remote.reserver";
+import { runScout } from "../creep/scout";
 
 /**
  * Process a single room through all automation systems
@@ -187,6 +188,9 @@ function manageRoomCreeps(room: Room, plans: any, intel: any): void {
 
       // Enhanced role-based automation
       switch (role) {
+        case "scout":
+          runScout(creep);
+          break;
         case "miner":
           runMiner(creep);
           break;
