@@ -10,12 +10,6 @@ import { RoomCache } from "./cache";
 import { getRoomMemory } from "../global.memory";
 
 import { CreepPersonality } from "../creep/personality";
-import {
-  getActiveRemoteOperations,
-  getRemoteCreepNeeds,
-  assignCreepToRemote,
-  findAvailableRemoteSource,
-} from "./remote.manager";
 
 /**
  * Manage spawning for a room based on all active plans
@@ -216,35 +210,7 @@ function trySpawnEconomicCreeps(
     }
   }
 
-  // Check remote mining needs
-  const remoteNeeds = getRemoteMiningNeeds(room);
-
-  // Check scout needs (before remote operations)
-  const scoutNeeds = getScoutNeeds(room);
-
   const spawnQueue = [
-    // Scout (highest priority - provides vision for remote mining)
-    {
-      role: "scout",
-      needed: scoutNeeds.scouts,
-      current: current.scout || 0,
-    },
-    // Remote mining creeps (high priority for expansion)
-    {
-      role: "remoteminer",
-      needed: remoteNeeds.miners,
-      current: current.remoteminer || 0,
-    },
-    {
-      role: "remotehauler",
-      needed: remoteNeeds.haulers,
-      current: current.remotehauler || 0,
-    },
-    {
-      role: "remotereserver",
-      needed: remoteNeeds.reservers,
-      current: current.remotereserver || 0,
-    },
     {
       role: "miner",
       // Aim for one miner per source that has a container (or one planned)
@@ -301,9 +267,6 @@ function trySpawnEconomicCreeps(
 
       // Set initial memory with homeRoom for scouts
       const initialMemory: any = { role: item.role, priority: "economy" };
-      if (item.role === "scout") {
-        initialMemory.homeRoom = room.name;
-      }
 
       let result = spawn.spawnCreep(body, name, {
         memory: initialMemory,
@@ -313,20 +276,6 @@ function trySpawnEconomicCreeps(
         console.log(
           `👷 Spawning ${item.role} (${item.current + 1}/${item.needed})`
         );
-
-        // Assign scout to target room
-        if (item.role === "scout") {
-          assignScoutToRoom(name, room);
-        }
-
-        // Assign remote creeps to operations
-        if (
-          item.role === "remoteminer" ||
-          item.role === "remotehauler" ||
-          item.role === "remotereserver"
-        ) {
-          assignRemoteCreep(name, item.role, room);
-        }
 
         return true;
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
@@ -576,18 +525,6 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
     mineralminer:
       RoomCache.myCreeps(room).filter((c) => c.memory.role === "mineralminer")
         .length + (spawningCounts.mineralminer || 0),
-    remoteminer:
-      RoomCache.myCreeps(room).filter((c) => c.memory.role === "remoteminer")
-        .length + (spawningCounts.remoteminer || 0),
-    remotehauler:
-      RoomCache.myCreeps(room).filter((c) => c.memory.role === "remotehauler")
-        .length + (spawningCounts.remotehauler || 0),
-    remotereserver:
-      RoomCache.myCreeps(room).filter((c) => c.memory.role === "remotereserver")
-        .length + (spawningCounts.remotereserver || 0),
-    scout:
-      RoomCache.myCreeps(room).filter((c) => c.memory.role === "scout").length +
-      (spawningCounts.scout || 0),
   };
 
   // Cache the result
@@ -802,105 +739,6 @@ function getOptimalBody(
         return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE];
       return [WORK, WORK, WORK, MOVE];
 
-    case "scout":
-      // Scout: cheapest possible - just needs to move and provide vision
-      return [MOVE];
-
-    case "remoteminer":
-      // Remote miner: focus on WORK for mining, MOVE for travel
-      if (energyAvailable >= 800)
-        return [
-          WORK,
-          WORK,
-          WORK,
-          WORK,
-          WORK,
-          WORK,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-        ];
-      if (energyAvailable >= 550)
-        return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE];
-      if (energyAvailable >= 400) return [WORK, WORK, WORK, MOVE, MOVE, MOVE];
-      return [WORK, WORK, MOVE, MOVE];
-
-    case "remotehauler":
-      // Remote hauler: large CARRY capacity with 1:1 MOVE ratio for off-road travel
-      if (energyAvailable >= 1200)
-        return [
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY, // 12 CARRY (600 capacity)
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE, // 12 MOVE (1:1 ratio)
-        ];
-      if (energyAvailable >= 800)
-        return [
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-        ];
-      if (energyAvailable >= 600)
-        return [
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          CARRY,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-          MOVE,
-        ];
-      if (energyAvailable >= 400)
-        return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
-      return [CARRY, CARRY, MOVE, MOVE];
-
-    case "remotereserver":
-      // Remote reserver: only CLAIM and MOVE parts
-      if (energyAvailable >= 1300) return [CLAIM, CLAIM, MOVE, MOVE];
-      if (energyAvailable >= 650) return [CLAIM, MOVE];
-      return []; // Can't make a reserver with less than 650 energy
-
     case "defender":
       // Mix of melee and ranged for versatility against kiters/healers
       if (energyAvailable >= 1000)
@@ -951,181 +789,6 @@ function shouldSpawnMineralMiner(room: Room): boolean {
   if (!mineral || mineral.mineralAmount === 0) return false;
 
   return true;
-}
-
-/**
- * Get scout needs for a room
- */
-function getScoutNeeds(room: Room): { scouts: number } {
-  const rcl = room.controller?.level || 0;
-
-  // Only spawn scouts at RCL 4+ (when remote mining is available)
-  if (rcl < 4) {
-    return { scouts: 0 };
-  }
-
-  // Check if we have any scout already
-  const existingScouts = room.find(FIND_MY_CREEPS, {
-    filter: (c) =>
-      c.memory.role === "scout" && (c.memory as any).homeRoom === room.name,
-  }).length;
-
-  // Get adjacent rooms that need scouting
-  const mem = room.memory as any;
-  if (!mem.remote) mem.remote = {};
-  if (!mem.remote.roomsToScout) mem.remote.roomsToScout = [];
-
-  // Update rooms to scout list periodically
-  if (!mem.remote.lastScoutScan || Game.time - mem.remote.lastScoutScan > 500) {
-    mem.remote.lastScoutScan = Game.time;
-    mem.remote.roomsToScout = [];
-
-    // Get all adjacent rooms
-    const exits = Game.map.describeExits(room.name);
-    if (exits) {
-      for (const dir in exits) {
-        const adjacentRoom = exits[dir as keyof typeof exits];
-        if (adjacentRoom) {
-          // Check if we have recent vision (last 1000 ticks)
-          const adjacentMem = Memory.rooms?.[adjacentRoom];
-          if (
-            !adjacentMem ||
-            !adjacentMem.lastScanned ||
-            Game.time - adjacentMem.lastScanned > 1000
-          ) {
-            // Need to scout this room
-            if (!mem.remote.roomsToScout.includes(adjacentRoom)) {
-              mem.remote.roomsToScout.push(adjacentRoom);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // Spawn 1 scout if we have rooms to scout and no scout exists
-  const roomsToScout = mem.remote.roomsToScout || [];
-  if (roomsToScout.length > 0 && existingScouts === 0) {
-    return { scouts: 1 };
-  }
-
-  return { scouts: 0 };
-}
-
-/**
- * Get remote mining needs for a room
- */
-function getRemoteMiningNeeds(room: Room): {
-  miners: number;
-  haulers: number;
-  reservers: number;
-} {
-  const operations = getActiveRemoteOperations(room.name);
-
-  let totalMiners = 0;
-  let totalHaulers = 0;
-  let totalReservers = 0;
-
-  for (const op of operations) {
-    const needs = getRemoteCreepNeeds(op);
-    totalMiners += needs.miners;
-    totalHaulers += needs.haulers;
-    totalReservers += needs.reserver ? 1 : 0;
-  }
-
-  return {
-    miners: totalMiners,
-    haulers: totalHaulers,
-    reservers: totalReservers,
-  };
-}
-
-/**
- * Assign a remote creep to an operation on spawn
- */
-function assignRemoteCreep(creepName: string, role: string, room: Room): void {
-  const operations = getActiveRemoteOperations(room.name);
-
-  // Find an operation that needs this type of creep
-  for (const op of operations) {
-    const needs = getRemoteCreepNeeds(op);
-
-    if (
-      role === "remoteminer" &&
-      op.assignedCreeps.miners.length < needs.miners
-    ) {
-      // Find available source for this miner
-      const source = findAvailableRemoteSource(op);
-      if (source) {
-        // Assign creep on next tick when it exists
-        const mem = Memory as any;
-        if (!mem.pendingAssignments) mem.pendingAssignments = {};
-        mem.pendingAssignments[creepName] = {
-          type: "remoteminer",
-          operation: op.roomName,
-          sourceId: source.id,
-        };
-        return;
-      }
-    } else if (
-      role === "remotehauler" &&
-      op.assignedCreeps.haulers.length < needs.haulers
-    ) {
-      // Assign creep on next tick when it exists
-      const mem = Memory as any;
-      if (!mem.pendingAssignments) mem.pendingAssignments = {};
-      mem.pendingAssignments[creepName] = {
-        type: "remotehauler",
-        operation: op.roomName,
-      };
-      return;
-    } else if (
-      role === "remotereserver" &&
-      needs.reserver &&
-      !op.assignedCreeps.reserver
-    ) {
-      // Assign creep on next tick when it exists
-      const mem = Memory as any;
-      if (!mem.pendingAssignments) mem.pendingAssignments = {};
-      mem.pendingAssignments[creepName] = {
-        type: "remotereserver",
-        operation: op.roomName,
-      };
-      return;
-    }
-  }
-}
-
-/**
- * Assign a scout to explore a target room
- */
-function assignScoutToRoom(creepName: string, room: Room): void {
-  const roomMem = room.memory as any;
-  const roomsToScout = roomMem.remote?.roomsToScout || [];
-
-  if (roomsToScout.length === 0) {
-    console.log(`⚠️ [Scout] No rooms to scout for ${creepName}`);
-    return;
-  }
-
-  // Assign to first room in list
-  const targetRoom = roomsToScout[0];
-
-  // Assign creep memory - it will be available when spawned
-  const mem = Memory as any;
-  if (!mem.pendingAssignments) mem.pendingAssignments = {};
-  mem.pendingAssignments[creepName] = {
-    type: "scout",
-    targetRoom: targetRoom,
-    homeRoom: room.name,
-  };
-
-  // Remove from list
-  roomMem.remote.roomsToScout = roomsToScout.filter(
-    (r: string) => r !== targetRoom
-  );
-
-  console.log(`🔍 [Scout] ${creepName} assigned to scout ${targetRoom}`);
 }
 
 /**

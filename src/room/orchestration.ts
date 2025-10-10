@@ -29,11 +29,6 @@ import { runMiner } from "../creep/miner";
 import { runMineralMiner } from "../creep/mineralminer";
 import { drawRoomHUD } from "./visuals";
 import { updateRoomTraffic } from "./traffic";
-import { runRemoteManager } from "./remote.manager";
-import { runRemoteMiner } from "../creep/remote.miner";
-import { runRemoteHauler } from "../creep/remote.hauler";
-import { runRemoteReserver } from "../creep/remote.reserver";
-import { runScout } from "../creep/scout";
 
 /**
  * Process a single room through all automation systems
@@ -168,13 +163,6 @@ function executeRoomPlans(room: Room, plans: any, intel: any): void {
     console.log(`❌ Lab manager error in ${room.name}: ${err}`);
   }
 
-  // 2.9. REMOTE MINING MANAGER
-  try {
-    runRemoteManager(room);
-  } catch (err) {
-    console.log(`❌ Remote manager error in ${room.name}: ${err}`);
-  }
-
   // 3. CREEP MANAGEMENT - Role-based automation
   manageRoomCreeps(room, plans, intel);
 
@@ -204,23 +192,11 @@ function manageRoomCreeps(room: Room, plans: any, intel: any): void {
 
       // Enhanced role-based automation
       switch (role) {
-        case "scout":
-          runScout(creep);
-          break;
         case "miner":
           runMiner(creep);
           break;
         case "mineralminer":
           runMineralMiner(creep);
-          break;
-        case "remoteminer":
-          runRemoteMiner(creep);
-          break;
-        case "remotehauler":
-          runRemoteHauler(creep);
-          break;
-        case "remotereserver":
-          runRemoteReserver(creep);
           break;
         case "harvester":
           runHarvester(creep, intel);

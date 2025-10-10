@@ -13,10 +13,6 @@ import {
   initializeMemory,
   updateGlobalStats,
 } from "./global.memory";
-import {
-  getActiveRemoteOperations,
-  assignCreepToRemote,
-} from "./room/remote.manager";
 
 /**
  * Main game loop - executed every tick
@@ -33,9 +29,6 @@ export const loop = (): void => {
     if (Game.time % 10 === 0) {
       cleanupMemory();
     }
-
-    // Process pending creep assignments
-    processPendingAssignments();
 
     // PHASE 2: ROOM PROCESSING
     for (const roomName in Game.rooms) {
@@ -110,61 +103,6 @@ function processPixelGeneration(): void {
     console.log(
       `💎 Pixels generated: ${pixelStats.generated}, Last: ${timeSinceLastPixel} ticks ago`
     );
-  }
-}
-
-/**
- * Process pending creep assignments from spawn queue
- */
-function processPendingAssignments(): void {
-  const mem = Memory as any;
-  if (!mem.pendingAssignments) return;
-
-  const assignments = mem.pendingAssignments;
-
-  for (const creepName in assignments) {
-    const creep = Game.creeps[creepName];
-    if (!creep) continue; // Creep not spawned yet
-
-    const assignment = assignments[creepName];
-
-    // Apply assignment based on type
-    if (
-      assignment.type === "remoteminer" ||
-      assignment.type === "remotehauler" ||
-      assignment.type === "remotereserver"
-    ) {
-      const operations = getActiveRemoteOperations(creep.room.name);
-      const op = operations.find(
-        (o: any) => o.roomName === assignment.operation
-      );
-
-      if (op) {
-        const roleMap: any = {
-          remoteminer: "miner",
-          remotehauler: "hauler",
-          remotereserver: "reserver",
-        };
-        assignCreepToRemote(creep, op, roleMap[assignment.type]);
-
-        if (assignment.type === "remoteminer" && assignment.sourceId) {
-          (creep.memory as any).sourceId = assignment.sourceId;
-        }
-
-        console.log(
-          `🌟 [Assignment] ${creepName} assigned to ${assignment.operation} as ${assignment.type}`
-        );
-      }
-    } else if (assignment.type === "scout") {
-      (creep.memory as any).targetRoom = assignment.targetRoom;
-      (creep.memory as any).homeRoom = assignment.homeRoom;
-      console.log(
-        `🔍 [Assignment] ${creepName} assigned to scout ${assignment.targetRoom}`
-      );
-    }
-
-    // Remove processed assignment
-    delete assignments[creepName];
   }
 }
 
