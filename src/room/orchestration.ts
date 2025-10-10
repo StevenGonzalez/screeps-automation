@@ -66,6 +66,7 @@ export function processRoom(roomName: string): void {
 
 /**
  * Gather comprehensive intelligence about the room
+ * CACHED: Intelligence is expensive (15+ room.find() calls), cache for 5 ticks
  */
 function gatherRoomIntelligence(room: Room): any {
   const roomMemory = getRoomMemory(room.name);
@@ -73,8 +74,21 @@ function gatherRoomIntelligence(room: Room): any {
   // Update last scanned time
   roomMemory.lastScanned = Game.time;
 
-  // Gather fresh intelligence
+  // Check intelligence cache
+  roomMemory.intelCache = roomMemory.intelCache || {};
+  const cache = roomMemory.intelCache as any;
+
+  if (cache.data && cache.tick && Game.time - cache.tick < 5) {
+    // Use cached intelligence
+    return cache.data;
+  }
+
+  // Gather fresh intelligence (expensive!)
   const intel = analyzeRoom(room);
+
+  // Cache the result
+  cache.data = intel;
+  cache.tick = Game.time;
 
   // Store key metrics in room memory for historical analysis
   roomMemory.economy = roomMemory.economy || {};
@@ -167,8 +181,10 @@ function executeRoomPlans(room: Room, plans: any, intel: any): void {
   // 4. LOGISTICS - Resource movement and optimization
   manageRoomLogistics(room, plans, intel);
 
-  // 5. VISUALS - Lightweight HUD for quick status
-  drawRoomHUD(room, intel);
+  // 5. VISUALS - Lightweight HUD (throttled to every 5 ticks to save CPU)
+  if (Game.time % 5 === 0) {
+    drawRoomHUD(room, intel);
+  }
 }
 
 /**

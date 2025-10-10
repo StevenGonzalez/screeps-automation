@@ -11,6 +11,14 @@ declare global {
     defense?: any;
     spawning?: any;
     remote?: any;
+    intelCache?: {
+      data?: any;
+      tick?: number;
+    };
+    creepCountCache?: {
+      counts?: { [role: string]: number };
+      tick?: number;
+    };
   }
 }
 /**
@@ -25,6 +33,15 @@ declare global {
 declare global {
   interface Memory {
     terminalHub?: any;
+    pendingAssignments?: {
+      [creepName: string]: {
+        type: string;
+        operation?: string;
+        sourceId?: Id<Source>;
+        targetRoom?: string;
+        homeRoom?: string;
+      };
+    };
   }
 }
 

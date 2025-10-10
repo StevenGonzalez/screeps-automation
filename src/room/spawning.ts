@@ -7,6 +7,7 @@
 
 /// <reference types="@types/screeps" />
 import { RoomCache } from "./cache";
+import { getRoomMemory } from "../global.memory";
 
 import { CreepPersonality } from "../creep/personality";
 import {
@@ -520,8 +521,18 @@ function trySpawnConstructionCreeps(
 
 /**
  * Get current creep counts by role (including spawning creeps)
+ * CACHED: Filtering all creeps is expensive, cache for 3 ticks
  */
 function getCurrentCreepCounts(room: Room): { [role: string]: number } {
+  const mem = getRoomMemory(room.name);
+  mem.creepCountCache = mem.creepCountCache || {};
+  const cache = mem.creepCountCache as any;
+
+  // Return cached counts if fresh
+  if (cache.counts && cache.tick && Game.time - cache.tick < 3) {
+    return cache.counts;
+  }
+
   // Count spawning creeps
   const spawningCounts: { [role: string]: number } = {};
   RoomCache.mySpawns(room).forEach((spawn) => {
@@ -534,7 +545,7 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
     }
   });
 
-  return {
+  const counts = {
     miner:
       RoomCache.myCreeps(room).filter((c) => c.memory.role === "miner").length +
       (spawningCounts.miner || 0),
@@ -572,6 +583,12 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
       RoomCache.myCreeps(room).filter((c) => c.memory.role === "scout").length +
       (spawningCounts.scout || 0),
   };
+
+  // Cache the result
+  cache.counts = counts;
+  cache.tick = Game.time;
+
+  return counts;
 }
 
 function assessRepairDemand(room: Room): { recommendedRepairers: number } {

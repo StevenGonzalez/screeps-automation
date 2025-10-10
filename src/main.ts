@@ -28,7 +28,11 @@ export const loop = (): void => {
   try {
     // PHASE 1: MEMORY MANAGEMENT
     initializeMemory();
-    cleanupMemory();
+
+    // Cleanup memory less frequently (every 10 ticks)
+    if (Game.time % 10 === 0) {
+      cleanupMemory();
+    }
 
     // Process pending creep assignments
     processPendingAssignments();
@@ -39,10 +43,11 @@ export const loop = (): void => {
     }
 
     // PHASE 3: GLOBAL OPERATIONS
-    updateGlobalStats();
-    processGlobalOperations();
-
-    // PHASE 4: PERFORMANCE MONITORING
+    // Update stats less frequently (every 10 ticks)
+    if (Game.time % 10 === 0) {
+      updateGlobalStats();
+    }
+    processGlobalOperations(); // PHASE 4: PERFORMANCE MONITORING
     if (Game.time % 100 === 0) {
       logPerformanceMetrics();
     }
