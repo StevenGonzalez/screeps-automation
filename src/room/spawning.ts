@@ -391,8 +391,10 @@ function trySpawnConstructionCreeps(
   // Only count non-deferred tasks (things builders will actually work on now)
   // Filter out null/undefined entries to get accurate count
   const activeTasks =
-    (constructionPlan?.priorities?.critical?.filter((t: any) => t).length || 0) +
-    (constructionPlan?.priorities?.important?.filter((t: any) => t).length || 0) +
+    (constructionPlan?.priorities?.critical?.filter((t: any) => t).length ||
+      0) +
+    (constructionPlan?.priorities?.important?.filter((t: any) => t).length ||
+      0) +
     (constructionPlan?.priorities?.normal?.filter((t: any) => t).length || 0);
 
   // No construction sites and no active tasks? Don't spawn builders
@@ -408,16 +410,20 @@ function trySpawnConstructionCreeps(
       ...(pri?.critical || []),
       ...(pri?.important || []),
       ...(pri?.normal || []),
-    ].filter(t => t); // Filter out null/undefined
-    
+    ].filter((t) => t); // Filter out null/undefined
+
     const nonRoadPlanned = prioritized.filter(
       (t) => t.type && t.type !== STRUCTURE_ROAD
     ).length;
-    
+
     if (nonRoadPlanned === 0) {
       if (Game.time % 100 === 0) {
-        const roadCount = prioritized.filter((t) => t.type === STRUCTURE_ROAD).length;
-        console.log(`⏸️ Skipping builder spawn - only ${roadCount} roads planned (can wait)`);
+        const roadCount = prioritized.filter(
+          (t) => t.type === STRUCTURE_ROAD
+        ).length;
+        console.log(
+          `⏸️ Skipping builder spawn - only ${roadCount} roads planned (can wait)`
+        );
       }
       return false;
     }
