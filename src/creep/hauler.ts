@@ -380,7 +380,11 @@ export function runHauler(creep: Creep, intel: any): void {
     }
 
     // Build up storage reserves - but AFTER controller is buffered
-    // Fill storage to 100k, then prioritize terminal, then continue filling storage
+    // Tiered energy distribution strategy:
+    // Phase 1 (0-20k): Build initial storage reserves
+    // Phase 2 (20k-50k): Start filling terminal to 5k, then balance
+    // Phase 3 (50k-100k): Terminal priority to 10k, storage to 100k
+    // Phase 4 (100k+): Terminal to 10k, then storage continues
     if (!target) {
       const storage = creep.room.storage;
       const terminal = creep.room.terminal;
@@ -389,26 +393,75 @@ export function runHauler(creep: Creep, intel: any): void {
       const terminalEnergy =
         terminal?.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
 
-      const STORAGE_COMFORTABLE = 100000;
-      const TERMINAL_ENERGY_TARGET = 10000;
+      const STORAGE_PHASE_1 = 20000; // Build initial reserves
+      const STORAGE_PHASE_2 = 50000; // Start terminal operations
+      const STORAGE_COMFORTABLE = 100000; // Full reserves
+      const TERMINAL_EARLY = 5000; // Early terminal energy
+      const TERMINAL_TARGET = 10000; // Full terminal energy
 
-      // Priority: Storage to 100k → Terminal to 10k → Storage beyond 100k
-      const shouldFillStorage =
-        storage &&
-        storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-        storage.id !== creep.memory.lastWithdrawId &&
-        (storageEnergy < STORAGE_COMFORTABLE ||
-          terminalEnergy >= TERMINAL_ENERGY_TARGET);
+      let shouldFillStorage = false;
+      let shouldFillTerminal = false;
 
-      const shouldFillTerminal =
-        terminal &&
-        terminalEnergy < TERMINAL_ENERGY_TARGET &&
-        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-        storageEnergy >= STORAGE_COMFORTABLE;
+      // Phase 1: 0-20k storage - Build reserves first
+      if (storageEnergy < STORAGE_PHASE_1) {
+        shouldFillStorage = !!(
+          storage &&
+          storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+          storage.id !== creep.memory.lastWithdrawId
+        );
+      }
+      // Phase 2: 20k-50k storage - Start terminal, then balance
+      else if (storageEnergy < STORAGE_PHASE_2) {
+        shouldFillTerminal = !!(
+          terminal &&
+          terminalEnergy < TERMINAL_EARLY &&
+          terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+        );
 
-      if (shouldFillTerminal) {
-        target = terminal;
-      } else if (shouldFillStorage) {
+        if (!shouldFillTerminal) {
+          shouldFillStorage = !!(
+            storage &&
+            storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+            storage.id !== creep.memory.lastWithdrawId
+          );
+        }
+      }
+      // Phase 3: 50k-100k storage - Terminal priority to 10k
+      else if (storageEnergy < STORAGE_COMFORTABLE) {
+        shouldFillTerminal = !!(
+          terminal &&
+          terminalEnergy < TERMINAL_TARGET &&
+          terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+        );
+
+        if (!shouldFillTerminal) {
+          shouldFillStorage = !!(
+            storage &&
+            storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+            storage.id !== creep.memory.lastWithdrawId
+          );
+        }
+      }
+      // Phase 4: 100k+ storage - Terminal to full, then storage continues
+      else {
+        shouldFillTerminal = !!(
+          terminal &&
+          terminalEnergy < TERMINAL_TARGET &&
+          terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+        );
+
+        if (!shouldFillTerminal) {
+          shouldFillStorage = !!(
+            storage &&
+            storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+            storage.id !== creep.memory.lastWithdrawId
+          );
+        }
+      }
+
+      if (shouldFillTerminal && terminal) {
+        target = terminal as AnyStoreStructure;
+      } else if (shouldFillStorage && storage) {
         target = storage as AnyStoreStructure;
       }
     }

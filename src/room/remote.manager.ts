@@ -9,11 +9,7 @@
  */
 
 import { getRoomMemory } from "../global.memory";
-import {
-  findBestRemoteRooms,
-  isRemoteRoomSafe,
-  RemoteRoomScan,
-} from "../scout/remote";
+import { findBestRemoteRooms, isRemoteRoomSafe } from "../creep/remote.scout";
 
 export interface RemoteOperation {
   roomName: string;
