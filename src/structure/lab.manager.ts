@@ -9,8 +9,8 @@ import { RoomCache } from "../room/cache";
  * - Prioritizes producing common boosts for military operations
  */
 
-// Common reaction recipes
-const REACTIONS: { [key: string]: [ResourceConstant, ResourceConstant] } = {
+// Custom reaction recipes mapping
+const LAB_REACTIONS: { [key: string]: [ResourceConstant, ResourceConstant] } = {
   // Tier 1
   OH: [RESOURCE_OXYGEN, RESOURCE_HYDROGEN],
   ZK: [RESOURCE_ZYNTHIUM, RESOURCE_KEANIUM],
@@ -114,7 +114,7 @@ export function runLabManager(room: Room) {
   }
 
   // Get the recipe for current target
-  const recipe = REACTIONS[currentTarget];
+  const recipe = LAB_REACTIONS[currentTarget];
   if (!recipe) {
     console.log(`[Lab] ⚠️ Unknown recipe for ${currentTarget}`);
     return;
@@ -245,7 +245,7 @@ export function getLabRequirements(room: Room): {
     (room.memory as any).reactionQueue?.[0];
   if (!currentTarget) return result;
 
-  const recipe = REACTIONS[currentTarget];
+  const recipe = LAB_REACTIONS[currentTarget];
   if (!recipe) return result;
 
   const [ingredientA, ingredientB] = recipe;
