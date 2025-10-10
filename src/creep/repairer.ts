@@ -3,6 +3,11 @@ import { style } from "../path.styles";
 import { CreepPersonality } from "./personality";
 import { getTowersInRoom } from "../structure/tower";
 import { RoomCache } from "../room/cache";
+import { planRoomDefense } from "../defense/planner";
+import {
+  getDefenseRepairTargets,
+  shouldRepairDefense,
+} from "../defense/maintenance";
 
 export function runRepairer(creep: Creep, intel: any): void {
   // If towers are well-stocked, let them handle most emergency repairs.
@@ -31,6 +36,9 @@ export function runRepairer(creep: Creep, intel: any): void {
       CreepPersonality.speak(creep, "frustrated");
     }
   } else {
+    // Get defense plan for intelligent repair
+    const defensePlan = planRoomDefense(creep.room);
+
     // 1) Prioritize truly critical non-fortification structures
     // If towers are high on energy, tighten threshold so towers take most of this load
     const criticalThreshold = towerHighEnergy ? 0.2 : 0.3;
@@ -46,12 +54,18 @@ export function runRepairer(creep: Creep, intel: any): void {
     let target: Structure | null = null;
     if (critical.length) target = pickMostDamaged(critical);
 
-    // 2) Low ramparts (seed to minimum), but keep it cheap
+    // 2) Defense structures (ramparts/walls) using intelligent prioritization
     if (!target) {
-      const lowRamparts = creep.room.find(FIND_STRUCTURES, {
-        filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 5000,
-      });
-      if (lowRamparts.length) target = pickMostDamaged(lowRamparts);
+      const defenseTargets = getDefenseRepairTargets(
+        creep.room,
+        defensePlan,
+        10
+      );
+      if (defenseTargets.length > 0) {
+        // Find closest defense target that needs repair
+        target =
+          creep.pos.findClosestByPath(defenseTargets) || defenseTargets[0];
+      }
     }
 
     // 3) Containers medium damage (prioritize over roads)

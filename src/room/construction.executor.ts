@@ -110,8 +110,9 @@ export function executeConstructionPlan(
     if (!dependenciesSatisfied(room, task)) continue;
     if (!withinRclLimits(room, task.type)) continue;
     if (!isBuildable(room, task.pos, task.type)) {
-      // Special case: if placing a non-road structure and a road (structure or site) blocks it, remove it and retry later
-      if (task.type !== STRUCTURE_ROAD) {
+      // Special case: if placing a non-road/non-rampart structure and a road (structure or site) blocks it, remove it and retry later
+      // Note: Ramparts can be placed on top of roads, so skip this logic for ramparts
+      if (task.type !== STRUCTURE_ROAD && task.type !== STRUCTURE_RAMPART) {
         const structs = task.pos.lookFor(LOOK_STRUCTURES);
         const road = structs.find((s) => s.structureType === STRUCTURE_ROAD);
         if (road) {

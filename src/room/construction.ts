@@ -9,6 +9,7 @@
 
 import { RoomIntelligence } from "./intelligence";
 import { getRoomMemory } from "../global.memory";
+import { planRoomDefense } from "../defense/planner";
 
 export interface ConstructionPlan {
   queue: ConstructionTask[];
@@ -739,30 +740,107 @@ function generatePowerSpawnTask(intel: RoomIntelligence): ConstructionTask {
 function generateDefensiveTasks(intel: RoomIntelligence): ConstructionTask[] {
   const tasks: ConstructionTask[] = [];
   const room = Game.rooms[intel.basic.name];
-  const threatLevel = intel.military.safetyScore < 50 ? 100 : 0;
+  if (!room) return tasks;
 
-  if (threatLevel > 30 || intel.basic.rcl >= 3) {
-    // Add ramparts over key structures (spawn, storage, terminal, towers)
-    const protectTypes: StructureConstant[] = [
-      STRUCTURE_SPAWN,
-      STRUCTURE_STORAGE,
-      STRUCTURE_TERMINAL,
-      STRUCTURE_TOWER,
-    ];
-    const structures = room?.find(FIND_MY_STRUCTURES) || [];
-    structures
-      .filter((s) => protectTypes.includes(s.structureType))
-      .forEach((s, i) => {
-        tasks.push({
-          type: STRUCTURE_RAMPART,
-          pos: s.pos,
-          priority: 36 - i * 0.1,
-          reason: `Protect ${s.structureType}`,
-          estimatedCost: 1000,
-          dependencies: [],
-          urgent: threatLevel > 70,
-        });
+  const threatLevel = intel.military.safetyScore < 50 ? 100 : 0;
+  const isUnderThreat = intel.military.hostiles.length > 0;
+
+  // Generate comprehensive defense plan
+  const defensePlan = planRoomDefense(room);
+
+  // Priority ramparts on critical structures (core layer)
+  const criticalRamparts = defensePlan.layers.core.filter((pos) => {
+    // Check if rampart already exists
+    const existing = pos
+      .lookFor(LOOK_STRUCTURES)
+      .find((s) => s.structureType === STRUCTURE_RAMPART);
+    return !existing;
+  });
+
+  criticalRamparts.forEach((pos, i) => {
+    tasks.push({
+      type: STRUCTURE_RAMPART,
+      pos,
+      priority: 70 - i * 0.05, // High priority
+      reason: `Protect critical structure at ${pos}`,
+      estimatedCost: 1000,
+      dependencies: [],
+      urgent: isUnderThreat,
+    });
+  });
+
+  // Inner ring ramparts (medium priority)
+  const innerRamparts = defensePlan.layers.inner.filter((pos) => {
+    const existing = pos
+      .lookFor(LOOK_STRUCTURES)
+      .find((s) => s.structureType === STRUCTURE_RAMPART);
+    return !existing;
+  });
+
+  innerRamparts.forEach((pos, i) => {
+    tasks.push({
+      type: STRUCTURE_RAMPART,
+      pos,
+      priority: 50 - i * 0.02,
+      reason: `Inner defense layer`,
+      estimatedCost: 1000,
+      dependencies: [],
+      urgent: false,
+    });
+  });
+
+  // Outer ring ramparts (lower priority, only at high RCL)
+  if (intel.basic.rcl >= 7) {
+    const outerRamparts = defensePlan.layers.outer.filter((pos) => {
+      const existing = pos
+        .lookFor(LOOK_STRUCTURES)
+        .find((s) => s.structureType === STRUCTURE_RAMPART);
+      return !existing;
+    });
+
+    outerRamparts.forEach((pos, i) => {
+      tasks.push({
+        type: STRUCTURE_RAMPART,
+        pos,
+        priority: 35 - i * 0.01,
+        reason: `Outer defense layer`,
+        estimatedCost: 1000,
+        dependencies: [],
+        urgent: false,
       });
+    });
+  }
+
+  // Exit walls (choke points) - only at RCL 5+
+  if (intel.basic.rcl >= 5) {
+    const exitWalls = defensePlan.exitWalls.filter((pos) => {
+      const existing = pos
+        .lookFor(LOOK_STRUCTURES)
+        .find((s) => s.structureType === STRUCTURE_WALL);
+      return !existing;
+    });
+
+    exitWalls.forEach((pos, i) => {
+      tasks.push({
+        type: STRUCTURE_WALL,
+        pos,
+        priority: 40 - i * 0.05,
+        reason: `Exit fortification`,
+        estimatedCost: 1000,
+        dependencies: [],
+        urgent: isUnderThreat,
+      });
+    });
+  }
+
+  // Boost priority if under threat
+  if (isUnderThreat || threatLevel > 70) {
+    tasks.forEach((task) => {
+      if (task.type === STRUCTURE_RAMPART || task.type === STRUCTURE_WALL) {
+        task.priority += 20;
+        task.urgent = true;
+      }
+    });
   }
 
   return tasks;
