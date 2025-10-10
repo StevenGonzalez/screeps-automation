@@ -49,23 +49,31 @@ export function runHauler(creep: Creep, intel: any): void {
       filter: (r) => r.store.getUsedCapacity(RESOURCE_ENERGY) > 50,
     });
 
-    // Check for mineral-filled containers if energy needs are not urgent
-    let mineralContainers: StructureContainer[] = [];
-    if (!energyUrgent) {
-      mineralContainers = RoomCache.containers(creep.room).filter((c) => {
-        // Look for containers near minerals (not sources or controller)
-        if (isSourceContainer(c) || isControllerContainer(c)) return false;
-        // Check if container has minerals and is getting full
-        for (const resourceType in c.store) {
-          if (resourceType === RESOURCE_ENERGY) continue;
-          const amount = c.store[resourceType as ResourceConstant] || 0;
+    // Check for mineral-filled containers
+    // Pick up minerals if container is getting full to prevent miner blocking
+    const mineralContainers: StructureContainer[] = RoomCache.containers(
+      creep.room
+    ).filter((c) => {
+      // Look for containers near minerals (not sources or controller)
+      if (isSourceContainer(c) || isControllerContainer(c)) return false;
+      // Check if container has minerals
+      for (const resourceType in c.store) {
+        if (resourceType === RESOURCE_ENERGY) continue;
+        const amount = c.store[resourceType as ResourceConstant] || 0;
+        // If energy is urgent, only pick up if container is nearly full (urgent unblocking)
+        if (energyUrgent) {
+          if (c.store.getFreeCapacity() < 200) {
+            return true;
+          }
+        } else {
+          // If energy is not urgent, pick up at 1000+ minerals or when container is 75% full
           if (amount > 1000 || c.store.getFreeCapacity() < 500) {
             return true;
           }
         }
-        return false;
-      });
-    }
+      }
+      return false;
+    });
 
     // Cleanup: check for misplaced minerals in controller containers
     // These should be removed so upgraders can use the container
@@ -86,11 +94,14 @@ export function runHauler(creep: Creep, intel: any): void {
     let target: any =
       creep.pos.findClosestByPath(urgentSource) ||
       creep.pos.findClosestByPath(mineralInControllerContainer) ||
+      creep.pos.findClosestByPath(
+        mineralContainers.filter((c) => c.store.getFreeCapacity() < 200)
+      ) || // Urgent: unblock full mineral containers
       creep.pos.findClosestByPath(pickupContainers) ||
       creep.pos.findClosestByPath(dropped) ||
       creep.pos.findClosestByPath(tombs) ||
       creep.pos.findClosestByPath(ruins) ||
-      creep.pos.findClosestByPath(mineralContainers);
+      creep.pos.findClosestByPath(mineralContainers); // Non-urgent mineral pickup
 
     // Check if labs need minerals from storage/terminal (before falling back to storage energy)
     if (!target && !energyUrgent && labReqs.toFill.length > 0) {
