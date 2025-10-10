@@ -29,13 +29,6 @@ export function runScout(creep: Creep): void {
     );
   }
 
-  // Debug logging
-  if (Game.time % 10 === 0) {
-    console.log(
-      `🔍 [Scout Debug] ${creep.name}: targetRoom=${targetRoom}, homeRoom=${homeRoom}, currentRoom=${creep.room.name}`
-    );
-  }
-
   if (!targetRoom) {
     // No assignment yet, try to get one from the room's scout list
     if (homeRoom && Game.rooms[homeRoom]) {
