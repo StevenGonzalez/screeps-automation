@@ -1,4 +1,4 @@
-import { ENERGY_DEPOSIT_PRIORITY } from "../config/roles";
+import { ENERGY_DEPOSIT_PRIORITY } from "../config/config.roles";
 
 export function findClosestSource(creep: Creep): Source | null {
   return creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);

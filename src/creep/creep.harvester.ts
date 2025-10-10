@@ -4,7 +4,7 @@ import {
   harvestFromSource,
   isCreepFull,
   transferEnergyTo,
-} from "../services/creep";
+} from "../services/services.creep";
 
 export function runHarvester(creep: Creep) {
   if (isCreepFull(creep)) {

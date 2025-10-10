@@ -1,5 +1,5 @@
-import { ROLE_HARVESTER } from "../config/roles";
-import { runHarvester } from "../roles/harvester";
+import { ROLE_HARVESTER } from "../config/config.roles";
+import { runHarvester } from "../roles/role.harvester";
 
 export function loop() {
   for (const name in Game.creeps) {

@@ -1,7 +1,7 @@
-import { ROLE_HARVESTER } from "../config/roles";
+import { ROLE_HARVESTER } from "../config/config.roles";
 
-import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/spawning";
-import { getRoomMemory } from "../services/memory";
+import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
+import { getRoomMemory } from "../services/services.memory";
 
 export function loop() {
   for (const roomName in Game.rooms) {
