@@ -101,11 +101,17 @@ function assessThreats(
   // Convert hostiles to defense targets
   const targets: DefenseTarget[] = hostiles.map((hostile) => {
     const spawn = room?.find(FIND_MY_SPAWNS)[0];
-    const distanceToSpawn = spawn ? hostile.pos.getRangeTo(spawn) : 50;
+    // Reconstruct RoomPosition from cached data (pos may be a plain object from Memory)
+    const pos = new RoomPosition(
+      hostile.pos.x,
+      hostile.pos.y,
+      hostile.pos.roomName
+    );
+    const distanceToSpawn = spawn ? pos.getRangeTo(spawn) : 50;
 
     return {
       id: hostile.id,
-      pos: hostile.pos,
+      pos: pos,
       threatLevel: hostile.threatLevel,
       bodyParts: hostile.bodyParts,
       estimatedDamage: calculateEstimatedDamage(hostile.bodyParts),

@@ -1,5 +1,5 @@
 /// <reference types="@types/screeps" />
-import { style } from "../path.styles";
+import { style, visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 import { RoomCache } from "../room/cache";
 import { getLabRequirements } from "../structure/lab.manager";
@@ -143,7 +143,7 @@ export function runHauler(creep: Creep, intel: any): void {
         if (req) {
           const res = creep.withdraw(labToEmpty, req.resource);
           if (res === ERR_NOT_IN_RANGE) {
-            creep.moveTo(labToEmpty, { visualizePathStyle: style("withdraw") });
+            creep.moveTo(labToEmpty, { ...visualPath("withdraw") });
             CreepPersonality.speak(creep, "move");
           } else if (res === OK) {
             creep.memory.lastWithdrawId = labToEmpty.id;
@@ -160,7 +160,7 @@ export function runHauler(creep: Creep, intel: any): void {
     if (target) {
       if (target instanceof Resource) {
         if (creep.pickup(target) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(target, { visualizePathStyle: style("withdraw") });
+          creep.moveTo(target, { ...visualPath("withdraw") });
           CreepPersonality.speak(creep, "move");
         } else {
           CreepPersonality.speak(creep, "withdraw");
@@ -191,7 +191,7 @@ export function runHauler(creep: Creep, intel: any): void {
 
         const res = creep.withdraw(target, resourceType);
         if (res === ERR_NOT_IN_RANGE) {
-          creep.moveTo(target, { visualizePathStyle: style("withdraw") });
+          creep.moveTo(target, { ...visualPath("withdraw") });
           CreepPersonality.speak(creep, "move");
         } else if (res === OK) {
           // Remember source to avoid depositing back into the same structure
@@ -219,7 +219,7 @@ export function runHauler(creep: Creep, intel: any): void {
     } else {
       const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
       if (source && creep.pos.getRangeTo(source) > 3) {
-        creep.moveTo(source, { visualizePathStyle: style("harvest") });
+        creep.moveTo(source, { ...visualPath("harvest") });
         CreepPersonality.speak(creep, "move");
       } else {
         CreepPersonality.speak(creep, "idle");
@@ -249,7 +249,7 @@ export function runHauler(creep: Creep, intel: any): void {
           );
           if (res === ERR_NOT_IN_RANGE) {
             creep.moveTo(labNeedingThis.lab, {
-              visualizePathStyle: style("transfer"),
+              ...visualPath("transfer"),
             });
             CreepPersonality.speak(creep, "move");
           } else if (res === OK) {
@@ -284,7 +284,7 @@ export function runHauler(creep: Creep, intel: any): void {
               resourceType as ResourceConstant
             );
             if (res === ERR_NOT_IN_RANGE) {
-              creep.moveTo(target, { visualizePathStyle: style("transfer") });
+              creep.moveTo(target, { ...visualPath("transfer") });
               CreepPersonality.speak(creep, "move");
             } else if (res === OK) {
               CreepPersonality.speak(creep, "transfer");
@@ -318,7 +318,7 @@ export function runHauler(creep: Creep, intel: any): void {
             cont.store.getFreeCapacity(RESOURCE_ENERGY) <= 400;
           if (nearLink && containerNearlyFull) {
             if (!creep.pos.isNearTo(nearLink)) {
-              creep.moveTo(nearLink, { visualizePathStyle: style("transfer") });
+              creep.moveTo(nearLink, { ...visualPath("transfer") });
               CreepPersonality.speak(creep, "move");
               return;
             } else if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0) {
@@ -480,7 +480,7 @@ export function runHauler(creep: Creep, intel: any): void {
     if (target) {
       const res = creep.transfer(target, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: style("transfer") });
+        creep.moveTo(target, { ...visualPath("transfer") });
         CreepPersonality.speak(creep, "move");
       } else if (res === OK) {
         // Successful drop-off; allow future deposits anywhere again

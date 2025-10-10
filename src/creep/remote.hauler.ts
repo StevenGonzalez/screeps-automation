@@ -9,7 +9,7 @@
  */
 
 /// <reference types="@types/screeps" />
-import { style } from "../path.styles";
+import { visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 
 export function runRemoteHauler(creep: Creep): void {
@@ -39,7 +39,7 @@ export function runRemoteHauler(creep: Creep): void {
 
       const exit = creep.pos.findClosestByPath(exitDir);
       if (exit) {
-        creep.moveTo(exit, { visualizePathStyle: style("move") });
+        creep.moveTo(exit, { ...visualPath("move") });
         CreepPersonality.speak(creep, "move");
       }
       return;
@@ -65,7 +65,7 @@ export function runRemoteHauler(creep: Creep): void {
       if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
         const exit = creep.pos.findClosestByPath(exitDir);
         if (exit) {
-          creep.moveTo(exit, { visualizePathStyle: style("move") });
+          creep.moveTo(exit, { ...visualPath("move") });
           CreepPersonality.speak(creep, "frustrated");
         }
       }
@@ -112,7 +112,7 @@ export function runRemoteHauler(creep: Creep): void {
       }
 
       if (result === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: style("withdraw") });
+        creep.moveTo(target, { ...visualPath("withdraw") });
         CreepPersonality.speak(creep, "move");
       } else if (result === OK) {
         CreepPersonality.speak(creep, "withdraw");
@@ -123,7 +123,7 @@ export function runRemoteHauler(creep: Creep): void {
       if (sources.length > 0) {
         const source = creep.pos.findClosestByPath(sources);
         if (source && creep.pos.getRangeTo(source) > 3) {
-          creep.moveTo(source, { visualizePathStyle: style("move") });
+          creep.moveTo(source, { ...visualPath("move") });
           CreepPersonality.speak(creep, "move");
         } else {
           CreepPersonality.speak(creep, "idle");
@@ -144,7 +144,7 @@ export function runRemoteHauler(creep: Creep): void {
 
       const exit = creep.pos.findClosestByPath(exitDir);
       if (exit) {
-        creep.moveTo(exit, { visualizePathStyle: style("move") });
+        creep.moveTo(exit, { ...visualPath("move") });
         CreepPersonality.speak(creep, "move");
       }
       return;
@@ -185,7 +185,7 @@ export function runRemoteHauler(creep: Creep): void {
     if (target) {
       const result = creep.transfer(target, RESOURCE_ENERGY);
       if (result === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: style("transfer") });
+        creep.moveTo(target, { ...visualPath("transfer") });
         CreepPersonality.speak(creep, "move");
       } else if (result === OK) {
         CreepPersonality.speak(creep, "transfer");

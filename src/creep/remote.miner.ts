@@ -9,7 +9,7 @@
  */
 
 /// <reference types="@types/screeps" />
-import { style } from "../path.styles";
+import { visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 
 export function runRemoteMiner(creep: Creep): void {
@@ -35,7 +35,7 @@ export function runRemoteMiner(creep: Creep): void {
 
     const exit = creep.pos.findClosestByPath(exitDir);
     if (exit) {
-      creep.moveTo(exit, { visualizePathStyle: style("move") });
+      creep.moveTo(exit, { ...visualPath("move") });
       CreepPersonality.speak(creep, "move");
     }
     return;
@@ -61,7 +61,7 @@ export function runRemoteMiner(creep: Creep): void {
     if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
       const exit = creep.pos.findClosestByPath(exitDir);
       if (exit) {
-        creep.moveTo(exit, { visualizePathStyle: style("move") });
+        creep.moveTo(exit, { ...visualPath("move") });
         CreepPersonality.speak(creep, "frustrated");
       }
     }
@@ -120,7 +120,7 @@ export function runRemoteMiner(creep: Creep): void {
 
       if (creeps.length === 0 && blockers.length === 0) {
         if (creep.pos.getRangeTo(roomPos) > 0) {
-          creep.moveTo(roomPos, { visualizePathStyle: style("harvest") });
+          creep.moveTo(roomPos, { ...visualPath("harvest") });
           CreepPersonality.speak(creep, "move");
           return;
         }
@@ -133,7 +133,7 @@ export function runRemoteMiner(creep: Creep): void {
   const harvestResult = creep.harvest(source);
   if (harvestResult === ERR_NOT_IN_RANGE) {
     // Move to source
-    creep.moveTo(source, { visualizePathStyle: style("harvest") });
+    creep.moveTo(source, { ...visualPath("harvest") });
     CreepPersonality.speak(creep, "move");
   } else if (harvestResult === OK) {
     CreepPersonality.speak(creep, "harvest");

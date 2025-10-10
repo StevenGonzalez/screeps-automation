@@ -9,7 +9,7 @@
  */
 
 /// <reference types="@types/screeps" />
-import { style } from "../path.styles";
+import { visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 
 export function runRemoteReserver(creep: Creep): void {
@@ -33,7 +33,7 @@ export function runRemoteReserver(creep: Creep): void {
 
     const exit = creep.pos.findClosestByPath(exitDir);
     if (exit) {
-      creep.moveTo(exit, { visualizePathStyle: style("move") });
+      creep.moveTo(exit, { ...visualPath("move") });
       CreepPersonality.speak(creep, "move");
     }
     return;
@@ -59,7 +59,7 @@ export function runRemoteReserver(creep: Creep): void {
     if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
       const exit = creep.pos.findClosestByPath(exitDir);
       if (exit) {
-        creep.moveTo(exit, { visualizePathStyle: style("move") });
+        creep.moveTo(exit, { ...visualPath("move") });
         CreepPersonality.speak(creep, "frustrated");
       }
     }
@@ -78,7 +78,7 @@ export function runRemoteReserver(creep: Creep): void {
   // Reserve the controller
   const result = creep.reserveController(controller);
   if (result === ERR_NOT_IN_RANGE) {
-    creep.moveTo(controller, { visualizePathStyle: style("upgrade") });
+    creep.moveTo(controller, { ...visualPath("upgrade") });
     CreepPersonality.speak(creep, "move");
   } else if (result === OK) {
     CreepPersonality.speak(creep, "upgrade");
@@ -121,13 +121,13 @@ export function runRemoteReserver(creep: Creep): void {
         if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
           const exit = creep.pos.findClosestByPath(exitDir);
           if (exit) {
-            creep.moveTo(exit, { visualizePathStyle: style("move") });
+            creep.moveTo(exit, { ...visualPath("move") });
           }
         }
       } else {
         // Wait near controller
         if (creep.pos.getRangeTo(controller) > 3) {
-          creep.moveTo(controller, { visualizePathStyle: style("move") });
+          creep.moveTo(controller, { ...visualPath("move") });
         }
         CreepPersonality.speak(creep, "idle");
       }

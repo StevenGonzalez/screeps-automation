@@ -8,7 +8,7 @@
 /// <reference types="@types/screeps" />
 
 import { CreepPersonality } from "./personality";
-import { style } from "../path.styles";
+import { visualPath } from "../path.styles";
 
 // Extend global interfaces for our custom memory properties
 declare global {
@@ -49,7 +49,7 @@ export class CreepActions {
     options: ActionOptions = {}
   ): ActionResult {
     const defaultOptions: ActionOptions = {
-      visualizePathStyle: style("move"),
+      ...visualPath("move"),
       reusePath: 10,
       serializeMemory: true,
       maxOps: 4000,
@@ -112,7 +112,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, source, { visualizePathStyle: style("harvest") });
+        this.moveTo(creep, source, { ...visualPath("harvest") });
         if (!options.silent && Math.random() < 0.1) {
           CreepPersonality.speak(creep, "move");
         }
@@ -164,7 +164,7 @@ export class CreepActions {
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
         this.moveTo(creep, structure, {
-          visualizePathStyle: style("transfer"),
+          ...visualPath("transfer"),
         });
         return ActionResult.IN_PROGRESS;
       case ERR_FULL:
@@ -215,7 +215,7 @@ export class CreepActions {
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
         this.moveTo(creep, structure, {
-          visualizePathStyle: style("withdraw"),
+          ...visualPath("withdraw"),
         });
         return ActionResult.IN_PROGRESS;
       case ERR_FULL:
@@ -256,7 +256,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, site, { visualizePathStyle: style("build") });
+        this.moveTo(creep, site, { ...visualPath("build") });
         return ActionResult.IN_PROGRESS;
       case ERR_NOT_ENOUGH_RESOURCES:
         return ActionResult.NO_RESOURCES;
@@ -300,7 +300,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, structure, { visualizePathStyle: style("repair") });
+        this.moveTo(creep, structure, { ...visualPath("repair") });
         return ActionResult.IN_PROGRESS;
       case ERR_NOT_ENOUGH_RESOURCES:
         return ActionResult.NO_RESOURCES;
@@ -340,7 +340,7 @@ export class CreepActions {
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
         this.moveTo(creep, controller, {
-          visualizePathStyle: style("upgrade"),
+          ...visualPath("upgrade"),
         });
         return ActionResult.IN_PROGRESS;
       case ERR_NOT_ENOUGH_RESOURCES:
@@ -380,7 +380,7 @@ export class CreepActions {
         }
         return ActionResult.SUCCESS;
       case ERR_NOT_IN_RANGE:
-        this.moveTo(creep, target, { visualizePathStyle: style("attack") });
+        this.moveTo(creep, target, { ...visualPath("attack") });
         return ActionResult.IN_PROGRESS;
       case ERR_INVALID_TARGET:
         return ActionResult.TARGET_NOT_FOUND;
@@ -431,7 +431,7 @@ export class CreepActions {
           return ActionResult.SUCCESS;
         }
 
-        this.moveTo(creep, target, { visualizePathStyle: style("heal") });
+        this.moveTo(creep, target, { ...visualPath("heal") });
         return ActionResult.IN_PROGRESS;
       case ERR_INVALID_TARGET:
         return ActionResult.TARGET_NOT_FOUND;
@@ -599,7 +599,7 @@ export class CreepActions {
     if (safePos) {
       // Creep panics when fleeing
       CreepPersonality.speak(creep, "flee", true); // Force speech when fleeing
-      return this.moveTo(creep, safePos, { visualizePathStyle: style("flee") });
+      return this.moveTo(creep, safePos, { ...visualPath("flee") });
     }
 
     return ActionResult.FAILED;

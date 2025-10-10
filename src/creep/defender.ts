@@ -1,5 +1,5 @@
 /// <reference types="@types/screeps" />
-import { style } from "../path.styles";
+import { visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 import { RoomCache } from "../room/cache";
 
@@ -94,14 +94,14 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
             if (spawn) {
               creep.moveTo(spawn, {
                 range: 3,
-                visualizePathStyle: style("flee"),
+                ...visualPath("flee"),
               });
               CreepPersonality.speak(creep, "idle");
             }
           } else {
             // Safe to engage
             creep.moveTo(target, {
-              visualizePathStyle: style("attack"),
+              ...visualPath("attack"),
               maxRooms: 1,
               reusePath: 3,
             });
@@ -120,7 +120,7 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
         } else if (range > 3 && range < 8) {
           // Move to range 3 if not too far
           creep.moveTo(target, {
-            visualizePathStyle: style("attack"),
+            ...visualPath("attack"),
             maxRooms: 1,
             range: 3,
             reusePath: 3,
@@ -130,7 +130,7 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
           if (spawn) {
             creep.moveTo(spawn, {
               range: 3,
-              visualizePathStyle: style("flee"),
+              ...visualPath("flee"),
             });
           }
         }
@@ -145,7 +145,7 @@ export function runDefender(creep: Creep, defensePlan: any, intel: any): void {
         if (creep.pos.getRangeTo(spawn) > 3) {
           creep.moveTo(spawn, {
             range: 3,
-            visualizePathStyle: style("flee"),
+            ...visualPath("flee"),
           });
         }
         CreepPersonality.speak(creep, "idle");

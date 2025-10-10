@@ -1,5 +1,5 @@
 /// <reference types="@types/screeps" />
-import { style } from "../path.styles";
+import { visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 
 /**
@@ -49,7 +49,7 @@ export function runMiner(creep: Creep): void {
   }
 
   if (!creep.pos.isEqualTo(targetPos)) {
-    creep.moveTo(targetPos, { visualizePathStyle: style("harvest") });
+    creep.moveTo(targetPos, { ...visualPath("harvest") });
     CreepPersonality.speak(creep, "move");
     return;
   }

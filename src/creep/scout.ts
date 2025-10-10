@@ -9,7 +9,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { style } from "../path.styles";
+import { visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 
 /**
@@ -27,7 +27,7 @@ export function runScout(creep: Creep): void {
       if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
         const exit = creep.pos.findClosestByPath(exitDir);
         if (exit) {
-          creep.moveTo(exit, { visualizePathStyle: style("scout") });
+          creep.moveTo(exit, { ...visualPath("scout") });
           CreepPersonality.speak(creep, "move");
         }
       }
@@ -48,7 +48,7 @@ export function runScout(creep: Creep): void {
 
     const exit = creep.pos.findClosestByPath(exitDir);
     if (exit) {
-      creep.moveTo(exit, { visualizePathStyle: style("scout") });
+      creep.moveTo(exit, { ...visualPath("scout") });
       CreepPersonality.speak(creep, "move");
     }
     return;
@@ -66,7 +66,7 @@ export function runScout(creep: Creep): void {
     // Move to center of room for better vision
     const center = new RoomPosition(25, 25, creep.room.name);
     if (!creep.pos.inRangeTo(center, 10)) {
-      creep.moveTo(center, { visualizePathStyle: style("scout") });
+      creep.moveTo(center, { ...visualPath("scout") });
       CreepPersonality.speak(creep, "move");
     } else {
       CreepPersonality.speak(creep, "idle");
@@ -92,7 +92,7 @@ export function runScout(creep: Creep): void {
     if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
       const exit = creep.pos.findClosestByPath(exitDir);
       if (exit) {
-        creep.moveTo(exit, { visualizePathStyle: style("scout") });
+        creep.moveTo(exit, { ...visualPath("scout") });
         CreepPersonality.speak(creep, "move");
       }
     }

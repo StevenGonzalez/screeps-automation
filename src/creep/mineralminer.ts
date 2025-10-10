@@ -40,7 +40,7 @@ export function runMineralMiner(creep: Creep): void {
       if (creep.pos.isNearTo(target)) {
         creep.transfer(target, mineral.mineralType);
       } else {
-        creep.moveTo(target, { visualizePathStyle: { stroke: "#ffaa00" } });
+        creep.moveTo(target);
       }
       return;
     }
@@ -48,7 +48,7 @@ export function runMineralMiner(creep: Creep): void {
 
   // Move adjacent to mineral deposit (not on top, since extractor is there)
   if (!creep.pos.isNearTo(mineral.pos)) {
-    creep.moveTo(mineral.pos, { visualizePathStyle: { stroke: "#ffaa00" } });
+    creep.moveTo(mineral.pos);
     return;
   }
 
