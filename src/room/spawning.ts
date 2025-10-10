@@ -1034,47 +1034,40 @@ function assignRemoteCreep(creepName: string, role: string, room: Room): void {
       // Find available source for this miner
       const source = findAvailableRemoteSource(op);
       if (source) {
-        // Assign on next tick when creep exists
-        setTimeout(() => {
-          const creep = Game.creeps[creepName];
-          if (creep) {
-            assignCreepToRemote(creep, op, "miner");
-            (creep.memory as any).sourceId = source.id;
-            console.log(
-              `🌟 [RemoteMining] Assigned ${creepName} to mine source in ${op.roomName}`
-            );
-          }
-        }, 10);
+        // Assign creep on next tick when it exists
+        const mem = Memory as any;
+        if (!mem.pendingAssignments) mem.pendingAssignments = {};
+        mem.pendingAssignments[creepName] = {
+          type: "remoteminer",
+          operation: op.roomName,
+          sourceId: source.id,
+        };
         return;
       }
     } else if (
       role === "remotehauler" &&
       op.assignedCreeps.haulers.length < needs.haulers
     ) {
-      setTimeout(() => {
-        const creep = Game.creeps[creepName];
-        if (creep) {
-          assignCreepToRemote(creep, op, "hauler");
-          console.log(
-            `🚚 [RemoteMining] Assigned ${creepName} to haul from ${op.roomName}`
-          );
-        }
-      }, 10);
+      // Assign creep on next tick when it exists
+      const mem = Memory as any;
+      if (!mem.pendingAssignments) mem.pendingAssignments = {};
+      mem.pendingAssignments[creepName] = {
+        type: "remotehauler",
+        operation: op.roomName,
+      };
       return;
     } else if (
       role === "remotereserver" &&
       needs.reserver &&
       !op.assignedCreeps.reserver
     ) {
-      setTimeout(() => {
-        const creep = Game.creeps[creepName];
-        if (creep) {
-          assignCreepToRemote(creep, op, "reserver");
-          console.log(
-            `🏴 [RemoteMining] Assigned ${creepName} to reserve ${op.roomName}`
-          );
-        }
-      }, 10);
+      // Assign creep on next tick when it exists
+      const mem = Memory as any;
+      if (!mem.pendingAssignments) mem.pendingAssignments = {};
+      mem.pendingAssignments[creepName] = {
+        type: "remotereserver",
+        operation: op.roomName,
+      };
       return;
     }
   }
@@ -1084,8 +1077,8 @@ function assignRemoteCreep(creepName: string, role: string, room: Room): void {
  * Assign a scout to explore a target room
  */
 function assignScoutToRoom(creepName: string, room: Room): void {
-  const mem = room.memory as any;
-  const roomsToScout = mem.remote?.roomsToScout || [];
+  const roomMem = room.memory as any;
+  const roomsToScout = roomMem.remote?.roomsToScout || [];
 
   if (roomsToScout.length === 0) {
     console.log(`⚠️ [Scout] No rooms to scout for ${creepName}`);
@@ -1095,20 +1088,21 @@ function assignScoutToRoom(creepName: string, room: Room): void {
   // Assign to first room in list
   const targetRoom = roomsToScout[0];
 
-  // Assign on next tick when creep exists
-  setTimeout(() => {
-    const creep = Game.creeps[creepName];
-    if (creep) {
-      (creep.memory as any).targetRoom = targetRoom;
-      (creep.memory as any).homeRoom = room.name;
-      console.log(`🔍 [Scout] ${creepName} assigned to scout ${targetRoom}`);
+  // Assign creep memory - it will be available when spawned
+  const mem = Memory as any;
+  if (!mem.pendingAssignments) mem.pendingAssignments = {};
+  mem.pendingAssignments[creepName] = {
+    type: "scout",
+    targetRoom: targetRoom,
+    homeRoom: room.name,
+  };
 
-      // Remove from list
-      mem.remote.roomsToScout = roomsToScout.filter(
-        (r: string) => r !== targetRoom
-      );
-    }
-  }, 10);
+  // Remove from list
+  roomMem.remote.roomsToScout = roomsToScout.filter(
+    (r: string) => r !== targetRoom
+  );
+
+  console.log(`🔍 [Scout] ${creepName} assigned to scout ${targetRoom}`);
 }
 
 /**
