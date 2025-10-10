@@ -10,6 +10,7 @@ declare global {
     construction?: any;
     defense?: any;
     spawning?: any;
+    remote?: any;
   }
 }
 /**

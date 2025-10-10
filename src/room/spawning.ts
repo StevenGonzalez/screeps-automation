@@ -9,6 +9,12 @@
 import { RoomCache } from "./cache";
 
 import { CreepPersonality } from "../creep/personality";
+import {
+  getActiveRemoteOperations,
+  getRemoteCreepNeeds,
+  assignCreepToRemote,
+  findAvailableRemoteSource,
+} from "./remote.manager";
 
 /**
  * Manage spawning for a room based on all active plans
@@ -209,7 +215,26 @@ function trySpawnEconomicCreeps(
     }
   }
 
+  // Check remote mining needs
+  const remoteNeeds = getRemoteMiningNeeds(room);
+
   const spawnQueue = [
+    // Remote mining creeps (high priority for expansion)
+    {
+      role: "remoteminer",
+      needed: remoteNeeds.miners,
+      current: current.remoteminer || 0,
+    },
+    {
+      role: "remotehauler",
+      needed: remoteNeeds.haulers,
+      current: current.remotehauler || 0,
+    },
+    {
+      role: "remotereserver",
+      needed: remoteNeeds.reservers,
+      current: current.remotereserver || 0,
+    },
     {
       role: "miner",
       // Aim for one miner per source that has a container (or one planned)
@@ -272,6 +297,16 @@ function trySpawnEconomicCreeps(
         console.log(
           `👷 Spawning ${item.role} (${item.current + 1}/${item.needed})`
         );
+
+        // Assign remote creeps to operations
+        if (
+          item.role === "remoteminer" ||
+          item.role === "remotehauler" ||
+          item.role === "remotereserver"
+        ) {
+          assignRemoteCreep(name, item.role, room);
+        }
+
         return true;
       } else if (result === ERR_NOT_ENOUGH_ENERGY) {
         // Fallback: try an emergency-sized body using current energy
@@ -510,6 +545,15 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
     mineralminer:
       RoomCache.myCreeps(room).filter((c) => c.memory.role === "mineralminer")
         .length + (spawningCounts.mineralminer || 0),
+    remoteminer:
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "remoteminer")
+        .length + (spawningCounts.remoteminer || 0),
+    remotehauler:
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "remotehauler")
+        .length + (spawningCounts.remotehauler || 0),
+    remotereserver:
+      RoomCache.myCreeps(room).filter((c) => c.memory.role === "remotereserver")
+        .length + (spawningCounts.remotereserver || 0),
   };
 }
 
@@ -718,6 +762,101 @@ function getOptimalBody(
         return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE];
       return [WORK, WORK, WORK, MOVE];
 
+    case "remoteminer":
+      // Remote miner: focus on WORK for mining, MOVE for travel
+      if (energyAvailable >= 800)
+        return [
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          WORK,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+        ];
+      if (energyAvailable >= 550)
+        return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE, MOVE, MOVE];
+      if (energyAvailable >= 400) return [WORK, WORK, WORK, MOVE, MOVE, MOVE];
+      return [WORK, WORK, MOVE, MOVE];
+
+    case "remotehauler":
+      // Remote hauler: large CARRY capacity with 1:1 MOVE ratio for off-road travel
+      if (energyAvailable >= 1200)
+        return [
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY, // 12 CARRY (600 capacity)
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE, // 12 MOVE (1:1 ratio)
+        ];
+      if (energyAvailable >= 800)
+        return [
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+        ];
+      if (energyAvailable >= 600)
+        return [
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          CARRY,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+          MOVE,
+        ];
+      if (energyAvailable >= 400)
+        return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
+      return [CARRY, CARRY, MOVE, MOVE];
+
+    case "remotereserver":
+      // Remote reserver: only CLAIM and MOVE parts
+      if (energyAvailable >= 1300) return [CLAIM, CLAIM, MOVE, MOVE];
+      if (energyAvailable >= 650) return [CLAIM, MOVE];
+      return []; // Can't make a reserver with less than 650 energy
+
     case "defender":
       // Mix of melee and ranged for versatility against kiters/healers
       if (energyAvailable >= 1000)
@@ -768,6 +907,97 @@ function shouldSpawnMineralMiner(room: Room): boolean {
   if (!mineral || mineral.mineralAmount === 0) return false;
 
   return true;
+}
+
+/**
+ * Get remote mining needs for a room
+ */
+function getRemoteMiningNeeds(room: Room): {
+  miners: number;
+  haulers: number;
+  reservers: number;
+} {
+  const operations = getActiveRemoteOperations(room.name);
+
+  let totalMiners = 0;
+  let totalHaulers = 0;
+  let totalReservers = 0;
+
+  for (const op of operations) {
+    const needs = getRemoteCreepNeeds(op);
+    totalMiners += needs.miners;
+    totalHaulers += needs.haulers;
+    totalReservers += needs.reserver ? 1 : 0;
+  }
+
+  return {
+    miners: totalMiners,
+    haulers: totalHaulers,
+    reservers: totalReservers,
+  };
+}
+
+/**
+ * Assign a remote creep to an operation on spawn
+ */
+function assignRemoteCreep(creepName: string, role: string, room: Room): void {
+  const operations = getActiveRemoteOperations(room.name);
+
+  // Find an operation that needs this type of creep
+  for (const op of operations) {
+    const needs = getRemoteCreepNeeds(op);
+
+    if (
+      role === "remoteminer" &&
+      op.assignedCreeps.miners.length < needs.miners
+    ) {
+      // Find available source for this miner
+      const source = findAvailableRemoteSource(op);
+      if (source) {
+        // Assign on next tick when creep exists
+        setTimeout(() => {
+          const creep = Game.creeps[creepName];
+          if (creep) {
+            assignCreepToRemote(creep, op, "miner");
+            (creep.memory as any).sourceId = source.id;
+            console.log(
+              `🌟 [RemoteMining] Assigned ${creepName} to mine source in ${op.roomName}`
+            );
+          }
+        }, 10);
+        return;
+      }
+    } else if (
+      role === "remotehauler" &&
+      op.assignedCreeps.haulers.length < needs.haulers
+    ) {
+      setTimeout(() => {
+        const creep = Game.creeps[creepName];
+        if (creep) {
+          assignCreepToRemote(creep, op, "hauler");
+          console.log(
+            `🚚 [RemoteMining] Assigned ${creepName} to haul from ${op.roomName}`
+          );
+        }
+      }, 10);
+      return;
+    } else if (
+      role === "remotereserver" &&
+      needs.reserver &&
+      !op.assignedCreeps.reserver
+    ) {
+      setTimeout(() => {
+        const creep = Game.creeps[creepName];
+        if (creep) {
+          assignCreepToRemote(creep, op, "reserver");
+          console.log(
+            `🏴 [RemoteMining] Assigned ${creepName} to reserve ${op.roomName}`
+          );
+        }
+      }, 10);
+      return;
+    }
+  }
 }
 
 /**

@@ -162,12 +162,15 @@ export function executeConstructionPlan(
       Math.min(1, energyAvail / Math.max(1, energyCap))
     );
     const wellStocked = stored > 10000 || energyRatio > 0.6;
+
     // Gate: don't place heat roads early or when economy is weak
     if (rcl >= 3 && wellStocked) {
-      const maxHot = Math.min(2, budget);
-      // Threshold scales with room level to avoid noise; e.g., 8 at RCL3, 15 at RCL5
-      const threshold = Math.max(6, Math.min(20, 5 + rcl * 3));
+      const maxHot = Math.min(5, budget); // Increased from 2 to 5 for faster coverage
+      // Threshold scales with room level to avoid noise
+      // Lower thresholds to catch more traffic patterns: 8 at RCL3, 12 at RCL5, 15 at RCL7
+      const threshold = Math.max(6, Math.min(15, 5 + rcl * 1.5));
       const hot = getHotTrafficTiles(room, threshold, maxHot);
+
       for (const pos of hot) {
         if (budget <= 0) break;
         if (!withinRclLimits(room, STRUCTURE_ROAD)) break;
