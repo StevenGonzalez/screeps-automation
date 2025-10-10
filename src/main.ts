@@ -1,7 +1,7 @@
-import * as creepRunnerSystem from "./systems/creeps";
-import * as memorySystem from "./systems/memory";
-import * as pixelsSystem from "./systems/pixels";
-import * as spawningSystem from "./systems/spawning";
+import * as creepRunnerSystem from "./orchestrators/creep";
+import * as memorySystem from "./orchestrators/memory";
+import * as pixelsSystem from "./orchestrators/pixels";
+import * as spawningSystem from "./orchestrators/spawning";
 
 export function loop() {
   creepRunnerSystem.loop();
