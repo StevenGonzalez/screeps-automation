@@ -42,6 +42,7 @@ declare global {
         homeRoom?: string;
       };
     };
+    enablePathVisuals?: boolean; // Set to true to enable path rendering (costs CPU)
   }
 }
 
@@ -135,6 +136,12 @@ export function initializeMemory(): void {
   if (!Memory.rooms) Memory.rooms = {};
   if (!Memory.creeps) Memory.creeps = {};
   if (!Memory.flags) Memory.flags = {};
+
+  // Initialize path visuals setting (disabled by default for CPU savings)
+  // Set Memory.enablePathVisuals = true in console to enable
+  if (Memory.enablePathVisuals === undefined) {
+    Memory.enablePathVisuals = false;
+  }
 
   // Initialize stats using any to bypass typing
   const mem = Memory as any;

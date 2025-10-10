@@ -38,3 +38,22 @@ export const PATH_STYLES: Record<PathIntent, PolyStyle> = {
 export function style(intent: PathIntent): PolyStyle {
   return PATH_STYLES[intent];
 }
+
+/**
+ * Get path visualization options (CPU optimization)
+ * Returns undefined if path visuals are disabled, which saves CPU
+ *
+ * Usage: creep.moveTo(target, visualPath("harvest"))
+ *
+ * To enable: Memory.enablePathVisuals = true
+ * To disable: Memory.enablePathVisuals = false (default)
+ */
+export function visualPath(
+  intent: PathIntent
+): { visualizePathStyle: PolyStyle } | {} {
+  // Check if path visuals are enabled (default: disabled to save CPU)
+  if (Memory.enablePathVisuals === true) {
+    return { visualizePathStyle: PATH_STYLES[intent] };
+  }
+  return {}; // No visualization = CPU savings!
+}
