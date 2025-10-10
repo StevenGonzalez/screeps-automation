@@ -170,6 +170,18 @@ export function runTerminalManager(room: Room) {
       }
     }
   }
+
+  // Log why we're not buying (if we need resources but can't buy)
+  if (Game.time % 100 === 0) {
+    if (terminal.cooldown) {
+      console.log(`[Terminal] ⏳ On cooldown for ${terminal.cooldown} ticks`);
+    } else if (!economyStrong) {
+      console.log(
+        `[Terminal] ⚠️ Storage too low for buying: ${storageEnergy}/${MIN_STORAGE_FOR_BUYING}`
+      );
+    }
+  }
+
   // 3. Auto-buy reagents if needed for labs, with cooldown and transaction cost check
   // Only buy if economy is strong (50k+ in storage)
   if (!terminal.cooldown && economyStrong) {
@@ -198,6 +210,23 @@ export function runTerminalManager(room: Room) {
       if (current < MIN_BASE_MINERAL) {
         neededResources[mineral] = MIN_BASE_MINERAL;
       }
+    }
+
+    // Log what we need (every 50 ticks)
+    if (Game.time % 50 === 0 && Object.keys(neededResources).length > 0) {
+      const needed = Object.keys(neededResources)
+        .map(
+          (r) =>
+            `${r}(${terminal.store[r as ResourceConstant] || 0}/${
+              neededResources[r]
+            })`
+        )
+        .join(", ");
+      console.log(
+        `[Terminal] Need to buy: ${needed}, Credits: ${Math.floor(
+          Game.market.credits
+        )}`
+      );
     }
 
     // Check what labs are actively using
