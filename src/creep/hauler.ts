@@ -2,8 +2,12 @@
 import { style } from "../path.styles";
 import { CreepPersonality } from "./personality";
 import { RoomCache } from "../room/cache";
+import { getLabRequirements } from "../structure/lab.manager";
 
 export function runHauler(creep: Creep, intel: any): void {
+  // Get lab requirements (used in both pickup and delivery)
+  const labReqs = getLabRequirements(creep.room);
+
   if (creep.store.getUsedCapacity() === 0) {
     // New acquire cycle: clear last withdraw memory to avoid over-filtering
     if (creep.memory.lastWithdrawId) delete creep.memory.lastWithdrawId;
@@ -86,8 +90,61 @@ export function runHauler(creep: Creep, intel: any): void {
       creep.pos.findClosestByPath(dropped) ||
       creep.pos.findClosestByPath(tombs) ||
       creep.pos.findClosestByPath(ruins) ||
-      creep.pos.findClosestByPath(mineralContainers) ||
-      creep.pos.findClosestByPath(storagesWithEnergy);
+      creep.pos.findClosestByPath(mineralContainers);
+
+    // Check if labs need minerals from storage/terminal (before falling back to storage energy)
+    if (!target && !energyUrgent && labReqs.toFill.length > 0) {
+      const storage = creep.room.storage;
+      const terminal = creep.room.terminal;
+
+      for (const req of labReqs.toFill) {
+        // Check if we have this resource in storage or terminal
+        const storageHas =
+          storage &&
+          (storage.store[req.resource as ResourceConstant] || 0) >= 100;
+        const terminalHas =
+          terminal &&
+          (terminal.store[req.resource as ResourceConstant] || 0) >= 100;
+
+        if (storageHas || terminalHas) {
+          target = terminalHas ? terminal : storage;
+          // We'll handle the withdrawal in the main logic below
+          // But mark what we're getting
+          (creep.memory as any).pendingLabResource = req.resource;
+          break;
+        }
+      }
+    }
+
+    // Fall back to storage energy if nothing else
+    if (!target) {
+      target = creep.pos.findClosestByPath(storagesWithEnergy);
+    }
+
+    // Also check for labs that need emptying (wrong minerals or full output labs)
+    // Lower priority than energy sources but before idle
+    if (!target && labReqs.toEmpty.length > 0) {
+      const labToEmpty = creep.pos.findClosestByPath(
+        labReqs.toEmpty.map((r) => r.lab)
+      );
+      if (labToEmpty) {
+        const req = labReqs.toEmpty.find((r) => r.lab.id === labToEmpty.id);
+        if (req) {
+          const res = creep.withdraw(labToEmpty, req.resource);
+          if (res === ERR_NOT_IN_RANGE) {
+            creep.moveTo(labToEmpty, { visualizePathStyle: style("withdraw") });
+            CreepPersonality.speak(creep, "move");
+          } else if (res === OK) {
+            creep.memory.lastWithdrawId = labToEmpty.id;
+            CreepPersonality.speak(creep, "withdraw");
+            if (Game.time % 50 === 0) {
+              console.log(`[Hauler] Emptying ${req.resource} from lab`);
+            }
+          }
+          return;
+        }
+      }
+    }
 
     if (target) {
       if (target instanceof Resource) {
@@ -101,8 +158,13 @@ export function runHauler(creep: Creep, intel: any): void {
         // Withdraw from structure - handle both energy and minerals
         let resourceType: ResourceConstant = RESOURCE_ENERGY;
 
+        // Check if we're getting a specific mineral for labs
+        if ((creep.memory as any).pendingLabResource) {
+          resourceType = (creep.memory as any).pendingLabResource;
+          delete (creep.memory as any).pendingLabResource;
+        }
         // If target is a mineral container, find the mineral type to withdraw
-        if (
+        else if (
           (target as AnyStoreStructure).structureType === STRUCTURE_CONTAINER
         ) {
           for (const res in (target as AnyStoreStructure).store) {
@@ -160,7 +222,34 @@ export function runHauler(creep: Creep, intel: any): void {
     );
 
     if (carryingMinerals) {
-      // Deliver minerals to terminal first, then storage
+      // Priority 1: Fill labs that need these specific minerals
+      for (const resourceType in creep.store) {
+        if (resourceType === RESOURCE_ENERGY) continue;
+        const amount = creep.store[resourceType as ResourceConstant];
+        if (amount <= 0) continue;
+
+        const labNeedingThis = labReqs.toFill.find(
+          (r) => r.resource === resourceType
+        );
+        if (labNeedingThis) {
+          const res = creep.transfer(
+            labNeedingThis.lab,
+            resourceType as ResourceConstant
+          );
+          if (res === ERR_NOT_IN_RANGE) {
+            creep.moveTo(labNeedingThis.lab, {
+              visualizePathStyle: style("transfer"),
+            });
+            CreepPersonality.speak(creep, "move");
+          } else if (res === OK) {
+            CreepPersonality.speak(creep, "transfer");
+            console.log(`[Hauler] Filling lab with ${resourceType}`);
+          }
+          return;
+        }
+      }
+
+      // Priority 2: Deliver minerals to terminal first, then storage
       let target: AnyStoreStructure | null = null;
 
       const terminal = creep.room.terminal;
