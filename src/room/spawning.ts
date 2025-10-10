@@ -299,8 +299,14 @@ function trySpawnEconomicCreeps(
       );
       const name = `${item.role}_${Game.time}`;
 
+      // Set initial memory with homeRoom for scouts
+      const initialMemory: any = { role: item.role, priority: "economy" };
+      if (item.role === "scout") {
+        initialMemory.homeRoom = room.name;
+      }
+
       let result = spawn.spawnCreep(body, name, {
-        memory: { role: item.role, priority: "economy" },
+        memory: initialMemory,
       });
 
       if (result === OK) {

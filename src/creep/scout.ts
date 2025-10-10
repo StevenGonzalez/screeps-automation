@@ -18,9 +18,47 @@ import { CreepPersonality } from "./personality";
 export function runScout(creep: Creep): void {
   // Get target room from memory
   const targetRoom = creep.memory.targetRoom as string | undefined;
-  const homeRoom = creep.memory.homeRoom as string;
+  let homeRoom = creep.memory.homeRoom as string;
+
+  // Fix for scouts spawned without homeRoom - set it to their spawn room
+  if (!homeRoom) {
+    homeRoom = creep.room.name;
+    (creep.memory as any).homeRoom = homeRoom;
+    console.log(
+      `🔍 [Scout] ${creep.name}: Fixed missing homeRoom to ${homeRoom}`
+    );
+  }
+
+  // Debug logging
+  if (Game.time % 10 === 0) {
+    console.log(
+      `🔍 [Scout Debug] ${creep.name}: targetRoom=${targetRoom}, homeRoom=${homeRoom}, currentRoom=${creep.room.name}`
+    );
+  }
 
   if (!targetRoom) {
+    // No assignment yet, try to get one from the room's scout list
+    if (homeRoom && Game.rooms[homeRoom]) {
+      const roomMem = Game.rooms[homeRoom].memory as any;
+      const roomsToScout = roomMem.remote?.roomsToScout || [];
+
+      if (roomsToScout.length > 0) {
+        // Assign to first room in list
+        const nextTarget = roomsToScout[0];
+        (creep.memory as any).targetRoom = nextTarget;
+
+        // Remove from list
+        roomMem.remote.roomsToScout = roomsToScout.filter(
+          (r: string) => r !== nextTarget
+        );
+
+        console.log(
+          `🔍 [Scout] ${creep.name}: Self-assigned to scout ${nextTarget}`
+        );
+        return; // Will execute assignment next tick
+      }
+    }
+
     // No assignment yet, return home or idle
     if (creep.room.name !== homeRoom) {
       const exitDir = creep.room.findExitTo(homeRoom);
