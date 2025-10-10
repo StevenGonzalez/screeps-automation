@@ -97,16 +97,33 @@ export function analyzeDefenseStatus(
   return status;
 }
 
+// Cache defense status to avoid expensive recalculation every tick
+const defenseStatusCache: {
+  [roomName: string]: { status: DefenseStatus; time: number };
+} = {};
+const STATUS_CACHE_DURATION = 10; // Cache for 10 ticks (repair status changes slowly)
+
 /**
  * Get defense structures that need repair
- * Returns structures sorted by priority
+ * Returns structures sorted by priority (cached)
  */
 export function getDefenseRepairTargets(
   room: Room,
   plan: DefensePlan,
   limit: number = 10
 ): Structure[] {
+  // Check cache first
+  const cached = defenseStatusCache[room.name];
+  if (cached && Game.time - cached.time < STATUS_CACHE_DURATION) {
+    return cached.status.repairPriority.slice(0, limit);
+  }
+
+  // Calculate fresh status
   const status = analyzeDefenseStatus(room, plan);
+
+  // Cache it
+  defenseStatusCache[room.name] = { status, time: Game.time };
+
   return status.repairPriority.slice(0, limit);
 }
 

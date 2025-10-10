@@ -18,10 +18,35 @@ export interface DefensePlan {
   exitWalls: RoomPosition[]; // Wall segments at exits
 }
 
+// Cache defense plans to avoid expensive recalculation every tick
+const defensePlanCache: {
+  [roomName: string]: { plan: DefensePlan; time: number };
+} = {};
+const CACHE_DURATION = 100; // Cache for 100 ticks (static layout)
+
 /**
- * Create a comprehensive defense plan for a room
+ * Create a comprehensive defense plan for a room (cached)
  */
 export function planRoomDefense(room: Room): DefensePlan {
+  // Check cache first
+  const cached = defensePlanCache[room.name];
+  if (cached && Game.time - cached.time < CACHE_DURATION) {
+    return cached.plan;
+  }
+
+  // Generate new plan
+  const plan = generateDefensePlan(room);
+
+  // Cache it
+  defensePlanCache[room.name] = { plan, time: Game.time };
+
+  return plan;
+}
+
+/**
+ * Generate a fresh defense plan (internal, expensive)
+ */
+function generateDefensePlan(room: Room): DefensePlan {
   const plan: DefensePlan = {
     ramparts: [],
     walls: [],
@@ -89,6 +114,13 @@ export function planRoomDefense(room: Room): DefensePlan {
   }
 
   return plan;
+}
+
+/**
+ * Invalidate cache for a room (call when major layout changes)
+ */
+export function invalidateDefensePlanCache(roomName: string): void {
+  delete defensePlanCache[roomName];
 }
 
 /**
