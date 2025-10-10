@@ -30,6 +30,25 @@ export function runScout(creep: Creep): void {
   }
 
   if (!targetRoom) {
+    // Check if scout is on cooldown after completing a mission
+    const cooldown = (creep.memory as any).scoutCooldown || 0;
+    if (Game.time < cooldown) {
+      // Still on cooldown, just idle at home
+      if (creep.room.name !== homeRoom) {
+        const exitDir = creep.room.findExitTo(homeRoom);
+        if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
+          const exit = creep.pos.findClosestByPath(exitDir);
+          if (exit) {
+            creep.moveTo(exit, { ...visualPath("scout") });
+            CreepPersonality.speak(creep, "move");
+          }
+        }
+      } else {
+        CreepPersonality.speak(creep, "idle");
+      }
+      return;
+    }
+
     // No assignment yet, try to get one from the room's scout list
     if (homeRoom && Game.rooms[homeRoom]) {
       const roomMem = Game.rooms[homeRoom].memory as any;
@@ -116,6 +135,19 @@ export function runScout(creep: Creep): void {
     Memory.rooms[targetRoom] = {} as any;
   }
   Memory.rooms[targetRoom].lastScanned = Game.time;
+
+  // Remove this room from the scout list so we don't re-scout it immediately
+  if (homeRoom && Game.rooms[homeRoom]) {
+    const roomMem = Game.rooms[homeRoom].memory as any;
+    if (roomMem.remote?.roomsToScout) {
+      roomMem.remote.roomsToScout = roomMem.remote.roomsToScout.filter(
+        (r: string) => r !== targetRoom
+      );
+    }
+  }
+
+  // Wait a few ticks before getting new assignment (cooldown period)
+  (creep.memory as any).scoutCooldown = Game.time + 20;
 
   // Return to home room
   if (creep.room.name !== homeRoom) {
