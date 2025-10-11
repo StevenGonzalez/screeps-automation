@@ -1,4 +1,4 @@
-import { ROLE_HARVESTER } from "../config/config.roles";
+import { ROLE_HARVESTER, ROLE_UPGRADER } from "../config/config.roles";
 
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
@@ -68,9 +68,14 @@ function getSpawnForRoom(room: Room): StructureSpawn | null {
 
 function processRoomSpawning(room: Room) {
   const spawn = getSpawnForRoom(room);
+
   if (!spawn) return;
+  if (spawn.spawning) return;
   if (shouldSpawnHarvester(room)) {
     spawnHarvester(room, spawn);
+  }
+  if (shouldSpawnUpgrader(room)) {
+    spawnUpgrader(room, spawn);
   }
 }
 
@@ -80,10 +85,24 @@ function shouldSpawnHarvester(room: Room): boolean {
   return harvesters.length < targetPopulation;
 }
 
+function shouldSpawnUpgrader(room: Room): boolean {
+  const upgraders = getCreepsByRole(ROLE_UPGRADER);
+  const targetPopulation = getPopulationTarget(ROLE_UPGRADER, room);
+  return upgraders.length < targetPopulation;
+}
+
 function spawnHarvester(room: Room, spawn: StructureSpawn): void {
   const newName = `Harvester${Game.time}`;
   const body = buildScaledBody(ROLE_HARVESTER, room.energyAvailable);
   spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_HARVESTER },
+  });
+}
+
+function spawnUpgrader(room: Room, spawn: StructureSpawn): void {
+  const newName = `Upgrader${Game.time}`;
+  const body = buildScaledBody(ROLE_UPGRADER, room.energyAvailable);
+  spawn.spawnCreep(body, newName, {
+    memory: { role: ROLE_UPGRADER },
   });
 }
