@@ -13,6 +13,7 @@ declare global {
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];
     towerIds?: Id<StructureTower>[];
+    plannedStructures?: Record<string, string[]>;
   }
 
   interface Memory {

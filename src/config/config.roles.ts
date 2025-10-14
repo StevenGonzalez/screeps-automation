@@ -3,7 +3,12 @@ export const ROLE_HARVESTER = "harvester";
 export const ROLE_UPGRADER = "upgrader";
 
 export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
-  harvester: [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_STORAGE],
+  harvester: [
+    STRUCTURE_SPAWN,
+    STRUCTURE_EXTENSION,
+    STRUCTURE_CONTAINER,
+    STRUCTURE_STORAGE,
+  ],
   upgrader: [STRUCTURE_CONTROLLER],
   builder: [],
 };
