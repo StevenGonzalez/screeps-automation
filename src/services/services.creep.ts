@@ -68,3 +68,52 @@ export function transferEnergyTo(creep: Creep, target: Structure): void {
     creep.moveTo(target);
   }
 }
+
+export function findClosestConstructionSite(
+  creep: Creep
+): ConstructionSite | null {
+  const sites = creep.room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[];
+  if (!sites || sites.length === 0) return null;
+  return creep.pos.findClosestByPath(sites) || null;
+}
+
+export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
+  const repairTargets = creep.room.find(FIND_STRUCTURES, {
+    filter: (s) => {
+      const hasHits =
+        (s as any).hits !== undefined && (s as any).hitsMax !== undefined;
+      if (!hasHits) return false;
+      if (
+        s.structureType === STRUCTURE_WALL ||
+        s.structureType === STRUCTURE_RAMPART
+      )
+        return false;
+      return (s as any).hits < (s as any).hitsMax;
+    },
+  }) as AnyStructure[];
+  if (repairTargets.length === 0) return null;
+  return creep.pos.findClosestByPath(repairTargets) || null;
+}
+
+export function upgradeController(creep: Creep): void {
+  if (creep.room.controller) {
+    if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(creep.room.controller);
+    }
+  }
+}
+
+export function buildAtConstructionSite(
+  creep: Creep,
+  site: ConstructionSite
+): number {
+  const res = creep.build(site);
+  if (res === ERR_NOT_IN_RANGE) return creep.moveTo(site);
+  return res;
+}
+
+export function repairStructure(creep: Creep, target: AnyStructure): number {
+  const res = creep.repair(target as AnyStructure);
+  if (res === ERR_NOT_IN_RANGE) return creep.moveTo(target.pos.x, target.pos.y);
+  return res;
+}

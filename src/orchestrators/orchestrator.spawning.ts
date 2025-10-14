@@ -81,6 +81,9 @@ function processRoomSpawning(room: Room) {
   if (shouldSpawnUpgrader(room)) {
     spawnUpgrader(room, spawn);
   }
+  if (shouldSpawnBuilder(room)) {
+    spawnBuilder(room, spawn);
+  }
 }
 
 function shouldSpawnHarvester(room: Room): boolean {
@@ -93,6 +96,14 @@ function shouldSpawnUpgrader(room: Room): boolean {
   const upgraders = getCreepsByRole(ROLE_UPGRADER);
   const targetPopulation = getPopulationTarget(ROLE_UPGRADER, room);
   return upgraders.length < targetPopulation;
+}
+
+function shouldSpawnBuilder(room: Room): boolean {
+  const builders = getCreepsByRole(ROLE_BUILDER);
+  const targetPopulation = getPopulationTarget(ROLE_BUILDER, room);
+  if (builders.length >= targetPopulation) return false;
+  const sites = room.find(FIND_CONSTRUCTION_SITES);
+  return sites.length > 0;
 }
 
 function spawnHarvester(room: Room, spawn: StructureSpawn): void {
@@ -108,5 +119,13 @@ function spawnUpgrader(room: Room, spawn: StructureSpawn): void {
   const body = buildScaledBody(ROLE_UPGRADER, room.energyAvailable);
   spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_UPGRADER },
+  });
+}
+
+function spawnBuilder(room: Room, spawn: StructureSpawn): void {
+  const newName = `${ROLE_BUILDER}${Game.time}`;
+  const body = buildScaledBody(ROLE_BUILDER, room.energyAvailable);
+  spawn.spawnCreep(body, newName, {
+    memory: { role: ROLE_BUILDER },
   });
 }

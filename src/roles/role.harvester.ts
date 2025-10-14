@@ -5,6 +5,7 @@ import {
   isCreepEmpty,
   findEnergyDepositTarget,
   transferEnergyTo,
+  upgradeController,
 } from "../services/services.creep";
 import { ROLE_HARVESTER } from "../config/config.roles";
 
@@ -24,13 +25,7 @@ export function runHarvester(creep: Creep) {
     if (depositTarget) {
       transferEnergyTo(creep, depositTarget);
     } else {
-      if (creep.room.controller) {
-        if (
-          creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE
-        ) {
-          creep.moveTo(creep.room.controller);
-        }
-      }
+      upgradeController(creep);
     }
   } else {
     const sources = getSources(creep.room);

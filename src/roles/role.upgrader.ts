@@ -3,6 +3,7 @@ import {
   isCreepEmpty,
   isCreepFull,
   harvestFromSource,
+  upgradeController,
 } from "../services/services.creep";
 
 export function runUpgrader(creep: Creep) {
@@ -17,9 +18,7 @@ export function runUpgrader(creep: Creep) {
   }
 
   if (creep.memory.working) {
-    if (creep.upgradeController(creep.room.controller!) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(creep.room.controller!);
-    }
+    upgradeController(creep);
   } else {
     const sources = getSources(creep.room);
     if (sources.length > 0) {
