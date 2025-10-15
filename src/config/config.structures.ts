@@ -12,6 +12,7 @@ export const STRUCTURE_PLANNER = {
   visualTickInterval: 50,
   visualRoadSampleStep: 4,
   visualMaxDotsPerKey: 200,
+  rampartOnTopFor: [STRUCTURE_CONTAINER, STRUCTURE_SPAWN, STRUCTURE_STORAGE],
 };
 
 export const PLANNER_KEYS = {

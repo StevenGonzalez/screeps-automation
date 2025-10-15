@@ -161,18 +161,22 @@ export function planRampartsForStructures(
   positions: RoomPosition[]
 ): RoomPosition[] {
   const result: RoomPosition[] = [];
-  const pad = STRUCTURE_PLANNER.rampartPadding;
   positions.forEach((pos) => {
-    for (let dx = -pad; dx <= pad; dx++) {
-      for (let dy = -pad; dy <= pad; dy++) {
-        const nx = pos.x + dx;
-        const ny = pos.y + dy;
-        if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
-        if (!isWalkable(room, nx, ny)) continue;
-        if (!result.find((p) => p.x === nx && p.y === ny)) {
-          result.push(new RoomPosition(nx, ny, room.name));
-        }
-      }
+    const structs = pos.lookFor(LOOK_STRUCTURES) as Structure[];
+    const onTopAllowed = (STRUCTURE_PLANNER.rampartOnTopFor || []).some((t) =>
+      structs.some((s) => s.structureType === t)
+    );
+    if (!onTopAllowed) return;
+    const existing = room.lookForAt(
+      LOOK_STRUCTURES,
+      pos.x,
+      pos.y
+    ) as Structure[];
+    const hasRampart = existing.some(
+      (s) => s.structureType === STRUCTURE_RAMPART
+    );
+    if (!hasRampart && isWalkable(room, pos.x, pos.y)) {
+      result.push(new RoomPosition(pos.x, pos.y, room.name));
     }
   });
   return result;

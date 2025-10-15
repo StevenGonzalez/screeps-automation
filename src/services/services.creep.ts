@@ -95,6 +95,58 @@ export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
   return creep.pos.findClosestByPath(repairTargets) || null;
 }
 
+export function findClosestDamagedRampart(
+  creep: Creep
+): StructureRampart | null {
+  const ramp = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+    filter: (s) =>
+      s.structureType === STRUCTURE_RAMPART &&
+      (s as StructureRampart).hits < (s as StructureRampart).hitsMax,
+  }) as StructureRampart | null;
+  return ramp;
+}
+
+export function findMostCriticalRepairTarget(
+  creep: Creep
+): AnyStructure | null {
+  const damaged = creep.room.find(FIND_STRUCTURES, {
+    filter: (s) => {
+      const hasHits =
+        (s as any).hits !== undefined && (s as any).hitsMax !== undefined;
+      if (!hasHits) return false;
+      if (s.structureType === STRUCTURE_WALL) return false;
+      return (s as any).hits < (s as any).hitsMax;
+    },
+  }) as AnyStructure[];
+
+  if (damaged.length === 0) return null;
+
+  const ramparts = damaged.filter(
+    (s) => s.structureType === STRUCTURE_RAMPART
+  ) as StructureRampart[];
+  if (ramparts.length > 0) {
+    return ramparts.reduce((a, b) => (a.hits < b.hits ? a : b));
+  }
+
+  return damaged.reduce((best, cur) => {
+    const bestRatio = best.hits / (best.hitsMax || 1);
+    const curRatio = cur.hits / (cur.hitsMax || 1);
+    return curRatio < bestRatio ? cur : best;
+  });
+}
+
+export function getClosestContainerOrStorage(creep: Creep): Structure | null {
+  const targets = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStoreStructure =>
+      (s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_STORAGE) &&
+      "store" in s &&
+      s.store[RESOURCE_ENERGY] > 0,
+  });
+  if (targets.length === 0) return null;
+  return creep.pos.findClosestByPath(targets) as Structure | null;
+}
+
 export function upgradeController(creep: Creep): void {
   if (creep.room.controller) {
     if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
