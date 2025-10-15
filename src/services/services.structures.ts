@@ -5,21 +5,71 @@ function isWalkable(room: Room, x: number, y: number): boolean {
   return look !== TERRAIN_MASK_WALL;
 }
 
+function isBuildableTile(room: Room, x: number, y: number): boolean {
+  if (x < 0 || x >= 50 || y < 0 || y >= 50) return false;
+  if (!isWalkable(room, x, y)) return false;
+  const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
+  return structures.length === 0;
+}
+
 export function planSourceContainer(
   room: Room,
   source: Source
 ): RoomPosition | null {
   const offset = STRUCTURE_PLANNER.containerOffset;
+  const existing = source.pos.findInRange(FIND_STRUCTURES, offset, {
+    filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+  });
+  if (existing.length > 0) return null;
+
+  const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
+  if (spawns.length > 0) {
+    let bestResult: { path: PathStep[] } | null = null;
+    let bestSpawn: StructureSpawn | null = null;
+    for (const s of spawns) {
+      const res = PathFinder.search(
+        s.pos,
+        { pos: source.pos, range: 0 },
+        {
+          plainCost: 2,
+          swampCost: 10,
+          maxOps: 2000,
+        }
+      );
+      if (
+        !bestResult ||
+        (res.path && res.path.length < bestResult.path.length)
+      ) {
+        bestResult = res as any;
+        bestSpawn = s;
+      }
+    }
+
+    if (bestResult && bestResult.path && bestResult.path.length > 0) {
+      for (let i = bestResult.path.length - 1; i >= 0; i--) {
+        const step = bestResult.path[i];
+        for (let dx = -offset; dx <= offset; dx++) {
+          for (let dy = -offset; dy <= offset; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const x = step.x + dx;
+            const y = step.y + dy;
+            const distX = Math.abs(x - source.pos.x);
+            const distY = Math.abs(y - source.pos.y);
+            if (distX > offset || distY > offset) continue;
+            if (isBuildableTile(room, x, y))
+              return new RoomPosition(x, y, room.name);
+          }
+        }
+      }
+    }
+  }
 
   for (let dx = -offset; dx <= offset; dx++) {
     for (let dy = -offset; dy <= offset; dy++) {
       if (dx === 0 && dy === 0) continue;
       const x = source.pos.x + dx;
       const y = source.pos.y + dy;
-      if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
-      if (!isWalkable(room, x, y)) continue;
-      const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
-      if (structures.length === 0) return new RoomPosition(x, y, room.name);
+      if (isBuildableTile(room, x, y)) return new RoomPosition(x, y, room.name);
     }
   }
   return null;
@@ -262,7 +312,6 @@ export function connectRoadClusters(
   let createdThisTick = 0;
   let passes = 0;
 
-  // Iteratively attempt to connect clusters but bound work per tick so we don't stall the runtime
   while (true) {
     if (createdThisTick >= maxConnectorsPerTick) return;
     if (passes >= maxPassesPerTick) return;
@@ -276,7 +325,6 @@ export function connectRoadClusters(
     let addedThisPass = false;
     for (let a = 0; a < clusters.length; a++) {
       for (let b = a + 1; b < clusters.length; b++) {
-        // If we've reached the per-tick cap, stop now and resume next tick
         if (createdThisTick >= maxConnectorsPerTick) return;
 
         const ca = clusters[a];
