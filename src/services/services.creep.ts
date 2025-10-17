@@ -185,30 +185,48 @@ export function findClosestDamagedRampart(
 export function findMostCriticalRepairTarget(
   creep: Creep
 ): AnyStructure | null {
+  const threshold = 10000;
   const damaged = creep.room.find(FIND_STRUCTURES, {
     filter: (s) => {
       const hasHits =
         (s as any).hits !== undefined && (s as any).hitsMax !== undefined;
       if (!hasHits) return false;
-      if (s.structureType === STRUCTURE_WALL) return false;
       return (s as any).hits < (s as any).hitsMax;
     },
   }) as AnyStructure[];
 
   if (damaged.length === 0) return null;
 
-  const ramparts = damaged.filter(
-    (s) => s.structureType === STRUCTURE_RAMPART
-  ) as StructureRampart[];
-  if (ramparts.length > 0) {
-    return ramparts.reduce((a, b) => (a.hits < b.hits ? a : b));
+  const critical = damaged.filter(
+    (s) =>
+      (s.structureType === STRUCTURE_RAMPART ||
+        s.structureType === STRUCTURE_WALL) &&
+      (s as any).hits < threshold
+  );
+  if (critical.length > 0) {
+    return critical.reduce((a, b) => (a.hits < b.hits ? a : b));
   }
+  return damaged.reduce((a, b) => (a.hits < b.hits ? a : b));
+}
 
-  return damaged.reduce((best, cur) => {
-    const bestRatio = best.hits / (best.hitsMax || 1);
-    const curRatio = cur.hits / (cur.hitsMax || 1);
-    return curRatio < bestRatio ? cur : best;
-  });
+export function findTowerRepairTarget(room: Room): AnyStructure | null {
+  const decayThreshold = 1000;
+  const candidates = room.find(FIND_STRUCTURES, {
+    filter: (s) => {
+      const hasHits =
+        (s as any).hits !== undefined && (s as any).hitsMax !== undefined;
+      if (!hasHits) return false;
+      if (
+        s.structureType === STRUCTURE_RAMPART ||
+        s.structureType === STRUCTURE_WALL
+      ) {
+        return (s as any).hits < decayThreshold;
+      }
+      return (s as any).hits < (s as any).hitsMax * 0.1;
+    },
+  }) as AnyStructure[];
+  if (candidates.length === 0) return null;
+  return candidates.reduce((a, b) => (a.hits < b.hits ? a : b));
 }
 
 export function getClosestContainerOrStorage(creep: Creep): Structure | null {
