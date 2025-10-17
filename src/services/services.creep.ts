@@ -245,3 +245,54 @@ export function repairStructure(creep: Creep, target: AnyStructure): number {
   if (res === ERR_NOT_IN_RANGE) return creep.moveTo(target.pos.x, target.pos.y);
   return res;
 }
+
+export function findContainersForSource(
+  room: Room,
+  source: Source
+): StructureContainer[] {
+  return room.find(FIND_STRUCTURES, {
+    filter: (s): s is StructureContainer =>
+      s.structureType === STRUCTURE_CONTAINER &&
+      s.pos.getRangeTo(source.pos) <= 1,
+  });
+}
+
+export function findUnclaimedMinerAssignment(
+  room: Room
+): { source: Source; container: StructureContainer } | null {
+  const sources = getSources(room);
+  for (const source of sources) {
+    const containers = findContainersForSource(room, source);
+    for (const container of containers) {
+      const taken = Object.values(Game.creeps).some(
+        (c) =>
+          c.memory.role === "miner" &&
+          c.memory.assignedContainerId === container.id
+      );
+      if (!taken) {
+        return { source, container };
+      }
+    }
+  }
+  return null;
+}
+
+export function findUnclaimedHaulerAssignment(
+  room: Room
+): StructureContainer | null {
+  const containers = room.find(FIND_STRUCTURES, {
+    filter: (s): s is StructureContainer =>
+      s.structureType === STRUCTURE_CONTAINER,
+  });
+  for (const container of containers) {
+    const taken = Object.values(Game.creeps).some(
+      (c) =>
+        c.memory.role === "hauler" &&
+        c.memory.assignedContainerId === container.id
+    );
+    if (!taken) {
+      return container;
+    }
+  }
+  return null;
+}

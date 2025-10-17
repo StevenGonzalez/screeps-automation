@@ -4,6 +4,8 @@ declare global {
     working?: boolean;
     sourceId?: string;
     targetId?: string;
+    assignedSourceId?: Id<Source>;
+    assignedContainerId?: Id<StructureContainer>;
   }
 
   interface RoomMemory {

@@ -3,9 +3,16 @@ import {
   isCreepEmpty,
   acquireEnergy,
   transferEnergyTo,
+  findUnclaimedHaulerAssignment,
 } from "../services/services.creep";
 
 export function runHauler(creep: Creep) {
+  if (!creep.memory.assignedContainerId) {
+    const assignment = findUnclaimedHaulerAssignment(creep.room);
+    if (assignment) {
+      creep.memory.assignedContainerId = assignment.id;
+    }
+  }
   if (isCreepEmpty(creep)) {
     const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
       filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 50,
@@ -16,11 +23,21 @@ export function runHauler(creep: Creep) {
       }
       return;
     }
-
+    // Prefer assigned container if available
+    if (creep.memory.assignedContainerId) {
+      const container = Game.getObjectById(
+        creep.memory.assignedContainerId
+      ) as StructureContainer | null;
+      if (container && container.store[RESOURCE_ENERGY] > 0) {
+        if (creep.withdraw(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(container);
+        }
+        return;
+      }
+    }
     acquireEnergy(creep);
     return;
   }
-
   const targets = creep.room.find(FIND_STRUCTURES, {
     filter: (s) =>
       (s.structureType === STRUCTURE_SPAWN ||
@@ -36,7 +53,6 @@ export function runHauler(creep: Creep) {
       return;
     }
   }
-
   const idle =
     getClosestContainerOrStorage(creep) || creep.room.find(FIND_MY_SPAWNS)[0];
   if (idle && !creep.pos.isNearTo(idle)) {

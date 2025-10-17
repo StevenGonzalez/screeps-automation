@@ -4,6 +4,7 @@ import {
   ROLE_UPGRADER,
   ROLE_REPAIRER,
   ROLE_MINER,
+  ROLE_HAULER,
 } from "../config/config.roles";
 
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
@@ -99,10 +100,30 @@ function processRoomSpawning(room: Room) {
   if (!spawn) return;
   if (spawn.spawning) return;
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
+  if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
+}
+
+function shouldSpawnHauler(room: Room): boolean {
+  const containers = room.find(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+  });
+  const haulers = getCreepsByRole(ROLE_HAULER).filter(
+    (c) => c.room.name === room.name
+  );
+  return haulers.length < containers.length && containers.length > 0;
+}
+
+function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
+  const newName = `${ROLE_HAULER}${Game.time}`;
+  const body = buildScaledBody(ROLE_HAULER, room.energyAvailable);
+  const res = spawn.spawnCreep(body, newName, {
+    memory: { role: ROLE_HAULER },
+  });
+  return res === OK;
 }
 
 function shouldSpawnMiner(room: Room): boolean {
