@@ -7,7 +7,11 @@ import {
   ROLE_HAULER,
 } from "../config/config.roles";
 
-import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
+import {
+  BODY_PATTERNS,
+  MAX_BODY_PART_COUNT,
+  SPAWN_ENERGY_RESERVE,
+} from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
 
@@ -152,7 +156,10 @@ function shouldSpawnHauler(room: Room): boolean {
 
 function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_HAULER}${Game.time}`;
-  const body = buildScaledBody(ROLE_HAULER, room.energyAvailable);
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  const body = buildScaledBody(ROLE_HAULER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_HAULER },
   });
@@ -213,7 +220,10 @@ function shouldSpawnRepairer(room: Room): boolean {
 
 function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_REPAIRER}${Game.time}`;
-  const body = buildScaledBody(ROLE_REPAIRER, room.energyAvailable);
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_REPAIRER },
   });
@@ -222,7 +232,10 @@ function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
 
 function spawnHarvester(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_HARVESTER}${Game.time}`;
-  const body = buildScaledBody(ROLE_HARVESTER, room.energyAvailable);
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  const body = buildScaledBody(ROLE_HARVESTER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_HARVESTER },
   });
@@ -231,7 +244,10 @@ function spawnHarvester(room: Room, spawn: StructureSpawn): boolean {
 
 function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_UPGRADER}${Game.time}`;
-  const body = buildScaledBody(ROLE_UPGRADER, room.energyAvailable);
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  const body = buildScaledBody(ROLE_UPGRADER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_UPGRADER },
   });
@@ -240,7 +256,10 @@ function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
 
 function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_BUILDER}${Game.time}`;
-  const body = buildScaledBody(ROLE_BUILDER, room.energyAvailable);
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  const body = buildScaledBody(ROLE_BUILDER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_BUILDER },
   });
@@ -250,7 +269,10 @@ function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
 function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINER}${Game.time}`;
   const maxWorkParts = 5;
-  let availableEnergy = room.energyAvailable;
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  let availableEnergy = allowedEnergy;
   const workCost = BODYPART_COST[WORK];
   const moveCost = BODYPART_COST[MOVE];
   let workParts = Math.min(

@@ -9,3 +9,4 @@ export const BODY_PATTERNS: Record<string, BodyPartConstant[]> = {
 };
 
 export const MAX_BODY_PART_COUNT = 50;
+export const SPAWN_ENERGY_RESERVE = 0.25;
