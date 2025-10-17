@@ -205,7 +205,19 @@ function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
 
 function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINER}${Game.time}`;
-  const body = [WORK, WORK, MOVE];
+  const maxWorkParts = 5;
+  let availableEnergy = room.energyAvailable;
+  const workCost = BODYPART_COST[WORK];
+  const moveCost = BODYPART_COST[MOVE];
+  let workParts = Math.min(
+    Math.floor(availableEnergy / (workCost + moveCost)),
+    maxWorkParts
+  );
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < workParts; i++) {
+    body.push(WORK, MOVE);
+  }
+  if (body.length === 0) body.push(WORK, MOVE);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_MINER },
   });
