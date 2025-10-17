@@ -39,3 +39,19 @@ export const PLANNER_KEYS = {
   RAMPARTS_KEY: "ramparts",
   EXTENSIONS_PREFIX: "extensions_for_",
 };
+
+export const TOWER_COUNT_PER_RCL: Record<number, number> = {
+  0: 0,
+  1: 0,
+  2: 0,
+  3: 1,
+  4: 1,
+  5: 2,
+  6: 2,
+  7: 3,
+  8: 6,
+};
+
+export type TowerDistributionMode = "even" | "primary";
+export const TOWER_DISTRIBUTION_MODE: TowerDistributionMode = "even";
+export const TOWER_PRIMARY_SPAWN_MEMORY_KEY = "primarySpawnId";

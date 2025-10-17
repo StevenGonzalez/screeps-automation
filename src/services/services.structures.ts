@@ -1,4 +1,10 @@
-import { STRUCTURE_PLANNER, PLANNER_KEYS } from "../config/config.structures";
+import {
+  STRUCTURE_PLANNER,
+  PLANNER_KEYS,
+  TOWER_COUNT_PER_RCL,
+  TOWER_DISTRIBUTION_MODE,
+  TOWER_PRIMARY_SPAWN_MEMORY_KEY,
+} from "../config/config.structures";
 
 function isWalkable(room: Room, x: number, y: number): boolean {
   const look = room.getTerrain().get(x, y);
@@ -372,7 +378,32 @@ export function planTowerPositions(
 ): RoomPosition[] {
   const out: RoomPosition[] = [];
   const pref = STRUCTURE_PLANNER.towerOffsetsFromSpawn;
+  const level = room.controller ? room.controller.level : 0;
+  const totalAllowed = TOWER_COUNT_PER_RCL[level] || 0;
+
+  if (totalAllowed <= 0) return out;
+
+  const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
+  let allowedForThisSpawn = totalAllowed;
+  if (spawns.length > 0) {
+    if (TOWER_DISTRIBUTION_MODE === "even") {
+      const sorted = spawns.slice().sort((a, b) => (a.id < b.id ? -1 : 1));
+      const idx = sorted.findIndex((s) => s.id === spawn.id);
+      const base = Math.floor(totalAllowed / spawns.length);
+      const rem = totalAllowed % spawns.length;
+      allowedForThisSpawn = base + (idx >= 0 && idx < rem ? 1 : 0);
+    } else if (TOWER_DISTRIBUTION_MODE === "primary") {
+      const primaryId = (room as any).memory?.[TOWER_PRIMARY_SPAWN_MEMORY_KEY];
+      if (primaryId && primaryId === spawn.id) {
+        allowedForThisSpawn = totalAllowed;
+      } else {
+        allowedForThisSpawn = 0;
+      }
+    }
+  }
+
   for (const off of pref) {
+    if (out.length >= allowedForThisSpawn) break;
     const x = spawn.pos.x + off.x;
     const y = spawn.pos.y + off.y;
     if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
