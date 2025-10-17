@@ -4,12 +4,14 @@ import {
   ROLE_BUILDER,
   ROLE_REPAIRER,
   ROLE_MINER,
+  ROLE_HAULER,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
 import { runBuilder } from "../roles/role.builder";
 import { runRepairer } from "../roles/role.repairer";
 import { runMiner } from "../roles/role.miner";
+import { runHauler } from "../roles/role.hauler";
 
 export function loop() {
   for (const name in Game.creeps) {
@@ -29,5 +31,7 @@ function processCreep(creep: Creep) {
     runRepairer(creep);
   } else if (creep.memory.role === ROLE_MINER) {
     runMiner(creep);
+  } else if (creep.memory.role === ROLE_HAULER) {
+    runHauler(creep);
   }
 }
