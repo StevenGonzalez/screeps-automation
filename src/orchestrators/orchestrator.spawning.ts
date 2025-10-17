@@ -108,13 +108,46 @@ function processRoomSpawning(room: Room) {
 }
 
 function shouldSpawnHauler(room: Room): boolean {
+  const WORKS_PER_HAULER = 5;
+  const DISTANCE_LONG = 20;
+  const MAX_HAULERS = 6;
+
   const containers = room.find(FIND_STRUCTURES, {
     filter: (s) => s.structureType === STRUCTURE_CONTAINER,
-  });
+  }) as StructureContainer[];
+
   const haulers = getCreepsByRole(ROLE_HAULER).filter(
     (c) => c.room.name === room.name
   );
-  return haulers.length < containers.length && containers.length > 0;
+
+  if (containers.length === 0) return false;
+
+  const targetFromContainers = containers.length;
+
+  const totalMinerWork = Object.values(Game.creeps)
+    .filter((c) => c.memory.role === ROLE_MINER && c.room?.name === room.name)
+    .reduce(
+      (sum, c) => sum + (c.body.filter((p) => p.type === WORK).length || 0),
+      0
+    );
+
+  const targetFromWork = Math.ceil(totalMinerWork / WORKS_PER_HAULER);
+
+  const spawn = getSpawnForRoom(room);
+  let extraLong = 0;
+  if (spawn) {
+    for (const container of containers) {
+      const path = spawn.pos.findPathTo(container.pos, { ignoreCreeps: true });
+      if (path.length > DISTANCE_LONG) extraLong++;
+    }
+  }
+
+  const desired = Math.min(
+    MAX_HAULERS,
+    Math.max(targetFromContainers, targetFromWork + extraLong)
+  );
+
+  return haulers.length < desired;
 }
 
 function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
@@ -155,16 +188,27 @@ function shouldSpawnBuilder(room: Room): boolean {
   const sites = room.find(FIND_CONSTRUCTION_SITES);
   return sites.length > 0;
 }
-function shouldSpawnRepairer(room: Room): boolean {
-  const repairers = getCreepsByRole(ROLE_REPAIRER);
-  const local = repairers.filter((c) => c.room?.name === room.name);
-  if (local.length > 0) return false;
+function getRepairerPopulationTarget(room: Room): number {
   const critical = room.find(FIND_STRUCTURES, {
-    filter: (s) =>
-      s.structureType === STRUCTURE_RAMPART &&
-      (s as StructureRampart).hits < 2000,
+    filter: (s) => {
+      const st = s as any;
+      if (typeof st.hits !== "number" || typeof st.hitsMax !== "number")
+        return false;
+      return st.hits < st.hitsMax * 0.5;
+    },
   });
-  return critical.length > 0;
+  const criticalCount = critical.length;
+  const perRepairer = 3;
+  const cap = 3;
+  const target = Math.min(cap, Math.ceil(criticalCount / perRepairer));
+  return target;
+}
+function shouldSpawnRepairer(room: Room): boolean {
+  const repairers = getCreepsByRole(ROLE_REPAIRER).filter(
+    (c) => c.room?.name === room.name
+  );
+  const target = getRepairerPopulationTarget(room);
+  return repairers.length < target && target > 0;
 }
 
 function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {

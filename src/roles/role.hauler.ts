@@ -23,7 +23,6 @@ export function runHauler(creep: Creep) {
       }
       return;
     }
-    // Prefer assigned container if available
     if (creep.memory.assignedContainerId) {
       const container = Game.getObjectById(
         creep.memory.assignedContainerId
