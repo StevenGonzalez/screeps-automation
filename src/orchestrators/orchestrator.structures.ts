@@ -2,7 +2,9 @@ import {
   planSourceContainer,
   planControllerContainer,
   planRampartsForStructures,
+  planExtensionPositions,
   planTowerPositions,
+  ensureRampartsForExistingStructures,
   addPlannedStructureToMemory,
   ensureMemoryRoomStructures,
   plannedPositionsFromMemory,
@@ -19,6 +21,7 @@ export function loop() {
     if (!room.controller || !room.controller.my) continue;
     processRoomStructures(room);
     applyPlannedConstruction(room);
+    ensureRampartsForExistingStructures(room);
   }
 }
 
@@ -26,6 +29,56 @@ function processRoomStructures(room: Room) {
   const last = room.memory.lastStructurePlanTick || 0;
   if (Game.time - last < STRUCTURE_PLANNER.planInterval) return;
   ensureMemoryRoomStructures(room);
+
+  try {
+    const meta = (room as any).memory.plannedStructuresMeta || {};
+    const mem = (room.memory.plannedStructures || {}) as Record<
+      string,
+      string[]
+    >;
+    const now = Game.time;
+    const pruneAge = (STRUCTURE_PLANNER as any).plannedRoadPruneTicks || 0;
+    if (pruneAge > 0) {
+      for (const key of Object.keys(mem)) {
+        if (
+          !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
+          !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
+        )
+          continue;
+        const info = meta[key];
+        if (!info || !info.createdAt) continue;
+        if (now - info.createdAt < pruneAge) continue;
+
+        const positions = mem[key] || [];
+        let anyLive = false;
+        for (const p of positions) {
+          const [px, py] = p.split(",").map(Number);
+          const structs = room.lookForAt(
+            LOOK_STRUCTURES,
+            px,
+            py
+          ) as Structure[];
+          if (structs.length > 0) {
+            anyLive = true;
+            break;
+          }
+          const sites = room.lookForAt(
+            LOOK_CONSTRUCTION_SITES,
+            px,
+            py
+          ) as ConstructionSite[];
+          if (sites.length > 0) {
+            anyLive = true;
+            break;
+          }
+        }
+        if (!anyLive) {
+          delete (room as any).memory.plannedStructures[key];
+          delete (room as any).memory.plannedStructuresMeta[key];
+        }
+      }
+    }
+  } catch (e) {}
 
   const sources = room.find(FIND_SOURCES);
   for (const source of sources) {
@@ -166,6 +219,17 @@ function processRoomStructures(room: Room) {
       for (const p of towerPositions)
         addPlannedStructureToMemory(room, towerKey, p);
     }
+
+    const extKey = `${PLANNER_KEYS.EXTENSIONS_PREFIX}${spawn.id}`;
+    const existingExt = plannedPositionsFromMemory(room, extKey);
+    if (existingExt.length === 0) {
+      const extPositions = planExtensionPositions(
+        room,
+        spawn as StructureSpawn
+      );
+      for (const p of extPositions)
+        addPlannedStructureToMemory(room, extKey, p);
+    }
   }
 
   const importantTypes = Object.keys(
@@ -181,8 +245,12 @@ function processRoomStructures(room: Room) {
 
   const ramparts = planRampartsForStructures(room, importantPositions);
   const rampKey = PLANNER_KEYS.RAMPARTS_KEY;
-  const existingRamparts = plannedPositionsFromMemory(room, rampKey);
-  if (existingRamparts.length === 0 && ramparts.length > 0) {
-    for (const p of ramparts) addPlannedStructureToMemory(room, rampKey, p);
+  const existingRamparts = plannedPositionsFromMemory(room, rampKey).map(
+    (p) => `${p.x},${p.y}`
+  );
+  const existingSet = new Set(existingRamparts);
+  for (const p of ramparts) {
+    const key = `${p.x},${p.y}`;
+    if (!existingSet.has(key)) addPlannedStructureToMemory(room, rampKey, p);
   }
 }

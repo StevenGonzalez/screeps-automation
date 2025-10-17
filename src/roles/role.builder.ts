@@ -1,6 +1,6 @@
 import {
   getSources,
-  harvestFromSource,
+  acquireEnergy,
   isCreepEmpty,
   isCreepFull,
   findClosestConstructionSite,
@@ -21,10 +21,7 @@ export function runBuilder(creep: Creep) {
     creep.memory.working = true;
   }
   if (!creep.memory.working) {
-    const sources = getSources(creep.room);
-    if (sources.length > 0) {
-      harvestFromSource(creep, sources[0]);
-    }
+    acquireEnergy(creep);
     return;
   }
 

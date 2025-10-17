@@ -15,6 +15,7 @@ declare global {
     lastStructurePlanTick?: number;
     towerIds?: Id<StructureTower>[];
     plannedStructures?: Record<string, string[]>;
+    plannedStructuresMeta?: Record<string, { createdAt: number }>;
   }
 
   interface Memory {

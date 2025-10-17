@@ -9,7 +9,10 @@ function isBuildableTile(room: Room, x: number, y: number): boolean {
   if (x < 0 || x >= 50 || y < 0 || y >= 50) return false;
   if (!isWalkable(room, x, y)) return false;
   const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
-  return structures.length === 0;
+  if (structures.length > 0) return false;
+  const sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y);
+  if (sites.length > 0) return false;
+  return true;
 }
 
 export function planSourceContainer(
@@ -25,7 +28,6 @@ export function planSourceContainer(
   const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
   if (spawns.length > 0) {
     let bestResult: { path: PathStep[] } | null = null;
-    let bestSpawn: StructureSpawn | null = null;
     for (const s of spawns) {
       const res = PathFinder.search(
         s.pos,
@@ -41,7 +43,6 @@ export function planSourceContainer(
         (res.path && res.path.length < bestResult.path.length)
       ) {
         bestResult = res as any;
-        bestSpawn = s;
       }
     }
 
@@ -89,7 +90,16 @@ export function planControllerContainer(
         if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
         if (!isWalkable(room, x, y)) continue;
         const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
-        if (structures.length === 0) return new RoomPosition(x, y, room.name);
+        const sites = room.lookForAt(
+          LOOK_CONSTRUCTION_SITES,
+          x,
+          y
+        ) as ConstructionSite[];
+        const hasContainerSite = sites.some(
+          (s) => s.structureType === STRUCTURE_CONTAINER
+        );
+        if (structures.length === 0 && !hasContainerSite)
+          return new RoomPosition(x, y, room.name);
       }
     }
   }
@@ -182,6 +192,180 @@ export function planRampartsForStructures(
   return result;
 }
 
+export function planExtensionPositions(room: Room, spawn: StructureSpawn) {
+  const out: RoomPosition[] = [];
+  const pref = (STRUCTURE_PLANNER as any).extensionOffsetsFromSpawn || [];
+  let maxPerSpawn = (STRUCTURE_PLANNER as any).maxExtensionsPerSpawn || 10;
+  const extensionsPerRCL: Record<number, number> = {
+    0: 0,
+    1: 0,
+    2: 5,
+    3: 10,
+    4: 20,
+    5: 30,
+    6: 40,
+    7: 50,
+    8: 60,
+  };
+  const rcl = room.controller ? room.controller.level : 0;
+  const allowed = extensionsPerRCL[rcl] || maxPerSpawn;
+  const existingExtensions = room.find(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_EXTENSION,
+  }).length;
+  maxPerSpawn = Math.max(
+    0,
+    Math.min(maxPerSpawn, allowed - existingExtensions)
+  );
+
+  const minDist = (STRUCTURE_PLANNER as any).extensionMinDistanceFromSpawn || 0;
+
+  for (const off of pref) {
+    if (out.length >= maxPerSpawn) break;
+    const x = spawn.pos.x + off.x;
+    const y = spawn.pos.y + off.y;
+    const cheb = Math.max(Math.abs(x - spawn.pos.x), Math.abs(y - spawn.pos.y));
+    if (cheb < minDist) continue;
+    if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
+    if (!isBuildableTile(room, x, y)) continue;
+    if (plannedRoadOrConnectorAt(room, x, y)) continue;
+    if (plannedNonRoadStructureAt(room, x, y)) continue;
+    out.push(new RoomPosition(x, y, room.name));
+  }
+
+  const radius = (STRUCTURE_PLANNER as any).extensionSearchRadius || 6;
+
+  if (out.length < maxPerSpawn && (STRUCTURE_PLANNER as any).extensionUseRing) {
+    const ringR = (STRUCTURE_PLANNER as any).extensionRingRadius || 2;
+    const ringPositions: RoomPosition[] = [];
+    for (let dx = -ringR; dx <= ringR; dx++) {
+      for (let dy = -ringR; dy <= ringR; dy++) {
+        if (Math.abs(dx) !== ringR && Math.abs(dy) !== ringR) continue;
+        const x = spawn.pos.x + dx;
+        const y = spawn.pos.y + dy;
+        const cheb = Math.max(
+          Math.abs(x - spawn.pos.x),
+          Math.abs(y - spawn.pos.y)
+        );
+        if (cheb < minDist) continue;
+        if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
+        if (!isBuildableTile(room, x, y)) continue;
+        if (plannedRoadOrConnectorAt(room, x, y)) continue;
+        if (plannedNonRoadStructureAt(room, x, y)) continue;
+        if (out.some((p) => p.x === x && p.y === y)) continue;
+        ringPositions.push(new RoomPosition(x, y, room.name));
+      }
+    }
+    let ringIndex = 0;
+    while (out.length < maxPerSpawn && ringIndex < ringPositions.length) {
+      out.push(ringPositions[ringIndex++]);
+    }
+    if (out.length < maxPerSpawn) {
+      for (let r = ringR + 1; r <= radius; r++) {
+        for (let dx = -r; dx <= r; dx++) {
+          for (let dy = -r; dy <= r; dy++) {
+            if (out.length >= maxPerSpawn) break;
+            if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+            const x = spawn.pos.x + dx;
+            const y = spawn.pos.y + dy;
+            const cheb = Math.max(
+              Math.abs(x - spawn.pos.x),
+              Math.abs(y - spawn.pos.y)
+            );
+            if (cheb < minDist) continue;
+            if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
+            if (!isBuildableTile(room, x, y)) continue;
+            if (plannedRoadOrConnectorAt(room, x, y)) continue;
+            if (plannedNonRoadStructureAt(room, x, y)) continue;
+            if (out.some((p) => p.x === x && p.y === y)) continue;
+            out.push(new RoomPosition(x, y, room.name));
+          }
+          if (out.length >= maxPerSpawn) break;
+        }
+        if (out.length >= maxPerSpawn) break;
+      }
+    }
+  }
+
+  if (out.length < maxPerSpawn) {
+    const candidates: RoomPosition[] = [];
+    for (let r = 1; r <= radius; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const x = spawn.pos.x + dx;
+          const y = spawn.pos.y + dy;
+          const cheb = Math.max(
+            Math.abs(x - spawn.pos.x),
+            Math.abs(y - spawn.pos.y)
+          );
+          if (cheb < minDist) continue;
+          if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
+          if (!isBuildableTile(room, x, y)) continue;
+          if (plannedRoadOrConnectorAt(room, x, y)) continue;
+          if (out.some((p) => p.x === x && p.y === y)) continue;
+          candidates.push(new RoomPosition(x, y, room.name));
+        }
+      }
+    }
+    candidates.sort(
+      (a, b) =>
+        Math.abs(a.x - spawn.pos.x) +
+        Math.abs(a.y - spawn.pos.y) -
+        (Math.abs(b.x - spawn.pos.x) + Math.abs(b.y - spawn.pos.y))
+    );
+    for (const c of candidates) {
+      if (out.length >= maxPerSpawn) break;
+      out.push(c);
+    }
+  }
+
+  const entrances = (STRUCTURE_PLANNER as any).extensionRingEntrances || 2;
+  if (out.length > entrances) {
+    const removeCount = Math.min(entrances, out.length - 1);
+    const roadTiles = getAllPlannedRoadTiles(room);
+    const roadSet = new Set(roadTiles.map((p) => `${p.x},${p.y}`));
+    const candidates: number[] = [];
+    for (let i = 0; i < out.length; i++) {
+      const p = out[i];
+      const neigh = [
+        `${p.x + 1},${p.y}`,
+        `${p.x - 1},${p.y}`,
+        `${p.x},${p.y + 1}`,
+        `${p.x},${p.y - 1}`,
+      ];
+      if (neigh.some((n) => roadSet.has(n))) candidates.push(i);
+    }
+    const removeIndices = new Set<number>();
+    for (
+      let i = 0;
+      i < candidates.length && removeIndices.size < removeCount;
+      i++
+    )
+      removeIndices.add(candidates[i]);
+    if (removeIndices.size < removeCount) {
+      const need = removeCount - removeIndices.size;
+      for (let k = 0; k < need; k++) {
+        const idx = Math.floor(((k + 0.5) * out.length) / need);
+        let chosen = idx;
+        let attempts = 0;
+        while (removeIndices.has(chosen) && attempts < out.length) {
+          chosen = (chosen + 1) % out.length;
+          attempts++;
+        }
+        if (!removeIndices.has(chosen)) removeIndices.add(chosen);
+      }
+    }
+    if (removeIndices.size > 0) {
+      const pruned: RoomPosition[] = [];
+      for (let i = 0; i < out.length; i++)
+        if (!removeIndices.has(i)) pruned.push(out[i]);
+      if (pruned.length > 0) out.splice(0, out.length, ...pruned);
+    }
+  }
+
+  return out;
+}
+
 export function planTowerPositions(
   room: Room,
   spawn: StructureSpawn
@@ -209,7 +393,13 @@ export function addPlannedStructureToMemory(
 ) {
   ensureMemoryRoomStructures(room);
   const mem = room.memory.plannedStructures as Record<string, string[]>;
-  if (!mem[type]) mem[type] = [];
+  if (!mem[type]) {
+    mem[type] = [];
+    const meta =
+      (room as any).memory.plannedStructuresMeta ||
+      ((room as any).memory.plannedStructuresMeta = {});
+    if (!meta[type]) meta[type] = { createdAt: Game.time } as any;
+  }
   const key = `${pos.x},${pos.y}`;
   if (!mem[type].includes(key)) mem[type].push(key);
 }
@@ -269,6 +459,40 @@ function getAllPlannedRoadTiles(room: Room): RoomPosition[] {
     out.push(...deserializePositions(room, mem[key]));
   }
   return out;
+}
+
+function plannedRoadOrConnectorAt(room: Room, x: number, y: number): boolean {
+  if (!room.memory.plannedStructures) return false;
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+  for (const key of Object.keys(mem)) {
+    if (
+      !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
+      !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
+    )
+      continue;
+    for (const p of mem[key]) {
+      const [px, py] = p.split(",").map(Number);
+      if (px === x && py === y) return true;
+    }
+  }
+  return false;
+}
+
+function plannedNonRoadStructureAt(room: Room, x: number, y: number): boolean {
+  if (!room.memory.plannedStructures) return false;
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+  for (const key of Object.keys(mem)) {
+    if (
+      key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
+      key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
+    )
+      continue;
+    for (const p of mem[key]) {
+      const [px, py] = p.split(",").map(Number);
+      if (px === x && py === y) return true;
+    }
+  }
+  return false;
 }
 
 function clusterTiles(tiles: RoomPosition[]): RoomPosition[][] {
@@ -370,6 +594,8 @@ export function removePlannedStructureFromMemory(
 
 function structureTypeForKey(key: string): StructureConstant | null {
   if (key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX)) return STRUCTURE_CONTAINER;
+  if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX))
+    return STRUCTURE_EXTENSION;
   if (key.startsWith(PLANNER_KEYS.ROAD_PREFIX)) return STRUCTURE_ROAD;
   if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) return STRUCTURE_ROAD;
   if (key.startsWith(PLANNER_KEYS.TOWERS_PREFIX)) return STRUCTURE_TOWER;
@@ -393,6 +619,15 @@ export function applyPlannedConstruction(room: Room) {
       ) as Structure[];
       if (structs.some((s) => s.structureType === type)) {
         removePlannedStructureFromMemory(room, key, pos);
+
+        const rampOnTop = (STRUCTURE_PLANNER.rampartOnTopFor || []).some(
+          (t) => t === type
+        );
+        if (rampOnTop) {
+          addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, pos);
+          room.createConstructionSite(pos.x, pos.y, STRUCTURE_RAMPART);
+        }
+
         continue;
       }
       const sites = room.lookForAt(
@@ -401,18 +636,39 @@ export function applyPlannedConstruction(room: Room) {
         pos.y
       ) as ConstructionSite[];
       if (sites.some((s) => s.structureType === type)) continue;
-      const res = room.createConstructionSite(
+      room.createConstructionSite(
         pos.x,
         pos.y,
         type as BuildableStructureConstant
       );
-      if (res === OK) {
-      } else if (
-        res === ERR_INVALID_TARGET ||
-        res === ERR_FULL ||
-        res === ERR_RCL_NOT_ENOUGH
-      ) {
-      }
+    }
+  }
+}
+
+export function ensureRampartsForExistingStructures(room: Room) {
+  const rampTypes = (STRUCTURE_PLANNER.rampartOnTopFor ||
+    []) as StructureConstant[];
+  const structures = room.find(FIND_STRUCTURES) as Structure[];
+  for (const s of structures) {
+    if (!rampTypes.includes(s.structureType as StructureConstant)) continue;
+    if (s.structureType === STRUCTURE_RAMPART) continue;
+    const x = s.pos.x;
+    const y = s.pos.y;
+    const existing = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
+    if (existing.some((st) => st.structureType === STRUCTURE_RAMPART)) continue;
+
+    const planned = plannedPositionsFromMemory(room, PLANNER_KEYS.RAMPARTS_KEY);
+    if (planned.some((p) => p.x === x && p.y === y)) {
+      continue;
+    }
+
+    addPlannedStructureToMemory(
+      room,
+      PLANNER_KEYS.RAMPARTS_KEY,
+      new RoomPosition(x, y, room.name)
+    );
+    const res = room.createConstructionSite(x, y, STRUCTURE_RAMPART);
+    if (res !== OK) {
     }
   }
 }

@@ -76,7 +76,6 @@ function processRoomSpawning(room: Room) {
 
   if (!spawn) return;
   if (spawn.spawning) return;
-  // Priority spawn order: harvester -> upgrader -> builder -> repairer
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;

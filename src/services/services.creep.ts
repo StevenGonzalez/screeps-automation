@@ -55,6 +55,82 @@ export function harvestFromSource(creep: Creep, source: Source): void {
   }
 }
 
+export function acquireEnergy(creep: Creep): boolean {
+  const storeTargets = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStoreStructure =>
+      (s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_STORAGE) &&
+      "store" in s &&
+      s.store[RESOURCE_ENERGY] > 0,
+  });
+  if (storeTargets.length > 0) {
+    const target = creep.pos.findClosestByPath(
+      storeTargets
+    ) as AnyStoreStructure;
+    if (!target) return false;
+    const res = creep.withdraw(target, RESOURCE_ENERGY);
+    if (res === ERR_NOT_IN_RANGE) {
+      creep.moveTo(target);
+      return true;
+    }
+    return res === OK;
+  }
+
+  const links = creep.room.find(FIND_STRUCTURES, {
+    filter: (s) =>
+      s.structureType === STRUCTURE_LINK && (s as StructureLink).energy > 0,
+  }) as StructureLink[];
+  if (links.length > 0) {
+    const link = creep.pos.findClosestByPath(links)!;
+    if (link) {
+      const res = creep.withdraw(link, RESOURCE_ENERGY);
+      if (res === ERR_NOT_IN_RANGE) {
+        creep.moveTo(link);
+        return true;
+      }
+      return res === OK;
+    }
+  }
+
+  const tomb = creep.pos.findClosestByPath(FIND_TOMBSTONES, {
+    filter: (t) => t.store && t.store[RESOURCE_ENERGY] > 0,
+  }) as Tombstone | null;
+  if (tomb) {
+    const res = creep.withdraw(tomb, RESOURCE_ENERGY);
+    if (res === ERR_NOT_IN_RANGE) {
+      creep.moveTo(tomb);
+      return true;
+    }
+    return res === OK;
+  }
+
+  const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+    filter: (d) => d.resourceType === RESOURCE_ENERGY,
+  }) as Resource | null;
+  if (dropped) {
+    const res = creep.pickup(dropped);
+    if (res === ERR_NOT_IN_RANGE) {
+      creep.moveTo(dropped);
+      return true;
+    }
+    return res === OK;
+  }
+
+  const source = creep.pos.findClosestByPath(
+    FIND_SOURCES_ACTIVE
+  ) as Source | null;
+  if (source) {
+    const res = creep.harvest(source);
+    if (res === ERR_NOT_IN_RANGE) {
+      creep.moveTo(source);
+      return true;
+    }
+    return res === OK;
+  }
+
+  return false;
+}
+
 export function isCreepEmpty(creep: Creep): boolean {
   return creep.store[RESOURCE_ENERGY] === 0;
 }

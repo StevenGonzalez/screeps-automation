@@ -4,16 +4,26 @@ export const STRUCTURE_PLANNER = {
   roadPadding: 0,
   rampartPadding: 1,
   towerOffsetsFromSpawn: [
-    { x: 3, y: 0 },
-    { x: -3, y: 0 },
-    { x: 0, y: 3 },
-    { x: 0, y: -3 },
+    { x: 2, y: 0 },
+    { x: -2, y: 0 },
+    { x: 0, y: 2 },
+    { x: 0, y: -2 },
   ],
-  visualTickInterval: 50,
-  visualRoadSampleStep: 4,
-  visualMaxDotsPerKey: 200,
   planInterval: 50,
-  rampartOnTopFor: [STRUCTURE_CONTAINER, STRUCTURE_SPAWN, STRUCTURE_STORAGE],
+  rampartOnTopFor: [
+    STRUCTURE_CONTAINER,
+    STRUCTURE_SPAWN,
+    STRUCTURE_STORAGE,
+    STRUCTURE_EXTENSION,
+  ],
+  extensionOffsetsFromSpawn: [],
+  maxExtensionsPerSpawn: 10,
+  extensionSearchRadius: 6,
+  extensionMinDistanceFromSpawn: 4,
+  plannedRoadPruneTicks: 5000,
+  extensionUseRing: false,
+  extensionRingRadius: 2,
+  extensionRingEntrances: 2,
 };
 
 export const PLANNER_KEYS = {
@@ -27,4 +37,5 @@ export const PLANNER_KEYS = {
   CONNECTOR_PREFIX: "connector_",
   TOWERS_PREFIX: "towers_for_",
   RAMPARTS_KEY: "ramparts",
+  EXTENSIONS_PREFIX: "extensions_for_",
 };
