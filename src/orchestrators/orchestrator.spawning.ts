@@ -3,10 +3,12 @@ import {
   ROLE_HARVESTER,
   ROLE_UPGRADER,
   ROLE_REPAIRER,
+  ROLE_MINER,
 } from "../config/config.roles";
 
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
+import { getSources } from "../services/services.creep";
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -58,6 +60,27 @@ function getCreepsByRole(role: string): Creep[] {
   );
 }
 
+function getMinerPopulationTarget(room: Room): number {
+  const sources = getSources(room);
+  let count = 0;
+  for (const source of sources) {
+    const containers = room.find(FIND_STRUCTURES, {
+      filter: (s) =>
+        s.structureType === STRUCTURE_CONTAINER &&
+        s.pos.getRangeTo(source.pos) <= 1,
+    });
+    if (containers.length > 0) count++;
+  }
+  return count;
+}
+
+function getHarvesterPopulationTarget(room: Room): number {
+  const minerCount = getCreepsByRole(ROLE_MINER).filter(
+    (c) => c.room.name === room.name
+  ).length;
+  return Math.max(0, 2 - minerCount);
+}
+
 function getPopulationTarget(role: string, room: Room): number {
   if (role === ROLE_HARVESTER) return 2;
   if (role === ROLE_UPGRADER) return 1;
@@ -73,18 +96,28 @@ function getSpawnForRoom(room: Room): StructureSpawn | null {
 
 function processRoomSpawning(room: Room) {
   const spawn = getSpawnForRoom(room);
-
   if (!spawn) return;
   if (spawn.spawning) return;
+  if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
 }
 
+function shouldSpawnMiner(room: Room): boolean {
+  const miners = getCreepsByRole(ROLE_MINER).filter(
+    (c) => c.room.name === room.name
+  );
+  const target = getMinerPopulationTarget(room);
+  return miners.length < target;
+}
+
 function shouldSpawnHarvester(room: Room): boolean {
-  const harvesters = getCreepsByRole(ROLE_HARVESTER);
-  const targetPopulation = getPopulationTarget(ROLE_HARVESTER, room);
+  const harvesters = getCreepsByRole(ROLE_HARVESTER).filter(
+    (c) => c.room.name === room.name
+  );
+  const targetPopulation = getHarvesterPopulationTarget(room);
   return harvesters.length < targetPopulation;
 }
 
@@ -145,6 +178,15 @@ function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
   const body = buildScaledBody(ROLE_BUILDER, room.energyAvailable);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_BUILDER },
+  });
+  return res === OK;
+}
+
+function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
+  const newName = `${ROLE_MINER}${Game.time}`;
+  const body = [WORK, WORK, MOVE];
+  const res = spawn.spawnCreep(body, newName, {
+    memory: { role: ROLE_MINER },
   });
   return res === OK;
 }
