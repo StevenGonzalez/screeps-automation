@@ -9,6 +9,8 @@ import {
   ensureMemoryRoomStructures,
   plannedPositionsFromMemory,
   getOrPlanRoad,
+  planRoadsAroundStructures,
+  pruneRoadsUnderStructures,
   connectRoadClusters,
   applyPlannedConstruction,
 } from "../services/services.structures";
@@ -238,6 +240,12 @@ function processRoomStructures(room: Room) {
   const importantPositions: RoomPosition[] = [];
   for (const t of importantTypes)
     importantPositions.push(...plannedPositionsFromMemory(room, t));
+
+  // Plan roads around existing planned structures (except extensions) when tiles are open
+  planRoadsAroundStructures(room);
+
+  // Remove planned/built roads that sit under non-road structures
+  pruneRoadsUnderStructures(room);
 
   connectRoadClusters(room);
 

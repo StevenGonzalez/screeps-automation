@@ -475,6 +475,95 @@ export function getOrPlanRoad(
   return path;
 }
 
+export function planRoadsAroundStructures(room: Room) {
+  const roadKey = `${PLANNER_KEYS.ROAD_PREFIX}around`;
+  if (!room.memory.plannedStructures) return;
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+  for (const key of Object.keys(mem)) {
+    if (key.startsWith(PLANNER_KEYS.ROAD_PREFIX)) continue;
+    if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) continue;
+    if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)) continue;
+
+    const positions = plannedPositionsFromMemory(room, key);
+    for (const s of positions) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const x = s.x + dx;
+          const y = s.y + dy;
+          if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
+          if (!isBuildableTile(room, x, y)) continue;
+          if (plannedRoadOrConnectorAt(room, x, y)) continue;
+          let neighborHasRoad = false;
+          for (let nx = -1; nx <= 1 && !neighborHasRoad; nx++) {
+            for (let ny = -1; ny <= 1; ny++) {
+              if (nx === 0 && ny === 0) continue;
+              const checkX = x + nx;
+              const checkY = y + ny;
+              if (checkX < 0 || checkX >= 50 || checkY < 0 || checkY >= 50)
+                continue;
+              if (plannedRoadOrConnectorAt(room, checkX, checkY)) {
+                neighborHasRoad = true;
+                break;
+              }
+              const existing = room.lookForAt(
+                LOOK_STRUCTURES,
+                checkX,
+                checkY
+              ) as Structure[];
+              if (existing.some((es) => es.structureType === STRUCTURE_ROAD)) {
+                neighborHasRoad = true;
+                break;
+              }
+            }
+          }
+          if (neighborHasRoad) continue;
+          if (plannedNonRoadStructureAt(room, x, y)) continue;
+          addPlannedStructureToMemory(
+            room,
+            roadKey,
+            new RoomPosition(x, y, room.name)
+          );
+        }
+      }
+    }
+  }
+}
+
+export function pruneRoadsUnderStructures(room: Room) {
+  if (!room.memory.plannedStructures) return;
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+  const roadKeys = Object.keys(mem).filter(
+    (k) =>
+      k.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
+      k.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
+  );
+
+  for (const key of roadKeys) {
+    const arr = mem[key] || [];
+    const keep: string[] = [];
+    for (const posStr of arr) {
+      const [px, py] = posStr.split(",").map(Number);
+      const structs = room.lookForAt(LOOK_STRUCTURES, px, py) as Structure[];
+      const nonRoadExists = structs.some(
+        (s) => s.structureType !== STRUCTURE_ROAD
+      );
+      if (nonRoadExists) {
+        for (const s of structs) {
+          if (s.structureType === STRUCTURE_ROAD) {
+            try {
+              (s as any).destroy();
+            } catch (e) {}
+          }
+        }
+        continue;
+      }
+      keep.push(posStr);
+    }
+    mem[key] = keep;
+  }
+}
+
 function getAllPlannedRoadTiles(room: Room): RoomPosition[] {
   if (!room.memory.plannedStructures) return [];
   const mem = room.memory.plannedStructures as Record<string, string[]>;
