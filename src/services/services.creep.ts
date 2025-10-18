@@ -185,27 +185,36 @@ export function findClosestDamagedRampart(
 export function findMostCriticalRepairTarget(
   creep: Creep
 ): AnyStructure | null {
-  const threshold = 10000;
   const damaged = creep.room.find(FIND_STRUCTURES, {
     filter: (s) => {
       const hasHits =
         (s as any).hits !== undefined && (s as any).hitsMax !== undefined;
-      if (!hasHits) return false;
-      return (s as any).hits < (s as any).hitsMax;
+      return hasHits && (s as any).hits < (s as any).hitsMax;
     },
   }) as AnyStructure[];
 
   if (damaged.length === 0) return null;
 
-  const critical = damaged.filter(
+  const nonDefensive = damaged.filter(
+    (s) =>
+      s.structureType !== STRUCTURE_RAMPART &&
+      s.structureType !== STRUCTURE_WALL
+  );
+  if (nonDefensive.length > 0) {
+    return nonDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
+  }
+
+  const RAMPART_CRITICAL = 1000;
+  const criticalDefensive = damaged.filter(
     (s) =>
       (s.structureType === STRUCTURE_RAMPART ||
         s.structureType === STRUCTURE_WALL) &&
-      (s as any).hits < threshold
+      (s as any).hits < RAMPART_CRITICAL
   );
-  if (critical.length > 0) {
-    return critical.reduce((a, b) => (a.hits < b.hits ? a : b));
+  if (criticalDefensive.length > 0) {
+    return criticalDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
   }
+
   return damaged.reduce((a, b) => (a.hits < b.hits ? a : b));
 }
 
