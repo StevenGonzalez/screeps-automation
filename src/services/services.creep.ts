@@ -131,6 +131,32 @@ export function acquireEnergy(creep: Creep): boolean {
   return false;
 }
 
+export function withdrawFromControllerContainer(creep: Creep): boolean {
+  const controller = creep.room.controller;
+  if (!controller) return false;
+
+  const containers = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is StructureContainer =>
+      s.structureType === STRUCTURE_CONTAINER &&
+      s.pos.getRangeTo(controller.pos) <= 2,
+  }) as StructureContainer[];
+
+  const containerWithEnergy = containers.find(
+    (c) => c.store && c.store[RESOURCE_ENERGY] > 0
+  );
+
+  if (containerWithEnergy) {
+    const res = creep.withdraw(containerWithEnergy, RESOURCE_ENERGY);
+    if (res === ERR_NOT_IN_RANGE) {
+      creep.moveTo(containerWithEnergy);
+      return true;
+    }
+    return res === OK;
+  }
+
+  return false;
+}
+
 export function isCreepEmpty(creep: Creep): boolean {
   return creep.store[RESOURCE_ENERGY] === 0;
 }
