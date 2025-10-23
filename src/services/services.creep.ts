@@ -63,14 +63,29 @@ export function acquireEnergy(creep: Creep): boolean {
       "store" in s &&
       s.store[RESOURCE_ENERGY] > 0,
   });
-  if (storeTargets.length > 0) {
-    const target = creep.pos.findClosestByPath(
+  // Prefer non-upgrader container/storage targets unless none available
+  const upgradeId = (creep.room.memory as any).upgradeContainerId as
+    | Id<StructureContainer>
+    | undefined;
+  let nonUpgradeTargets = storeTargets;
+  if (upgradeId) {
+    nonUpgradeTargets = storeTargets.filter((s) => s.id !== upgradeId);
+  }
+  let chosenTarget: AnyStoreStructure | null = null;
+  if (nonUpgradeTargets.length > 0) {
+    chosenTarget = creep.pos.findClosestByPath(
+      nonUpgradeTargets
+    ) as AnyStoreStructure;
+  } else if (storeTargets.length > 0) {
+    // fallback to upgrade container/storage if it's the only source
+    chosenTarget = creep.pos.findClosestByPath(
       storeTargets
     ) as AnyStoreStructure;
-    if (!target) return false;
-    const res = creep.withdraw(target, RESOURCE_ENERGY);
+  }
+  if (chosenTarget) {
+    const res = creep.withdraw(chosenTarget, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(target);
+      creep.moveTo(chosenTarget);
       return true;
     }
     return res === OK;
@@ -309,15 +324,22 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
 }
 
 export function getClosestContainerOrStorage(creep: Creep): Structure | null {
-  const targets = creep.room.find(FIND_STRUCTURES, {
+  const allTargets = creep.room.find(FIND_STRUCTURES, {
     filter: (s): s is AnyStoreStructure =>
       (s.structureType === STRUCTURE_CONTAINER ||
         s.structureType === STRUCTURE_STORAGE) &&
       "store" in s &&
       s.store[RESOURCE_ENERGY] > 0,
   });
-  if (targets.length === 0) return null;
-  return creep.pos.findClosestByPath(targets) as Structure | null;
+  if (allTargets.length === 0) return null;
+  const upgradeId = (creep.room.memory as any).upgradeContainerId as
+    | Id<StructureContainer>
+    | undefined;
+  let nonUpgrade = allTargets;
+  if (upgradeId) nonUpgrade = allTargets.filter((s) => s.id !== upgradeId);
+  if (nonUpgrade.length > 0)
+    return creep.pos.findClosestByPath(nonUpgrade) as Structure | null;
+  return creep.pos.findClosestByPath(allTargets) as Structure | null;
 }
 
 export function getMinerContainerIds(room: Room): Id<StructureContainer>[] {
