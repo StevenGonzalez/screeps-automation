@@ -38,6 +38,21 @@ function processRoomMemory(room: Room) {
     });
     room.memory.containerIds = containers.map((c) => c.id);
 
+    // Record miner-adjacent containers (within range 1 of a source) so haulers
+    // can target them specifically for withdrawals.
+    const sourceList = room.find(FIND_SOURCES) as Source[];
+    const minerContainerIds: string[] = [];
+    for (const c of containers) {
+      for (const s of sourceList) {
+        if (c.pos.getRangeTo(s.pos) <= 1) {
+          minerContainerIds.push(c.id);
+          break;
+        }
+      }
+    }
+    // allow storing extra memory key without extending RoomMemory types here
+    (room.memory as any).minerContainerIds = minerContainerIds;
+
     const towers = room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_TOWER,
     });

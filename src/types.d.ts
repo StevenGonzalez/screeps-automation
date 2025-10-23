@@ -14,6 +14,7 @@ declare global {
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];
+    minerContainerIds?: Id<StructureContainer>[];
     lastStructurePlanTick?: number;
     towerIds?: Id<StructureTower>[];
     plannedStructures?: Record<string, string[]>;

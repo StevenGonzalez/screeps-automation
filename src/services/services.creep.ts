@@ -131,6 +131,44 @@ export function acquireEnergy(creep: Creep): boolean {
   return false;
 }
 
+export function pickupDroppedResource(
+  creep: Creep,
+  resource: Resource
+): boolean {
+  const res = creep.pickup(resource);
+  if (res === ERR_NOT_IN_RANGE) {
+    creep.moveTo(resource);
+    return true;
+  }
+  return res === OK;
+}
+
+export function withdrawFromContainer(
+  creep: Creep,
+  container: StructureContainer
+): boolean {
+  const res = creep.withdraw(container, RESOURCE_ENERGY);
+  if (res === ERR_NOT_IN_RANGE) {
+    creep.moveTo(container);
+    return true;
+  }
+  return res === OK;
+}
+
+export function findClosestContainerWithFreeCapacity(
+  creep: Creep
+): Structure | null {
+  const targets = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStoreStructure =>
+      (s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_STORAGE) &&
+      "store" in s &&
+      s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+  });
+  if (targets.length === 0) return null;
+  return creep.pos.findClosestByPath(targets) as Structure | null;
+}
+
 export function withdrawFromControllerContainer(creep: Creep): boolean {
   const controller = creep.room.controller;
   if (!controller) return false;
@@ -271,6 +309,67 @@ export function getClosestContainerOrStorage(creep: Creep): Structure | null {
         s.structureType === STRUCTURE_STORAGE) &&
       "store" in s &&
       s.store[RESOURCE_ENERGY] > 0,
+  });
+  if (targets.length === 0) return null;
+  return creep.pos.findClosestByPath(targets) as Structure | null;
+}
+
+export function getMinerContainerIds(room: Room): Id<StructureContainer>[] {
+  // Prefer memory if orchestrator recorded miner containers
+  if (room.memory && (room.memory as any).minerContainerIds) {
+    return (room.memory as any).minerContainerIds as Id<StructureContainer>[];
+  }
+  // Fallback: compute by checking containers within range 1 of any source
+  const sources = room.find(FIND_SOURCES) as Source[];
+  const containers = room.find(FIND_STRUCTURES, {
+    filter: (s): s is StructureContainer =>
+      s.structureType === STRUCTURE_CONTAINER,
+  }) as StructureContainer[];
+  const minerIds: Id<StructureContainer>[] = [];
+  for (const c of containers) {
+    for (const s of sources) {
+      if (c.pos.getRangeTo(s.pos) <= 1) {
+        minerIds.push(c.id as Id<StructureContainer>);
+        break;
+      }
+    }
+  }
+  return minerIds;
+}
+
+export function findClosestMinerContainerWithEnergy(
+  creep: Creep
+): StructureContainer | null {
+  const ids = getMinerContainerIds(creep.room);
+  if (!ids || ids.length === 0) return null;
+  const containers = ids
+    .map((id) => Game.getObjectById(id))
+    .filter(Boolean) as StructureContainer[];
+  const withEnergy = containers.filter(
+    (c) => c.store && c.store[RESOURCE_ENERGY] > 0
+  );
+  if (withEnergy.length === 0) return null;
+  return creep.pos.findClosestByPath(withEnergy) || null;
+}
+
+export function findDepositTargetExcludingMiner(
+  creep: Creep,
+  role: string
+): Structure | null {
+  const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
+  // Check role-priority targets first (spawn/extensions/towers etc.)
+  const priorityTarget = findEnergyDepositTarget(creep, role);
+  if (priorityTarget && minerIds.indexOf(priorityTarget.id) === -1)
+    return priorityTarget;
+
+  // Fallback: any container/storage with free capacity that is NOT a miner container
+  const targets = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStoreStructure =>
+      (s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_STORAGE) &&
+      "store" in s &&
+      s.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+      minerIds.indexOf(s.id as string) === -1,
   });
   if (targets.length === 0) return null;
   return creep.pos.findClosestByPath(targets) as Structure | null;

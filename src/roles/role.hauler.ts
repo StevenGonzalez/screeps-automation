@@ -4,6 +4,11 @@ import {
   acquireEnergy,
   transferEnergyTo,
   findUnclaimedHaulerAssignment,
+  pickupDroppedResource,
+  withdrawFromContainer,
+  findClosestContainerWithFreeCapacity,
+  findClosestMinerContainerWithEnergy,
+  findDepositTargetExcludingMiner,
 } from "../services/services.creep";
 
 export function runHauler(creep: Creep) {
@@ -18,22 +23,17 @@ export function runHauler(creep: Creep) {
       filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 50,
     }) as Resource | null;
     if (dropped) {
-      if (creep.pickup(dropped) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(dropped);
-      }
+      if (pickupDroppedResource(creep, dropped)) return;
       return;
     }
-    if (creep.memory.assignedContainerId) {
-      const container = Game.getObjectById(
-        creep.memory.assignedContainerId
-      ) as StructureContainer | null;
-      if (container && container.store[RESOURCE_ENERGY] > 0) {
-        if (creep.withdraw(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(container);
-        }
-        return;
-      }
+    // Withdraw only from miner containers
+    const minerContainer = findClosestMinerContainerWithEnergy(creep);
+    if (minerContainer) {
+      if (withdrawFromContainer(creep, minerContainer)) return;
+      return;
     }
+
+    // fall back to other acquisition methods
     acquireEnergy(creep);
     return;
   }
@@ -52,6 +52,13 @@ export function runHauler(creep: Creep) {
       return;
     }
   }
+  // Prefer deposit targets excluding miner containers
+  const depositTarget = findDepositTargetExcludingMiner(creep, "hauler");
+  if (depositTarget) {
+    transferEnergyTo(creep, depositTarget);
+    return;
+  }
+
   const idle =
     getClosestContainerOrStorage(creep) || creep.room.find(FIND_MY_SPAWNS)[0];
   if (idle && !creep.pos.isNearTo(idle)) {
