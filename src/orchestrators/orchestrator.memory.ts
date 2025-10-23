@@ -38,8 +38,6 @@ function processRoomMemory(room: Room) {
     });
     room.memory.containerIds = containers.map((c) => c.id);
 
-    // Record miner-adjacent containers (within range 1 of a source) so haulers
-    // can target them specifically for withdrawals.
     const sourceList = room.find(FIND_SOURCES) as Source[];
     const minerContainerIds: string[] = [];
     for (const c of containers) {
@@ -50,16 +48,14 @@ function processRoomMemory(room: Room) {
         }
       }
     }
-    // allow storing extra memory key without extending RoomMemory types here
+
     (room.memory as any).minerContainerIds = minerContainerIds;
 
-    // Record the closest container to the controller as the upgrade container
     if (room.controller) {
       const controllerContainers = containers.filter(
         (c) => c.pos.getRangeTo(room.controller!.pos) <= 2
       );
       if (controllerContainers.length > 0) {
-        // pick the closest by path to the controller
         const closest =
           room.controller!.pos.findClosestByPath(controllerContainers);
         (room.memory as any).upgradeContainerId = closest

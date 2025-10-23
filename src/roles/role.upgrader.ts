@@ -23,7 +23,6 @@ export function runUpgrader(creep: Creep) {
   if (creep.memory.working) {
     upgradeController(creep);
   } else {
-    // Try the configured upgrade container first (if present in room memory)
     const upgradeId = (creep.room.memory as any).upgradeContainerId as
       | Id<StructureContainer>
       | undefined;

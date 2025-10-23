@@ -3,7 +3,6 @@ import screeps from 'rollup-plugin-screeps';
 import typescript from 'rollup-plugin-typescript2';
 import { readFileSync } from 'fs';
 
-// Read screeps config from file
 const screepsConfig = JSON.parse(readFileSync('./screeps.json', 'utf8'));
 
 export default {

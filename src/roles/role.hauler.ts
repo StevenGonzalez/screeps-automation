@@ -26,14 +26,14 @@ export function runHauler(creep: Creep) {
       if (pickupDroppedResource(creep, dropped)) return;
       return;
     }
-    // Withdraw only from miner containers
+
     const minerContainer = findClosestMinerContainerWithEnergy(creep);
     if (minerContainer) {
       if (withdrawFromContainer(creep, minerContainer)) return;
       return;
     }
 
-    // fall back to other acquisition methods
+    acquireEnergy(creep);
     acquireEnergy(creep);
     return;
   }
@@ -52,7 +52,7 @@ export function runHauler(creep: Creep) {
       return;
     }
   }
-  // Prefer deposit targets excluding miner containers
+
   const depositTarget = findDepositTargetExcludingMiner(creep, "hauler");
   if (depositTarget) {
     transferEnergyTo(creep, depositTarget);

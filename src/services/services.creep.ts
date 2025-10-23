@@ -215,14 +215,11 @@ export function findClosestConstructionSite(
   const sites = creep.room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[];
   if (!sites || sites.length === 0) return null;
 
-  // Prefer non-road construction sites first so builders don't spend time
-  // building roads when there are other higher-priority structures to finish.
   const nonRoadSites = sites.filter((s) => s.structureType !== STRUCTURE_ROAD);
   if (nonRoadSites.length > 0) {
     return creep.pos.findClosestByPath(nonRoadSites) || null;
   }
 
-  // Fallback: only road sites remain, return the closest one.
   return creep.pos.findClosestByPath(sites) || null;
 }
 
@@ -324,11 +321,10 @@ export function getClosestContainerOrStorage(creep: Creep): Structure | null {
 }
 
 export function getMinerContainerIds(room: Room): Id<StructureContainer>[] {
-  // Prefer memory if orchestrator recorded miner containers
   if (room.memory && (room.memory as any).minerContainerIds) {
     return (room.memory as any).minerContainerIds as Id<StructureContainer>[];
   }
-  // Fallback: compute by checking containers within range 1 of any source
+
   const sources = room.find(FIND_SOURCES) as Source[];
   const containers = room.find(FIND_STRUCTURES, {
     filter: (s): s is StructureContainer =>
@@ -366,12 +362,11 @@ export function findDepositTargetExcludingMiner(
   role: string
 ): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
-  // Check role-priority targets first (spawn/extensions/towers etc.)
+
   const priorityTarget = findEnergyDepositTarget(creep, role);
   if (priorityTarget && minerIds.indexOf(priorityTarget.id) === -1)
     return priorityTarget;
 
-  // If role is hauler, prefer the upgrade container (it's important but below spawns/extensions)
   if (role === "hauler") {
     const upgradeId = (creep.room.memory as any).upgradeContainerId as
       | Id<StructureContainer>
@@ -390,7 +385,6 @@ export function findDepositTargetExcludingMiner(
     }
   }
 
-  // Fallback: any container/storage with free capacity that is NOT a miner container
   const targets = creep.room.find(FIND_STRUCTURES, {
     filter: (s): s is AnyStoreStructure =>
       (s.structureType === STRUCTURE_CONTAINER ||
@@ -404,11 +398,46 @@ export function findDepositTargetExcludingMiner(
 }
 
 export function upgradeController(creep: Creep): void {
-  if (creep.room.controller) {
-    if (creep.upgradeController(creep.room.controller) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(creep.room.controller);
+  const controller = creep.room.controller;
+  if (!controller) return;
+
+  if (signControllerIfNeeded(creep, controller)) return;
+
+  if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
+    creep.moveTo(controller);
+  }
+}
+
+export function signControllerIfNeeded(
+  creep: Creep,
+  controller: StructureController
+): boolean {
+  const desiredSignature =
+    (creep.room.memory as any).desiredSignature ||
+    `${(controller.owner && (controller.owner as any).username) || "me"} — ${
+      creep.room.name
+    }`;
+
+  const currentSign = controller.sign;
+  const myUsername =
+    (controller.owner && (controller.owner as any).username) || undefined;
+
+  if (
+    !currentSign ||
+    currentSign.username !== myUsername ||
+    currentSign.text !== desiredSignature
+  ) {
+    if (creep.pos.getRangeTo(controller.pos) > 1) {
+      creep.moveTo(controller);
+      return true;
+    } else {
+      creep.signController(controller, desiredSignature);
+      (creep.room.memory as any).lastSigned = Game.time;
+      return true;
     }
   }
+
+  return false;
 }
 
 export function buildAtConstructionSite(
