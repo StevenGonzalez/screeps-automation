@@ -17,8 +17,10 @@ import {
 } from "../services/services.structures";
 import { PLANNER_KEYS } from "../config/config.structures";
 import { STRUCTURE_PLANNER } from "../config/config.structures";
+import { cleanupPlannedStructuresGlobal } from "../services/services.structures";
 
 export function loop() {
+  cleanupPlannedStructuresGlobal();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room.controller || !room.controller.my) continue;
