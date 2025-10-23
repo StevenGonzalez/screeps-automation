@@ -214,6 +214,15 @@ export function findClosestConstructionSite(
 ): ConstructionSite | null {
   const sites = creep.room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[];
   if (!sites || sites.length === 0) return null;
+
+  // Prefer non-road construction sites first so builders don't spend time
+  // building roads when there are other higher-priority structures to finish.
+  const nonRoadSites = sites.filter((s) => s.structureType !== STRUCTURE_ROAD);
+  if (nonRoadSites.length > 0) {
+    return creep.pos.findClosestByPath(nonRoadSites) || null;
+  }
+
+  // Fallback: only road sites remain, return the closest one.
   return creep.pos.findClosestByPath(sites) || null;
 }
 
