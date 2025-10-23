@@ -412,11 +412,7 @@ export function signControllerIfNeeded(
   creep: Creep,
   controller: StructureController
 ): boolean {
-  const desiredSignature =
-    (creep.room.memory as any).desiredSignature ||
-    `${(controller.owner && (controller.owner as any).username) || "me"} — ${
-      creep.room.name
-    }`;
+  const desiredSignature = "Under New Management";
 
   const currentSign = controller.sign;
   const myUsername =
