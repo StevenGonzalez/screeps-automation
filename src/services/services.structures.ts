@@ -746,96 +746,12 @@ export function removePlannedStructureFromMemory(
  * - Remove planned road/connector tiles that sit under non-road structures (already handled elsewhere),
  *   and trim any entries that reference invalid coords.
  */
-export function cleanupPlannedStructuresForRoom(room: Room) {
-  if (!room.memory.plannedStructures) return;
-  const mem = room.memory.plannedStructures as Record<string, string[]>;
-  const meta = (room as any).memory.plannedStructuresMeta || {};
-
-  for (const key of Object.keys(mem)) {
-    const arr = mem[key] || [];
-    if (arr.length <= 1) continue;
-
-    // Only dedupe certain keys (containers and controller and extensions)
-    if (
-      key === PLANNER_KEYS.CONTAINER_CONTROLLER ||
-      key.startsWith(PLANNER_KEYS.CONTAINER_SOURCE_PREFIX) ||
-      key.startsWith(PLANNER_KEYS.CONTAINER_MINERAL_PREFIX) ||
-      key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)
-    ) {
-      // if any of the positions contains an actual structure of that type, keep that one
-      const type = structureTypeForKey(key);
-      let chosen: string | null = null;
-      for (const p of arr) {
-        const [x, y] = p.split(",").map(Number);
-        if (isNaN(x) || isNaN(y)) continue;
-        const structs = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
-        if (structs.some((s) => s.structureType === type)) {
-          chosen = p;
-          break;
-        }
-      }
-      if (!chosen) chosen = arr[0];
-      mem[key] = [chosen];
-      if (meta && meta[key]) meta[key].createdAt = Game.time;
-    } else {
-      // for others, remove invalid coords and loosely dedupe
-      const seen = new Set<string>();
-      const keep: string[] = [];
-      for (const p of arr) {
-        if (seen.has(p)) continue;
-        const [x, y] = p.split(",").map(Number);
-        if (isNaN(x) || isNaN(y) || x < 0 || x >= 50 || y < 0 || y >= 50)
-          continue;
-        seen.add(p);
-        keep.push(p);
-      }
-      mem[key] = keep;
-      if (meta && meta[key] && mem[key].length === 0) delete meta[key];
-    }
-  }
-}
 
 /**
  * Global cleanup run invoked from orchestrator. It will:
  * - cleanup the visible room's plannedStructures (dedupe/prune)
  * - optionally prune plannedStructures for unseen rooms older than configured age
  */
-export function cleanupPlannedStructuresGlobal() {
-  const interval = (STRUCTURE_PLANNER as any).plannedCleanupInterval || 0;
-  if (!interval || Game.time % interval !== 0) return;
-
-  // cleanup visible rooms first
-  for (const rn in Game.rooms) {
-    try {
-      const room = Game.rooms[rn];
-      cleanupPlannedStructuresForRoom(room);
-    } catch (e) {}
-  }
-
-  // prune unseen rooms from Memory.rooms if entries are very old
-  const unseenAge = (STRUCTURE_PLANNER as any).plannedCleanupUnseenAge || 0;
-  if (unseenAge <= 0) return;
-  if (!Memory.rooms) return;
-  for (const rname of Object.keys(Memory.rooms)) {
-    if (Game.rooms[rname]) continue; // visible
-    const rm = (Memory.rooms as any)[rname];
-    if (!rm || !rm.plannedStructuresMeta) continue;
-    let anyRecent = false;
-    for (const k of Object.keys(rm.plannedStructuresMeta)) {
-      const info = rm.plannedStructuresMeta[k] as any;
-      if (!info || !info.createdAt) continue;
-      if (Game.time - info.createdAt < unseenAge) {
-        anyRecent = true;
-        break;
-      }
-    }
-    if (!anyRecent) {
-      // remove planned structures/meta from this unseen room to save Memory
-      delete (Memory.rooms as any)[rname].plannedStructures;
-      delete (Memory.rooms as any)[rname].plannedStructuresMeta;
-    }
-  }
-}
 
 function structureTypeForKey(key: string): StructureConstant | null {
   if (key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX)) return STRUCTURE_CONTAINER;
@@ -849,71 +765,4 @@ function structureTypeForKey(key: string): StructureConstant | null {
   return null;
 }
 
-export function applyPlannedConstruction(room: Room) {
-  if (!room.memory.plannedStructures) return;
-  const mem = room.memory.plannedStructures as Record<string, string[]>;
-  for (const key of Object.keys(mem)) {
-    const type = structureTypeForKey(key);
-    if (!type) continue;
-    const positions = plannedPositionsFromMemory(room, key);
-    for (const pos of positions) {
-      const structs = room.lookForAt(
-        LOOK_STRUCTURES,
-        pos.x,
-        pos.y
-      ) as Structure[];
-      if (structs.some((s) => s.structureType === type)) {
-        removePlannedStructureFromMemory(room, key, pos);
-
-        const rampOnTop = (STRUCTURE_PLANNER.rampartOnTopFor || []).some(
-          (t) => t === type
-        );
-        if (rampOnTop) {
-          addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, pos);
-          room.createConstructionSite(pos.x, pos.y, STRUCTURE_RAMPART);
-        }
-
-        continue;
-      }
-      const sites = room.lookForAt(
-        LOOK_CONSTRUCTION_SITES,
-        pos.x,
-        pos.y
-      ) as ConstructionSite[];
-      if (sites.some((s) => s.structureType === type)) continue;
-      room.createConstructionSite(
-        pos.x,
-        pos.y,
-        type as BuildableStructureConstant
-      );
-    }
-  }
-}
-
-export function ensureRampartsForExistingStructures(room: Room) {
-  const rampTypes = (STRUCTURE_PLANNER.rampartOnTopFor ||
-    []) as StructureConstant[];
-  const structures = room.find(FIND_STRUCTURES) as Structure[];
-  for (const s of structures) {
-    if (!rampTypes.includes(s.structureType as StructureConstant)) continue;
-    if (s.structureType === STRUCTURE_RAMPART) continue;
-    const x = s.pos.x;
-    const y = s.pos.y;
-    const existing = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
-    if (existing.some((st) => st.structureType === STRUCTURE_RAMPART)) continue;
-
-    const planned = plannedPositionsFromMemory(room, PLANNER_KEYS.RAMPARTS_KEY);
-    if (planned.some((p) => p.x === x && p.y === y)) {
-      continue;
-    }
-
-    addPlannedStructureToMemory(
-      room,
-      PLANNER_KEYS.RAMPARTS_KEY,
-      new RoomPosition(x, y, room.name)
-    );
-    const res = room.createConstructionSite(x, y, STRUCTURE_RAMPART);
-    if (res !== OK) {
-    }
-  }
-}
+// orchestration-level functions moved to orchestrator

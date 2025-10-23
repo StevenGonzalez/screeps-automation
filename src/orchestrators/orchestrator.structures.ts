@@ -5,7 +5,6 @@ import {
   planRampartsForStructures,
   planExtensionPositions,
   planTowerPositions,
-  ensureRampartsForExistingStructures,
   addPlannedStructureToMemory,
   ensureMemoryRoomStructures,
   plannedPositionsFromMemory,
@@ -13,11 +12,161 @@ import {
   planRoadsAroundStructures,
   pruneRoadsUnderStructures,
   connectRoadClusters,
-  applyPlannedConstruction,
 } from "../services/services.structures";
 import { PLANNER_KEYS } from "../config/config.structures";
 import { STRUCTURE_PLANNER } from "../config/config.structures";
-import { cleanupPlannedStructuresGlobal } from "../services/services.structures";
+
+function structureTypeForKey(key: string): StructureConstant | null {
+  switch (true) {
+    case key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX):
+      return STRUCTURE_CONTAINER;
+    case key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX):
+      return STRUCTURE_EXTENSION;
+    case key.startsWith(PLANNER_KEYS.ROAD_PREFIX):
+    case key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX):
+      return STRUCTURE_ROAD;
+    case key.startsWith(PLANNER_KEYS.TOWERS_PREFIX):
+      return STRUCTURE_TOWER;
+    case key === PLANNER_KEYS.RAMPARTS_KEY:
+      return STRUCTURE_RAMPART;
+    case key === PLANNER_KEYS.CONTAINER_CONTROLLER:
+      return STRUCTURE_CONTAINER;
+    default:
+      return null;
+  }
+}
+
+function cleanupPlannedStructuresGlobal() {
+  const interval = (STRUCTURE_PLANNER as any).plannedCleanupInterval || 0;
+  if (!interval || Game.time % interval !== 0) return;
+
+  for (const rn in Game.rooms) {
+    try {
+      const room = Game.rooms[rn];
+      const mem = room.memory.plannedStructures as
+        | Record<string, string[]>
+        | undefined;
+      const meta = (room as any).memory.plannedStructuresMeta || {};
+      if (mem) {
+        for (const key of Object.keys(mem)) {
+          const arr = mem[key] || [];
+          if (arr.length <= 1) continue;
+          if (
+            key === PLANNER_KEYS.CONTAINER_CONTROLLER ||
+            key.startsWith(PLANNER_KEYS.CONTAINER_SOURCE_PREFIX) ||
+            key.startsWith(PLANNER_KEYS.CONTAINER_MINERAL_PREFIX) ||
+            key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)
+          ) {
+            mem[key] = [arr[0]];
+            if (meta && meta[key]) meta[key].createdAt = Game.time;
+          } else {
+            const seen = new Set<string>();
+            const keep: string[] = [];
+            for (const p of arr) {
+              if (seen.has(p)) continue;
+              const [x, y] = p.split(",").map(Number);
+              if (isNaN(x) || isNaN(y) || x < 0 || x >= 50 || y < 0 || y >= 50)
+                continue;
+              seen.add(p);
+              keep.push(p);
+            }
+            mem[key] = keep;
+            if (meta && meta[key] && mem[key].length === 0) delete meta[key];
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  const unseenAge = (STRUCTURE_PLANNER as any).plannedCleanupUnseenAge || 0;
+  if (unseenAge <= 0) return;
+  if (!Memory.rooms) return;
+  for (const rname of Object.keys(Memory.rooms)) {
+    if (Game.rooms[rname]) continue;
+    const rm = (Memory.rooms as any)[rname];
+    if (!rm || !rm.plannedStructuresMeta) continue;
+    let anyRecent = false;
+    for (const k of Object.keys(rm.plannedStructuresMeta)) {
+      const info = rm.plannedStructuresMeta[k] as any;
+      if (!info || !info.createdAt) continue;
+      if (Game.time - info.createdAt < unseenAge) {
+        anyRecent = true;
+        break;
+      }
+    }
+    if (!anyRecent) {
+      delete (Memory.rooms as any)[rname].plannedStructures;
+      delete (Memory.rooms as any)[rname].plannedStructuresMeta;
+    }
+  }
+}
+
+function applyPlannedConstruction(room: Room) {
+  if (!room.memory.plannedStructures) return;
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+  for (const key of Object.keys(mem)) {
+    const type = structureTypeForKey(key);
+    if (!type) continue;
+    const positions = plannedPositionsFromMemory(room, key);
+    for (const pos of positions) {
+      const structs = room.lookForAt(
+        LOOK_STRUCTURES,
+        pos.x,
+        pos.y
+      ) as Structure[];
+      if (structs.some((s) => s.structureType === type)) {
+        const arr = mem[key] || [];
+        const keyStr = `${pos.x},${pos.y}`;
+        mem[key] = arr.filter((s) => s !== keyStr);
+        const rampOnTop = (STRUCTURE_PLANNER.rampartOnTopFor || []).some(
+          (t) => t === type
+        );
+        if (rampOnTop) {
+          addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, pos);
+          room.createConstructionSite(pos.x, pos.y, STRUCTURE_RAMPART);
+        }
+        continue;
+      }
+      const sites = room.lookForAt(
+        LOOK_CONSTRUCTION_SITES,
+        pos.x,
+        pos.y
+      ) as ConstructionSite[];
+      if (sites.some((s) => s.structureType === type)) continue;
+      room.createConstructionSite(
+        pos.x,
+        pos.y,
+        type as BuildableStructureConstant
+      );
+    }
+  }
+}
+
+function ensureRampartsForExistingStructures(room: Room) {
+  const rampTypes = (STRUCTURE_PLANNER.rampartOnTopFor ||
+    []) as StructureConstant[];
+  const structures = room.find(FIND_STRUCTURES) as Structure[];
+  for (const s of structures) {
+    if (!rampTypes.includes(s.structureType as StructureConstant)) continue;
+    if (s.structureType === STRUCTURE_RAMPART) continue;
+    const x = s.pos.x;
+    const y = s.pos.y;
+    const existing = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
+    if (existing.some((st) => st.structureType === STRUCTURE_RAMPART)) continue;
+
+    const planned = plannedPositionsFromMemory(room, PLANNER_KEYS.RAMPARTS_KEY);
+    if (planned.some((p) => p.x === x && p.y === y)) {
+      continue;
+    }
+
+    addPlannedStructureToMemory(
+      room,
+      PLANNER_KEYS.RAMPARTS_KEY,
+      new RoomPosition(x, y, room.name)
+    );
+    room.createConstructionSite(x, y, STRUCTURE_RAMPART);
+  }
+}
 
 export function loop() {
   cleanupPlannedStructuresGlobal();
