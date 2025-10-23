@@ -30,6 +30,7 @@ export const PLANNER_KEYS = {
   CONTAINER_PREFIX: "container",
   CONTAINER_SOURCE_PREFIX: "container_source_",
   CONTAINER_CONTROLLER: "container_controller",
+  CONTAINER_MINERAL_PREFIX: "container_mineral_",
   ROAD_PREFIX: "road_",
   NODE_SOURCE_PREFIX: "node_source_",
   NODE_CONTROLLER: "node_controller",

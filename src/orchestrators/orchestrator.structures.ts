@@ -1,6 +1,7 @@
 import {
   planSourceContainer,
   planControllerContainer,
+  planMineralContainer,
   planRampartsForStructures,
   planExtensionPositions,
   planTowerPositions,
@@ -156,14 +157,34 @@ function processRoomStructures(room: Room) {
 
     const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
     if (mineral) {
+      const plannedMineral = plannedPositionsFromMemory(
+        room,
+        `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
+      );
+      if (plannedMineral.length === 0) {
+        const mpos = planMineralContainer(room, mineral);
+        if (mpos)
+          addPlannedStructureToMemory(
+            room,
+            `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`,
+            mpos
+          );
+      }
+
       const mineralKey = `${PLANNER_KEYS.ROAD_PREFIX}${spawn.id}_${PLANNER_KEYS.NODE_MINERAL_PREFIX}${mineral.id}`;
       const existingMineralRoad = plannedPositionsFromMemory(room, mineralKey);
       if (existingMineralRoad.length === 0) {
+        const plannedMineral2 = plannedPositionsFromMemory(
+          room,
+          `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
+        );
+        const targetPos =
+          plannedMineral2.length > 0 ? plannedMineral2[0] : mineral.pos;
         const roadPoints = getOrPlanRoad(
           room,
           mineralKey,
           spawn.pos,
-          mineral.pos
+          targetPos
         );
         for (const p of roadPoints)
           addPlannedStructureToMemory(room, mineralKey, p);
@@ -196,9 +217,13 @@ function processRoomStructures(room: Room) {
     }
 
     if (mineral) {
+      const plannedMineral3 = plannedPositionsFromMemory(
+        room,
+        `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
+      );
       energyNodes.push({
         id: `${PLANNER_KEYS.NODE_MINERAL_PREFIX}${mineral.id}`,
-        pos: mineral.pos,
+        pos: plannedMineral3.length > 0 ? plannedMineral3[0] : mineral.pos,
       });
     }
 

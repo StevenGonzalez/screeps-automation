@@ -95,18 +95,45 @@ export function planControllerContainer(
         const y = controller.pos.y + dy;
         if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
         if (!isWalkable(room, x, y)) continue;
-        const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
+        // ensure no container exists or is planned nearby to avoid duplicates
+        const structures = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
         const sites = room.lookForAt(
           LOOK_CONSTRUCTION_SITES,
           x,
           y
         ) as ConstructionSite[];
+        const hasContainer = structures.some(
+          (s) => s.structureType === STRUCTURE_CONTAINER
+        );
         const hasContainerSite = sites.some(
           (s) => s.structureType === STRUCTURE_CONTAINER
         );
-        if (structures.length === 0 && !hasContainerSite)
+        if (!hasContainer && !hasContainerSite)
           return new RoomPosition(x, y, room.name);
       }
+    }
+  }
+  return null;
+}
+
+export function planMineralContainer(
+  room: Room,
+  mineral: Mineral
+): RoomPosition | null {
+  const offset = STRUCTURE_PLANNER.containerOffset;
+  // if any container exists within offset of mineral, don't plan
+  const existing = mineral.pos.findInRange(FIND_STRUCTURES, offset, {
+    filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+  });
+  if (existing.length > 0) return null;
+
+  // try to find a tile adjacent to the mineral that is buildable
+  for (let dx = -offset; dx <= offset; dx++) {
+    for (let dy = -offset; dy <= offset; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = mineral.pos.x + dx;
+      const y = mineral.pos.y + dy;
+      if (isBuildableTile(room, x, y)) return new RoomPosition(x, y, room.name);
     }
   }
   return null;
