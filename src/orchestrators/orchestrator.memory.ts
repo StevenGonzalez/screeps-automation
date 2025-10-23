@@ -53,6 +53,23 @@ function processRoomMemory(room: Room) {
     // allow storing extra memory key without extending RoomMemory types here
     (room.memory as any).minerContainerIds = minerContainerIds;
 
+    // Record the closest container to the controller as the upgrade container
+    if (room.controller) {
+      const controllerContainers = containers.filter(
+        (c) => c.pos.getRangeTo(room.controller!.pos) <= 2
+      );
+      if (controllerContainers.length > 0) {
+        // pick the closest by path to the controller
+        const closest =
+          room.controller!.pos.findClosestByPath(controllerContainers);
+        (room.memory as any).upgradeContainerId = closest
+          ? closest.id
+          : undefined;
+      } else {
+        (room.memory as any).upgradeContainerId = undefined;
+      }
+    }
+
     const towers = room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_TOWER,
     });

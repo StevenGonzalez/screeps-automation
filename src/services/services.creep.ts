@@ -362,6 +362,25 @@ export function findDepositTargetExcludingMiner(
   if (priorityTarget && minerIds.indexOf(priorityTarget.id) === -1)
     return priorityTarget;
 
+  // If role is hauler, prefer the upgrade container (it's important but below spawns/extensions)
+  if (role === "hauler") {
+    const upgradeId = (creep.room.memory as any).upgradeContainerId as
+      | Id<StructureContainer>
+      | undefined;
+    if (upgradeId) {
+      const upgradeCont = Game.getObjectById(
+        upgradeId
+      ) as StructureContainer | null;
+      if (
+        upgradeCont &&
+        upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+        minerIds.indexOf(upgradeCont.id as string) === -1
+      ) {
+        return upgradeCont;
+      }
+    }
+  }
+
   // Fallback: any container/storage with free capacity that is NOT a miner container
   const targets = creep.room.find(FIND_STRUCTURES, {
     filter: (s): s is AnyStoreStructure =>
