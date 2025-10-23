@@ -95,7 +95,7 @@ export function planControllerContainer(
         const y = controller.pos.y + dy;
         if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
         if (!isWalkable(room, x, y)) continue;
-        // ensure no container exists or is planned nearby to avoid duplicates
+
         const structures = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
         const sites = room.lookForAt(
           LOOK_CONSTRUCTION_SITES,
@@ -121,13 +121,11 @@ export function planMineralContainer(
   mineral: Mineral
 ): RoomPosition | null {
   const offset = STRUCTURE_PLANNER.containerOffset;
-  // if any container exists within offset of mineral, don't plan
   const existing = mineral.pos.findInRange(FIND_STRUCTURES, offset, {
     filter: (s) => s.structureType === STRUCTURE_CONTAINER,
   });
   if (existing.length > 0) return null;
 
-  // try to find a tile adjacent to the mineral that is buildable
   for (let dx = -offset; dx <= offset; dx++) {
     for (let dy = -offset; dy <= offset; dy++) {
       if (dx === 0 && dy === 0) continue;
@@ -739,20 +737,6 @@ export function removePlannedStructureFromMemory(
   mem[type] = arr.filter((s) => s !== key);
 }
 
-/**
- * Cleanup duplicate or stale planned entries for a single room.
- * - If multiple positions exist for container/controller/source/mineral keys,
- *   keep any position that already has a structure there, otherwise keep the first.
- * - Remove planned road/connector tiles that sit under non-road structures (already handled elsewhere),
- *   and trim any entries that reference invalid coords.
- */
-
-/**
- * Global cleanup run invoked from orchestrator. It will:
- * - cleanup the visible room's plannedStructures (dedupe/prune)
- * - optionally prune plannedStructures for unseen rooms older than configured age
- */
-
 function structureTypeForKey(key: string): StructureConstant | null {
   if (key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX)) return STRUCTURE_CONTAINER;
   if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX))
@@ -764,5 +748,3 @@ function structureTypeForKey(key: string): StructureConstant | null {
   if (key === PLANNER_KEYS.CONTAINER_CONTROLLER) return STRUCTURE_CONTAINER;
   return null;
 }
-
-// orchestration-level functions moved to orchestrator

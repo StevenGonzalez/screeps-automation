@@ -10,9 +10,7 @@ export const STRUCTURE_PLANNER = {
     { x: 0, y: -2 },
   ],
   planInterval: 50,
-  // automatic plannedStructures cleanup: run every N ticks (0 = disabled)
   plannedCleanupInterval: 1000,
-  // when a room is not visible, entries older than this (ticks) will be purged from Memory.rooms
   plannedCleanupUnseenAge: 10000,
   rampartOnTopFor: [
     STRUCTURE_CONTAINER,

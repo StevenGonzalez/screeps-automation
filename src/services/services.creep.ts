@@ -63,7 +63,7 @@ export function acquireEnergy(creep: Creep): boolean {
       "store" in s &&
       s.store[RESOURCE_ENERGY] > 0,
   });
-  // Prefer non-upgrader container/storage targets unless none available
+
   const upgradeId = (creep.room.memory as any).upgradeContainerId as
     | Id<StructureContainer>
     | undefined;
@@ -77,7 +77,6 @@ export function acquireEnergy(creep: Creep): boolean {
       nonUpgradeTargets
     ) as AnyStoreStructure;
   } else if (storeTargets.length > 0) {
-    // fallback to upgrade container/storage if it's the only source
     chosenTarget = creep.pos.findClosestByPath(
       storeTargets
     ) as AnyStoreStructure;
