@@ -88,7 +88,19 @@ function getHarvesterPopulationTarget(room: Room): number {
 
 function getPopulationTarget(role: string, room: Room): number {
   if (role === ROLE_HARVESTER) return 2;
-  if (role === ROLE_UPGRADER) return 1;
+  if (role === ROLE_UPGRADER) {
+    let base = 1;
+
+    if (room.controller && room.controller.level >= 6) base++;
+
+    const storage = room.storage;
+    if (storage && storage.store[RESOURCE_ENERGY] > 50000)
+      base += Math.floor(storage.store[RESOURCE_ENERGY] / 50000);
+
+    if (room.energyAvailable > 1500) base++;
+
+    return Math.min(base, 4);
+  }
   if (role === ROLE_BUILDER) return 1;
   return 0;
 }
