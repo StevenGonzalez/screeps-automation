@@ -234,6 +234,41 @@ function processRoomStructures(room: Room) {
     }
   } catch (e) {}
 
+  let spawn: StructureSpawn | null = null;
+  if (room.memory.spawnId) {
+    spawn = Game.getObjectById(room.memory.spawnId) as StructureSpawn | null;
+  }
+  if (spawn && room.controller && room.controller.level >= 4) {
+    const storageKey = `${PLANNER_KEYS.STORAGE_PREFIX}${spawn.id}`;
+    const plannedStorage = plannedPositionsFromMemory(room, storageKey);
+    const hasStorage =
+      room.find(FIND_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_STORAGE,
+      }).length > 0;
+    if (!hasStorage && plannedStorage.length === 0) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const x = spawn.pos.x + dx;
+          const y = spawn.pos.y + dy;
+          if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
+          const terrain = room.getTerrain().get(x, y);
+          if (terrain === TERRAIN_MASK_WALL) continue;
+          const structs = room.lookForAt(LOOK_STRUCTURES, x, y);
+          const sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y);
+          if (structs.length === 0 && sites.length === 0) {
+            addPlannedStructureToMemory(
+              room,
+              storageKey,
+              new RoomPosition(x, y, room.name)
+            );
+            break;
+          }
+        }
+      }
+    }
+  }
+
   const sources = room.find(FIND_SOURCES);
   for (const source of sources) {
     const planned = plannedPositionsFromMemory(
@@ -315,7 +350,6 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  const spawn = room.find(FIND_MY_SPAWNS)[0];
   if (spawn) {
     for (const source of sources) {
       const containerPlanned = plannedPositionsFromMemory(
@@ -357,7 +391,6 @@ function processRoomStructures(room: Room) {
 
     const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
     if (mineral) {
-      // Always plan a mineral container, regardless of extractor presence
       const plannedMineral = plannedPositionsFromMemory(
         room,
         `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`

@@ -48,6 +48,7 @@ export const PLANNER_KEYS = {
   TOWERS_PREFIX: "towers_for_",
   RAMPARTS_KEY: "ramparts",
   EXTENSIONS_PREFIX: "extensions_for_",
+  STORAGE_PREFIX: "storage_for_",
 };
 
 export const TOWER_COUNT_PER_RCL: Record<number, number> = {

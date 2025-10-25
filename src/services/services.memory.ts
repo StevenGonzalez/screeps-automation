@@ -1,3 +1,10 @@
+export function addStorageToMemory(room: Room, pos: RoomPosition) {
+  if (!room.memory.storagePositions) room.memory.storagePositions = [];
+  const keyStr = `${pos.x},${pos.y}`;
+  if (!room.memory.storagePositions.includes(keyStr)) {
+    room.memory.storagePositions.push(keyStr);
+  }
+}
 export function addTowerToMemory(room: Room, towerId: Id<StructureTower>) {
   if (!room.memory.towerIds) room.memory.towerIds = [];
   if (!room.memory.towerIds.includes(towerId)) {

@@ -20,6 +20,7 @@ declare global {
     plannedStructures?: Record<string, string[]>;
     plannedStructuresMeta?: Record<string, { createdAt: number }>;
     upgraderContainerId?: Id<StructureContainer>;
+    storagePositions?: string[];
   }
 
   interface Memory {
