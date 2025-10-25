@@ -511,45 +511,27 @@ export function planRoadsAroundStructures(room: Room) {
 
     const positions = plannedPositionsFromMemory(room, key);
     for (const s of positions) {
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          if (dx === 0 && dy === 0) continue;
-          const x = s.x + dx;
-          const y = s.y + dy;
-          if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
-          if (!isBuildableTile(room, x, y)) continue;
-          if (plannedRoadOrConnectorAt(room, x, y)) continue;
-          let neighborHasRoad = false;
-          for (let nx = -1; nx <= 1 && !neighborHasRoad; nx++) {
-            for (let ny = -1; ny <= 1; ny++) {
-              if (nx === 0 && ny === 0) continue;
-              const checkX = x + nx;
-              const checkY = y + ny;
-              if (checkX < 0 || checkX >= 50 || checkY < 0 || checkY >= 50)
-                continue;
-              if (plannedRoadOrConnectorAt(room, checkX, checkY)) {
-                neighborHasRoad = true;
-                break;
-              }
-              const existing = room.lookForAt(
-                LOOK_STRUCTURES,
-                checkX,
-                checkY
-              ) as Structure[];
-              if (existing.some((es) => es.structureType === STRUCTURE_ROAD)) {
-                neighborHasRoad = true;
-                break;
-              }
-            }
-          }
-          if (neighborHasRoad) continue;
-          if (plannedNonRoadStructureAt(room, x, y)) continue;
-          addPlannedStructureToMemory(
-            room,
-            roadKey,
-            new RoomPosition(x, y, room.name)
-          );
-        }
+      const directions = [
+        { dx: 0, dy: -1 }, // North
+        { dx: 0, dy: 1 }, // South
+        { dx: -1, dy: 0 }, // West
+        { dx: 1, dy: 0 }, // East
+      ];
+      for (const { dx, dy } of directions) {
+        const x = s.x + dx;
+        const y = s.y + dy;
+        if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
+        if (!isBuildableTile(room, x, y)) continue;
+        if (plannedRoadOrConnectorAt(room, x, y)) continue;
+        if (plannedNonRoadStructureAt(room, x, y)) continue;
+        const existing = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
+        if (existing.some((es) => es.structureType === STRUCTURE_ROAD))
+          continue;
+        addPlannedStructureToMemory(
+          room,
+          roadKey,
+          new RoomPosition(x, y, room.name)
+        );
       }
     }
   }
