@@ -257,23 +257,42 @@ function processRoomStructures(room: Room) {
     );
 
     let hasControllerContainer = false;
+    let foundContainer: StructureContainer | null = null;
+
     if (room.memory.upgraderContainerId) {
-      const container = Game.getObjectById(room.memory.upgraderContainerId);
-      if (container && container.structureType === STRUCTURE_CONTAINER) {
-        if (container.pos.getRangeTo(room.controller.pos) <= 2) {
-          hasControllerContainer = true;
-        }
+      const container = Game.getObjectById(
+        room.memory.upgraderContainerId
+      ) as StructureContainer | null;
+      if (
+        container &&
+        container.structureType === STRUCTURE_CONTAINER &&
+        container.pos.getRangeTo(room.controller.pos) <= 2
+      ) {
+        hasControllerContainer = true;
+        foundContainer = container;
       }
     }
 
     if (!hasControllerContainer) {
-      const containers = room.lookForAt(
-        LOOK_STRUCTURES,
-        room.controller.pos.x,
-        room.controller.pos.y
-      ) as Structure[];
-      if (containers.some((s) => s.structureType === STRUCTURE_CONTAINER)) {
+      const containers = room.find(FIND_STRUCTURES, {
+        filter: (s) =>
+          s.structureType === STRUCTURE_CONTAINER &&
+          s.pos.getRangeTo(room.controller!.pos) <= 2,
+      }) as StructureContainer[];
+      if (containers.length > 0) {
         hasControllerContainer = true;
+        foundContainer = containers[0];
+      }
+    }
+
+    if (hasControllerContainer && planned.length > 0) {
+      const mem = room.memory.plannedStructures as Record<string, string[]>;
+      if (mem && mem[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
+        delete mem[PLANNER_KEYS.CONTAINER_CONTROLLER];
+      }
+      const meta = (room as any).memory.plannedStructuresMeta;
+      if (meta && meta[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
+        delete meta[PLANNER_KEYS.CONTAINER_CONTROLLER];
       }
     }
     if (planned.length > 1) {
