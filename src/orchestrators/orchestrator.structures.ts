@@ -255,6 +255,14 @@ function processRoomStructures(room: Room) {
       room,
       PLANNER_KEYS.CONTAINER_CONTROLLER
     );
+    if (planned.length > 1) {
+      const mem = room.memory.plannedStructures as Record<string, string[]>;
+      if (mem && mem[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
+        mem[PLANNER_KEYS.CONTAINER_CONTROLLER] = [
+          mem[PLANNER_KEYS.CONTAINER_CONTROLLER][0],
+        ];
+      }
+    }
     if (planned.length === 0) {
       const pos = planControllerContainer(room, room.controller);
       if (pos)
@@ -308,6 +316,7 @@ function processRoomStructures(room: Room) {
 
     const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
     if (mineral) {
+      // Always plan a mineral container, regardless of extractor presence
       const plannedMineral = plannedPositionsFromMemory(
         room,
         `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
