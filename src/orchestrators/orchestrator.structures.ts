@@ -26,6 +26,8 @@ function structureTypeForKey(key: string): StructureConstant | null {
       return STRUCTURE_ROAD;
     case key.startsWith(PLANNER_KEYS.TOWERS_PREFIX):
       return STRUCTURE_TOWER;
+    case key.startsWith(PLANNER_KEYS.STORAGE_PREFIX):
+      return STRUCTURE_STORAGE;
     case key === PLANNER_KEYS.RAMPARTS_KEY:
       return STRUCTURE_RAMPART;
     case key === PLANNER_KEYS.CONTAINER_CONTROLLER:
