@@ -255,6 +255,27 @@ function processRoomStructures(room: Room) {
       room,
       PLANNER_KEYS.CONTAINER_CONTROLLER
     );
+
+    let hasControllerContainer = false;
+    if (room.memory.upgraderContainerId) {
+      const container = Game.getObjectById(room.memory.upgraderContainerId);
+      if (container && container.structureType === STRUCTURE_CONTAINER) {
+        if (container.pos.getRangeTo(room.controller.pos) <= 2) {
+          hasControllerContainer = true;
+        }
+      }
+    }
+
+    if (!hasControllerContainer) {
+      const containers = room.lookForAt(
+        LOOK_STRUCTURES,
+        room.controller.pos.x,
+        room.controller.pos.y
+      ) as Structure[];
+      if (containers.some((s) => s.structureType === STRUCTURE_CONTAINER)) {
+        hasControllerContainer = true;
+      }
+    }
     if (planned.length > 1) {
       const mem = room.memory.plannedStructures as Record<string, string[]>;
       if (mem && mem[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
@@ -263,7 +284,8 @@ function processRoomStructures(room: Room) {
         ];
       }
     }
-    if (planned.length === 0) {
+
+    if (planned.length === 0 && !hasControllerContainer) {
       const pos = planControllerContainer(room, room.controller);
       if (pos)
         addPlannedStructureToMemory(
