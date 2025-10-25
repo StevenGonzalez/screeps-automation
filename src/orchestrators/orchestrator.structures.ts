@@ -13,8 +13,7 @@ import {
   pruneRoadsUnderStructures,
   connectRoadClusters,
 } from "../services/services.structures";
-import { PLANNER_KEYS } from "../config/config.structures";
-import { STRUCTURE_PLANNER } from "../config/config.structures";
+import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
 
 function structureTypeForKey(key: string): StructureConstant | null {
   switch (true) {
