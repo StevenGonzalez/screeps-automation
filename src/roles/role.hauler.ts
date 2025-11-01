@@ -34,7 +34,6 @@ export function runHauler(creep: Creep) {
     }
 
     acquireEnergy(creep);
-    acquireEnergy(creep);
     return;
   }
   const targets = creep.room.find(FIND_STRUCTURES, {
