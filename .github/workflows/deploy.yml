@@ -20,8 +20,13 @@ jobs:
       - name: Install dependencies
         run: yarn install
         
-      - name: Build and Deploy
-        run: yarn deploy
-        env:
-          SCREEPS_EMAIL: ${{ secrets.SCREEPS_EMAIL }}
-          SCREEPS_TOKEN: ${{ secrets.SCREEPS_TOKEN }}
+      - name: Build
+        run: yarn build
+        
+      - name: Deploy to dist branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          publish_branch: dist
+          force_orphan: true
