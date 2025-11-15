@@ -129,7 +129,7 @@ function trySpawnEconomicCreeps(
   const current = getCurrentCreepCounts(room);
   const repairDemand = assessRepairDemand(room);
   const sources = RoomCache.sources(room);
-  const containersOrSites = (pos: RoomPosition) => {
+  const hasBuiltContainer = (pos: RoomPosition) => {
     const hasStruct = room
       .lookForAtArea(
         LOOK_STRUCTURES,
@@ -140,20 +140,9 @@ function trySpawnEconomicCreeps(
         true
       )
       .some((i) => i.structure.structureType === STRUCTURE_CONTAINER);
-    if (hasStruct) return true;
-    const hasSite = room
-      .lookForAtArea(
-        LOOK_CONSTRUCTION_SITES,
-        pos.y - 1,
-        pos.x - 1,
-        pos.y + 1,
-        pos.x + 1,
-        true
-      )
-      .some((i) => i.constructionSite.structureType === STRUCTURE_CONTAINER);
-    return hasSite;
+    return hasStruct;
   };
-  const minerTargets = sources.filter((s) => containersOrSites(s.pos)).length;
+  const minerTargets = sources.filter((s) => hasBuiltContainer(s.pos)).length;
 
   // Spawn queue in priority order
   const hasConstruction = RoomCache.constructionSites(room).length > 0;
