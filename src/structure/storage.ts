@@ -7,6 +7,8 @@
 
 /// <reference types="@types/screeps" />
 
+import { isSourceContainer, isControllerContainer } from "../utils/structure.utils";
+
 /**
  * Manage all storage structures in a room
  */
@@ -506,20 +508,6 @@ function createDistributionPlan(
 /**
  * Helper functions
  */
-function isSourceContainer(container: StructureContainer): boolean {
-  return (
-    container.room.find(FIND_SOURCES, {
-      filter: (source) => container.pos.isNearTo(source),
-    }).length > 0
-  );
-}
-
-function isControllerContainer(container: StructureContainer): boolean {
-  return container.room.controller
-    ? container.pos.isNearTo(container.room.controller)
-    : false;
-}
-
 function getPriority(priority: string): number {
   switch (priority) {
     case "high":

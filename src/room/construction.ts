@@ -10,6 +10,8 @@
 import { RoomIntelligence } from "./intelligence";
 import { getRoomMemory } from "../global.memory";
 import { planRoomDefense } from "../defense/planner";
+import { inBounds, posKey, isValidBuildPosition } from "../utils/position.utils";
+import { hasContainerNear, hasRoad } from "../utils/structure.utils";
 
 export interface ConstructionPlan {
   queue: ConstructionTask[];
@@ -453,16 +455,7 @@ function generateContainerTasks(intel: RoomIntelligence): ConstructionTask[] {
   // Controller container
   const controller = room?.controller;
   if (controller) {
-    const containerNearby = room
-      ?.lookForAtArea(
-        LOOK_STRUCTURES,
-        controller.pos.y - 2,
-        controller.pos.x - 2,
-        controller.pos.y + 2,
-        controller.pos.x + 2,
-        true
-      )
-      .some((item) => item.structure.structureType === STRUCTURE_CONTAINER);
+    const containerNearby = hasContainerNear(controller.pos, 2);
 
     if (!containerNearby) {
       const pos = findContainerPosition(controller.pos);
@@ -1136,18 +1129,6 @@ function findPowerSpawnPosition(spawnPos: RoomPosition): RoomPosition {
   return new RoomPosition(spawnPos.x - 1, spawnPos.y + 3, spawnPos.roomName);
 }
 
-function isValidBuildPosition(pos: RoomPosition): boolean {
-  // Simplified validation - in real implementation would check terrain and structures
-  const room = Game.rooms[pos.roomName];
-  if (!room) return false;
-
-  const terrain = room.getTerrain();
-  if (terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
-
-  const structures = pos.lookFor(LOOK_STRUCTURES);
-  return structures.length === 0;
-}
-
 // Towers can replace roads/ramparts; allow those tiles during planning
 function isPlaceableForTower(pos: RoomPosition): boolean {
   const room = Game.rooms[pos.roomName];
@@ -1194,14 +1175,6 @@ function getLabLimit(rcl: number): number {
 }
 
 // ===== Enhanced strategic layout helpers =====
-
-function posKey(pos: RoomPosition): string {
-  return `${pos.roomName}:${pos.x}:${pos.y}`;
-}
-
-function inBounds(x: number, y: number): boolean {
-  return x > 0 && x < 49 && y > 0 && y < 49;
-}
 
 function findBaseAnchor(room: Room): RoomPosition {
   // Cached anchor to reduce CPU
@@ -2088,10 +2061,7 @@ function generateExtractorTasks(intel: RoomIntelligence): ConstructionTask[] {
   }
 
   // Add a container near mineral if missing
-  const hasContainer = mineral.pos
-    .findInRange(FIND_STRUCTURES, 1)
-    .some((s) => s.structureType === STRUCTURE_CONTAINER);
-  if (!hasContainer) {
+  if (!hasContainerNear(mineral.pos, 1)) {
     const cpos = findContainerPosition(mineral.pos);
     if (cpos) {
       tasks.push({

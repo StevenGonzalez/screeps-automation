@@ -35,6 +35,12 @@ function getWallTarget(rcl: number): number {
 
 /// <reference types="@types/screeps" />
 import { RoomCache } from "../room/cache";
+import { 
+  countBodyParts,
+  isFastCreep,
+  isNearRoomEdge,
+  isHealerKiter
+} from "../utils/combat.utils";
 
 /**
  * Execute tower actions from defense plan
@@ -259,28 +265,11 @@ function runBasicTowerAI(room: Room): void {
     const hostiles = RoomCache.hostileCreeps(room);
     const viableHostiles = hostiles.filter((hostile: Creep) => {
       // Filter out harassment/kiting targets
-      const healParts = hostile.body.filter(
-        (p: BodyPartDefinition) => p.type === HEAL
-      ).length;
-      const moveParts = hostile.body.filter(
-        (p: BodyPartDefinition) => p.type === MOVE
-      ).length;
-      const attackParts = hostile.body.filter(
-        (p: BodyPartDefinition) => p.type === ATTACK || p.type === RANGED_ATTACK
-      ).length;
+      const healParts = countBodyParts(hostile, HEAL);
       const distance = tower.pos.getRangeTo(hostile.pos);
 
-      const isFastCreep = moveParts >= hostile.body.length * 0.4;
-      const nearEdge =
-        hostile.pos.x <= 5 ||
-        hostile.pos.x >= 44 ||
-        hostile.pos.y <= 5 ||
-        hostile.pos.y >= 44;
-      const isHealerKiter =
-        healParts > 0 && attackParts <= 3 && healParts >= attackParts * 0.75;
-
       // Skip if it's a kiter that can outheal us or has mostly heals
-      if (healParts > 0 && (isHealerKiter || isFastCreep) && nearEdge) {
+      if (healParts > 0 && (isHealerKiter(hostile) || isFastCreep(hostile)) && isNearRoomEdge(hostile.pos)) {
         // Tower damage formula: 600 at range <=5, linear falloff to 150 at range 20+
         let towerDamage = 600;
         if (distance > 5) {

@@ -1,6 +1,8 @@
 /// <reference types="@types/screeps" />
 import { CreepPersonality } from "./personality";
 import { visualPath } from "../path.styles";
+import { getRoomMemory } from "../global.memory";
+import { isSourceContainer } from "../utils/structure.utils";
 
 export function runUpgrader(creep: Creep, intel: any): void {
   // Toggle state
@@ -138,7 +140,7 @@ export function runUpgrader(creep: Creep, intel: any): void {
 function getControllerContainer(room: Room): StructureContainer | null {
   const controller = room.controller;
   if (!controller) return null;
-  const mem = getRoomMem(room.name);
+  const mem = getRoomMemory(room.name);
   const id = mem.controllerContainerId as Id<StructureContainer> | undefined;
   let cached = id ? Game.getObjectById<StructureContainer>(id) : null;
   if (
@@ -157,18 +159,4 @@ function getControllerContainer(room: Room): StructureContainer | null {
   const best = found[0] || null;
   if (best) mem.controllerContainerId = best.id as string;
   return best;
-}
-
-function isSourceContainer(container: StructureContainer): boolean {
-  const room = container.room;
-  const near = room.find(FIND_SOURCES, {
-    filter: (s) => container.pos.isNearTo(s.pos),
-  });
-  return near.length > 0;
-}
-
-function getRoomMem(roomName: string): any {
-  if (!Memory.rooms) Memory.rooms = {} as any;
-  if (!Memory.rooms[roomName]) (Memory.rooms as any)[roomName] = {};
-  return (Memory.rooms as any)[roomName];
 }

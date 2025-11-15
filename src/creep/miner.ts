@@ -1,6 +1,7 @@
 /// <reference types="@types/screeps" />
 import { visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
+import { hasContainerNear, hasContainerSiteNear } from "../utils/structure.utils";
 
 /**
  * Miner: static harvester designed to sit on a container by a source and mine continuously.
@@ -125,36 +126,6 @@ function getMiningMemory(roomName: string): {
     assignments: { [sourceId: string]: string };
     seats: { [sourceId: string]: { x: number; y: number } };
   };
-}
-
-function hasContainerNear(pos: RoomPosition): boolean {
-  const room = Game.rooms[pos.roomName];
-  const found = room
-    ?.lookForAtArea(
-      LOOK_STRUCTURES,
-      pos.y - 1,
-      pos.x - 1,
-      pos.y + 1,
-      pos.x + 1,
-      true
-    )
-    .some((i) => i.structure.structureType === STRUCTURE_CONTAINER);
-  return !!found;
-}
-
-function hasContainerSiteNear(pos: RoomPosition): boolean {
-  const room = Game.rooms[pos.roomName];
-  const found = room
-    ?.lookForAtArea(
-      LOOK_CONSTRUCTION_SITES,
-      pos.y - 1,
-      pos.x - 1,
-      pos.y + 1,
-      pos.x + 1,
-      true
-    )
-    .some((i) => i.constructionSite.structureType === STRUCTURE_CONTAINER);
-  return !!found;
 }
 
 function findContainerSpotNear(pos: RoomPosition): RoomPosition | null {

@@ -8,6 +8,7 @@
 /// <reference types="@types/screeps" />
 
 import { RoomIntelligence } from "./intelligence";
+import { getBodyForRole } from "./spawning";
 
 export interface EconomicPlan {
   creepComposition: {
@@ -354,80 +355,13 @@ export function assessEconomicHealth(intel: RoomIntelligence): {
 
 /**
  * Calculate optimal body composition for a role based on economy
+ * Delegates to spawning module which has the comprehensive body calculations
  */
 export function calculateOptimalBody(
   role: string,
   energyAvailable: number,
   intel: RoomIntelligence
 ): BodyPartConstant[] {
-  const maxCost = Math.min(energyAvailable, 3000); // Max body cost
-
-  switch (role) {
-    case "harvester":
-      return calculateHarvesterBody(maxCost, intel);
-    case "hauler":
-      return calculateHaulerBody(maxCost);
-    case "upgrader":
-      return calculateUpgraderBody(maxCost);
-    case "builder":
-      return calculateBuilderBody(maxCost);
-    default:
-      return [WORK, CARRY, MOVE]; // Basic worker
-  }
-}
-
-function calculateHarvesterBody(
-  maxEnergy: number,
-  intel: RoomIntelligence
-): BodyPartConstant[] {
-  const hasContainer = intel.economy.sources.some(
-    () =>
-      // Simplified check - in real implementation would check for nearby containers
-      true
-  );
-
-  if (hasContainer && maxEnergy >= 550) {
-    // Container harvester - all work parts
-    return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE];
-  } else if (maxEnergy >= 350) {
-    // Mobile harvester
-    return [WORK, WORK, WORK, CARRY, MOVE, MOVE];
-  } else {
-    // Basic harvester
-    return [WORK, WORK, CARRY, MOVE];
-  }
-}
-
-function calculateHaulerBody(maxEnergy: number): BodyPartConstant[] {
-  const carryParts = Math.min(Math.floor(maxEnergy / 150), 10); // CARRY + MOVE = 150
-  const moveParts = carryParts;
-
-  const body: BodyPartConstant[] = [];
-  for (let i = 0; i < carryParts; i++) body.push(CARRY);
-  for (let i = 0; i < moveParts; i++) body.push(MOVE);
-
-  return body;
-}
-
-function calculateUpgraderBody(maxEnergy: number): BodyPartConstant[] {
-  const maxWorkParts = Math.min(Math.floor(maxEnergy / 200), 15); // WORK + CARRY + MOVE = 200
-
-  const body: BodyPartConstant[] = [];
-  for (let i = 0; i < maxWorkParts; i++) body.push(WORK);
-  for (let i = 0; i < maxWorkParts; i++) body.push(CARRY);
-  for (let i = 0; i < maxWorkParts; i++) body.push(MOVE);
-
-  return body;
-}
-
-function calculateBuilderBody(maxEnergy: number): BodyPartConstant[] {
-  // Balanced work and carry for building
-  const units = Math.min(Math.floor(maxEnergy / 200), 8);
-
-  const body: BodyPartConstant[] = [];
-  for (let i = 0; i < units; i++) body.push(WORK);
-  for (let i = 0; i < units; i++) body.push(CARRY);
-  for (let i = 0; i < units; i++) body.push(MOVE);
-
-  return body;
+  // Delegate to the comprehensive body calculation in spawning module
+  return getBodyForRole(role, energyAvailable);
 }

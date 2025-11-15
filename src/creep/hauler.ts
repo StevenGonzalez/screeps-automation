@@ -3,6 +3,7 @@ import { style, visualPath } from "../path.styles";
 import { CreepPersonality } from "./personality";
 import { RoomCache } from "../room/cache";
 import { getLabRequirements } from "../structure/lab.manager";
+import { isSourceContainer, isControllerContainer, isMineralContainer } from "../utils/structure.utils";
 
 export function runHauler(creep: Creep, intel: any): void {
   // Get lab requirements (used in both pickup and delivery)
@@ -491,25 +492,4 @@ export function runHauler(creep: Creep, intel: any): void {
       CreepPersonality.speak(creep, "frustrated");
     }
   }
-}
-
-function isControllerContainer(container: StructureContainer): boolean {
-  const ctrl = container.room.controller;
-  return !!ctrl && container.pos.inRangeTo(ctrl.pos, 3);
-}
-
-function isSourceContainer(container: StructureContainer): boolean {
-  const room = container.room;
-  const near = room.find(FIND_SOURCES, {
-    filter: (s) => container.pos.isNearTo(s.pos),
-  });
-  return near.length > 0;
-}
-
-function isMineralContainer(container: StructureContainer): boolean {
-  const room = container.room;
-  const near = room.find(FIND_MINERALS, {
-    filter: (m) => container.pos.inRangeTo(m.pos, 2),
-  });
-  return near.length > 0;
 }

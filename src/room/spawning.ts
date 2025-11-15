@@ -259,7 +259,7 @@ function trySpawnEconomicCreeps(
 
   for (const item of spawnQueue) {
     if (item.current < item.needed) {
-      const body = getOptimalBody(
+      const body = getBodyForRole(
         item.role,
         spawn.room.energyCapacityAvailable
       );
@@ -460,7 +460,7 @@ function trySpawnConstructionCreeps(
 
   const currentBuilders = counts.builder;
   if (currentBuilders < target) {
-    const body = getOptimalBody("builder", spawn.room.energyCapacityAvailable);
+    const body = getBodyForRole("builder", spawn.room.energyCapacityAvailable);
     const name = `builder_construction_${Game.time}`;
     const result = spawn.spawnCreep(body, name, {
       memory: { role: "builder", priority: "construction" },
@@ -586,8 +586,9 @@ function assessRepairDemand(room: Room): { recommendedRepairers: number } {
 }
 /**
  * Calculate optimal body parts for a given role and energy
+ * Exported for use by other modules (e.g., economy.ts)
  */
-function getOptimalBody(
+export function getBodyForRole(
   role: string,
   energyAvailable: number
 ): BodyPartConstant[] {

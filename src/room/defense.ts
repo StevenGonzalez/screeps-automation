@@ -8,6 +8,14 @@
 /// <reference types="@types/screeps" />
 
 import { RoomIntelligence } from "./intelligence";
+import { 
+  calculateAttackPower, 
+  calculateHealCapability,
+  countBodyParts,
+  isFastCreep,
+  isNearRoomEdge,
+  isHealerKiter
+} from "../utils/combat.utils";
 
 export interface DefensePlan {
   threatAssessment: {
@@ -114,10 +122,10 @@ function assessThreats(
       pos: pos,
       threatLevel: hostile.threatLevel,
       bodyParts: hostile.bodyParts,
-      estimatedDamage: calculateEstimatedDamage(hostile.bodyParts),
+      estimatedDamage: calculateAttackPower(hostile.bodyParts),
       priority: calculateTargetPriority(hostile, distanceToSpawn),
       distanceToSpawn,
-      attackCapability: calculateAttackCapability(hostile.bodyParts),
+      attackCapability: calculateAttackPower(hostile.bodyParts),
       healCapability: calculateHealCapability(hostile.bodyParts),
     };
   });
@@ -467,24 +475,6 @@ function generateAlerts(
 
 // Helper functions
 
-function calculateEstimatedDamage(bodyParts: BodyPartConstant[]): number {
-  return (
-    bodyParts.filter((part) => part === ATTACK).length * 30 +
-    bodyParts.filter((part) => part === RANGED_ATTACK).length * 10
-  );
-}
-
-function calculateAttackCapability(bodyParts: BodyPartConstant[]): number {
-  return (
-    bodyParts.filter((part) => part === ATTACK).length * 30 +
-    bodyParts.filter((part) => part === RANGED_ATTACK).length * 10
-  );
-}
-
-function calculateHealCapability(bodyParts: BodyPartConstant[]): number {
-  return bodyParts.filter((part) => part === HEAL).length * 12;
-}
-
 function calculateTargetPriority(
   hostile: RoomIntelligence["military"]["hostiles"][0],
   distanceToSpawn: number
@@ -518,31 +508,11 @@ function findBestTargetForTower(
     const creep = Game.getObjectById<Creep>(target.id);
     if (!creep) return false;
 
-    // Check if this is a harassment pattern:
-    // 1. Creep has significant heal parts (can outheal tower damage)
-    const healParts = creep.body.filter((p) => p.type === HEAL).length;
-    const toughParts = creep.body.filter((p) => p.type === TOUGH).length;
-    const moveParts = creep.body.filter((p) => p.type === MOVE).length;
-    const attackParts = creep.body.filter(
-      (p) => p.type === ATTACK || p.type === RANGED_ATTACK
-    ).length;
-
-    // 2. High mobility (can escape quickly)
-    const isFastCreep = moveParts >= creep.body.length * 0.4;
-
-    // 3. Near edge of room (easy escape)
-    const nearEdge =
-      creep.pos.x <= 5 ||
-      creep.pos.x >= 44 ||
-      creep.pos.y <= 5 ||
-      creep.pos.y >= 44;
-
-    // 4. Low attack capability relative to healing
-    const isHealerKiter =
-      healParts > 0 && attackParts <= 3 && healParts >= attackParts * 0.75;
-
+    // Check if this is a harassment pattern
+    const healParts = countBodyParts(creep, HEAL);
+    
     // Detect harassment: fast healer near edge with low attack capability
-    if (healParts > 0 && (isHealerKiter || isFastCreep) && nearEdge) {
+    if (healParts > 0 && (isHealerKiter(creep) || isFastCreep(creep)) && isNearRoomEdge(creep.pos)) {
       // This is likely a kiting harasser - only target if we can kill it quickly
       const distance = tower.pos.getRangeTo(creep.pos);
       // Tower damage formula: 600 at range <=5, linear falloff to 150 at range 20+
