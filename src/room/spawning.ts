@@ -435,17 +435,18 @@ function trySpawnConstructionCreeps(
     target = Math.min(target, 6);
   }
 
-  // Early-game and economy gating: keep lean if capacity is low or logistics not ready
-  if (energyCap < 400 || counts.harvester < 2 || counts.hauler < 1) {
+  // Early-game and economy gating: keep lean if economy is truly struggling
+  // Only restrict if we have very low capacity AND poor harvesting
+  if (energyCap < 300 && counts.harvester < 1) {
     target = Math.min(target, 1);
   }
   // If energy is currently very low and storage is empty, avoid spawning extra builders
   if (energyRatio < 0.3 && stored < 5000) {
-    target = Math.min(target, 1);
+    target = Math.min(target, 2); // Allow at least 2 builders even with low energy
   }
   // RCL-based cap: early rooms can't support too many builders
-  if (rcl <= 2) target = Math.min(target, 2);
-  if (rcl <= 4) target = Math.min(target, 4);
+  if (rcl <= 2) target = Math.min(target, 3); // Allow 3 builders at RCL2
+  if (rcl <= 4) target = Math.min(target, 5); // Allow 5 builders at RCL3-4
 
   const currentBuilders = counts.builder;
   if (currentBuilders < target) {
