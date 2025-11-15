@@ -429,12 +429,15 @@ function trySpawnConstructionCreeps(
     Math.min(1, energyAvail / Math.max(1, energyCap))
   );
 
-  // Dynamic target builders based on construction volume and economy
-  // Scale more reasonably: 1 builder per ~3-5 construction sites or ~8-10 active tasks
-  let target = 1;
-  if (sites >= 3 || activeTasks >= 8) target = 2;
-  if (sites >= 8 || activeTasks >= 20) target = 3;
-  if (sites >= 15 || activeTasks >= 40) target = 4;
+  // Dynamic target builders based on construction energy requirements
+  // Base rule: 1 builder per 5,000 energy needed for construction
+  const constructionEnergy = constructionPlan?.metrics?.estimatedCost || 0;
+  let target = Math.max(1, Math.ceil(constructionEnergy / 5000));
+
+  // Cap builders at 6 to avoid spawning too many (unless there's truly massive construction)
+  if (constructionEnergy < 50000) {
+    target = Math.min(target, 6);
+  }
 
   // Early-game and economy gating: keep lean if capacity is low or logistics not ready
   if (energyCap < 400 || counts.harvester < 2 || counts.hauler < 1) {
@@ -444,8 +447,9 @@ function trySpawnConstructionCreeps(
   if (energyRatio < 0.3 && stored < 5000) {
     target = Math.min(target, 1);
   }
-  // RCL-based cap
+  // RCL-based cap: early rooms can't support too many builders
   if (rcl <= 2) target = Math.min(target, 2);
+  if (rcl <= 4) target = Math.min(target, 4);
 
   const currentBuilders = counts.builder;
   if (currentBuilders < target) {
@@ -455,10 +459,11 @@ function trySpawnConstructionCreeps(
       memory: { role: "builder", priority: "construction" },
     });
     if (result === OK) {
+      const constructionEnergy = constructionPlan?.metrics?.estimatedCost || 0;
       console.log(
         `🏗️ Spawning builder (${
           currentBuilders + 1
-        }/${target}) for ${sites} sites / ${activeTasks} tasks`
+        }/${target}) for ${sites} sites / ${constructionEnergy.toLocaleString()} energy`
       );
       return true;
     } else if (result === ERR_NOT_ENOUGH_ENERGY) {
