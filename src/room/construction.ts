@@ -956,23 +956,14 @@ function calculateConstructionMetrics(
 ) {
   const totalTasks = tasks.length;
   
-  // Calculate cost from planned tasks
-  const plannedCost = tasks.reduce(
-    (sum, task) => sum + task.estimatedCost,
-    0
-  );
-  
-  // Also calculate cost from existing construction sites
+  // Calculate cost from existing construction sites (actual buildable work)
   const room = Game.rooms[intel.basic.name];
-  const sitesCost = room 
+  const estimatedCost = room 
     ? room.find(FIND_CONSTRUCTION_SITES).reduce(
         (sum, site) => sum + (site.progressTotal - site.progress),
         0
       )
     : 0;
-  
-  // Total construction energy = planned tasks + in-progress sites
-  const estimatedCost = plannedCost + sitesCost;
 
   // Estimate time based on builder capacity and energy flow
   const builderWorkParts = (intel.creeps.byRole.builder || 0) * 2; // Assume 2 work parts per builder
