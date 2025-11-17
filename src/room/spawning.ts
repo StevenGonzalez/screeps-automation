@@ -545,11 +545,11 @@ function assessRepairDemand(room: Room): { recommendedRepairers: number } {
         s.structureType === STRUCTURE_TOWER ||
         s.structureType === STRUCTURE_STORAGE ||
         s.structureType === STRUCTURE_TERMINAL) &&
-      s.hits < s.hitsMax * 0.5,
+      s.hits < s.hitsMax * 0.65,
   }).length;
 
   const rampartsLow = room.find(FIND_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 5000,
+    filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 8000,
   }).length;
 
   const roadsMedium = room.find(FIND_STRUCTURES, {

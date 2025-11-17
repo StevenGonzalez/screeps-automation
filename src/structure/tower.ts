@@ -204,15 +204,37 @@ export function performAutoRepair(room: Room): void {
       continue;
     }
 
-    // 2) Ramparts (light topping) when very full and no hostiles
-    if (
-      !hostile &&
-      energy >= minWallsRepair &&
-      room.storage &&
-      room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 50000
-    ) {
+    // 2) Containers - prevent decay by repairing at 80%
+    if (energy >= 400) {
+      const containers = tower.pos.findInRange(FIND_STRUCTURES, 20, {
+        filter: (s) =>
+          s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.8,
+      }) as StructureContainer[];
+      if (containers.length > 0) {
+        const target = containers.reduce((a, b) =>
+          a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b
+        );
+        if (!roomMem.targets[target.id] && target.hits < target.hitsMax) {
+          const res = tower.repair(target);
+          if (res === OK) {
+            roomMem.targets[target.id] = true;
+            repaired = true;
+            if (DEBUG_TOWER_REPAIR && Game.time % 300 === 0) {
+              const pct = Math.round((target.hits / target.hitsMax) * 100);
+              console.log(`📦 Tower maintaining container (${pct}%)`);
+            }
+          }
+          continue;
+        }
+      }
+    }
+
+    // 3) Ramparts - proactive maintenance to prevent decay to zero
+    if (!hostile && energy >= 500) {
       const ramparts = tower.pos.findInRange(FIND_STRUCTURES, 20, {
-        filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 2000,
+        filter: (s) =>
+          s.structureType === STRUCTURE_RAMPART &&
+          s.hits < Math.min(10000, s.hitsMax * 0.5),
       }) as StructureRampart[];
       if (ramparts.length > 0) {
         const target = ramparts.reduce((a, b) => (a.hits < b.hits ? a : b));
@@ -229,8 +251,9 @@ export function performAutoRepair(room: Room): void {
         continue;
       }
 
-      // 3) Walls (only extreme lows) when very full and no hostiles
-      const walls = tower.pos.findInRange(FIND_STRUCTURES, 20, {
+      // 4) Walls (only extreme lows) when very full and no hostiles
+      if (room.storage && room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 50000) {
+        const walls = tower.pos.findInRange(FIND_STRUCTURES, 20, {
         filter: (s) => s.structureType === STRUCTURE_WALL && s.hits < 5000,
       }) as StructureWall[];
       if (walls.length > 0) {
@@ -245,6 +268,7 @@ export function performAutoRepair(room: Room): void {
         if (res === OK && DEBUG_TOWER_REPAIR && Game.time % 600 === 0) {
           console.log(`🧱 Tower nudged wall to ${target.hits}`);
         }
+      }
       }
     }
   }

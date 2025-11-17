@@ -68,11 +68,11 @@ export function runRepairer(creep: Creep, intel: any): void {
       }
     }
 
-    // 3) Containers medium damage (prioritize over roads)
+    // 3) Containers - repair early to prevent decay (at 80%)
     if (!target) {
       const containers = creep.room.find(FIND_STRUCTURES, {
         filter: (s) =>
-          s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.6,
+          s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.8,
       });
       if (containers.length) target = pickMostDamaged(containers);
     }
