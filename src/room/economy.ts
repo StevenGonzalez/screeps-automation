@@ -87,6 +87,55 @@ function determineEconomicStrategy(
 }
 
 /**
+ * Calculate dynamic upgrader count based on economic surplus
+ * Prevents over-spending energy on upgrading when resources are needed elsewhere
+ */
+function calculateDynamicUpgraders(intel: RoomIntelligence): number {
+  const { economy, basic } = intel;
+  const rcl = basic.rcl;
+  const energyStored = economy.energyStored;
+  const netFlow = economy.netFlow;
+  const phase = basic.phase;
+
+  // Base upgraders: always maintain at least 1
+  let upgraders = 1;
+
+  // Calculate based on stored energy thresholds
+  if (energyStored < 10000) {
+    // Very low energy - minimal upgrading (1 upgrader)
+    upgraders = 1;
+  } else if (energyStored < 50000) {
+    // Low energy - conservative upgrading (1-2 upgraders)
+    upgraders = netFlow > 0 ? 2 : 1;
+  } else if (energyStored < 150000) {
+    // Moderate energy - balanced upgrading (2-3 upgraders)
+    upgraders = Math.min(3, 1 + Math.floor(netFlow / 5));
+  } else if (energyStored < 300000) {
+    // Good energy reserves - increased upgrading (3-5 upgraders)
+    upgraders = Math.min(5, 2 + Math.floor(netFlow / 5));
+  } else {
+    // Abundant energy - maximize upgrading (5-8 upgraders)
+    upgraders = Math.min(8, 3 + Math.floor(energyStored / 50000));
+  }
+
+  // Cap based on RCL (don't over-upgrade early on)
+  const rclCap = Math.max(2, Math.floor(rcl * 1.5));
+  upgraders = Math.min(upgraders, rclCap);
+
+  // Reduce upgraders if net flow is negative
+  if (netFlow < -5) {
+    upgraders = Math.max(1, Math.floor(upgraders / 2));
+  }
+
+  // At RCL 8, only minimal upgrading needed (just keep controller alive)
+  if (rcl >= 8) {
+    upgraders = 1;
+  }
+
+  return upgraders;
+}
+
+/**
  * Calculate optimal creep composition for the strategy
  */
 function calculateOptimalCreeps(
@@ -106,7 +155,8 @@ function calculateOptimalCreeps(
     case "BOOTSTRAP":
       // Minimal viable economy - one harvester per source, upgraders, builders as needed
       harvesters = Math.max(sourceCount, 2);
-      upgraders = Math.max(1, Math.floor(rcl / 2));
+      // Keep minimal upgraders during bootstrap
+      upgraders = 1;
       builders =
         infrastructure.constructionSites.length > 0
           ? Math.max(1, Math.floor(rcl / 2))
@@ -118,7 +168,8 @@ function calculateOptimalCreeps(
       // Balanced growth - efficient harvesting with strong building
       harvesters = sourceCount * (rcl >= 4 ? 1 : 2); // Fewer harvesters with containers
       haulers = rcl >= 2 ? Math.min(sourceCount, 3) : 0;
-      upgraders = Math.max(2, Math.floor(rcl / 2));
+      // Dynamic upgraders based on net energy flow and stored energy
+      upgraders = calculateDynamicUpgraders(intel);
       builders =
         infrastructure.constructionSites.length > 0
           ? Math.max(2, Math.floor(rcl / 2))
@@ -129,7 +180,8 @@ function calculateOptimalCreeps(
       // Fine-tuned for efficiency
       harvesters = sourceCount; // One per source with optimal bodies
       haulers = Math.max(2, Math.floor(sourceCount * 1.5));
-      upgraders = Math.floor(economy.netFlow / 10); // Scale with excess energy
+      // Dynamic upgraders based on actual economic surplus
+      upgraders = calculateDynamicUpgraders(intel);
       builders = infrastructure.constructionSites.length > 2 ? 2 : 1;
       break;
 
