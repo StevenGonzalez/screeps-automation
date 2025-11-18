@@ -536,44 +536,49 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
 }
 
 function assessRepairDemand(room: Room): { recommendedRepairers: number } {
-  // Scan for damaged structures and decaying roads/containers
+  // Count structures needing repair by category
+  const containers = room.find(FIND_STRUCTURES, {
+    filter: (s) =>
+      s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.8,
+  }).length;
+
+  const ramparts = room.find(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 10000,
+  }).length;
+
+  const roads = room.find(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.5,
+  }).length;
+
   const critical = room.find(FIND_STRUCTURES, {
     filter: (s) =>
-      (s.structureType === STRUCTURE_CONTAINER ||
-        s.structureType === STRUCTURE_ROAD ||
-        s.structureType === STRUCTURE_SPAWN ||
+      (s.structureType === STRUCTURE_SPAWN ||
         s.structureType === STRUCTURE_TOWER ||
         s.structureType === STRUCTURE_STORAGE ||
-        s.structureType === STRUCTURE_TERMINAL) &&
-      s.hits < s.hitsMax * 0.65,
+        s.structureType === STRUCTURE_TERMINAL ||
+        s.structureType === STRUCTURE_EXTENSION) &&
+      s.hits < s.hitsMax * 0.8,
   }).length;
 
-  const rampartsLow = room.find(FIND_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 8000,
-  }).length;
-
-  const roadsMedium = room.find(FIND_STRUCTURES, {
-    filter: (s) =>
-      s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.3,
-  }).length;
-
-  // Very strict scoring - repairers should be rare
-  // Only spawn when there's substantial damage, not just minor decay
+  // Calculate needed repairers based on repair workload
   let recommended = 0;
 
-  if (critical > 0) {
-    // Critical structures need immediate attention
+  // Always have 1 repairer if there are containers or roads to maintain
+  if (containers > 0 || roads > 5 || ramparts > 0) {
     recommended = 1;
-  } else if (rampartsLow > 20 || roadsMedium > 50) {
-    // Significant rampart/road decay
-    recommended = 1;
-  } else if (rampartsLow > 50 && roadsMedium > 100) {
-    // Massive decay across many structures
+  }
+
+  // Add more repairers based on decay load
+  if (containers >= 3 || roads >= 15 || ramparts >= 20) {
     recommended = 2;
   }
-  // Never spawn 3 repairers - 2 is the maximum
 
-  return { recommendedRepairers: recommended };
+  if (containers >= 5 || roads >= 30 || ramparts >= 40 || critical > 0) {
+    recommended = 3;
+  }
+
+  // Cap at 3 repairers
+  return { recommendedRepairers: Math.min(recommended, 3) };
 }
 /**
  * Calculate optimal body parts for a given role and energy
