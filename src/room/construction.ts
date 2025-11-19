@@ -1195,56 +1195,41 @@ function findBaseAnchor(room: Room): RoomPosition {
     }
   }
 
-  // Prefer around room center, away from exits and walls, with low wall density in radius 4-5
-  const center = new RoomPosition(25, 25, room.name);
-  const candidates: RoomPosition[] = [];
-  for (let dx = -5; dx <= 5; dx++) {
-    for (let dy = -5; dy <= 5; dy++) {
-      const x = center.x + dx;
-      const y = center.y + dy;
-      if (!inBounds(x, y)) continue;
-      candidates.push(new RoomPosition(x, y, room.name));
-    }
-  }
-  const terrain = room.getTerrain();
-  let best: { pos: RoomPosition; score: number } | null = null;
-  const controller = room.controller;
+  // Prefer anchor near spawn if possible
   const spawn = room.find(FIND_MY_SPAWNS)[0];
-  const sources = room.find(FIND_SOURCES);
-
-  for (const pos of candidates) {
-    if (terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) continue;
-
-    // Score based on: distance to exits (keep >= 6), low nearby walls, proximity to controller/sources
-    const minExitDist = Math.min(pos.x, pos.y, 49 - pos.x, 49 - pos.y);
-    if (minExitDist < 6) continue;
-
-    let wallPenalty = 0;
-    for (let rx = -4; rx <= 4; rx++) {
-      for (let ry = -4; ry <= 4; ry++) {
-        if (!inBounds(pos.x + rx, pos.y + ry)) continue;
-        if (terrain.get(pos.x + rx, pos.y + ry) === TERRAIN_MASK_WALL)
-          wallPenalty += 1;
+  const terrain = room.getTerrain();
+  let anchor: RoomPosition | null = null;
+  if (spawn) {
+    // Try to find a compact area near the spawn
+    let best: { pos: RoomPosition; score: number } | null = null;
+    for (let dx = -3; dx <= 3; dx++) {
+      for (let dy = -3; dy <= 3; dy++) {
+        const x = spawn.pos.x + dx;
+        const y = spawn.pos.y + dy;
+        if (!inBounds(x, y)) continue;
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+        // Score: prefer tiles with few nearby walls and not too close to exits
+        const minExitDist = Math.min(x, y, 49 - x, 49 - y);
+        if (minExitDist < 3) continue;
+        let wallPenalty = 0;
+        for (let rx = -2; rx <= 2; rx++) {
+          for (let ry = -2; ry <= 2; ry++) {
+            if (!inBounds(x + rx, y + ry)) continue;
+            if (terrain.get(x + rx, y + ry) === TERRAIN_MASK_WALL) wallPenalty += 1;
+          }
+        }
+        const score = minExitDist * 2 - wallPenalty * 1.5;
+        if (!best || score > best.score) best = { pos: new RoomPosition(x, y, room.name), score };
       }
     }
-
-    const ctrlDist = controller ? pos.getRangeTo(controller.pos) : 20;
-    const spawnDist = spawn ? pos.getRangeTo(spawn.pos) : 10;
-    const avgSourceDist = sources.length
-      ? sources.reduce((s, src) => s + pos.getRangeTo(src.pos), 0) /
-        sources.length
-      : 20;
-
-    // Weight towards being reasonably close to spawn while balanced to controller/sources
-    const score =
-      minExitDist * 2 -
-      wallPenalty -
-      (ctrlDist + avgSourceDist) * 0.1 -
-      spawnDist * 0.2;
-    if (!best || score > best.score) best = { pos, score };
+    anchor = best?.pos || spawn.pos;
   }
 
-  const anchor = best?.pos || center;
+  // Fallback: use room center if no spawn or no good spot near spawn
+  if (!anchor) {
+    anchor = new RoomPosition(25, 25, room.name);
+  }
+
   // Store in memory for future ticks
   mem.construction = mem.construction || {};
   mem.construction.anchor = { x: anchor.x, y: anchor.y };
