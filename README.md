@@ -1,10 +1,5 @@
-## 🚀 Features
-
-- Role dispatching via memory-based creep manager
-- Strategic automation modules for building, expansion, and resource control
-- Structure logic for towers, links, and future lab automation
-- Optional enhancements: memory cleanup, task queues, room planning
-- Designed for clarity, modularity, and ease of iteration
+## Purpose
+This is my screeps playground. My only goals are to write clean code and beat out the clankers.
 
 ## 🛠️ Tech Stack
 

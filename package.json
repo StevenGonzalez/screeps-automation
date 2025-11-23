@@ -23,8 +23,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/screeps-automation.git"
+    "url": "https://github.com/StevenGonzalez/screeps-automation.git"
   },
-  "author": "Your Name",
+  "author": "Steven Gonzalez",
   "license": "MIT"
 }
