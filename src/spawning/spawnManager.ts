@@ -1,6 +1,7 @@
 // src/spawning/spawnManager.ts
 import { bestBodyForRole } from './bodyFactory';
 import { MemoryManager } from '../memory/memoryManager';
+import { SpawnConfig } from '../config';
 
 export class SpawnManager {
   run() {
@@ -12,7 +13,7 @@ export class SpawnManager {
       const harvesterCount = creepsInRoom.reduce((acc, c) => acc + (c.memory.role === 'harvester' ? 1 : 0), 0);
       const desiredHarvesters = Math.max(1, Math.floor(room.energyCapacityAvailable / 300));
       const sourcesCount = room.find(FIND_SOURCES).length;
-      const maxPerSource = 2; // max harvesters per source (tunable)
+      const maxPerSource = SpawnConfig.maxHarvestersPerSource;
       const maxHarvesters = Math.max(1, sourcesCount * maxPerSource);
       const targetHarvesters = Math.min(desiredHarvesters, maxHarvesters);
 
@@ -27,8 +28,8 @@ export class SpawnManager {
 
         let desiredUpgraders = 0;
         if (!room.storage) {
-          if ((room.energyCapacityAvailable || 0) >= 550) desiredUpgraders = 2;
-          else if ((room.energyCapacityAvailable || 0) >= 300) desiredUpgraders = 1;
+          if ((room.energyCapacityAvailable || 0) >= SpawnConfig.upgrader.energyThreshold2) desiredUpgraders = 2;
+          else if ((room.energyCapacityAvailable || 0) >= SpawnConfig.upgrader.energyThreshold1) desiredUpgraders = 1;
         } else {
           // storage-based scaling (if storage exists)
           const stored = (room.storage && (room.storage.store as any)[RESOURCE_ENERGY]) || 0;
@@ -42,7 +43,23 @@ export class SpawnManager {
           const needed = desiredUpgraders - (currentUpgraders + queuedUpgraders);
           for (let i = 0; i < needed; i++) {
             const { body } = bestBodyForRole('upgrader', room.energyCapacityAvailable);
-            queue.push({ role: 'upgrader', body, priority: 40, requestedAt: Game.time, fallbackAfter: 25 });
+            queue.push({ role: 'upgrader', body, priority: SpawnConfig.upgrader.priority, requestedAt: Game.time, fallbackAfter: SpawnConfig.upgrader.fallbackAfter });
+          }
+          MemoryManager.set(queuePath, queue);
+        }
+      }
+
+      // Auto-enqueue builders when there are construction sites
+      const constructionSites = room.find(FIND_MY_CONSTRUCTION_SITES).length;
+      if (constructionSites > 0) {
+        const currentBuilders = creepsInRoom.reduce((acc, c) => acc + (c.memory.role === 'builder' ? 1 : 0), 0);
+        const queuedBuilders = (queue || []).reduce((acc, r) => acc + (r.role === 'builder' ? 1 : 0), 0);
+        const desiredBuilders = Math.min(SpawnConfig.builder.maxBuilders, Math.ceil(constructionSites / SpawnConfig.builder.sitesPerBuilder));
+        if (currentBuilders + queuedBuilders < desiredBuilders) {
+          const needed = desiredBuilders - (currentBuilders + queuedBuilders);
+          for (let i = 0; i < needed; i++) {
+            const { body } = bestBodyForRole('builder', room.energyCapacityAvailable);
+            queue.push({ role: 'builder', body, priority: SpawnConfig.builder.priority, requestedAt: Game.time, fallbackAfter: SpawnConfig.builder.fallbackAfter });
           }
           MemoryManager.set(queuePath, queue);
         }
@@ -50,7 +67,7 @@ export class SpawnManager {
 
       // Emergency immediate spawn if no harvesters and nothing queued
       if (harvesterCount === 0 && queue.length === 0) {
-        const { body } = bestBodyForRole('harvester', room.energyAvailable || 300);
+        const { body } = bestBodyForRole('harvester', room.energyAvailable || SpawnConfig.harvesterEnergyStep);
         const name = `harv_${Game.time}`;
         sp.spawnCreep(body, name, { memory: { role: 'harvester' } });
         continue;
@@ -60,7 +77,7 @@ export class SpawnManager {
       const queuedHarvesters = queue.reduce((acc, r) => acc + (r.role === 'harvester' ? 1 : 0), 0);
       if (harvesterCount + queuedHarvesters < targetHarvesters) {
         const { body } = bestBodyForRole('harvester', room.energyCapacityAvailable);
-        const req = { role: 'harvester', body, requestedAt: Game.time, priority: 1 };
+        const req = { role: 'harvester', body, requestedAt: Game.time, priority: 1, fallbackAfter: SpawnConfig.queue.defaultFallbackAfter };
         queue.push(req);
         MemoryManager.set(queuePath, queue);
       }

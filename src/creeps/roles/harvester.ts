@@ -1,13 +1,13 @@
 // src/creeps/roles/harvester.ts
 
-import { acquireEnergy } from '../behaviors/energy';
+import { SpawnConfig } from '../../config';
+import { handleAcquireWork } from '../roleState';
 
 export function run(creep: Creep) {
-  if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-    const res = acquireEnergy(creep, { preferHarvest: true });
-    if (res !== 'none') return;
-  }
+  const shouldPause = handleAcquireWork(creep, SpawnConfig.upgrader.minToWorkFraction || 0.5, true);
+  if (shouldPause) return;
 
+  // WORK: deliver to structures or upgrade if nothing
   const target = creep.pos.findClosestByPath(FIND_STRUCTURES, {
     filter: (s: Structure) => {
       if (s.structureType === STRUCTURE_STORAGE || s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_TERMINAL) {

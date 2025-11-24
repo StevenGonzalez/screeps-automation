@@ -37,6 +37,13 @@ export function bestBodyForRole(role: string, energy: number): { body: BodyPartC
     return { body, cost };
   }
 
+  if (role === 'builder') {
+    const pattern: BodyPartConstant[] = [WORK, CARRY, MOVE, MOVE];
+    const { body, cost } = repeatPattern(pattern, energy);
+    if (body.length === 0) return { body: [WORK, CARRY, MOVE], cost: partCost[WORK] + partCost[CARRY] + partCost[MOVE] };
+    return { body, cost };
+  }
+
   // default minimal mover
   return { body: [MOVE, CARRY], cost: partCost[MOVE] + partCost[CARRY] };
 }

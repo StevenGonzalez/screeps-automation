@@ -1,6 +1,7 @@
 // src/creeps/creepManager.ts
 import { run as harvesterRun } from './roles/harvester';
 import { run as upgraderRun } from './roles/upgrader';
+import { run as builderRun } from './roles/builder';
 
 export class CreepManager {
   run() {
@@ -14,6 +15,9 @@ export class CreepManager {
             break;
           case 'upgrader':
             upgraderRun(creep);
+            break;
+          case 'builder':
+            builderRun(creep);
             break;
           default:
             harvesterRun(creep);
