@@ -215,3 +215,49 @@ StructurePlanner flow (high level):
 ---
 
 If you want, I can now scaffold the `MemoryManager` (Option A) into `src/memory/memoryManager.ts` and add a small unit test. Which option should I implement next?
+
+## Current Implementations (repo)
+
+This project already includes a number of concrete implementations that follow the architecture above. Use this section as a quick map to the code and as a place to find tunable thresholds.
+
+- **MemoryManager**: `src/memory/memoryManager.ts`
+  - Read-through cache, dirty-tracking, `reset()`, `flush()` lifecycle.
+  - Helpers: `get`, `set`, `update`, `has`, `remove`, `scheduleSave(path, delayTicks)`.
+  - Segment helpers: `readSegment(id)` / `writeSegment(id, data)` use `RawMemory.segments`.
+
+- **Kernel & Scheduler**: `src/kernel/kernel.ts`, `src/kernel/scheduler.ts`
+  - `Kernel.tick()` lifecycle: `MemoryManager.reset()` → run subsystems → `Scheduler.run()` → `MemoryManager.flush()`.
+  - A diagnostics job is scheduled to log per-room spawn queue and creep counts every 100 ticks.
+
+- **SpawnManager & Spawn Queue**: `src/spawning/spawnManager.ts`
+  - Memory-backed queue at `rooms.<room>.spawnQueue`.
+  - Spawn request shape: `{ role, body?, priority?, requestedAt, fallbackAfter? }`.
+  - Queue processing sorts by `priority` then age. If a request is older than `fallbackAfter` and energy is insufficient, an emergency cheaper body is attempted.
+  - Emergency immediate spawn for harvesters if no harvesters exist and queue is empty.
+  - Auto-enqueue logic for `upgrader` role in early RCL rooms (works without storage):
+    - If `room.energyCapacityAvailable >= 300` enqueue 1 upgrader; if >= 550 enqueue 2 (tunable thresholds in `spawnManager`).
+
+- **BodyFactory**: `src/spawning/bodyFactory.ts`
+  - Pattern-based body composition with programmatic part costs.
+  - Harvester pattern: `[WORK, WORK, CARRY, MOVE]` repeated to fit energy and part limits.
+  - Upgrader pattern: `[WORK, CARRY, MOVE]` repeated.
+  - Provides sensible fallbacks when energy is very low.
+
+- **Creeps & Behaviors**
+  - `src/creeps/behaviors/energy.ts`: `acquireEnergy(creep, opts)` used by multiple roles.
+    - Priority: pickup dropped energy → withdraw from structures → harvest assigned/nearest source.
+  - `src/creeps/sourceManager.ts`: assigns sources to creeps and persists assignments in room memory.
+
+- **Roles**
+  - `src/creeps/roles/harvester.ts`: uses `acquireEnergy(..., { preferHarvest: true })`; delivers energy (transfer to spawn/storage/or controller fallback).
+  - `src/creeps/roles/upgrader.ts`: uses `acquireEnergy(..., { preferHarvest: false })`; upgrades controller.
+  - `src/creeps/creepManager.ts`: dispatches creeps to roles each tick.
+
+## Tuning & Where To Change
+
+- Spawn tuning and role thresholds: `src/spawning/spawnManager.ts`.
+- Body composition patterns: `src/spawning/bodyFactory.ts`.
+- Energy acquisition behavior: `src/creeps/behaviors/energy.ts` and source assignment in `src/creeps/sourceManager.ts`.
+- Memory persistence behavior and delayed writes: `src/memory/memoryManager.ts`.
+
+If you want, I can (A) add a small `config.ts` with these thresholds, (B) extract delivery behavior to `creeps/behaviors/deliver.ts`, or (C) write unit tests for `bodyFactory`. Which would you prefer? 
