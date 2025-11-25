@@ -9,6 +9,7 @@ interface SpawnRequest {
   priority: number;
   requestedAt: number;
   fallbackAfter: number;
+  containerId?: string;
 }
 
 export class SpawnManager {
@@ -27,6 +28,8 @@ export class SpawnManager {
     const creepsInRoom = this.getCreepsInRoom(room);
     
     this.handleEmergencyHarvesterSpawn(spawn, creepsInRoom, queuePath);
+    this.enqueueMiners(room, creepsInRoom, queuePath);
+    this.enqueueHaulers(room, creepsInRoom, queuePath);
     this.enqueueHarvesters(room, creepsInRoom, queuePath);
     this.enqueueUpgraders(room, creepsInRoom, queuePath);
     this.enqueueBuilders(room, creepsInRoom, queuePath);
@@ -55,10 +58,111 @@ export class SpawnManager {
     }
   }
 
+  private enqueueMiners(room: Room, creeps: Creep[], queuePath: string) {
+    const assignmentsPath = `rooms.${room.name}.minerAssignments`;
+    const assignments = MemoryManager.get<Record<string, string>>(assignmentsPath, {}) || {};
+
+    for (const cid in Object.assign({}, assignments)) {
+      const minerName = assignments[cid];
+      if (minerName && !Game.creeps[minerName]) {
+        delete assignments[cid];
+      }
+    }
+
+    const builtContainers = room.find(FIND_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+    }) as StructureContainer[];
+
+    const safeContainers = builtContainers.filter(c => this.isSafeContainer(c));
+
+    for (const container of safeContainers) {
+      const assignedMiner = assignments[container.id];
+      if (assignedMiner && Game.creeps[assignedMiner]) continue;
+
+      const queuedForContainer = this.countQueuedForContainer(queuePath, container.id);
+      if (queuedForContainer > 0) continue;
+
+      const { body } = bestBodyForRole('miner', room.energyCapacityAvailable);
+      const req: SpawnRequest = {
+        role: 'miner',
+        body,
+        requestedAt: Game.time,
+        priority: 60,
+        fallbackAfter: SpawnConfig.queue.defaultFallbackAfter,
+        containerId: container.id,
+      };
+      this.addToQueue(queuePath, req);
+    }
+
+    MemoryManager.set(assignmentsPath, assignments);
+  }
+
+  private isSafeContainer(container: StructureContainer): boolean {
+    const source = container.pos.findInRange(FIND_SOURCES, 1)[0];
+    if (!source) return false;
+
+    const room = Game.rooms[source.pos.roomName];
+    if (!room) return false;
+
+    if (room.controller && room.controller.owner && !room.controller.my) {
+      return false;
+    }
+
+    const hostiles = source.pos.findInRange(FIND_HOSTILE_CREEPS, 5);
+    return hostiles.length === 0;
+  }
+
+  private countQueuedForContainer(queuePath: string, containerId: string): number {
+    const queue = MemoryManager.get<SpawnRequest[]>(queuePath, []) || [];
+    return queue.reduce((acc, r) => acc + (r.role === 'miner' && r.containerId === containerId ? 1 : 0), 0);
+  }
+
+  private enqueueHaulers(room: Room, creeps: Creep[], queuePath: string) {
+    const minerCount = this.countCreepsByRole(creeps, 'miner');
+    if (minerCount === 0) return;
+
+    const haulerCount = this.countCreepsByRole(creeps, 'hauler');
+    const queuedHaulers = this.countQueuedByRole(queuePath, 'hauler');
+    
+    const desiredHaulers = Math.max(1, Math.ceil(minerCount * 1.5));
+
+    if (haulerCount + queuedHaulers < desiredHaulers) {
+      const { body } = bestBodyForRole('hauler', room.energyCapacityAvailable);
+      const req: SpawnRequest = {
+        role: 'hauler',
+        body,
+        requestedAt: Game.time,
+        priority: 55,
+        fallbackAfter: SpawnConfig.queue.defaultFallbackAfter,
+      };
+      this.addToQueue(queuePath, req);
+    }
+  }
+
   private enqueueHarvesters(room: Room, creeps: Creep[], queuePath: string) {
     const harvesterCount = this.countCreepsByRole(creeps, 'harvester');
     const queuedHarvesters = this.countQueuedByRole(queuePath, 'harvester');
+    const minerCount = this.countCreepsByRole(creeps, 'miner');
+    const haulerCount = this.countCreepsByRole(creeps, 'hauler');
     
+    // If we have miners and haulers, we only need 1 harvester as backup
+    if (minerCount > 0 && haulerCount > 0) {
+      const targetHarvesters = 1;
+      if (harvesterCount + queuedHarvesters < targetHarvesters) {
+        const { body } = bestBodyForRole('harvester', room.energyCapacityAvailable);
+        const req: SpawnRequest = { 
+          role: 'harvester', 
+          body, 
+          requestedAt: Game.time, 
+          priority: 50, 
+          fallbackAfter: SpawnConfig.queue.defaultFallbackAfter 
+        };
+        this.addToQueue(queuePath, req);
+      }
+      return;
+    }
+    
+    // Normal harvester logic when no miners
     const desiredHarvesters = Math.max(1, Math.floor(room.energyCapacityAvailable / 300));
     const sourcesCount = room.find(FIND_SOURCES).length;
     const maxHarvesters = Math.max(1, sourcesCount * SpawnConfig.maxHarvestersPerSource);
@@ -165,9 +269,21 @@ export class SpawnManager {
   private attemptSpawn(spawn: StructureSpawn, req: SpawnRequest, room: Room): boolean {
     const baseName = `spawn_${req.role}_${Game.time}`;
     const name = `${baseName}_${Math.floor(Math.random() * 10000)}`;
-    const res = spawn.spawnCreep(req.body, name, { memory: { role: req.role } });
+    
+    const memory: any = { role: req.role };
+    if (req.containerId) {
+      memory.containerId = req.containerId;
+    }
+    
+    const res = spawn.spawnCreep(req.body, name, { memory });
 
     if (res === OK) {
+      if (req.role === 'miner' && req.containerId) {
+        const assignmentsPath = `rooms.${room.name}.minerAssignments`;
+        const assignments = MemoryManager.get<Record<string, string>>(assignmentsPath, {}) || {};
+        assignments[req.containerId] = name;
+        MemoryManager.set(assignmentsPath, assignments);
+      }
       return true;
     } else if (res === ERR_NOT_ENOUGH_ENERGY) {
       return this.tryEmergencySpawn(spawn, req, room, baseName);
@@ -184,7 +300,21 @@ export class SpawnManager {
     if (age >= fallbackAfter) {
       const emergency = bestBodyForRole(req.role, room.energyAvailable).body;
       const fname = `${baseName}_emg_${Math.floor(Math.random() * 10000)}`;
-      const fres = spawn.spawnCreep(emergency, fname, { memory: { role: req.role } });
+      
+      const memory: any = { role: req.role };
+      if (req.containerId) {
+        memory.containerId = req.containerId;
+      }
+      
+      const fres = spawn.spawnCreep(emergency, fname, { memory });
+      
+      if (fres === OK && req.role === 'miner' && req.containerId) {
+        const assignmentsPath = `rooms.${room.name}.minerAssignments`;
+        const assignments = MemoryManager.get<Record<string, string>>(assignmentsPath, {}) || {};
+        assignments[req.containerId] = fname;
+        MemoryManager.set(assignmentsPath, assignments);
+      }
+      
       return fres === OK;
     }
     return false;

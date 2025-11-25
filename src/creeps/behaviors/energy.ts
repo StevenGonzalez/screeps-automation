@@ -15,13 +15,46 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
 
   // withdraw from container/storage/terminal - prefer sources that can meaningfully fill the creep
   const freeCap = creep.store.getFreeCapacity(RESOURCE_ENERGY) || 0;
+  
+  // Check for miner containers first (high priority for all creeps)
+  const minerContainers = creep.room.find(FIND_STRUCTURES, {
+    filter: (s: Structure) => {
+      if (s.structureType !== STRUCTURE_CONTAINER) return false;
+      const hasEnergy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY] || 0) > 0);
+      if (!hasEnergy) return false;
+      const crepsOnContainer = s.pos.lookFor(LOOK_CREEPS);
+      const hasMiner = crepsOnContainer.some(c => c.my && c.memory.role === 'miner');
+      return hasMiner;
+    }
+  }) as StructureContainer[];
+
+  if (minerContainers.length > 0) {
+    const target = creep.pos.findClosestByPath(minerContainers);
+    if (target) {
+      if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(target, { visualizePathStyle: { stroke: '#ffff00' } });
+      return 'withdrawing';
+    }
+  }
+
+  // Then check other storage structures
   const structureCandidates = creep.room.find(FIND_STRUCTURES, {
-    filter: (s: Structure) => (s.structureType === STRUCTURE_STORAGE || s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_TERMINAL) && ((s as any).store && ((s as any).store[RESOURCE_ENERGY] || 0) > 0),
+    filter: (s: Structure) => {
+      if (s.structureType === STRUCTURE_STORAGE || s.structureType === STRUCTURE_TERMINAL) {
+        return ((s as any).store && ((s as any).store[RESOURCE_ENERGY] || 0) > 0);
+      }
+      if (s.structureType === STRUCTURE_CONTAINER) {
+        const hasEnergy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY] || 0) > 0);
+        if (!hasEnergy) return false;
+        const crepsOnContainer = s.pos.lookFor(LOOK_CREEPS);
+        const hasMiner = crepsOnContainer.some(c => c.my && c.memory.role === 'miner');
+        return !hasMiner;
+      }
+      return false;
+    },
   }) as Structure[];
 
   let storeTarget: Structure | undefined;
   if (structureCandidates.length > 0) {
-    // prefer a structure that has at least half the creep's free capacity, otherwise choose the one with most energy
     const halfNeed = Math.max(50, Math.floor(freeCap / 2));
     storeTarget = structureCandidates.find(s => ((s as any).store[RESOURCE_ENERGY] || 0) >= halfNeed);
     if (!storeTarget) {
