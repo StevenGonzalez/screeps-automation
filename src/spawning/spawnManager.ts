@@ -51,7 +51,10 @@ export class SpawnManager {
 
   private handleEmergencyHarvesterSpawn(spawn: StructureSpawn, creeps: Creep[], queuePath: string) {
     const harvesterCount = this.countCreepsByRole(creeps, 'harvester');
-    if (harvesterCount === 0) {
+    const minerCount = this.countCreepsByRole(creeps, 'miner');
+    
+    // Only spawn emergency harvester if we have no harvesters AND no miners
+    if (harvesterCount === 0 && minerCount === 0) {
       const { body } = bestBodyForRole('harvester', spawn.room.energyAvailable || SpawnConfig.harvesterEnergyStep);
       const name = `harv_${Game.time}`;
       spawn.spawnCreep(body, name, { memory: { role: 'harvester' } });
@@ -143,22 +146,9 @@ export class SpawnManager {
     const harvesterCount = this.countCreepsByRole(creeps, 'harvester');
     const queuedHarvesters = this.countQueuedByRole(queuePath, 'harvester');
     const minerCount = this.countCreepsByRole(creeps, 'miner');
-    const haulerCount = this.countCreepsByRole(creeps, 'hauler');
     
-    // If we have miners and haulers, we only need 1 harvester as backup
-    if (minerCount > 0 && haulerCount > 0) {
-      const targetHarvesters = 1;
-      if (harvesterCount + queuedHarvesters < targetHarvesters) {
-        const { body } = bestBodyForRole('harvester', room.energyCapacityAvailable);
-        const req: SpawnRequest = { 
-          role: 'harvester', 
-          body, 
-          requestedAt: Game.time, 
-          priority: 50, 
-          fallbackAfter: SpawnConfig.queue.defaultFallbackAfter 
-        };
-        this.addToQueue(queuePath, req);
-      }
+    // If we have any miners, don't spawn harvesters (haulers will handle transport)
+    if (minerCount > 0) {
       return;
     }
     

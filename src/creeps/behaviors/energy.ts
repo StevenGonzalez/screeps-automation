@@ -13,15 +13,29 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
     return 'picking';
   }
 
+  // withdraw from tombstones and ruins
+  const tombstone = creep.pos.findClosestByPath(FIND_TOMBSTONES, { filter: (t: Tombstone) => (t.store[RESOURCE_ENERGY] || 0) > 0 });
+  if (tombstone) {
+    if (creep.withdraw(tombstone, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(tombstone, { visualizePathStyle: { stroke: '#ffaa00' } });
+    return 'withdrawing';
+  }
+
+  const ruin = creep.pos.findClosestByPath(FIND_RUINS, { filter: (r: Ruin) => (r.store[RESOURCE_ENERGY] || 0) > 0 });
+  if (ruin) {
+    if (creep.withdraw(ruin, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(ruin, { visualizePathStyle: { stroke: '#ffaa00' } });
+    return 'withdrawing';
+  }
+
   // withdraw from container/storage/terminal - prefer sources that can meaningfully fill the creep
   const freeCap = creep.store.getFreeCapacity(RESOURCE_ENERGY) || 0;
   
   // Check for miner containers first (high priority for all creeps)
+  // Only use containers that have at least 50 energy (avoid empty/low containers)
   const minerContainers = creep.room.find(FIND_STRUCTURES, {
     filter: (s: Structure) => {
       if (s.structureType !== STRUCTURE_CONTAINER) return false;
-      const hasEnergy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY] || 0) > 0);
-      if (!hasEnergy) return false;
+      const energy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY])) || 0;
+      if (energy < 50) return false;
       const crepsOnContainer = s.pos.lookFor(LOOK_CREEPS);
       const hasMiner = crepsOnContainer.some(c => c.my && c.memory.role === 'miner');
       return hasMiner;

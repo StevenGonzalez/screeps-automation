@@ -3,6 +3,12 @@ import { roadPlanner } from './roadPlanner';
 import { roadBuilder } from './roadBuilder';
 import { containerPlanner } from './containerPlanner';
 import { containerBuilder } from './containerBuilder';
+import { extensionPlanner } from './extensionPlanner';
+import { extensionBuilder } from './extensionBuilder';
+import { storagePlanner } from './storagePlanner';
+import { storageBuilder } from './storageBuilder';
+import { towerPlanner } from './towerPlanner';
+import { towerBuilder } from './towerBuilder';
 
 export class StructureManager {
   run() {
@@ -15,10 +21,17 @@ export class StructureManager {
   }
 
   private manageRoomStructures(room: Room) {
-    this.planRoads(room);
-    this.buildRoads(room);
+    this.planStorage(room);
+    this.planTowers(room);
+    this.planExtensions(room);
     this.planContainers(room);
+    this.planRoads(room);
+    
+    this.buildStorage(room);
+    this.buildTowers(room);
+    this.buildExtensions(room);
     this.buildContainers(room);
+    this.buildRoads(room);
   }
 
   private planRoads(room: Room) {
@@ -37,9 +50,36 @@ export class StructureManager {
     containerBuilder.buildContainersForRoom(room);
   }
 
+  private planExtensions(room: Room) {
+    extensionPlanner.planExtensionsForRoom(room);
+  }
+
+  private buildExtensions(room: Room) {
+    extensionBuilder.buildExtensionsForRoom(room);
+  }
+
+  private planStorage(room: Room) {
+    storagePlanner.planStorageForRoom(room);
+  }
+
+  private buildStorage(room: Room) {
+    storageBuilder.buildStorageForRoom(room);
+  }
+
+  private planTowers(room: Room) {
+    towerPlanner.planTowersForRoom(room);
+  }
+
+  private buildTowers(room: Room) {
+    towerBuilder.buildTowersForRoom(room);
+  }
+
   invalidateRoomPlans(roomName: string) {
     roadPlanner.invalidatePlan(roomName);
     containerPlanner.invalidatePlan(roomName);
+    extensionPlanner.invalidatePlan(roomName);
+    storagePlanner.invalidatePlan(roomName);
+    towerPlanner.invalidatePlan(roomName);
   }
 }
 
