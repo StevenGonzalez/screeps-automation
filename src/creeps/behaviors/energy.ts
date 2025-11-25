@@ -43,7 +43,23 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
   }) as StructureContainer[];
 
   if (minerContainers.length > 0) {
-    const target = creep.pos.findClosestByPath(minerContainers);
+    // Sort by energy amount (highest first) to prioritize full containers
+    minerContainers.sort((a, b) => {
+      const aEnergy = (a.store[RESOURCE_ENERGY] || 0);
+      const bEnergy = (b.store[RESOURCE_ENERGY] || 0);
+      return bEnergy - aEnergy;
+    });
+
+    // Pick the container with the most energy that we can path to
+    let target: StructureContainer | null = null;
+    for (const container of minerContainers) {
+      const path = creep.pos.findPathTo(container, { ignoreCreeps: true });
+      if (path.length > 0) {
+        target = container;
+        break;
+      }
+    }
+
     if (target) {
       if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(target, { visualizePathStyle: { stroke: '#ffff00' } });
       return 'withdrawing';
