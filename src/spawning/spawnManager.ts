@@ -77,7 +77,7 @@ export class SpawnManager {
       const queuedHarvesters = queue.reduce((acc, r) => acc + (r.role === 'harvester' ? 1 : 0), 0);
       if (harvesterCount + queuedHarvesters < targetHarvesters) {
         const { body } = bestBodyForRole('harvester', room.energyCapacityAvailable);
-        const req = { role: 'harvester', body, requestedAt: Game.time, priority: 1, fallbackAfter: SpawnConfig.queue.defaultFallbackAfter };
+        const req = { role: 'harvester', body, requestedAt: Game.time, priority: 50, fallbackAfter: SpawnConfig.queue.defaultFallbackAfter };
         queue.push(req);
         MemoryManager.set(queuePath, queue);
       }
