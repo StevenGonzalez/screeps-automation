@@ -50,7 +50,18 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
         source = Game.getObjectById(assigned) as Source | null;
       }
     }
-    if (!source) source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE) as Source | null;
+    if (!source) {
+      // Only look for sources in safe rooms (our rooms or neutral)
+      source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
+        filter: (s: Source) => {
+          const room = Game.rooms[s.pos.roomName];
+          if (!room) return false;
+          if (room.controller && room.controller.owner && !room.controller.my) return false;
+          const hostiles = s.pos.findInRange(FIND_HOSTILE_CREEPS, 5);
+          return hostiles.length === 0;
+        }
+      }) as Source | null;
+    }
     if (source) {
       if (creep.harvest(source) === ERR_NOT_IN_RANGE) creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
       return 'harvesting';
@@ -67,6 +78,18 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
       (creep.memory as any).sourceId = assigned;
       source = Game.getObjectById(assigned) as Source | null;
     }
+  }
+  if (!source) {
+    // Only look for safe sources
+    source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
+      filter: (s: Source) => {
+        const room = Game.rooms[s.pos.roomName];
+        if (!room) return false;
+        if (room.controller && room.controller.owner && !room.controller.my) return false;
+        const hostiles = s.pos.findInRange(FIND_HOSTILE_CREEPS, 5);
+        return hostiles.length === 0;
+      }
+    }) as Source | null;
   }
   if (source) {
     if (creep.harvest(source) === ERR_NOT_IN_RANGE) creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
