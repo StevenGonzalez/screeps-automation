@@ -3,6 +3,7 @@ import { MemoryManager } from '../memory/memoryManager';
 import { Scheduler } from './scheduler';
 import { spawnManager } from '../spawning/spawnManager';
 import { creepManager } from '../creeps/creepManager';
+import { structureManager } from '../structures/structureManager';
 
 export class Kernel {
   scheduler: Scheduler;
@@ -36,6 +37,7 @@ export class Kernel {
   }
 
   runTick() {
+    structureManager.run();
     spawnManager.run();
     creepManager.run();
   }

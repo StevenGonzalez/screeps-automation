@@ -253,11 +253,50 @@ This project already includes a number of concrete implementations that follow t
   - `src/creeps/roles/upgrader.ts`: uses `acquireEnergy(..., { preferHarvest: false })`; upgrades controller.
   - `src/creeps/creepManager.ts`: dispatches creeps to roles each tick.
 
+- **Structure Automation**: `src/structures/`
+  - **StructureManager**: `src/structures/structureManager.ts`
+    - Orchestrates all automated structure planning and building systems.
+    - Runs every tick, managing road planning and construction for all owned rooms.
+    - Extensible design for future structure types (towers, extensions, walls, ramparts).
+  
+  - **RoadPlanner**: `src/structures/roadPlanner.ts`
+    - Generates optimal road networks connecting spawn → sources → controller.
+    - Uses `PathFinder.search` with intelligent cost matrices:
+      - Existing roads cost 1 (encourages reuse).
+      - Plains cost 2, swamps cost 10 (optimizes for natural terrain).
+      - Structures (except roads/containers) cost 255 (avoids blocking).
+    - Generates pairwise paths between all key locations to create an efficient mesh network.
+    - Plans are cached in Memory at `rooms.<room>.roadPlan` and invalidated on RCL changes.
+    - Filters out positions that already have non-road structures to prevent conflicts.
+  
+  - **RoadBuilder**: `src/structures/roadBuilder.ts`
+    - Executes road plans by creating construction sites incrementally.
+    - Build throttling: creates max 5 construction sites per check interval (every 10 ticks).
+    - Automatic cleanup (every 50 ticks):
+      - Destroys roads under non-road structures (spawn, extensions, towers, etc.).
+      - Removes obsolete roads not in current plan (unless within 3 tiles of key locations).
+      - Cancels road construction sites blocked by other structures.
+    - Maintains build state per room in Memory at `rooms.<room>.roadBuildState`.
+
+  **Design philosophy**:
+  - CPU-conscious: spreads construction site creation across ticks to avoid spikes.
+  - Self-healing: automatically adapts to structure placement and removes conflicts.
+  - Memory-efficient: only stores position strings and minimal state per room.
+  - Extensible: StructureManager designed to add tower placement, extension clusters, walls/ramparts later.
+
+  **Future extensions** (architecture ready):
+  - Tower placement with overlapping coverage analysis.
+  - Extension cluster generation near spawn with compact layouts.
+  - Rampart and wall ring generation for defense.
+  - Container placement at mining positions and controller.
+
 ## Tuning & Where To Change
 
-- Spawn tuning and role thresholds: `src/spawning/spawnManager.ts`.
+- Spawn tuning and role thresholds: `src/spawning/spawnManager.ts` and `src/config.ts`.
 - Body composition patterns: `src/spawning/bodyFactory.ts`.
 - Energy acquisition behavior: `src/creeps/behaviors/energy.ts` and source assignment in `src/creeps/sourceManager.ts`.
 - Memory persistence behavior and delayed writes: `src/memory/memoryManager.ts`.
+- Road planning intervals and construction throttling: `src/structures/roadBuilder.ts` (`BUILD_CHECK_INTERVAL`, `CLEANUP_CHECK_INTERVAL`, `MAX_SITES_PER_TICK`).
+- PathFinder cost tuning: `src/structures/roadPlanner.ts` (`plainCost`, `swampCost` in `findOptimalPath`).
 
-If you want, I can (A) add a small `config.ts` with these thresholds, (B) extract delivery behavior to `creeps/behaviors/deliver.ts`, or (C) write unit tests for `bodyFactory`. Which would you prefer? 
+If you want, I can (A) extract delivery behavior to `creeps/behaviors/deliver.ts`, (B) write unit tests for `bodyFactory`, or (C) add tower/extension placement logic to structure automation. Which would you prefer? 
