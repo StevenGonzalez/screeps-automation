@@ -18,7 +18,10 @@ export function handleAcquireWork(creep: Creep, minToWorkFraction: number, prefe
   if (state === 'acquire') {
     const res = acquireEnergy(creep, { preferHarvest });
     const nowHas = creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
-    if (nowHas >= minToWork || (res === 'none' && nowHas > 0)) {
+    const isFull = free === 0;
+    
+    // Only switch to work if: full, OR no more energy sources available AND we have enough to work
+    if (isFull || (res === 'none' && nowHas >= minToWork)) {
       (creep.memory as any).state = 'work';
       return false;
     }
