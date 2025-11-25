@@ -1,6 +1,3 @@
-// src/config.ts
-// Centralized tuning values for spawning and roles
-
 export const SpawnConfig = {
   maxHarvestersPerSource: 2,
   harvesterEnergyStep: 300,
@@ -10,7 +7,6 @@ export const SpawnConfig = {
     energyThreshold2: 550,
     priority: 40,
     fallbackAfter: 25,
-    // fraction of capacity required before switching from acquiring -> working
     minToWorkFraction: 0.5,
   },
 
@@ -20,6 +16,20 @@ export const SpawnConfig = {
     priority: 30,
     fallbackAfter: 25,
     minToWorkFraction: 0.5,
+  },
+
+  repairer: {
+    criticalThreshold: 0.75,
+    generalThreshold: 0.5,
+    minRampartHits: 10000,
+    maxRampartHits: 50000,
+    repairRoads: true,
+    repairContainers: true,
+    priority: 35,
+    fallbackAfter: 25,
+    minToWorkFraction: 0.5,
+    maxRepairers: 2,
+    minDamagedStructures: 3,
   },
 
   queue: {

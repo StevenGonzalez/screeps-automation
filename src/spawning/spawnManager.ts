@@ -2,6 +2,7 @@
 import { bestBodyForRole } from './bodyFactory';
 import { MemoryManager } from '../memory/memoryManager';
 import { SpawnConfig } from '../config';
+import { getRoomRepairStats } from '../creeps/behaviors/repair';
 
 interface SpawnRequest {
   role: string;
@@ -31,6 +32,7 @@ export class SpawnManager {
     this.enqueueMiners(room, creepsInRoom, queuePath);
     this.enqueueHaulers(room, creepsInRoom, queuePath);
     this.enqueueHarvesters(room, creepsInRoom, queuePath);
+    this.enqueueRepairers(room, creepsInRoom, queuePath);
     this.enqueueUpgraders(room, creepsInRoom, queuePath);
     this.enqueueBuilders(room, creepsInRoom, queuePath);
     this.processQueue(spawn, room, queuePath);
@@ -204,6 +206,50 @@ export class SpawnManager {
           priority: SpawnConfig.upgrader.priority, 
           requestedAt: Game.time, 
           fallbackAfter: SpawnConfig.upgrader.fallbackAfter 
+        };
+        this.addToQueue(queuePath, req);
+      }
+    }
+  }
+
+  private enqueueRepairers(room: Room, creeps: Creep[], queuePath: string) {
+    // Get repair statistics for intelligent spawn decisions
+    const repairStats = getRoomRepairStats(room);
+    const totalDamaged = repairStats.totalDamaged;
+    
+    // Only spawn repairers if there's meaningful repair work
+    if (totalDamaged < SpawnConfig.repairer.minDamagedStructures) return;
+    
+    const currentRepairers = this.countCreepsByRole(creeps, 'repairer');
+    const queuedRepairers = this.countQueuedByRole(queuePath, 'repairer');
+    
+    // Calculate desired repairers based on damage
+    let desiredRepairers = 0;
+    
+    // High priority: critical structures or ramparts are damaged
+    if (repairStats.criticalDamaged > 0 || repairStats.rampartsLow > 0) {
+      desiredRepairers = Math.min(SpawnConfig.repairer.maxRepairers, 2);
+    } 
+    // Medium priority: extensions or significant general damage
+    else if (repairStats.extensionsDamaged > 2 || totalDamaged >= 10) {
+      desiredRepairers = Math.min(SpawnConfig.repairer.maxRepairers, 1);
+    }
+    // Low priority: some roads/containers need repair
+    else if (totalDamaged >= SpawnConfig.repairer.minDamagedStructures) {
+      desiredRepairers = 1;
+    }
+    
+    // Don't spawn if we already have enough repairers working or queued
+    if (currentRepairers + queuedRepairers < desiredRepairers) {
+      const needed = desiredRepairers - (currentRepairers + queuedRepairers);
+      for (let i = 0; i < needed; i++) {
+        const { body } = bestBodyForRole('repairer', room.energyCapacityAvailable);
+        const req: SpawnRequest = { 
+          role: 'repairer', 
+          body, 
+          priority: SpawnConfig.repairer.priority, 
+          requestedAt: Game.time, 
+          fallbackAfter: SpawnConfig.repairer.fallbackAfter 
         };
         this.addToQueue(queuePath, req);
       }

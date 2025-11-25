@@ -4,6 +4,7 @@ import { run as upgraderRun } from './roles/upgrader';
 import { run as builderRun } from './roles/builder';
 import { run as minerRun } from './roles/miner';
 import { run as haulerRun } from './roles/hauler';
+import { run as repairerRun } from './roles/repairer';
 
 export class CreepManager {
   run() {
@@ -26,6 +27,9 @@ export class CreepManager {
             break;
           case 'hauler':
             haulerRun(creep);
+            break;
+          case 'repairer':
+            repairerRun(creep);
             break;
           default:
             harvesterRun(creep);
