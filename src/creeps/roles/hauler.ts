@@ -35,6 +35,12 @@ export function run(creep: Creep) {
         const energyCap = (s as any).energyCapacity || 0;
         return energy < energyCap;
       }
+      if (s.structureType === STRUCTURE_CONTAINER) {
+        const store = (s as any).store || {};
+        const energyAmount = store[RESOURCE_ENERGY] || 0;
+        const cap = (s as any).storeCapacity || 0;
+        return energyAmount < cap;
+      }
       if (s.structureType === STRUCTURE_STORAGE) {
         const store = (s as any).store || {};
         const cap = (s as any).storeCapacity || 0;
@@ -71,6 +77,15 @@ function getTargetPriority(structure: Structure): number {
   if (structure.structureType === STRUCTURE_SPAWN) return 100;
   if (structure.structureType === STRUCTURE_EXTENSION) return 90;
   if (structure.structureType === STRUCTURE_TOWER) return 80;
+  
+  if (structure.structureType === STRUCTURE_CONTAINER) {
+    const controller = structure.room.controller;
+    if (controller && structure.pos.inRangeTo(controller.pos, 3)) {
+      return 70;
+    }
+    return 20;
+  }
+  
   if (structure.structureType === STRUCTURE_STORAGE) return 10;
   return 0;
 }
