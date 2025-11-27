@@ -10,7 +10,7 @@ interface RoadBuildState {
 export class RoadBuilder {
   private readonly BUILD_CHECK_INTERVAL = 10;
   private readonly CLEANUP_CHECK_INTERVAL = 50;
-  private readonly MAX_SITES_PER_TICK = 20;
+  private readonly MAX_SITES_PER_TICK = 5;
 
   buildRoadsForRoom(room: Room) {
     const statePath = `rooms.${room.name}.roadBuildState`;
