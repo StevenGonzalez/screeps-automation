@@ -53,7 +53,7 @@ export class ContainerPlanner {
     }
 
     // Container at controller
-    if (room.controller && room.controller.my && room.controller.level >= 2) {
+    if (room.controller && room.controller.my) {
       const pos = this.findBestContainerPosition(room, room.controller.pos, spawn.pos);
       if (pos) {
         locations.push({ pos, type: 'controller', targetId: room.controller.id });
