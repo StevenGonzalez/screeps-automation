@@ -152,6 +152,14 @@ export class ExtensionPlanner {
   }
 
   private blockReservedPositions(room: Room, blockedPositions: Set<string>) {
+    // Block planned road positions
+    const roadPlan = MemoryManager.get<{ positions: string[] }>(`rooms.${room.name}.roadPlan`);
+    if (roadPlan?.positions) {
+      for (const posStr of roadPlan.positions) {
+        blockedPositions.add(posStr);
+      }
+    }
+
     const storagePlan = MemoryManager.get<{ position: string | null }>(`rooms.${room.name}.storagePlan`);
     if (storagePlan?.position) {
       const [x, y] = storagePlan.position.split(',').map(Number);

@@ -57,6 +57,14 @@ export class TowerPlanner {
       blockedPositions.add(`${s.pos.x},${s.pos.y}`);
     }
 
+    // Block planned road positions
+    const roadPlan = MemoryManager.get<{ positions: string[] }>(`rooms.${room.name}.roadPlan`);
+    if (roadPlan?.positions) {
+      for (const posStr of roadPlan.positions) {
+        blockedPositions.add(posStr);
+      }
+    }
+
     const storage = this.getStoragePosition(room, existingStructures, existingSites);
     const controller = room.controller;
     const sources = room.find(FIND_SOURCES);

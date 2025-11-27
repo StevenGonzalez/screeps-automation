@@ -149,37 +149,6 @@ export class RoadPlanner {
           }
         }
 
-        // Mark planned extension positions as impassable
-        const extensionPlan = MemoryManager.get<any>(`rooms.${roomName}.extensionPlan`);
-        if (extensionPlan && extensionPlan.positions) {
-          for (const posStr of extensionPlan.positions) {
-            const [x, y] = posStr.split(',').map(Number);
-            if (costs.get(x, y) < 255) {
-              costs.set(x, y, 255);
-            }
-          }
-        }
-
-        // Mark planned tower positions as impassable
-        const towerPlan = MemoryManager.get<any>(`rooms.${roomName}.towerPlan`);
-        if (towerPlan && towerPlan.positions) {
-          for (const posStr of towerPlan.positions) {
-            const [x, y] = posStr.split(',').map(Number);
-            if (costs.get(x, y) < 255) {
-              costs.set(x, y, 255);
-            }
-          }
-        }
-
-        // Mark planned storage position as impassable
-        const storagePlan = MemoryManager.get<any>(`rooms.${roomName}.storagePlan`);
-        if (storagePlan && storagePlan.position) {
-          const [x, y] = storagePlan.position.split(',').map(Number);
-          if (costs.get(x, y) < 255) {
-            costs.set(x, y, 255);
-          }
-        }
-
         return costs;
       },
       plainCost: 2,

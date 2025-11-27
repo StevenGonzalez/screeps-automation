@@ -58,6 +58,14 @@ export class StoragePlanner {
       blockedPositions.add(`${s.pos.x},${s.pos.y}`);
     }
 
+    // Block planned road positions
+    const roadPlan = MemoryManager.get<{ positions: string[] }>(`rooms.${room.name}.roadPlan`);
+    if (roadPlan?.positions) {
+      for (const posStr of roadPlan.positions) {
+        blockedPositions.add(posStr);
+      }
+    }
+
     const candidates: Array<{ pos: RoomPosition; score: number }> = [];
 
     for (let range = 2; range <= 6; range++) {

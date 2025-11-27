@@ -21,11 +21,11 @@ export class StructureManager {
   }
 
   private manageRoomStructures(room: Room) {
+    this.planContainers(room);
+    this.planRoads(room);
     this.planStorage(room);
     this.planTowers(room);
     this.planExtensions(room);
-    this.planContainers(room);
-    this.planRoads(room);
     
     this.buildStorage(room);
     this.buildTowers(room);
