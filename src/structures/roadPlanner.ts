@@ -9,7 +9,7 @@ interface RoadPlan {
 
 interface KeyLocation {
   pos: RoomPosition;
-  type: 'spawn' | 'source' | 'controller';
+  type: 'spawn' | 'source' | 'controller' | 'container' | 'mineral';
   id?: string;
 }
 
@@ -54,6 +54,29 @@ export class RoadPlanner {
 
     if (room.controller && room.controller.my) {
       locations.push({ pos: room.controller.pos, type: 'controller', id: room.controller.id });
+    }
+
+    // Include containers from planned or built positions
+    const containers = room.find(FIND_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_CONTAINER
+    });
+    for (const container of containers) {
+      locations.push({ pos: container.pos, type: 'container', id: container.id });
+    }
+
+    const containerSites = room.find(FIND_CONSTRUCTION_SITES, {
+      filter: (s) => s.structureType === STRUCTURE_CONTAINER
+    });
+    for (const site of containerSites) {
+      locations.push({ pos: site.pos, type: 'container', id: site.id });
+    }
+
+    // Include mineral if extractor exists or RCL >= 6
+    if (room.controller && room.controller.level >= 6) {
+      const minerals = room.find(FIND_MINERALS);
+      for (const mineral of minerals) {
+        locations.push({ pos: mineral.pos, type: 'mineral', id: mineral.id });
+      }
     }
 
     return locations;
@@ -105,6 +128,7 @@ export class RoadPlanner {
         
         const costs = new PathFinder.CostMatrix();
         
+        // Mark existing structures
         const structures = room.find(FIND_STRUCTURES);
         for (const struct of structures) {
           if (struct.structureType === STRUCTURE_ROAD) {
@@ -115,10 +139,44 @@ export class RoadPlanner {
           }
         }
 
+        // Mark construction sites
         const constructionSites = room.find(FIND_CONSTRUCTION_SITES);
         for (const site of constructionSites) {
           if (site.structureType === STRUCTURE_ROAD) {
             costs.set(site.pos.x, site.pos.y, 1);
+          } else if (site.structureType !== STRUCTURE_CONTAINER) {
+            costs.set(site.pos.x, site.pos.y, 255);
+          }
+        }
+
+        // Mark planned extension positions as impassable
+        const extensionPlan = MemoryManager.get<any>(`rooms.${roomName}.extensionPlan`);
+        if (extensionPlan && extensionPlan.positions) {
+          for (const posStr of extensionPlan.positions) {
+            const [x, y] = posStr.split(',').map(Number);
+            if (costs.get(x, y) < 255) {
+              costs.set(x, y, 255);
+            }
+          }
+        }
+
+        // Mark planned tower positions as impassable
+        const towerPlan = MemoryManager.get<any>(`rooms.${roomName}.towerPlan`);
+        if (towerPlan && towerPlan.positions) {
+          for (const posStr of towerPlan.positions) {
+            const [x, y] = posStr.split(',').map(Number);
+            if (costs.get(x, y) < 255) {
+              costs.set(x, y, 255);
+            }
+          }
+        }
+
+        // Mark planned storage position as impassable
+        const storagePlan = MemoryManager.get<any>(`rooms.${roomName}.storagePlan`);
+        if (storagePlan && storagePlan.position) {
+          const [x, y] = storagePlan.position.split(',').map(Number);
+          if (costs.get(x, y) < 255) {
+            costs.set(x, y, 255);
           }
         }
 
