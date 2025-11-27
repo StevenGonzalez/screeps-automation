@@ -16,6 +16,9 @@ interface KeyLocation {
 export class RoadPlanner {
   planRoadsForRoom(room: Room): RoadPlan | null {
     if (!room.controller || !room.controller.my) return null;
+    
+    // Don't plan roads until RCL 2
+    if (room.controller.level < 2) return null;
 
     const planPath = `rooms.${room.name}.roadPlan`;
     const existingPlan = MemoryManager.get<RoadPlan>(planPath);
