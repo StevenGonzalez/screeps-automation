@@ -4,6 +4,7 @@ import { Scheduler } from './scheduler';
 import { spawnManager } from '../spawning/spawnManager';
 import { creepManager } from '../creeps/creepManager';
 import { structureManager } from '../structures/structureManager';
+import { towerManager } from '../structures/towerManager';
 import { pixelManager } from '../economy/pixelManager';
 
 export class Kernel {
@@ -39,6 +40,7 @@ export class Kernel {
 
   runTick() {
     pixelManager.run();
+    towerManager.run();
     structureManager.run();
     spawnManager.run();
     creepManager.run();
