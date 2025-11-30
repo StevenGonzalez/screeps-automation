@@ -29,6 +29,32 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
   // withdraw from container/storage/terminal - prefer sources that can meaningfully fill the creep
   const freeCap = creep.store.getFreeCapacity(RESOURCE_ENERGY) || 0;
   
+  // Upgraders should prioritize controller containers
+  if (creep.memory.role === 'upgrader' && creep.room.controller) {
+    const controllerContainers = creep.room.controller.pos.findInRange(FIND_STRUCTURES, 2, {
+      filter: (s: Structure) => {
+        if (s.structureType !== STRUCTURE_CONTAINER) return false;
+        const energy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY])) || 0;
+        return energy > 0;
+      }
+    }) as StructureContainer[];
+    
+    if (controllerContainers.length > 0) {
+      // Sort by energy amount (highest first)
+      controllerContainers.sort((a, b) => {
+        const aEnergy = (a.store[RESOURCE_ENERGY] || 0);
+        const bEnergy = (b.store[RESOURCE_ENERGY] || 0);
+        return bEnergy - aEnergy;
+      });
+      
+      const target = controllerContainers[0];
+      if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffff00' } });
+      }
+      return 'withdrawing';
+    }
+  }
+  
   // Check for miner containers first (high priority for all creeps)
   // Only use containers that have at least 50 energy (avoid empty/low containers)
   const minerContainers = creep.room.find(FIND_STRUCTURES, {
