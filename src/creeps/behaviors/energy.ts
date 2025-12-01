@@ -31,15 +31,17 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
   
   // Upgraders should use the nearest container (will be the controller container)
   if (creep.memory.role === 'upgrader') {
-    const nearestContainer = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+    const nearbyContainers = creep.pos.findInRange(FIND_STRUCTURES, 3, {
       filter: (s: Structure) => {
         if (s.structureType !== STRUCTURE_CONTAINER) return false;
         const energy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY])) || 0;
         return energy > 0;
       }
-    }) as StructureContainer | null;
+    }) as StructureContainer[];
     
-    if (nearestContainer) {
+    if (nearbyContainers.length > 0) {
+      // Use the closest one by range
+      const nearestContainer = creep.pos.findClosestByRange(nearbyContainers) as StructureContainer;
       if (creep.withdraw(nearestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(nearestContainer, { visualizePathStyle: { stroke: '#ffff00' } });
       }
