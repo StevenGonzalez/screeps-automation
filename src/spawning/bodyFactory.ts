@@ -31,7 +31,9 @@ export function bestBodyForRole(role: string, energy: number): { body: BodyPartC
   }
 
   if (role === 'upgrader') {
-    const pattern: BodyPartConstant[] = [WORK, CARRY, MOVE];
+    // Upgraders work right next to container and controller, so maximize WORK parts
+    // Only need minimal CARRY (1-2 parts) and MOVE (enough to move when empty)
+    const pattern: BodyPartConstant[] = [WORK, WORK, WORK, CARRY, MOVE];
     const { body, cost } = repeatPattern(pattern, energy);
     if (body.length === 0) return { body: [WORK, MOVE, CARRY], cost: partCost[WORK] + partCost[MOVE] + partCost[CARRY] };
     return { body, cost };
