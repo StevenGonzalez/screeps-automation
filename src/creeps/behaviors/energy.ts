@@ -29,23 +29,36 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
   // withdraw from container/storage/terminal - prefer sources that can meaningfully fill the creep
   const freeCap = creep.store.getFreeCapacity(RESOURCE_ENERGY) || 0;
   
-  // Upgraders should use the nearest container (will be the controller container)
+  // Upgraders should prioritize nearby containers/storage (controller area)
   if (creep.memory.role === 'upgrader') {
-    const nearbyContainers = creep.pos.findInRange(FIND_STRUCTURES, 3, {
+    const nearbyStorage = creep.pos.findInRange(FIND_STRUCTURES, 4, {
       filter: (s: Structure) => {
-        if (s.structureType !== STRUCTURE_CONTAINER) return false;
-        const energy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY])) || 0;
-        return energy > 0;
+        if (s.structureType === STRUCTURE_CONTAINER || 
+            s.structureType === STRUCTURE_STORAGE ||
+            s.structureType === STRUCTURE_LINK) {
+          const energy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY])) || 0;
+          return energy > 0;
+        }
+        return false;
       }
-    }) as StructureContainer[];
+    }) as (StructureContainer | StructureStorage | StructureLink)[];
     
-    if (nearbyContainers.length > 0) {
-      // Use the closest one by range
-      const nearestContainer = creep.pos.findClosestByRange(nearbyContainers) as StructureContainer;
-      if (creep.withdraw(nearestContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(nearestContainer, { visualizePathStyle: { stroke: '#ffff00' } });
+    if (nearbyStorage.length > 0) {
+      // Prefer containers first, then storage, then links - within each type prefer closest
+      const containers = nearbyStorage.filter(s => s.structureType === STRUCTURE_CONTAINER);
+      const storage = nearbyStorage.filter(s => s.structureType === STRUCTURE_STORAGE);
+      const links = nearbyStorage.filter(s => s.structureType === STRUCTURE_LINK);
+      
+      const target = (containers.length > 0 ? creep.pos.findClosestByRange(containers) : null) ||
+                     (storage.length > 0 ? creep.pos.findClosestByRange(storage) : null) ||
+                     (links.length > 0 ? creep.pos.findClosestByRange(links) : null);
+      
+      if (target) {
+        if (creep.withdraw(target as any, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(target, { visualizePathStyle: { stroke: '#ffff00' } });
+        }
+        return 'withdrawing';
       }
-      return 'withdrawing';
     }
   }
   
