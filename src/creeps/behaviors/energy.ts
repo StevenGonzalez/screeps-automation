@@ -30,7 +30,7 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
   const freeCap = creep.store.getFreeCapacity(RESOURCE_ENERGY) || 0;
   
   // Upgraders should prioritize nearby containers/storage (controller area)
-  if (creep.memory.role === 'upgrader') {
+  if (creep.memory.role === 'upgrader' || creep.memory.role === 'spawn_upgrader') {
     const nearbyStorage = creep.pos.findInRange(FIND_STRUCTURES, 4, {
       filter: (s: Structure) => {
         if (s.structureType === STRUCTURE_CONTAINER || 
