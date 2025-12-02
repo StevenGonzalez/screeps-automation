@@ -1,6 +1,15 @@
 // src/memory/types.ts
 // Extend global Memory types for type safety
 
+export enum CreepRole {
+  HARVESTER = 'harvester',
+  MINER = 'miner',
+  HAULER = 'hauler',
+  UPGRADER = 'upgrader',
+  BUILDER = 'builder',
+  REPAIRER = 'repairer',
+}
+
 declare global {
   interface Memory {
     rooms: Record<string, RoomMemory>;

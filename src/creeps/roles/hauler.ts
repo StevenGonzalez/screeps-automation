@@ -36,16 +36,23 @@ export function run(creep: Creep) {
         return energy < energyCap;
       }
       if (s.structureType === STRUCTURE_CONTAINER) {
-        const store = (s as any).store || {};
-        const energyAmount = store[RESOURCE_ENERGY] || 0;
-        const cap = (s as any).storeCapacity || 0;
+        const container = s as StructureContainer;
+        const energyAmount = container.store[RESOURCE_ENERGY] || 0;
+        const cap = container.store.getCapacity() || 0;
+        // Only fill controller containers if they're less than 80% full
+        const controller = container.room.controller;
+        if (controller && container.pos.inRangeTo(controller.pos, 3)) {
+          return energyAmount < cap * 0.8;
+        }
+        // Don't fill miner containers (miners drop energy there)
+        const crepsOnContainer = container.pos.lookFor(LOOK_CREEPS);
+        const hasMiner = crepsOnContainer.some(c => c.my && c.memory.role === 'miner');
+        if (hasMiner) return false;
         return energyAmount < cap;
       }
       if (s.structureType === STRUCTURE_STORAGE) {
-        const store = (s as any).store || {};
-        const cap = (s as any).storeCapacity || 0;
-        const used = Object.values(store as Record<string, number>).reduce((a, b) => a + b, 0);
-        return used < cap;
+        const storage = s as StructureStorage;
+        return storage.store.getFreeCapacity() !== null && storage.store.getFreeCapacity()! > 0;
       }
       return false;
     },
