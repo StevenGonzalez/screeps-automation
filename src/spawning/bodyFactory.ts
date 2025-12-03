@@ -47,8 +47,30 @@ export function bestBodyForRole(role: string, energy: number): { body: BodyPartC
   }
 
   if (role === 'miner') {
-    const pattern: BodyPartConstant[] = [WORK, WORK, MOVE];
-    const { body, cost } = repeatPattern(pattern, energy);
+    // Miners sit on container and harvest. Sources regenerate 3000 energy every 300 ticks.
+    // Perfect mining: 3000/300 = 10 energy/tick. Each WORK harvests 2/tick, so 5 WORK parts optimal.
+    // Build towards 5 WORK + minimal MOVE for initial positioning
+    const targetWork = 5;
+    const body: BodyPartConstant[] = [];
+    let cost = 0;
+    
+    // Add WORK parts up to 5
+    let workCount = 0;
+    while (workCount < targetWork && cost + partCost[WORK] <= energy && body.length < 50) {
+      body.push(WORK);
+      cost += partCost[WORK];
+      workCount++;
+    }
+    
+    // Add 1 MOVE per 2 WORK parts (enough to move unencumbered)
+    const moveNeeded = Math.ceil(workCount / 2);
+    let moveCount = 0;
+    while (moveCount < moveNeeded && cost + partCost[MOVE] <= energy && body.length < 50) {
+      body.push(MOVE);
+      cost += partCost[MOVE];
+      moveCount++;
+    }
+    
     if (body.length === 0) return { body: [WORK, MOVE], cost: partCost[WORK] + partCost[MOVE] };
     return { body, cost };
   }
