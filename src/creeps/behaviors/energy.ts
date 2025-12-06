@@ -41,7 +41,47 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
     }
   }
   
+  // Check for miner containers first (high priority for all creeps except upgraders)
+  // Only use containers that have at least 50 energy (avoid empty/low containers)
+  if (creep.memory.role !== CreepRole.UPGRADER) {
+    const minerContainers = creep.room.find(FIND_STRUCTURES, {
+      filter: (s: Structure) => {
+        if (s.structureType !== STRUCTURE_CONTAINER) return false;
+        const energy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY])) || 0;
+        if (energy < 50) return false;
+        const crepsOnContainer = s.pos.lookFor(LOOK_CREEPS);
+        const hasMiner = crepsOnContainer.some(c => c.my && c.memory.role === CreepRole.MINER);
+        return hasMiner;
+      }
+    }) as StructureContainer[];
+
+    if (minerContainers.length > 0) {
+      // Sort by energy amount (highest first) to prioritize full containers
+      minerContainers.sort((a, b) => {
+        const aEnergy = (a.store[RESOURCE_ENERGY] || 0);
+        const bEnergy = (b.store[RESOURCE_ENERGY] || 0);
+        return bEnergy - aEnergy;
+      });
+
+      // Pick the container with the most energy that we can path to
+      let target: StructureContainer | null = null;
+      for (const container of minerContainers) {
+        const path = creep.pos.findPathTo(container, { ignoreCreeps: true });
+        if (path.length > 0) {
+          target = container;
+          break;
+        }
+      }
+
+      if (target) {
+        if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(target, { visualizePathStyle: { stroke: '#ffff00' } });
+        return 'withdrawing';
+      }
+    }
+  }
+
   // pickup dropped energy (but not for upgraders who should stick to their container)
+  // Only pick up dropped energy if we're not already near a miner container that we should be withdrawing from
   if (creep.memory.role !== CreepRole.UPGRADER) {
     const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, { filter: (r: Resource) => r.resourceType === RESOURCE_ENERGY && r.amount > 20 });
     if (dropped) {
@@ -59,43 +99,6 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
     const ruin = creep.pos.findClosestByPath(FIND_RUINS, { filter: (r: Ruin) => (r.store[RESOURCE_ENERGY] || 0) > 0 });
     if (ruin) {
       if (creep.withdraw(ruin, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(ruin, { visualizePathStyle: { stroke: '#ffaa00' } });
-      return 'withdrawing';
-    }
-  }
-  
-  // Check for miner containers first (high priority for all creeps)
-  // Only use containers that have at least 50 energy (avoid empty/low containers)
-  const minerContainers = creep.room.find(FIND_STRUCTURES, {
-    filter: (s: Structure) => {
-      if (s.structureType !== STRUCTURE_CONTAINER) return false;
-      const energy = ((s as any).store && ((s as any).store[RESOURCE_ENERGY])) || 0;
-      if (energy < 50) return false;
-      const crepsOnContainer = s.pos.lookFor(LOOK_CREEPS);
-      const hasMiner = crepsOnContainer.some(c => c.my && c.memory.role === CreepRole.MINER);
-      return hasMiner;
-    }
-  }) as StructureContainer[];
-
-  if (minerContainers.length > 0) {
-    // Sort by energy amount (highest first) to prioritize full containers
-    minerContainers.sort((a, b) => {
-      const aEnergy = (a.store[RESOURCE_ENERGY] || 0);
-      const bEnergy = (b.store[RESOURCE_ENERGY] || 0);
-      return bEnergy - aEnergy;
-    });
-
-    // Pick the container with the most energy that we can path to
-    let target: StructureContainer | null = null;
-    for (const container of minerContainers) {
-      const path = creep.pos.findPathTo(container, { ignoreCreeps: true });
-      if (path.length > 0) {
-        target = container;
-        break;
-      }
-    }
-
-    if (target) {
-      if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(target, { visualizePathStyle: { stroke: '#ffff00' } });
       return 'withdrawing';
     }
   }
