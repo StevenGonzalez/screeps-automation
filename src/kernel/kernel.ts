@@ -18,7 +18,6 @@ export class Kernel {
         for (const r of rooms) {
           const q = MemoryManager.get<any[]>(`rooms.${r.name}.spawnQueue`, []) || [];
           const creepCount = Object.values(Game.creeps).filter(c => c.room.name === r.name).length;
-          console.log(`Diag ${r.name}: creeps=${creepCount}, spawnQueue=${q.length}`);
         }
       } catch (e) { console.log('Diagnostics error: ' + e); }
     }, 100);
