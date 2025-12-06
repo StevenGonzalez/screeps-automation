@@ -42,6 +42,37 @@ export class SpawnManager {
     return Object.values(Game.creeps).filter(c => c.room.name === room.name);
   }
 
+  private getSpawnEnergyBudget(room: Room): number {
+    const available = room.energyAvailable;
+    const capacity = room.energyCapacityAvailable;
+    
+    // If we have storage, use it to determine budget
+    if (room.storage) {
+      const stored = room.storage.store[RESOURCE_ENERGY] || 0;
+      
+      // Abundant energy: spawn at max capacity
+      if (stored > 50000) return capacity;
+      
+      // Good energy: spawn at 75% capacity
+      if (stored > 20000) return Math.min(capacity, Math.floor(capacity * 0.75));
+      
+      // Low energy: only use what's available, don't exceed 50% capacity
+      return Math.min(available, Math.floor(capacity * 0.5));
+    }
+    
+    // No storage: scale based on available vs capacity ratio
+    const ratio = available / capacity;
+    
+    // High energy available: use up to 80% of capacity
+    if (ratio > 0.9) return Math.floor(capacity * 0.8);
+    
+    // Medium energy: use available energy but cap at 60% capacity
+    if (ratio > 0.7) return Math.min(available, Math.floor(capacity * 0.6));
+    
+    // Low energy: only use current available, max 40% capacity
+    return Math.min(available, Math.floor(capacity * 0.4));
+  }
+
   private countCreepsByRole(creeps: Creep[], role: string): number {
     return creeps.reduce((acc, c) => acc + (c.memory.role === role ? 1 : 0), 0);
   }
@@ -87,6 +118,7 @@ export class SpawnManager {
       const queuedForContainer = this.countQueuedForContainer(queuePath, container.id);
       if (queuedForContainer > 0) continue;
 
+      // Miners are critical but cheap - always use max capacity for efficiency
       const { body } = bestBodyForRole('miner', room.energyCapacityAvailable);
       const req: SpawnRequest = {
         role: 'miner',
@@ -132,7 +164,8 @@ export class SpawnManager {
     const desiredHaulers = Math.max(1, Math.ceil(minerCount * 1.5));
 
     if (haulerCount + queuedHaulers < desiredHaulers) {
-      const { body } = bestBodyForRole('hauler', room.energyCapacityAvailable);
+      const budget = this.getSpawnEnergyBudget(room);
+      const { body } = bestBodyForRole('hauler', budget);
       const req: SpawnRequest = {
         role: 'hauler',
         body,
@@ -161,7 +194,8 @@ export class SpawnManager {
     const targetHarvesters = Math.min(desiredHarvesters, maxHarvesters);
 
     if (harvesterCount + queuedHarvesters < targetHarvesters) {
-      const { body } = bestBodyForRole('harvester', room.energyCapacityAvailable);
+      const budget = this.getSpawnEnergyBudget(room);
+      const { body } = bestBodyForRole('harvester', budget);
       const req: SpawnRequest = { 
         role: 'harvester', 
         body, 
@@ -199,7 +233,8 @@ export class SpawnManager {
     if (currentUpgraders + queuedUpgraders < desiredUpgraders) {
       const needed = desiredUpgraders - (currentUpgraders + queuedUpgraders);
       for (let i = 0; i < needed; i++) {
-        const { body } = bestBodyForRole('upgrader', room.energyCapacityAvailable);
+        const budget = this.getSpawnEnergyBudget(room);
+        const { body } = bestBodyForRole('upgrader', budget);
         const req: SpawnRequest = { 
           role: 'upgrader', 
           body, 
@@ -243,7 +278,8 @@ export class SpawnManager {
     if (currentRepairers + queuedRepairers < desiredRepairers) {
       const needed = desiredRepairers - (currentRepairers + queuedRepairers);
       for (let i = 0; i < needed; i++) {
-        const { body } = bestBodyForRole('repairer', room.energyCapacityAvailable);
+        const budget = this.getSpawnEnergyBudget(room);
+        const { body } = bestBodyForRole('repairer', budget);
         const req: SpawnRequest = { 
           role: 'repairer', 
           body, 
@@ -270,7 +306,8 @@ export class SpawnManager {
     if (currentBuilders + queuedBuilders < desiredBuilders) {
       const needed = desiredBuilders - (currentBuilders + queuedBuilders);
       for (let i = 0; i < needed; i++) {
-        const { body } = bestBodyForRole('builder', room.energyCapacityAvailable);
+        const budget = this.getSpawnEnergyBudget(room);
+        const { body } = bestBodyForRole('builder', budget);
         const req: SpawnRequest = { 
           role: 'builder', 
           body, 

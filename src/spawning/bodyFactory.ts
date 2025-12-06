@@ -32,15 +32,18 @@ export function bestBodyForRole(role: string, energy: number): { body: BodyPartC
 
   if (role === 'upgrader') {
     // Upgraders work right next to container and controller, so maximize WORK parts
-    // Only need minimal CARRY (1-2 parts) and MOVE (enough to move when empty)
-    const pattern: BodyPartConstant[] = [WORK, WORK, WORK, CARRY, MOVE];
+    // Pattern: 2 WORK, 1 CARRY, 1 MOVE = 250 energy (down from 350)
+    // More efficient scaling and less energy drain
+    const pattern: BodyPartConstant[] = [WORK, WORK, CARRY, MOVE];
     const { body, cost } = repeatPattern(pattern, energy);
     if (body.length === 0) return { body: [WORK, MOVE, CARRY], cost: partCost[WORK] + partCost[MOVE] + partCost[CARRY] };
     return { body, cost };
   }
 
   if (role === 'builder') {
-    const pattern: BodyPartConstant[] = [WORK, CARRY, MOVE, MOVE];
+    // Pattern: 1 WORK, 2 CARRY, 1 MOVE = 250 energy
+    // Better balance for building - more carry for energy, less move cost
+    const pattern: BodyPartConstant[] = [WORK, CARRY, CARRY, MOVE];
     const { body, cost } = repeatPattern(pattern, energy);
     if (body.length === 0) return { body: [WORK, CARRY, MOVE], cost: partCost[WORK] + partCost[CARRY] + partCost[MOVE] };
     return { body, cost };
