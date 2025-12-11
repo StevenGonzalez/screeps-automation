@@ -1,131 +1,317 @@
 // src/creeps/roles/hauler.ts
 import { acquireEnergy } from '../behaviors/energy';
 
+interface HaulerMemory {
+  state?: 'acquire' | 'work';
+  sourceId?: Id<Source | StructureContainer | StructureStorage | Resource>;
+  destinationId?: Id<StructureExtension | StructureSpawn | StructureTower | StructureContainer | StructureStorage>;
+  _move?: any;
+}
+
+// Static reservation tracking
+const sourceReservations = new Map<string, number>();
+const destinationReservations = new Map<string, number>();
+
 export function run(creep: Creep) {
-  if (!(creep.memory as any).state) (creep.memory as any).state = 'acquire';
-  const state = (creep.memory as any).state as 'acquire' | 'work';
+  const memory = creep.memory as HaulerMemory;
 
-  const used = creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
-  const capacity = creep.store.getCapacity(RESOURCE_ENERGY) || 0;
+  // Initialize state
+  if (!memory.state) memory.state = 'acquire';
 
-  if (state === 'acquire') {
-    const res = acquireEnergy(creep, { preferHarvest: false });
-    
-    if (used >= capacity * 0.8 || (res === 'none' && used > 0)) {
-      (creep.memory as any).state = 'work';
-      (creep.memory as any).targetId = undefined; // Clear any old target
-    } else {
-      return;
-    }
+  // Clear reservations if creep is dying
+  if (creep.ticksToLive && creep.ticksToLive < 50) {
+    clearReservations(creep);
   }
 
+  const used = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+  const capacity = creep.store.getCapacity(RESOURCE_ENERGY);
+
+  // State transitions
   if (used === 0) {
-    (creep.memory as any).state = 'acquire';
-    (creep.memory as any).targetId = undefined;
-    return;
+    memory.state = 'acquire';
+    memory.destinationId = undefined;
+    delete memory._move;
+  } else if (used >= capacity) {
+    memory.state = 'work';
+    memory.sourceId = undefined;
+    delete memory._move;
   }
 
-  // Check if we have a stored target
-  let target: Structure | null = null;
-  const targetId = (creep.memory as any).targetId as string | undefined;
-  if (targetId) {
-    target = Game.getObjectById(targetId) as Structure | null;
-    // Validate the target is still valid
-    if (target && !canAcceptEnergy(target)) {
-      target = null;
-      (creep.memory as any).targetId = undefined;
+  if (memory.state === 'acquire') {
+    collectEnergy(creep);
+  } else {
+    deliverEnergy(creep);
+  }
+}
+
+function collectEnergy(creep: Creep): void {
+  const memory = creep.memory as HaulerMemory;
+  
+  // Validate existing target
+  if (memory.sourceId) {
+    const target = Game.getObjectById(memory.sourceId);
+    if (!target || !isValidSource(target)) {
+      clearSourceReservation(creep);
+      memory.sourceId = undefined;
     }
   }
 
-  // If no valid target, find a new one
-  if (!target) {
-    const targets = creep.room.find(FIND_STRUCTURES, {
-      filter: (s: Structure) => canAcceptEnergy(s)
-    }) as Structure[];
-
-    if (targets.length > 0) {
-      targets.sort((a, b) => {
-        const aPriority = getTargetPriority(a);
-        const bPriority = getTargetPriority(b);
-        if (aPriority !== bPriority) return bPriority - aPriority;
-        return creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b);
-      });
-
-      target = targets[0];
-      (creep.memory as any).targetId = target.id;
+  // Find new target if needed
+  if (!memory.sourceId) {
+    const target = findBestSource(creep);
+    if (target) {
+      memory.sourceId = target.id as any;
+      reserveSource(target.id, creep.store.getFreeCapacity(RESOURCE_ENERGY));
     }
   }
 
-  if (target) {
-    const transferResult = creep.transfer(target as AnyStructure, RESOURCE_ENERGY);
-    if (transferResult === ERR_NOT_IN_RANGE) {
-      creep.moveTo(target as any, { visualizePathStyle: { stroke: '#ffffff' } });
-    } else if (transferResult === OK) {
-      // Successfully transferred, clear target to find a new one next tick
-      (creep.memory as any).targetId = undefined;
-    } else if (transferResult === ERR_FULL) {
-      // Target is full, clear it and find a new one
-      (creep.memory as any).targetId = undefined;
+  // Collect from target
+  if (memory.sourceId) {
+    const target = Game.getObjectById(memory.sourceId);
+    if (target) {
+      let result: ScreepsReturnCode;
+      
+      if (target instanceof Resource) {
+        result = creep.pickup(target);
+      } else if (target instanceof Source) {
+        result = creep.harvest(target);
+      } else {
+        result = creep.withdraw(target, RESOURCE_ENERGY);
+      }
+
+      if (result === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: 20 });
+      } else if (result === OK || result === ERR_FULL) {
+        // Clear target when successful or full
+        clearSourceReservation(creep);
+        memory.sourceId = undefined;
+      }
+    }
+  }
+}
+
+function deliverEnergy(creep: Creep): void {
+  const memory = creep.memory as HaulerMemory;
+  
+  // Validate existing target
+  if (memory.destinationId) {
+    const target = Game.getObjectById(memory.destinationId);
+    if (!target || !isValidDestination(target)) {
+      clearDestinationReservation(creep);
+      memory.destinationId = undefined;
+    }
+  }
+
+  // Find new target if needed
+  if (!memory.destinationId) {
+    const target = findBestDestination(creep);
+    if (target) {
+      memory.destinationId = target.id as any;
+      reserveDestination(target.id, creep.store.getUsedCapacity(RESOURCE_ENERGY));
+    }
+  }
+
+  // Deliver to target
+  if (memory.destinationId) {
+    const target = Game.getObjectById(memory.destinationId);
+    if (target) {
+      const result = creep.transfer(target, RESOURCE_ENERGY);
+      
+      if (result === ERR_NOT_IN_RANGE) {
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 20 });
+      } else if (result === OK || result === ERR_FULL) {
+        // Clear target when successful or full
+        clearDestinationReservation(creep);
+        memory.destinationId = undefined;
+      }
     }
   } else {
     // No valid targets, upgrade controller as fallback
     const controller = creep.room.controller;
     if (controller && controller.my) {
       if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' } });
+        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 20 });
       }
     }
   }
 }
 
-function canAcceptEnergy(structure: Structure): boolean {
-  if (structure.structureType === STRUCTURE_SPAWN || structure.structureType === STRUCTURE_EXTENSION) {
-    const energy = (structure as any).energy || 0;
-    const energyCap = (structure as any).energyCapacity || 0;
-    return energy < energyCap;
-  }
-  if (structure.structureType === STRUCTURE_TOWER) {
-    const energy = (structure as any).energy || 0;
-    const energyCap = (structure as any).energyCapacity || 0;
-    return energy < energyCap;
-  }
-  if (structure.structureType === STRUCTURE_CONTAINER) {
-    const container = structure as StructureContainer;
-    const energyAmount = container.store[RESOURCE_ENERGY] || 0;
-    const cap = container.store.getCapacity() || 0;
-    // Only fill controller containers if they're less than 80% full
-    const controller = container.room.controller;
-    if (controller && container.pos.inRangeTo(controller.pos, 3)) {
-      return energyAmount < cap * 0.8;
+function findBestSource(creep: Creep): Source | StructureContainer | StructureStorage | Resource | null {
+  const room = creep.room;
+  
+  // Priority 1: Containers with energy (not over-reserved)
+  const containers = room.find(FIND_STRUCTURES, {
+    filter: (s) => {
+      if (s.structureType !== STRUCTURE_CONTAINER) return false;
+      
+      const container = s as StructureContainer;
+      const energyAmount = container.store.getUsedCapacity(RESOURCE_ENERGY);
+      if (energyAmount === 0) return false;
+      
+      // Don't take from miner containers
+      const creepsOnContainer = container.pos.lookFor(LOOK_CREEPS);
+      const hasMiner = creepsOnContainer.some(c => c.my && (c.memory as any).role === 'miner');
+      if (hasMiner) return false;
+      
+      // Check if not over-reserved
+      const reserved = sourceReservations.get(container.id) || 0;
+      return energyAmount - reserved > 50;
     }
-    // Don't fill miner containers (miners drop energy there)
-    const crepsOnContainer = container.pos.lookFor(LOOK_CREEPS);
-    const hasMiner = crepsOnContainer.some(c => c.my && c.memory.role === 'miner');
-    if (hasMiner) return false;
-    return energyAmount < cap;
+  }) as StructureContainer[];
+
+  // Priority 2: Storage
+  const storage = room.storage;
+  if (storage && storage.store.getUsedCapacity(RESOURCE_ENERGY) > 100) {
+    const reserved = sourceReservations.get(storage.id) || 0;
+    const available = storage.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
+    if (available > 50) {
+      containers.push(storage as any);
+    }
   }
-  if (structure.structureType === STRUCTURE_STORAGE) {
-    const storage = structure as StructureStorage;
-    return storage.store.getFreeCapacity() !== null && storage.store.getFreeCapacity()! > 0;
+
+  if (containers.length > 0) {
+    return creep.pos.findClosestByPath(containers, {
+      filter: (c) => {
+        const reserved = sourceReservations.get(c.id) || 0;
+        return c.store.getUsedCapacity(RESOURCE_ENERGY) - reserved > 0;
+      }
+    });
   }
-  return false;
+
+  // Priority 3: Dropped energy
+  const droppedEnergy = room.find(FIND_DROPPED_RESOURCES, {
+    filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+  });
+  
+  if (droppedEnergy.length > 0) {
+    return creep.pos.findClosestByPath(droppedEnergy);
+  }
+
+  // Priority 4: Sources (last resort)
+  const sources = room.find(FIND_SOURCES_ACTIVE);
+  return creep.pos.findClosestByPath(sources);
 }
 
-function getTargetPriority(structure: Structure): number {
-  if (structure.structureType === STRUCTURE_SPAWN) return 100;
-  if (structure.structureType === STRUCTURE_EXTENSION) return 90;
-  if (structure.structureType === STRUCTURE_TOWER) return 80;
-  
-  if (structure.structureType === STRUCTURE_CONTAINER) {
-    const controller = structure.room.controller;
-    if (controller && structure.pos.inRangeTo(controller.pos, 3)) {
-      return 70;
+function findBestDestination(creep: Creep): StructureExtension | StructureSpawn | StructureTower | StructureContainer | StructureStorage | null {
+  const room = creep.room;
+  const energyCarried = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+
+  // Priority 1: Spawns and extensions that need energy
+  const spawnExtensions = room.find(FIND_MY_STRUCTURES, {
+    filter: (structure) => {
+      if (structure.structureType !== STRUCTURE_EXTENSION && 
+          structure.structureType !== STRUCTURE_SPAWN) {
+        return false;
+      }
+      
+      const reserved = destinationReservations.get(structure.id) || 0;
+      const capacity = structure.store.getFreeCapacity(RESOURCE_ENERGY);
+      return capacity - reserved > 0;
     }
-    return 20;
+  }) as (StructureExtension | StructureSpawn)[];
+
+  if (spawnExtensions.length > 0) {
+    return creep.pos.findClosestByPath(spawnExtensions, {
+      filter: (t) => {
+        const reserved = destinationReservations.get(t.id) || 0;
+        return t.store.getFreeCapacity(RESOURCE_ENERGY) - reserved >= Math.min(energyCarried, 50);
+      }
+    });
   }
-  
-  if (structure.structureType === STRUCTURE_STORAGE) return 10;
-  return 0;
+
+  // Priority 2: Towers below 80% capacity
+  const towers = room.find(FIND_MY_STRUCTURES, {
+    filter: (s) => {
+      if (s.structureType !== STRUCTURE_TOWER) return false;
+      const reserved = destinationReservations.get(s.id) || 0;
+      return s.store.getFreeCapacity(RESOURCE_ENERGY) - reserved > 200;
+    }
+  }) as StructureTower[];
+
+  if (towers.length > 0) {
+    return creep.pos.findClosestByPath(towers);
+  }
+
+  // Priority 3: Controller containers (if less than 80% full)
+  const controller = room.controller;
+  if (controller) {
+    const controllerContainers = room.find(FIND_STRUCTURES, {
+      filter: (s) => {
+        if (s.structureType !== STRUCTURE_CONTAINER) return false;
+        if (!s.pos.inRangeTo(controller.pos, 3)) return false;
+        const reserved = destinationReservations.get(s.id) || 0;
+        const freeCapacity = s.store.getFreeCapacity(RESOURCE_ENERGY);
+        return freeCapacity - reserved > 0 && 
+               s.store.getUsedCapacity(RESOURCE_ENERGY) < s.store.getCapacity() * 0.8;
+      }
+    }) as StructureContainer[];
+
+    if (controllerContainers.length > 0) {
+      return creep.pos.findClosestByPath(controllerContainers);
+    }
+  }
+
+  // Priority 4: Storage
+  const storage = room.storage;
+  if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+    return storage as any;
+  }
+
+  return null;
 }
 
-export default { run };
+function isValidSource(target: Source | StructureContainer | StructureStorage | Resource): boolean {
+  if (target instanceof Source) {
+    return target.energy > 0;
+  }
+  if (target instanceof Resource) {
+    return target.amount > 0;
+  }
+  return target.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+}
+
+function isValidDestination(target: StructureExtension | StructureSpawn | StructureTower | StructureContainer | StructureStorage): boolean {
+  return target.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
+}
+
+// Reservation system
+function reserveSource(id: string, amount: number): void {
+  const current = sourceReservations.get(id) || 0;
+  sourceReservations.set(id, current + amount);
+}
+
+function reserveDestination(id: string, amount: number): void {
+  const current = destinationReservations.get(id) || 0;
+  destinationReservations.set(id, current + amount);
+}
+
+function clearSourceReservation(creep: Creep): void {
+  const memory = creep.memory as HaulerMemory;
+  if (memory.sourceId) {
+    const reserved = sourceReservations.get(memory.sourceId) || 0;
+    const amount = creep.store.getFreeCapacity(RESOURCE_ENERGY);
+    sourceReservations.set(memory.sourceId, Math.max(0, reserved - amount));
+  }
+}
+
+function clearDestinationReservation(creep: Creep): void {
+  const memory = creep.memory as HaulerMemory;
+  if (memory.destinationId) {
+    const reserved = destinationReservations.get(memory.destinationId) || 0;
+    const amount = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+    destinationReservations.set(memory.destinationId, Math.max(0, reserved - amount));
+  }
+}
+
+function clearReservations(creep: Creep): void {
+  clearSourceReservation(creep);
+  clearDestinationReservation(creep);
+}
+
+// Clean up reservations each tick
+export function cleanupReservations(): void {
+  sourceReservations.clear();
+  destinationReservations.clear();
+}
+
+export default { run, cleanupReservations };

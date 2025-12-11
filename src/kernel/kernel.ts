@@ -6,6 +6,7 @@ import { creepManager } from '../creeps/creepManager';
 import { structureManager } from '../structures/structureManager';
 import { towerManager } from '../structures/towerManager';
 import { pixelManager } from '../economy/pixelManager';
+import * as haulerRole from '../creeps/roles/hauler';
 
 export class Kernel {
   scheduler: Scheduler;
@@ -25,6 +26,9 @@ export class Kernel {
 
   tick() {
     MemoryManager.reset();
+    
+    // Clean up hauler reservations at start of tick
+    haulerRole.cleanupReservations();
 
     try {
       this.runTick();
