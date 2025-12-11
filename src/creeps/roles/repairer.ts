@@ -31,6 +31,13 @@ export function run(creep: Creep) {
 
   const memory = creep.memory as RepairerMemory;
   const carrying = creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
+  
+  // Check if we're blocking a container position and move off if so
+  if (isBlockingContainer(creep)) {
+    moveOffContainer(creep);
+    return;
+  }
+  
   if (carrying === 0) {
     memory.buildTargetId = undefined;
     return;
@@ -99,6 +106,58 @@ export function run(creep: Creep) {
         visualizePathStyle: { stroke: '#0000ff' },
         reusePath: 20
       });
+    }
+  }
+}
+
+function isBlockingContainer(creep: Creep): boolean {
+  // Check if standing on a container or container construction site
+  const structures = creep.pos.lookFor(LOOK_STRUCTURES);
+  const hasContainer = structures.some(s => s.structureType === STRUCTURE_CONTAINER);
+  
+  const sites = creep.pos.lookFor(LOOK_CONSTRUCTION_SITES);
+  const hasContainerSite = sites.some(s => s.structureType === STRUCTURE_CONTAINER);
+  
+  return hasContainer || hasContainerSite;
+}
+
+function moveOffContainer(creep: Creep): void {
+  // Find an adjacent position that's not a container
+  const terrain = creep.room.getTerrain();
+  const directions = [
+    TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT,
+    BOTTOM, BOTTOM_LEFT, LEFT, TOP_LEFT
+  ];
+  
+  for (const dir of directions) {
+    const pos = creep.pos;
+    let newX = pos.x;
+    let newY = pos.y;
+    
+    switch(dir) {
+      case TOP: newY--; break;
+      case TOP_RIGHT: newX++; newY--; break;
+      case RIGHT: newX++; break;
+      case BOTTOM_RIGHT: newX++; newY++; break;
+      case BOTTOM: newY++; break;
+      case BOTTOM_LEFT: newX--; newY++; break;
+      case LEFT: newX--; break;
+      case TOP_LEFT: newX--; newY--; break;
+    }
+    
+    if (newX < 1 || newX > 48 || newY < 1 || newY > 48) continue;
+    if (terrain.get(newX, newY) === TERRAIN_MASK_WALL) continue;
+    
+    const newPos = new RoomPosition(newX, newY, pos.roomName);
+    const structuresAtPos = newPos.lookFor(LOOK_STRUCTURES);
+    const hasContainerAtPos = structuresAtPos.some(s => 
+      s.structureType === STRUCTURE_CONTAINER ||
+      (s.structureType !== STRUCTURE_ROAD && s.structureType !== STRUCTURE_RAMPART)
+    );
+    
+    if (!hasContainerAtPos) {
+      creep.move(dir);
+      return;
     }
   }
 }
