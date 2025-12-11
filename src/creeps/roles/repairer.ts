@@ -3,6 +3,11 @@ import { SpawnConfig } from '../../config';
 import { handleAcquireWork } from '../roleState';
 import { repairStructures } from '../behaviors/repair';
 
+interface RepairerMemory {
+  buildTargetId?: Id<ConstructionSite>;
+  _move?: any;
+}
+
 /**
  * Repairer role: specializes in maintaining and repairing structures.
  * 
@@ -24,8 +29,12 @@ export function run(creep: Creep) {
   
   if (shouldPause) return;
 
+  const memory = creep.memory as RepairerMemory;
   const carrying = creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
-  if (carrying === 0) return;
+  if (carrying === 0) {
+    memory.buildTargetId = undefined;
+    return;
+  }
 
   const repairResult = repairStructures(creep, {
     criticalThreshold: SpawnConfig.repairer.criticalThreshold,
@@ -38,31 +47,46 @@ export function run(creep: Creep) {
 
   if (repairResult === 'repairing') return;
 
-  const sites = creep.room.find(FIND_CONSTRUCTION_SITES);
+  // Validate cached build target
+  let target: ConstructionSite | null = null;
+  if (memory.buildTargetId) {
+    target = Game.getObjectById(memory.buildTargetId);
+    if (!target) {
+      memory.buildTargetId = undefined;
+    }
+  }
   
-  if (sites.length > 0) {
-    let target = creep.pos.findClosestByPath(
-      sites.filter(s => s.structureType !== STRUCTURE_ROAD)
-    ) as ConstructionSite | null;
+  // Find new target only if needed
+  if (!target) {
+    target = creep.pos.findClosestByPath(FIND_CONSTRUCTION_SITES, {
+      filter: (s) => s.structureType !== STRUCTURE_ROAD
+    });
     
     if (!target) {
-      target = creep.pos.findClosestByPath(
-        sites.filter(s => s.structureType === STRUCTURE_ROAD)
-      ) as ConstructionSite | null;
+      target = creep.pos.findClosestByPath(FIND_CONSTRUCTION_SITES, {
+        filter: (s) => s.structureType === STRUCTURE_ROAD
+      });
     }
     
     if (target) {
-      const buildResult = creep.build(target);
-      
-      if (buildResult === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { 
-          visualizePathStyle: { stroke: '#ffaa00' },
-          reusePath: 5
-        });
-      }
-      
-      return;
+      memory.buildTargetId = target.id;
     }
+  }
+  
+  if (target) {
+    const buildResult = creep.build(target);
+    
+    if (buildResult === ERR_NOT_IN_RANGE) {
+      creep.moveTo(target, { 
+        visualizePathStyle: { stroke: '#ffaa00' },
+        reusePath: 15
+      });
+    } else if (buildResult === OK && target.progress + 5 >= target.progressTotal) {
+      // Clear target if almost done
+      memory.buildTargetId = undefined;
+    }
+    
+    return;
   }
 
   const controller = creep.room.controller;
@@ -73,7 +97,7 @@ export function run(creep: Creep) {
     if (upgradeResult === ERR_NOT_IN_RANGE) {
       creep.moveTo(controller, { 
         visualizePathStyle: { stroke: '#0000ff' },
-        reusePath: 10
+        reusePath: 20
       });
     }
   }

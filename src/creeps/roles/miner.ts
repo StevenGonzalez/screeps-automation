@@ -22,7 +22,7 @@ export function run(creep: Creep) {
   }
 
   if (!creep.pos.isEqualTo(container.pos)) {
-    creep.moveTo(container.pos, { visualizePathStyle: { stroke: '#ffaa00' } });
+    creep.moveTo(container.pos, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: 20 });
     return;
   }
 

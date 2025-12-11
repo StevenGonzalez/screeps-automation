@@ -9,7 +9,7 @@ export function run(creep: Creep) {
   const controller = creep.room.controller;
   if (controller) {
     if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' } });
+      creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 20 });
     }
   }
 }

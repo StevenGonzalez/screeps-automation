@@ -1,5 +1,6 @@
 // src/creeps/roles/hauler.ts
 import { acquireEnergy } from '../behaviors/energy';
+import { RoomCache } from '../../utils/roomCache';
 
 interface HaulerMemory {
   state?: 'acquire' | 'work';
@@ -140,24 +141,19 @@ function findBestSource(creep: Creep): Source | StructureContainer | StructureSt
   const room = creep.room;
   
   // Priority 1: Containers with energy (not over-reserved)
-  const containers = room.find(FIND_STRUCTURES, {
-    filter: (s) => {
-      if (s.structureType !== STRUCTURE_CONTAINER) return false;
-      
-      const container = s as StructureContainer;
-      const energyAmount = container.store.getUsedCapacity(RESOURCE_ENERGY);
-      if (energyAmount === 0) return false;
-      
-      // Don't take from miner containers
-      const creepsOnContainer = container.pos.lookFor(LOOK_CREEPS);
-      const hasMiner = creepsOnContainer.some(c => c.my && (c.memory as any).role === 'miner');
-      if (hasMiner) return false;
-      
-      // Check if not over-reserved
-      const reserved = sourceReservations.get(container.id) || 0;
-      return energyAmount - reserved > 50;
-    }
-  }) as StructureContainer[];
+  const containers = RoomCache.getContainers(room).filter((container) => {
+    const energyAmount = container.store.getUsedCapacity(RESOURCE_ENERGY);
+    if (energyAmount === 0) return false;
+    
+    // Don't take from miner containers
+    const creepsOnContainer = container.pos.lookFor(LOOK_CREEPS);
+    const hasMiner = creepsOnContainer.some(c => c.my && (c.memory as any).role === 'miner');
+    if (hasMiner) return false;
+    
+    // Check if not over-reserved
+    const reserved = sourceReservations.get(container.id) || 0;
+    return energyAmount - reserved > 50;
+  });
 
   // Priority 2: Storage
   const storage = room.storage;
@@ -179,16 +175,16 @@ function findBestSource(creep: Creep): Source | StructureContainer | StructureSt
   }
 
   // Priority 3: Dropped energy
-  const droppedEnergy = room.find(FIND_DROPPED_RESOURCES, {
-    filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
-  });
+  const droppedEnergy = RoomCache.getDroppedResources(room).filter(
+    (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+  );
   
   if (droppedEnergy.length > 0) {
     return creep.pos.findClosestByPath(droppedEnergy);
   }
 
   // Priority 4: Sources (last resort)
-  const sources = room.find(FIND_SOURCES_ACTIVE);
+  const sources = RoomCache.getActiveSources(room);
   return creep.pos.findClosestByPath(sources);
 }
 
@@ -197,18 +193,19 @@ function findBestDestination(creep: Creep): StructureExtension | StructureSpawn 
   const energyCarried = creep.store.getUsedCapacity(RESOURCE_ENERGY);
 
   // Priority 1: Spawns and extensions that need energy
-  const spawnExtensions = room.find(FIND_MY_STRUCTURES, {
-    filter: (structure) => {
-      if (structure.structureType !== STRUCTURE_EXTENSION && 
-          structure.structureType !== STRUCTURE_SPAWN) {
-        return false;
-      }
-      
-      const reserved = destinationReservations.get(structure.id) || 0;
-      const capacity = structure.store.getFreeCapacity(RESOURCE_ENERGY);
-      return capacity - reserved > 0;
-    }
-  }) as (StructureExtension | StructureSpawn)[];
+  const spawns = RoomCache.getMySpawns(room).filter((structure) => {
+    const reserved = destinationReservations.get(structure.id) || 0;
+    const capacity = structure.store.getFreeCapacity(RESOURCE_ENERGY);
+    return capacity - reserved > 0;
+  });
+
+  const extensions = RoomCache.getMyExtensions(room).filter((structure) => {
+    const reserved = destinationReservations.get(structure.id) || 0;
+    const capacity = structure.store.getFreeCapacity(RESOURCE_ENERGY);
+    return capacity - reserved > 0;
+  });
+
+  const spawnExtensions = [...spawns, ...extensions];
 
   if (spawnExtensions.length > 0) {
     return creep.pos.findClosestByPath(spawnExtensions, {
@@ -220,13 +217,10 @@ function findBestDestination(creep: Creep): StructureExtension | StructureSpawn 
   }
 
   // Priority 2: Towers below 80% capacity
-  const towers = room.find(FIND_MY_STRUCTURES, {
-    filter: (s) => {
-      if (s.structureType !== STRUCTURE_TOWER) return false;
-      const reserved = destinationReservations.get(s.id) || 0;
-      return s.store.getFreeCapacity(RESOURCE_ENERGY) - reserved > 200;
-    }
-  }) as StructureTower[];
+  const towers = RoomCache.getMyTowers(room).filter((s) => {
+    const reserved = destinationReservations.get(s.id) || 0;
+    return s.store.getFreeCapacity(RESOURCE_ENERGY) - reserved > 200;
+  });
 
   if (towers.length > 0) {
     return creep.pos.findClosestByPath(towers);
@@ -235,16 +229,13 @@ function findBestDestination(creep: Creep): StructureExtension | StructureSpawn 
   // Priority 3: Controller containers (if less than 80% full)
   const controller = room.controller;
   if (controller) {
-    const controllerContainers = room.find(FIND_STRUCTURES, {
-      filter: (s) => {
-        if (s.structureType !== STRUCTURE_CONTAINER) return false;
-        if (!s.pos.inRangeTo(controller.pos, 3)) return false;
-        const reserved = destinationReservations.get(s.id) || 0;
-        const freeCapacity = s.store.getFreeCapacity(RESOURCE_ENERGY);
-        return freeCapacity - reserved > 0 && 
-               s.store.getUsedCapacity(RESOURCE_ENERGY) < s.store.getCapacity() * 0.8;
-      }
-    }) as StructureContainer[];
+    const controllerContainers = RoomCache.getContainers(room).filter((s) => {
+      if (!s.pos.inRangeTo(controller.pos, 3)) return false;
+      const reserved = destinationReservations.get(s.id) || 0;
+      const freeCapacity = s.store.getFreeCapacity(RESOURCE_ENERGY);
+      return freeCapacity - reserved > 0 && 
+             s.store.getUsedCapacity(RESOURCE_ENERGY) < s.store.getCapacity() * 0.8;
+    });
 
     if (controllerContainers.length > 0) {
       return creep.pos.findClosestByPath(controllerContainers);
