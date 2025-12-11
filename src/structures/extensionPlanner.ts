@@ -49,12 +49,28 @@ export class ExtensionPlanner {
     const existingStructures = room.find(FIND_STRUCTURES);
     const existingSites = room.find(FIND_CONSTRUCTION_SITES);
     const blockedPositions = new Set<string>();
+    const roadPositions = new Set<string>();
 
+    // Track existing and planned roads
     for (const s of existingStructures) {
       blockedPositions.add(`${s.pos.x},${s.pos.y}`);
+      if (s.structureType === STRUCTURE_ROAD) {
+        roadPositions.add(`${s.pos.x},${s.pos.y}`);
+      }
     }
     for (const s of existingSites) {
       blockedPositions.add(`${s.pos.x},${s.pos.y}`);
+      if (s.structureType === STRUCTURE_ROAD) {
+        roadPositions.add(`${s.pos.x},${s.pos.y}`);
+      }
+    }
+
+    // Add planned roads from roadPlan
+    const roadPlan = MemoryManager.get<{ positions: string[] }>(`rooms.${room.name}.roadPlan`);
+    if (roadPlan?.positions) {
+      for (const posStr of roadPlan.positions) {
+        roadPositions.add(posStr);
+      }
     }
 
     this.blockReservedPositions(room, blockedPositions);
@@ -76,9 +92,17 @@ export class ExtensionPlanner {
 
         const distToSpawn = pos.getRangeTo(spawn);
         const adjacentPlains = this.countAdjacentPlains(pos, terrain);
-        const nearRoad = this.isNearRoad(pos, existingStructures);
+        const adjacentToRoad = this.isAdjacentToRoad(pos, roadPositions);
+        const roadCount = this.countAdjacentRoads(pos, roadPositions);
+        const blocksPath = this.wouldBlockPath(pos, room, roadPositions);
 
-        const score = -distToSpawn * 10 + adjacentPlains * 5 + (nearRoad ? 20 : 0) + (terrainType === 0 ? 10 : 0);
+        // Heavily prioritize road-adjacent positions
+        let score = -distToSpawn * 5;
+        score += adjacentPlains * 3;
+        score += adjacentToRoad ? 100 : -50; // Strong preference for road adjacency
+        score += roadCount * 30; // More adjacent roads = better
+        score += terrainType === 0 ? 10 : 0;
+        score += blocksPath ? -200 : 0; // Heavily penalize blocking paths
         
         candidates.push({ pos, score });
       }
@@ -142,12 +166,61 @@ export class ExtensionPlanner {
     return count;
   }
 
-  private isNearRoad(pos: RoomPosition, structures: Structure[]): boolean {
-    for (const s of structures) {
-      if (s.structureType === STRUCTURE_ROAD && pos.getRangeTo(s.pos) <= 1) {
-        return true;
+  private isAdjacentToRoad(pos: RoomPosition, roadPositions: Set<string>): boolean {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const key = `${pos.x + dx},${pos.y + dy}`;
+        if (roadPositions.has(key)) {
+          return true;
+        }
       }
     }
+    return false;
+  }
+
+  private countAdjacentRoads(pos: RoomPosition, roadPositions: Set<string>): number {
+    let count = 0;
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const key = `${pos.x + dx},${pos.y + dy}`;
+        if (roadPositions.has(key)) count++;
+      }
+    }
+    return count;
+  }
+
+  private wouldBlockPath(pos: RoomPosition, room: Room, roadPositions: Set<string>): boolean {
+    // Check if placing an extension here would block movement between adjacent roads
+    let adjacentRoadCount = 0;
+    const adjacentRoadDirs: Array<{ dx: number; dy: number }> = [];
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const key = `${pos.x + dx},${pos.y + dy}`;
+        if (roadPositions.has(key)) {
+          adjacentRoadCount++;
+          adjacentRoadDirs.push({ dx, dy });
+        }
+      }
+    }
+
+    // If there are 2+ roads on opposite sides, this position connects them
+    if (adjacentRoadCount >= 2) {
+      for (let i = 0; i < adjacentRoadDirs.length; i++) {
+        for (let j = i + 1; j < adjacentRoadDirs.length; j++) {
+          const dir1 = adjacentRoadDirs[i];
+          const dir2 = adjacentRoadDirs[j];
+          // Check if roads are on opposite sides (would create a choke point)
+          if (Math.abs(dir1.dx + dir2.dx) <= 1 && Math.abs(dir1.dy + dir2.dy) <= 1) {
+            return true;
+          }
+        }
+      }
+    }
+
     return false;
   }
 

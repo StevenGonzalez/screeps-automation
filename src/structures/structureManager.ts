@@ -21,17 +21,20 @@ export class StructureManager {
   }
 
   private manageRoomStructures(room: Room) {
+    // Plan everything first
     this.planContainers(room);
     this.planRoads(room);
     this.planStorage(room);
     this.planTowers(room);
     this.planExtensions(room);
     
+    // Build infrastructure (roads) before extensions
+    // This ensures extensions can be placed along roads
     this.buildStorage(room);
     this.buildTowers(room);
-    this.buildExtensions(room);
     this.buildContainers(room);
     this.buildRoads(room);
+    this.buildExtensions(room);
   }
 
   private planRoads(room: Room) {

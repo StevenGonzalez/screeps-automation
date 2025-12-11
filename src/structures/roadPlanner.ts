@@ -115,6 +115,9 @@ export class RoadPlanner {
       }
     }
 
+    // Add connector roads to extension clusters
+    this.addExtensionConnectorRoads(room, spawn.pos, roadSet);
+
     const positions: RoomPosition[] = [];
     for (const key of roadSet) {
       const [x, y] = key.split(',').map(Number);
@@ -182,6 +185,121 @@ export class RoadPlanner {
     }
 
     return false;
+  }
+
+  private addExtensionConnectorRoads(room: Room, spawnPos: RoomPosition, roadSet: Set<string>) {
+    // Find extension clusters that are far from roads
+    const extensions = room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_EXTENSION
+    });
+
+    const extensionSites = room.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: s => s.structureType === STRUCTURE_EXTENSION
+    });
+
+    const allExtensionPositions = [
+      ...extensions.map(e => e.pos),
+      ...extensionSites.map(e => e.pos)
+    ];
+
+    // Group extensions into clusters
+    const clusters = this.clusterExtensions(allExtensionPositions);
+
+    // For each cluster, find the closest road and connect if distance > 2
+    for (const cluster of clusters) {
+      const clusterCenter = this.getClusterCenter(cluster);
+      const closestRoadDist = this.getDistanceToNearestRoad(clusterCenter, roadSet);
+
+      if (closestRoadDist > 2) {
+        // Find nearest road position
+        let nearestRoadPos: RoomPosition | null = null;
+        let minDist = Infinity;
+
+        for (const roadKey of roadSet) {
+          const [x, y] = roadKey.split(',').map(Number);
+          const roadPos = new RoomPosition(x, y, room.name);
+          const dist = clusterCenter.getRangeTo(roadPos);
+          if (dist < minDist) {
+            minDist = dist;
+            nearestRoadPos = roadPos;
+          }
+        }
+
+        if (nearestRoadPos) {
+          const path = this.findOptimalPath(room, clusterCenter, nearestRoadPos);
+          for (const pos of path) {
+            const key = `${pos.x},${pos.y}`;
+            if (!this.isStructureLocation(room, pos)) {
+              roadSet.add(key);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private clusterExtensions(positions: RoomPosition[]): RoomPosition[][] {
+    if (positions.length === 0) return [];
+
+    const clusters: RoomPosition[][] = [];
+    const visited = new Set<string>();
+
+    for (const pos of positions) {
+      const key = `${pos.x},${pos.y}`;
+      if (visited.has(key)) continue;
+
+      const cluster: RoomPosition[] = [];
+      const queue = [pos];
+      visited.add(key);
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        cluster.push(current);
+
+        // Find nearby extensions (within range 3)
+        for (const other of positions) {
+          const otherKey = `${other.x},${other.y}`;
+          if (visited.has(otherKey)) continue;
+          if (current.getRangeTo(other) <= 3) {
+            visited.add(otherKey);
+            queue.push(other);
+          }
+        }
+      }
+
+      clusters.push(cluster);
+    }
+
+    return clusters;
+  }
+
+  private getClusterCenter(cluster: RoomPosition[]): RoomPosition {
+    if (cluster.length === 0) return cluster[0];
+
+    let sumX = 0;
+    let sumY = 0;
+    for (const pos of cluster) {
+      sumX += pos.x;
+      sumY += pos.y;
+    }
+
+    const avgX = Math.round(sumX / cluster.length);
+    const avgY = Math.round(sumY / cluster.length);
+
+    return new RoomPosition(avgX, avgY, cluster[0].roomName);
+  }
+
+  private getDistanceToNearestRoad(pos: RoomPosition, roadSet: Set<string>): number {
+    let minDist = Infinity;
+    for (const roadKey of roadSet) {
+      const [x, y] = roadKey.split(',').map(Number);
+      const roadPos = new RoomPosition(x, y, pos.roomName);
+      const dist = pos.getRangeTo(roadPos);
+      if (dist < minDist) {
+        minDist = dist;
+      }
+    }
+    return minDist;
   }
 
   getRoadPlan(room: Room): RoadPlan | null {
