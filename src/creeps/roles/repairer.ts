@@ -118,7 +118,16 @@ function isBlockingContainer(creep: Creep): boolean {
   const sites = creep.pos.lookFor(LOOK_CONSTRUCTION_SITES);
   const hasContainerSite = sites.some(s => s.structureType === STRUCTURE_CONTAINER);
   
-  return hasContainer || hasContainerSite;
+  if (hasContainer || hasContainerSite) return true;
+  
+  // Check if a miner is trying to reach this position
+  const nearbyCreeps = creep.pos.findInRange(FIND_MY_CREEPS, 1);
+  const minerNearby = nearbyCreeps.some(c => 
+    (c.memory as any).role === 'miner' && 
+    c.pos.getRangeTo(creep.pos) === 1
+  );
+  
+  return minerNearby && (hasContainer || hasContainerSite);
 }
 
 function moveOffContainer(creep: Creep): void {

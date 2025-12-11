@@ -9,23 +9,54 @@ export function run(creep: Creep) {
     return;
   }
 
-  const container = Game.getObjectById(containerId) as StructureContainer | null;
-  if (!container) {
-    console.log(`Miner ${creep.name} container ${containerId} not found`);
-    return;
+  let container = Game.getObjectById(containerId) as StructureContainer | null;
+  let containerPos: RoomPosition | null = null;
+  
+  // Check if it's a built container
+  if (container) {
+    containerPos = container.pos;
+  } else {
+    // Check if it's still a construction site
+    const site = Game.getObjectById(containerId) as ConstructionSite | null;
+    if (site && site.structureType === STRUCTURE_CONTAINER) {
+      containerPos = site.pos;
+    } else {
+      console.log(`Miner ${creep.name} container ${containerId} not found`);
+      return;
+    }
   }
 
-  const source = container.pos.findInRange(FIND_SOURCES, 1)[0];
+  const source = containerPos.findInRange(FIND_SOURCES, 1)[0];
   if (!source) {
     console.log(`Miner ${creep.name} no source near container`);
     return;
   }
 
-  if (!creep.pos.isEqualTo(container.pos)) {
-    creep.moveTo(container.pos, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: 20 });
+  // If not at container position, move there
+  if (!creep.pos.isEqualTo(containerPos)) {
+    // Check if someone is blocking the container position
+    const blockingCreeps = containerPos.lookFor(LOOK_CREEPS);
+    if (blockingCreeps.length > 0) {
+      // Tell them to move
+      const blocker = blockingCreeps[0];
+      if (blocker.my && blocker.id !== creep.id) {
+        blocker.say('Move!');
+      }
+    }
+    
+    creep.moveTo(containerPos, { 
+      visualizePathStyle: { stroke: '#ffaa00' }, 
+      reusePath: 5  // Shorter reuse for miners getting to position
+    });
+    
+    // Try to harvest even while moving if in range
+    if (creep.pos.isNearTo(source)) {
+      creep.harvest(source);
+    }
     return;
   }
 
+  // At container position, harvest
   creep.harvest(source);
 }
 
