@@ -37,11 +37,8 @@ export function run(creep: Creep) {
     // Check if someone is blocking the container position
     const blockingCreeps = containerPos.lookFor(LOOK_CREEPS);
     if (blockingCreeps.length > 0) {
-      // Tell them to move
-      const blocker = blockingCreeps[0];
-      if (blocker.my && blocker.id !== creep.id) {
-        blocker.say('Move!');
-      }
+      // We're trying to get to our spot
+      creep.say('🚧');
     }
     
     creep.moveTo(containerPos, { 
