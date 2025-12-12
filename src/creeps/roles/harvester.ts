@@ -25,7 +25,7 @@ export function run(creep: Creep) {
   let target: Structure | null = null;
   if (memory.targetId) {
     target = Game.getObjectById(memory.targetId);
-    if (target && !canAcceptEnergy(target)) {
+    if (target && (!canAcceptEnergy(target) || isMinerContainer(target))) {
       target = null;
       memory.targetId = undefined;
     }
@@ -34,7 +34,7 @@ export function run(creep: Creep) {
   // Find new target only when needed
   if (!target) {
     target = creep.pos.findClosestByPath(FIND_STRUCTURES, {
-      filter: (s: Structure) => canAcceptEnergy(s)
+      filter: (s: Structure) => canAcceptEnergy(s) && !isMinerContainer(s)
     }) as Structure | null;
 
     if (target) {
@@ -72,6 +72,13 @@ function canAcceptEnergy(s: Structure): boolean {
     return energy < energyCap;
   }
   return false;
+}
+
+function isMinerContainer(s: Structure): boolean {
+  if (s.structureType !== STRUCTURE_CONTAINER) return false;
+  // Check if there's a miner creep on this container
+  const creepsOnContainer = s.pos.lookFor(LOOK_CREEPS);
+  return creepsOnContainer.some(c => c.my && (c.memory as any).role === 'miner');
 }
 
 export default { run };
