@@ -81,7 +81,7 @@ function collectEnergy(creep: Creep): void {
       }
 
       if (result === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: 20 });
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffaa00' }, reusePath: 5 });
       } else if (result === OK || result === ERR_FULL) {
         // Clear target when successful or full
         clearSourceReservation(creep);
@@ -119,7 +119,7 @@ function deliverEnergy(creep: Creep): void {
       const result = creep.transfer(target, RESOURCE_ENERGY);
       
       if (result === ERR_NOT_IN_RANGE) {
-        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 20 });
+        creep.moveTo(target, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 5 });
       } else if (result === OK || result === ERR_FULL) {
         // Clear target when successful or full
         clearDestinationReservation(creep);
@@ -131,7 +131,7 @@ function deliverEnergy(creep: Creep): void {
     const controller = creep.room.controller;
     if (controller && controller.my) {
       if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 20 });
+        creep.moveTo(controller, { visualizePathStyle: { stroke: '#ffffff' }, reusePath: 5 });
       }
     }
   }
@@ -155,12 +155,21 @@ function findBestSource(creep: Creep): Source | StructureContainer | StructureSt
   });
 
   if (containers.length > 0) {
-    const target = creep.pos.findClosestByPath(containers, {
-      filter: (c) => {
+    let target = creep.pos.findClosestByPath(containers, {
+      filter: (c: StructureContainer) => {
         const reserved = sourceReservations.get(c.id) || 0;
         return c.store.getUsedCapacity(RESOURCE_ENERGY) - reserved > 0;
       }
     });
+    // Fallback to range if path finding fails
+    if (!target) {
+      target = creep.pos.findClosestByRange(containers, {
+        filter: (c: StructureContainer) => {
+          const reserved = sourceReservations.get(c.id) || 0;
+          return c.store.getUsedCapacity(RESOURCE_ENERGY) - reserved > 0;
+        }
+      });
+    }
     if (target) return target;
   }
 
@@ -170,12 +179,17 @@ function findBestSource(creep: Creep): Source | StructureContainer | StructureSt
   );
   
   if (droppedEnergy.length > 0) {
-    return creep.pos.findClosestByPath(droppedEnergy);
+    let target = creep.pos.findClosestByPath(droppedEnergy);
+    // Fallback to range if path finding fails
+    if (!target) {
+      target = creep.pos.findClosestByRange(droppedEnergy);
+    }
+    if (target) return target;
   }
 
   // Priority 3: Sources (last resort)
   const sources = RoomCache.getActiveSources(room);
-  return creep.pos.findClosestByPath(sources);
+  return creep.pos.findClosestByPath(sources) || creep.pos.findClosestByRange(sources);
 }
 
 function findBestDestination(creep: Creep): StructureExtension | StructureSpawn | StructureTower | StructureContainer | StructureStorage | null {
@@ -198,12 +212,22 @@ function findBestDestination(creep: Creep): StructureExtension | StructureSpawn 
   const spawnExtensions = [...spawns, ...extensions];
 
   if (spawnExtensions.length > 0) {
-    return creep.pos.findClosestByPath(spawnExtensions, {
-      filter: (t) => {
+    let target = creep.pos.findClosestByPath(spawnExtensions, {
+      filter: (t: StructureExtension | StructureSpawn) => {
         const reserved = destinationReservations.get(t.id) || 0;
         return t.store.getFreeCapacity(RESOURCE_ENERGY) - reserved >= Math.min(energyCarried, 50);
       }
     });
+    // Fallback to range if path finding fails
+    if (!target) {
+      target = creep.pos.findClosestByRange(spawnExtensions, {
+        filter: (t: StructureExtension | StructureSpawn) => {
+          const reserved = destinationReservations.get(t.id) || 0;
+          return t.store.getFreeCapacity(RESOURCE_ENERGY) - reserved >= Math.min(energyCarried, 50);
+        }
+      });
+    }
+    if (target) return target;
   }
 
   // Priority 2: Towers below 80% capacity
@@ -213,7 +237,7 @@ function findBestDestination(creep: Creep): StructureExtension | StructureSpawn 
   });
 
   if (towers.length > 0) {
-    return creep.pos.findClosestByPath(towers);
+    return creep.pos.findClosestByPath(towers) || creep.pos.findClosestByRange(towers);
   }
 
   // Priority 3: Controller containers (if less than 80% full)
@@ -228,7 +252,7 @@ function findBestDestination(creep: Creep): StructureExtension | StructureSpawn 
     });
 
     if (controllerContainers.length > 0) {
-      return creep.pos.findClosestByPath(controllerContainers);
+      return creep.pos.findClosestByPath(controllerContainers) || creep.pos.findClosestByRange(controllerContainers);
     }
   }
 
