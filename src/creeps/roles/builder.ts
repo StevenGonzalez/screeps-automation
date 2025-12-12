@@ -8,21 +8,23 @@ interface BuilderMemory {
 }
 
 export function run(creep: Creep) {
+  const memory = creep.memory as BuilderMemory;
+  
+  // FIRST priority: Check if we're blocking a container position and move off if so
+  // This needs to happen before everything else, even energy acquisition
+  if (isBlockingContainer(creep)) {
+    moveOffContainer(creep);
+    return;
+  }
+
   const shouldPause = handleAcquireWork(creep, SpawnConfig.builder.minToWorkFraction || 0.5, false);
   if (shouldPause) return;
 
-  const memory = creep.memory as BuilderMemory;
   const carrying = creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
 
   if (carrying === 0) {
     memory.targetId = undefined;
     delete memory._move;
-    return;
-  }
-
-  // Check if we're blocking a container position and move off if so
-  if (isBlockingContainer(creep)) {
-    moveOffContainer(creep);
     return;
   }
 

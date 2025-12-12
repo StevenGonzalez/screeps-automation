@@ -9,21 +9,23 @@ interface HarvesterMemory {
 }
 
 export function run(creep: Creep) {
+  const memory = creep.memory as HarvesterMemory;
+  
+  // FIRST priority: Check if we're blocking a container position and move off if so
+  // This needs to happen before everything else, even energy acquisition
+  if (isBlockingContainer(creep)) {
+    moveOffContainer(creep);
+    return;
+  }
+  
   const shouldPause = handleAcquireWork(creep, SpawnConfig.upgrader.minToWorkFraction || 0.5, true);
   if (shouldPause) return;
 
-  const memory = creep.memory as HarvesterMemory;
   const carrying = creep.store.getUsedCapacity(RESOURCE_ENERGY);
 
   if (carrying === 0) {
     memory.targetId = undefined;
     delete memory._move;
-    return;
-  }
-
-  // Check if we're blocking a container position and move off if so
-  if (isBlockingContainer(creep)) {
-    moveOffContainer(creep);
     return;
   }
 

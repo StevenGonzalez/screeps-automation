@@ -21,6 +21,15 @@ interface RepairerMemory {
  * energy collection and work phase switching.
  */
 export function run(creep: Creep) {
+  const memory = creep.memory as RepairerMemory;
+  
+  // FIRST priority: Check if we're blocking a container position and move off if so
+  // This needs to happen before everything else, even energy acquisition
+  if (isBlockingContainer(creep)) {
+    moveOffContainer(creep);
+    return;
+  }
+  
   const shouldPause = handleAcquireWork(
     creep, 
     SpawnConfig.repairer.minToWorkFraction || 0.5, 
@@ -29,7 +38,6 @@ export function run(creep: Creep) {
   
   if (shouldPause) return;
 
-  const memory = creep.memory as RepairerMemory;
   const carrying = creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
   
   if (carrying === 0) {
@@ -37,7 +45,7 @@ export function run(creep: Creep) {
     return;
   }
   
-  // Check if we're blocking a container position and move off if so
+  // Now proceed with repair behavior
   if (isBlockingContainer(creep)) {
     moveOffContainer(creep);
     return;
