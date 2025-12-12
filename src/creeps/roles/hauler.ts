@@ -145,11 +145,6 @@ function findBestSource(creep: Creep): Source | StructureContainer | StructureSt
     const energyAmount = container.store.getUsedCapacity(RESOURCE_ENERGY);
     if (energyAmount === 0) return false;
     
-    // Don't take from miner containers
-    const creepsOnContainer = container.pos.lookFor(LOOK_CREEPS);
-    const hasMiner = creepsOnContainer.some(c => c.my && (c.memory as any).role === 'miner');
-    if (hasMiner) return false;
-    
     // Check if not over-reserved
     const reserved = sourceReservations.get(container.id) || 0;
     return energyAmount - reserved > 50;
