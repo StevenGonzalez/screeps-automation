@@ -8,16 +8,10 @@ interface BuilderMemory {
 }
 
 export function run(creep: Creep) {
-  const memory = creep.memory as BuilderMemory;
-  
-  // FIRST priority: Check if we're blocking a container position and move off if so
-  // This needs to happen before everything else, even energy acquisition
-  if (isBlockingContainer(creep)) {
-    moveOffContainer(creep);
-    return;
-  }
-
   const shouldPause = handleAcquireWork(creep, SpawnConfig.builder.minToWorkFraction || 0.5, false);
+  if (shouldPause) return;
+
+  const memory = creep.memory as BuilderMemory;
   if (shouldPause) return;
 
   const carrying = creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0;
@@ -76,68 +70,6 @@ export function run(creep: Creep) {
   if (controller) {
     if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
       creep.moveTo(controller, { visualizePathStyle: { stroke: '#00ff00' }, reusePath: 20 });
-    }
-  }
-}
-
-function isBlockingContainer(creep: Creep): boolean {
-  // Check if standing on a container or container construction site
-  const structures = creep.pos.lookFor(LOOK_STRUCTURES);
-  const hasContainer = structures.some(s => s.structureType === STRUCTURE_CONTAINER);
-  
-  const sites = creep.pos.lookFor(LOOK_CONSTRUCTION_SITES);
-  const hasContainerSite = sites.some(s => s.structureType === STRUCTURE_CONTAINER);
-  
-  // Always move off containers
-  return hasContainer || hasContainerSite;
-}
-
-function moveOffContainer(creep: Creep): void {
-  // Find an adjacent position that's not a container
-  const terrain = creep.room.getTerrain();
-  const directions = [
-    TOP, TOP_RIGHT, RIGHT, BOTTOM_RIGHT,
-    BOTTOM, BOTTOM_LEFT, LEFT, TOP_LEFT
-  ];
-  
-  for (const dir of directions) {
-    const pos = creep.pos;
-    let newX = pos.x;
-    let newY = pos.y;
-    
-    switch(dir) {
-      case TOP: newY--; break;
-      case TOP_RIGHT: newX++; newY--; break;
-      case RIGHT: newX++; break;
-      case BOTTOM_RIGHT: newX++; newY++; break;
-      case BOTTOM: newY++; break;
-      case BOTTOM_LEFT: newX--; newY++; break;
-      case LEFT: newX--; break;
-      case TOP_LEFT: newX--; newY--; break;
-    }
-    
-    if (newX < 1 || newX > 48 || newY < 1 || newY > 48) continue;
-    if (terrain.get(newX, newY) === TERRAIN_MASK_WALL) continue;
-    
-    const newPos = new RoomPosition(newX, newY, pos.roomName);
-    
-    // Check if this position has a container or container site
-    const structures = newPos.lookFor(LOOK_STRUCTURES);
-    const hasContainer = structures.some(s => s.structureType === STRUCTURE_CONTAINER);
-    
-    const sites = newPos.lookFor(LOOK_CONSTRUCTION_SITES);
-    const hasContainerSite = sites.some(s => s.structureType === STRUCTURE_CONTAINER);
-    
-    // Avoid containers and blocking structures (but roads/ramparts are ok)
-    const hasBlockingStructure = structures.some(s => 
-      s.structureType !== STRUCTURE_ROAD && 
-      s.structureType !== STRUCTURE_RAMPART &&
-      s.structureType !== STRUCTURE_CONTAINER
-    );
-    
-    if (!hasContainer && !hasContainerSite && !hasBlockingStructure) {
-      creep.move(dir);
-      return;
     }
   }
 }

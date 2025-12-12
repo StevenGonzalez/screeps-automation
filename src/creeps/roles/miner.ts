@@ -4,10 +4,7 @@ import { MemoryManager } from '../../memory/memoryManager';
 export function run(creep: Creep) {
   const containerId = (creep.memory as any).containerId as string | undefined;
   
-  if (!containerId) {
-    console.log(`Miner ${creep.name} has no container assignment`);
-    return;
-  }
+  if (!containerId) return;
 
   let container = Game.getObjectById(containerId) as StructureContainer | null;
   let containerPos: RoomPosition | null = null;
@@ -21,29 +18,18 @@ export function run(creep: Creep) {
     if (site && site.structureType === STRUCTURE_CONTAINER) {
       containerPos = site.pos;
     } else {
-      console.log(`Miner ${creep.name} container ${containerId} not found`);
       return;
     }
   }
 
   const source = containerPos.findInRange(FIND_SOURCES, 1)[0];
-  if (!source) {
-    console.log(`Miner ${creep.name} no source near container`);
-    return;
-  }
+  if (!source) return;
 
   // If not at container position, move there
   if (!creep.pos.isEqualTo(containerPos)) {
-    // Check if someone is blocking the container position
-    const blockingCreeps = containerPos.lookFor(LOOK_CREEPS);
-    if (blockingCreeps.length > 0) {
-      // We're trying to get to our spot
-      creep.say('🚧');
-    }
-    
     creep.moveTo(containerPos, { 
       visualizePathStyle: { stroke: '#ffaa00' }, 
-      reusePath: 5  // Shorter reuse for miners getting to position
+      reusePath: 5
     });
     
     // Try to harvest even while moving if in range
