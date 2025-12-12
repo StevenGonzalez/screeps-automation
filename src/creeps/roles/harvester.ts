@@ -15,15 +15,15 @@ export function run(creep: Creep) {
   const memory = creep.memory as HarvesterMemory;
   const carrying = creep.store.getUsedCapacity(RESOURCE_ENERGY);
 
-  // Check if we're blocking a container position and move off if so
-  if (isBlockingContainer(creep)) {
-    moveOffContainer(creep);
-    return;
-  }
-
   if (carrying === 0) {
     memory.targetId = undefined;
     delete memory._move;
+    return;
+  }
+
+  // Check if we're blocking a container position and move off if so
+  if (isBlockingContainer(creep)) {
+    moveOffContainer(creep);
     return;
   }
 
@@ -88,16 +88,8 @@ function isBlockingContainer(creep: Creep): boolean {
   const sites = creep.pos.lookFor(LOOK_CONSTRUCTION_SITES);
   const hasContainerSite = sites.some(s => s.structureType === STRUCTURE_CONTAINER);
   
-  if (hasContainer || hasContainerSite) return true;
-  
-  // Check if a miner is trying to reach this position
-  const nearbyCreeps = creep.pos.findInRange(FIND_MY_CREEPS, 1);
-  const minerNearby = nearbyCreeps.some(c => 
-    (c.memory as any).role === 'miner' && 
-    c.pos.getRangeTo(creep.pos) === 1
-  );
-  
-  return minerNearby && (hasContainer || hasContainerSite);
+  // Always move off containers
+  return hasContainer || hasContainerSite;
 }
 
 function moveOffContainer(creep: Creep): void {
@@ -128,13 +120,22 @@ function moveOffContainer(creep: Creep): void {
     if (terrain.get(newX, newY) === TERRAIN_MASK_WALL) continue;
     
     const newPos = new RoomPosition(newX, newY, pos.roomName);
-    const structuresAtPos = newPos.lookFor(LOOK_STRUCTURES);
-    const hasContainerAtPos = structuresAtPos.some(s => 
-      s.structureType === STRUCTURE_CONTAINER ||
-      (s.structureType !== STRUCTURE_ROAD && s.structureType !== STRUCTURE_RAMPART)
+    
+    // Check if this position has a container or container site
+    const structures = newPos.lookFor(LOOK_STRUCTURES);
+    const hasContainer = structures.some(s => s.structureType === STRUCTURE_CONTAINER);
+    
+    const sites = newPos.lookFor(LOOK_CONSTRUCTION_SITES);
+    const hasContainerSite = sites.some(s => s.structureType === STRUCTURE_CONTAINER);
+    
+    // Avoid containers and blocking structures (but roads/ramparts are ok)
+    const hasBlockingStructure = structures.some(s => 
+      s.structureType !== STRUCTURE_ROAD && 
+      s.structureType !== STRUCTURE_RAMPART &&
+      s.structureType !== STRUCTURE_CONTAINER
     );
     
-    if (!hasContainerAtPos) {
+    if (!hasContainer && !hasContainerSite && !hasBlockingStructure) {
       creep.move(dir);
       return;
     }
