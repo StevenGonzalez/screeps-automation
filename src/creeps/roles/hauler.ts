@@ -237,10 +237,14 @@ function findBestDestination(creep: Creep): StructureExtension | StructureSpawn 
     }
   }
 
-  // Priority 4: Storage
+  // Priority 4: Storage (with reservation checking)
   const storage = room.storage;
-  if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-    return storage as any;
+  if (storage) {
+    const reserved = destinationReservations.get(storage.id) || 0;
+    const freeCapacity = storage.store.getFreeCapacity(RESOURCE_ENERGY);
+    if (freeCapacity - reserved > 0) {
+      return storage as any;
+    }
   }
 
   return null;
