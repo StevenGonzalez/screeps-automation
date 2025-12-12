@@ -299,6 +299,39 @@ This project already includes a number of concrete implementations that follow t
     - Maintains build state per room in Memory at `rooms.<room>.rampartBuildState`.
     - Respects game construction site limits to avoid errors.
 
+  - **TerminalPlanner**: `src/structures/terminalPlanner.ts`
+    - Plans terminal placement for RCL 6+ rooms.
+    - Prioritizes positions adjacent to storage (range 1) for optimal logistics.
+    - Falls back to storage plan if storage not yet built, or spawn position if no storage plan.
+    - Scoring system:
+      - Strong preference for adjacency to storage (100 point bonus).
+      - Distance penalty: closer to storage is better.
+      - Terrain bonus: plains preferred over swamp.
+    - Plans cached in Memory at `rooms.<room>.terminalPlan` and invalidated on RCL changes.
+    - Returns position string for terminal placement.
+  
+  - **TerminalBuilder**: `src/structures/terminalBuilder.ts`
+    - Executes terminal plans by creating construction sites incrementally.
+    - Build throttling: checks every 30 ticks to create construction site.
+    - Automatic cleanup (every 150 ticks):
+      - Destroys terminals not in current plan.
+      - Cancels obsolete terminal construction sites.
+    - Maintains build state per room in Memory at `rooms.<room>.terminalBuildState`.
+    - Only one terminal per room (game limit).
+
+  - **TerminalManager**: `src/structures/terminalManager.ts`
+    - Manages terminal operations for inter-room resource transfers.
+    - Automatic energy balancing:
+      - Checks every 50 ticks for rooms needing energy.
+      - Transfers energy from surplus rooms (>100k total) to deficit rooms (<50k total).
+      - Maintains minimum terminal energy reserve (10k) before sending.
+    - Queued transfer system:
+      - Priority-based queue stored in Memory at `rooms.<room>.terminal`.
+      - Processes one transfer per tick (respects terminal cooldown).
+      - Failed transfers move to back of queue.
+    - Public API: `queueTransfer(fromRoom, toRoom, resource, amount, priority)`.
+    - Extensible for future market integration.
+
   **Design philosophy**:
   - CPU-conscious: spreads construction site creation across ticks to avoid spikes.
   - Self-healing: automatically adapts to structure placement and removes conflicts.
@@ -320,5 +353,8 @@ This project already includes a number of concrete implementations that follow t
 - PathFinder cost tuning: `src/structures/roadPlanner.ts` (`plainCost`, `swampCost` in `findOptimalPath`).
 - Rampart protection priorities and RCL thresholds: `src/structures/rampartPlanner.ts` (extension protection starts at RCL 7, labs at RCL 6).
 - Rampart build throttling: `src/structures/rampartBuilder.ts` (`BUILD_CHECK_INTERVAL=20`, `MAX_SITES_PER_CHECK=3`, `CLEANUP_CHECK_INTERVAL=100`).
+- Terminal placement scoring: `src/structures/terminalPlanner.ts` (adjacency bonus, distance penalties).
+- Terminal build intervals: `src/structures/terminalBuilder.ts` (`BUILD_CHECK_INTERVAL=30`, `CLEANUP_CHECK_INTERVAL=150`).
+- Terminal energy thresholds: `src/structures/terminalManager.ts` (`MIN_TERMINAL_ENERGY=10000`, `ENERGY_CHECK_INTERVAL=50`, transfer amount and surplus/deficit thresholds).
 
 If you want, I can (A) extract delivery behavior to `creeps/behaviors/deliver.ts`, (B) write unit tests for `bodyFactory`, or (C) add tower/extension placement logic to structure automation. Which would you prefer? 
