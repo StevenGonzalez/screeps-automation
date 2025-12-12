@@ -60,14 +60,7 @@ export function buildRamparts(room: Room): void {
   // Find existing ramparts and construction sites
   const existingRamparts = room.find(FIND_STRUCTURES, {
     filter: (s) => s.structureType === STRUCTURE_RAMPART
-  }) as StructureRampart[];
-
-  // Make sure all ramparts are public
-  for (const rampart of existingRamparts) {
-    if (!rampart.isPublic) {
-      rampart.setPublic(true);
-    }
-  }
+  });
 
   const rampartSites = room.find(FIND_MY_CONSTRUCTION_SITES, {
     filter: (s) => s.structureType === STRUCTURE_RAMPART

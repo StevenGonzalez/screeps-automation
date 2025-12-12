@@ -317,10 +317,4 @@ function clearReservations(creep: Creep): void {
   clearDestinationReservation(creep);
 }
 
-// Clean up reservations each tick
-export function cleanupReservations(): void {
-  sourceReservations.clear();
-  destinationReservations.clear();
-}
-
-export default { run, cleanupReservations };
+export default { run };

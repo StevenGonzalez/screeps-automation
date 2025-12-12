@@ -28,9 +28,6 @@ export class Kernel {
   tick() {
     MemoryManager.reset();
     
-    // Clean up hauler reservations at start of tick
-    haulerRole.cleanupReservations();
-    
     // Clean up old room caches
     RoomCache.cleanup();
 
