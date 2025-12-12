@@ -138,48 +138,8 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
     return 'withdrawing';
   }
 
-  // prefer harvest if requested (but only if no miners in room)
+  // prefer harvest if requested
   if (preferHarvest) {
-    // Check if room has miners - if so, don't harvest directly
-    const roomCreeps = creep.room.find(FIND_MY_CREEPS);
-    const hasMiners = roomCreeps.some(c => (c.memory as any).role === CreepRole.MINER);
-    
-    if (!hasMiners) {
-      const sid = (creep.memory as any).sourceId as string | undefined;
-      let source: Source | null = null;
-      if (sid) source = Game.getObjectById(sid) as Source | null;
-      if (!source) {
-        const assigned = assignSourceToCreep(creep);
-        if (assigned) {
-          (creep.memory as any).sourceId = assigned;
-          source = Game.getObjectById(assigned) as Source | null;
-        }
-      }
-      if (!source) {
-        // Only look for sources in safe rooms (our rooms or neutral)
-        source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
-          filter: (s: Source) => {
-            const room = Game.rooms[s.pos.roomName];
-            if (!room) return false;
-            if (room.controller && room.controller.owner && !room.controller.my) return false;
-            const hostiles = s.pos.findInRange(FIND_HOSTILE_CREEPS, 5);
-            return hostiles.length === 0;
-          }
-        }) as Source | null;
-      }
-      if (source) {
-        if (creep.harvest(source) === ERR_NOT_IN_RANGE) creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
-        return 'harvesting';
-      }
-    }
-  }
-
-  // if not preferHarvest or no harvest target, try assigned source as fallback
-  // But only if no miners exist in the room
-  const roomCreeps = creep.room.find(FIND_MY_CREEPS);
-  const hasMiners = roomCreeps.some(c => (c.memory as any).role === CreepRole.MINER);
-  
-  if (!hasMiners) {
     const sid = (creep.memory as any).sourceId as string | undefined;
     let source: Source | null = null;
     if (sid) source = Game.getObjectById(sid) as Source | null;
@@ -191,7 +151,7 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
       }
     }
     if (!source) {
-      // Only look for safe sources
+      // Only look for sources in safe rooms (our rooms or neutral)
       source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
         filter: (s: Source) => {
           const room = Game.rooms[s.pos.roomName];
@@ -206,6 +166,34 @@ export function acquireEnergy(creep: Creep, opts?: { preferHarvest?: boolean }):
       if (creep.harvest(source) === ERR_NOT_IN_RANGE) creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
       return 'harvesting';
     }
+  }
+
+  // if not preferHarvest or no harvest target, try assigned source as fallback
+  const sid = (creep.memory as any).sourceId as string | undefined;
+  let source: Source | null = null;
+  if (sid) source = Game.getObjectById(sid) as Source | null;
+  if (!source) {
+    const assigned = assignSourceToCreep(creep);
+    if (assigned) {
+      (creep.memory as any).sourceId = assigned;
+      source = Game.getObjectById(assigned) as Source | null;
+    }
+  }
+  if (!source) {
+    // Only look for safe sources
+    source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
+      filter: (s: Source) => {
+        const room = Game.rooms[s.pos.roomName];
+        if (!room) return false;
+        if (room.controller && room.controller.owner && !room.controller.my) return false;
+        const hostiles = s.pos.findInRange(FIND_HOSTILE_CREEPS, 5);
+        return hostiles.length === 0;
+      }
+    }) as Source | null;
+  }
+  if (source) {
+    if (creep.harvest(source) === ERR_NOT_IN_RANGE) creep.moveTo(source, { visualizePathStyle: { stroke: '#ffaa00' } });
+    return 'harvesting';
   }
 
   return 'none';
