@@ -154,26 +154,17 @@ function findBestSource(creep: Creep): Source | StructureContainer | StructureSt
     return energyAmount - reserved > 50;
   });
 
-  // Priority 2: Storage
-  const storage = room.storage;
-  if (storage && storage.store.getUsedCapacity(RESOURCE_ENERGY) > 100) {
-    const reserved = sourceReservations.get(storage.id) || 0;
-    const available = storage.store.getUsedCapacity(RESOURCE_ENERGY) - reserved;
-    if (available > 50) {
-      containers.push(storage as any);
-    }
-  }
-
   if (containers.length > 0) {
-    return creep.pos.findClosestByPath(containers, {
+    const target = creep.pos.findClosestByPath(containers, {
       filter: (c) => {
         const reserved = sourceReservations.get(c.id) || 0;
         return c.store.getUsedCapacity(RESOURCE_ENERGY) - reserved > 0;
       }
     });
+    if (target) return target;
   }
 
-  // Priority 3: Dropped energy
+  // Priority 2: Dropped energy
   const droppedEnergy = RoomCache.getDroppedResources(room).filter(
     (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
   );
@@ -182,7 +173,7 @@ function findBestSource(creep: Creep): Source | StructureContainer | StructureSt
     return creep.pos.findClosestByPath(droppedEnergy);
   }
 
-  // Priority 4: Sources (last resort)
+  // Priority 3: Sources (last resort)
   const sources = RoomCache.getActiveSources(room);
   return creep.pos.findClosestByPath(sources);
 }
