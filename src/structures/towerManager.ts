@@ -49,25 +49,48 @@ export class TowerManager {
       return;
     }
 
-    // Priority 3: Repair structures (only if tower has enough energy)
+    // Priority 3: Emergency repairs only (let repairers handle routine maintenance)
     for (const tower of towers) {
       if (tower.store[RESOURCE_ENERGY] < 500) continue; // Save energy for defense
       
-      const damagedStructures = room.find(FIND_STRUCTURES, {
+      // Only handle TRUE emergencies:
+      const emergencyStructures = room.find(FIND_STRUCTURES, {
         filter: s => {
-          // Don't repair walls or ramparts here (they have too many hits)
-          if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
-            return false;
+          // Skip walls entirely
+          if (s.structureType === STRUCTURE_WALL) return false;
+          
+          // Emergency: ramparts below 5k hits
+          if (s.structureType === STRUCTURE_RAMPART) {
+            return s.hits < 5000;
           }
-          return s.hits < s.hitsMax;
+          
+          // Emergency: critical structures below 50% HP
+          const isCritical = s.structureType === STRUCTURE_SPAWN || 
+                            s.structureType === STRUCTURE_TOWER ||
+                            s.structureType === STRUCTURE_STORAGE ||
+                            s.structureType === STRUCTURE_TERMINAL;
+          
+          if (isCritical) {
+            return s.hits < s.hitsMax * 0.5;
+          }
+          
+          // Don't repair anything else - let repairers handle it
+          return false;
         }
       });
 
-      if (damagedStructures.length > 0) {
-        // Sort by hits percentage to prioritize critical structures
-        damagedStructures.sort((a, b) => (a.hits / a.hitsMax) - (b.hits / b.hitsMax));
-        const target = damagedStructures[0];
-        tower.repair(target);
+      if (emergencyStructures.length > 0) {
+        // Sort by absolute hits for ramparts, percentage for others
+        emergencyStructures.sort((a, b) => {
+          if (a.structureType === STRUCTURE_RAMPART && b.structureType === STRUCTURE_RAMPART) {
+            return a.hits - b.hits;
+          }
+          if (a.structureType === STRUCTURE_RAMPART) return -1; // Prioritize ramparts
+          if (b.structureType === STRUCTURE_RAMPART) return 1;
+          return (a.hits / a.hitsMax) - (b.hits / b.hitsMax);
+        });
+        
+        tower.repair(emergencyStructures[0]);
       }
     }
   }

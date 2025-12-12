@@ -278,17 +278,37 @@ This project already includes a number of concrete implementations that follow t
       - Cancels road construction sites blocked by other structures.
     - Maintains build state per room in Memory at `rooms.<room>.roadBuildState`.
 
+  - **RampartPlanner**: `src/structures/rampartPlanner.ts`
+    - Identifies critical structures requiring rampart protection based on priority system.
+    - Protection priorities (highest to lowest):
+      1. Spawns (always protected)
+      2. Storage and Terminal (critical economy)
+      3. Towers (defensive structures)
+      4. Links (RCL 5+)
+      5. Labs (RCL 6+)
+      6. Extensions (RCL 7+ and >20 extensions)
+    - Plans cached in Memory at `rooms.<room>.rampartPlan` and invalidated on RCL changes or after 1000 ticks.
+    - Returns position strings for rampart placement on top of existing structures.
+  
+  - **RampartBuilder**: `src/structures/rampartBuilder.ts`
+    - Executes rampart plans by creating construction sites incrementally.
+    - Build throttling: creates max 3 rampart sites per check interval (every 20 ticks).
+    - Automatic cleanup (every 100 ticks):
+      - Destroys ramparts not in current plan (if no important structure underneath).
+      - Cancels obsolete rampart construction sites.
+    - Maintains build state per room in Memory at `rooms.<room>.rampartBuildState`.
+    - Respects game construction site limits to avoid errors.
+
   **Design philosophy**:
   - CPU-conscious: spreads construction site creation across ticks to avoid spikes.
   - Self-healing: automatically adapts to structure placement and removes conflicts.
   - Memory-efficient: only stores position strings and minimal state per room.
-  - Extensible: StructureManager designed to add tower placement, extension clusters, walls/ramparts later.
+  - Extensible: StructureManager designed to add more structure types as needed.
 
   **Future extensions** (architecture ready):
-  - Tower placement with overlapping coverage analysis.
-  - Extension cluster generation near spawn with compact layouts.
-  - Rampart and wall ring generation for defense.
-  - Container placement at mining positions and controller.
+  - Wall ring generation for perimeter defense.
+  - Advanced rampart layering (inner/outer rings).
+  - Chokepoint detection and wall placement optimization.
 
 ## Tuning & Where To Change
 
@@ -298,5 +318,7 @@ This project already includes a number of concrete implementations that follow t
 - Memory persistence behavior and delayed writes: `src/memory/memoryManager.ts`.
 - Road planning intervals and construction throttling: `src/structures/roadBuilder.ts` (`BUILD_CHECK_INTERVAL`, `CLEANUP_CHECK_INTERVAL`, `MAX_SITES_PER_TICK`).
 - PathFinder cost tuning: `src/structures/roadPlanner.ts` (`plainCost`, `swampCost` in `findOptimalPath`).
+- Rampart protection priorities and RCL thresholds: `src/structures/rampartPlanner.ts` (extension protection starts at RCL 7, labs at RCL 6).
+- Rampart build throttling: `src/structures/rampartBuilder.ts` (`BUILD_CHECK_INTERVAL=20`, `MAX_SITES_PER_CHECK=3`, `CLEANUP_CHECK_INTERVAL=100`).
 
 If you want, I can (A) extract delivery behavior to `creeps/behaviors/deliver.ts`, (B) write unit tests for `bodyFactory`, or (C) add tower/extension placement logic to structure automation. Which would you prefer? 

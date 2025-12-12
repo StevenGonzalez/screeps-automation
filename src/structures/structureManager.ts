@@ -9,6 +9,7 @@ import { storagePlanner } from './storagePlanner';
 import { storageBuilder } from './storageBuilder';
 import { towerPlanner } from './towerPlanner';
 import { towerBuilder } from './towerBuilder';
+import { buildRamparts } from './rampartBuilder';
 
 export class StructureManager {
   run() {
@@ -35,6 +36,9 @@ export class StructureManager {
     this.buildContainers(room);
     this.buildRoads(room);
     this.buildExtensions(room);
+    
+    // Build ramparts last to protect completed structures
+    this.buildRamparts(room);
   }
 
   private planRoads(room: Room) {
@@ -75,6 +79,10 @@ export class StructureManager {
 
   private buildTowers(room: Room) {
     towerBuilder.buildTowersForRoom(room);
+  }
+
+  private buildRamparts(room: Room) {
+    buildRamparts(room);
   }
 
   invalidateRoomPlans(roomName: string) {

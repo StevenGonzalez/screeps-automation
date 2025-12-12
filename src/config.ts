@@ -19,17 +19,17 @@ export const SpawnConfig = {
   },
 
   repairer: {
-    criticalThreshold: 0.75,
-    generalThreshold: 0.5,
-    minRampartHits: 10000,
-    maxRampartHits: 50000,
+    criticalThreshold: 0.9,  // Start repairing critical structures at 90% (was 75%)
+    generalThreshold: 0.7,   // Start repairing general structures at 70% (was 50%)
+    minRampartHits: 10000,   // Emergency threshold for ramparts
+    maxRampartHits: 100000,  // Keep ramparts topped off to 100k (was 50k)
     repairRoads: true,
     repairContainers: true,
     priority: 35,
     fallbackAfter: 25,
     minToWorkFraction: 0.5,
     maxRepairers: 2,
-    minDamagedStructures: 3,
+    minDamagedStructures: 1, // Spawn repairer if even 1 structure needs work (was 3)
   },
 
   queue: {
