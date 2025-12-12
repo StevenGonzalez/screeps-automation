@@ -139,11 +139,15 @@ function deliverEnergy(creep: Creep): void {
 
 function findBestSource(creep: Creep): Source | StructureContainer | StructureStorage | Resource | null {
   const room = creep.room;
+  const controller = room.controller;
   
-  // Priority 1: Containers with energy (not over-reserved)
+  // Priority 1: Miner containers with energy (not controller containers, not over-reserved)
   const containers = RoomCache.getContainers(room).filter((container) => {
     const energyAmount = container.store.getUsedCapacity(RESOURCE_ENERGY);
     if (energyAmount === 0) return false;
+    
+    // Exclude controller containers - those are for upgraders only
+    if (controller && container.pos.inRangeTo(controller.pos, 3)) return false;
     
     // Check if not over-reserved
     const reserved = sourceReservations.get(container.id) || 0;
