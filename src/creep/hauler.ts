@@ -4,6 +4,7 @@ import { CreepPersonality } from "./personality";
 import { RoomCache } from "../room/cache";
 import { getLabRequirements } from "../structure/lab.manager";
 import { isSourceContainer, isControllerContainer, isMineralContainer } from "../utils/structure.utils";
+import { CreepActions } from "./actions";
 
 export function runHauler(creep: Creep, intel: any): void {
   // Get lab requirements (used in both pickup and delivery)
@@ -12,6 +13,7 @@ export function runHauler(creep: Creep, intel: any): void {
   if (creep.store.getUsedCapacity() === 0) {
     // New acquire cycle: clear last withdraw memory to avoid over-filtering
     if (creep.memory.lastWithdrawId) delete creep.memory.lastWithdrawId;
+    if (creep.memory.targetId) delete creep.memory.targetId;
 
     // Check if energy needs are urgent (low spawn/extension energy or critical towers)
     const energyRatio =
@@ -98,11 +100,16 @@ export function runHauler(creep: Creep, intel: any): void {
       creep.pos.findClosestByPath(
         mineralContainers.filter((c) => c.store.getFreeCapacity() < 200)
       ) || // Urgent: unblock full mineral containers
-      creep.pos.findClosestByPath(pickupContainers) ||
+      CreepActions.findBestEnergyContainer(creep, pickupContainers) ||
       creep.pos.findClosestByPath(dropped) ||
       creep.pos.findClosestByPath(tombs) ||
       creep.pos.findClosestByPath(ruins) ||
       creep.pos.findClosestByPath(mineralContainers); // Non-urgent mineral pickup
+
+    // Store target in memory so other haulers can see it
+    if (target && target instanceof Structure) {
+      creep.memory.targetId = target.id;
+    }
 
     // Check if labs need minerals from storage/terminal (before falling back to storage energy)
     if (!target && !energyUrgent && labReqs.toFill.length > 0) {

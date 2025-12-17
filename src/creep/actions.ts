@@ -468,20 +468,81 @@ export class CreepActions {
   }
 
   /**
+   * Find the best container for energy pickup, considering:
+   * - Available energy amount
+   * - Distance from creep
+   * - How many other creeps are already targeting it
+   * Returns null if no suitable container found
+   */
+  static findBestEnergyContainer(
+    creep: Creep,
+    containers: Structure[],
+    minEnergy: number = 100
+  ): Structure | null {
+    if (containers.length === 0) return null;
+
+    // Count how many other creeps (of same role or haulers) are targeting each container
+    const targetCounts: { [id: string]: number } = {};
+    const relevantCreeps = creep.room.find(FIND_MY_CREEPS, {
+      filter: (c) =>
+        c.name !== creep.name &&
+        (c.memory.role === creep.memory.role ||
+          c.memory.role === "hauler") &&
+        c.store.getUsedCapacity() === 0, // Only count creeps looking to pick up
+    });
+
+    for (const otherCreep of relevantCreeps) {
+      if (otherCreep.memory.targetId) {
+        targetCounts[otherCreep.memory.targetId] =
+          (targetCounts[otherCreep.memory.targetId] || 0) + 1;
+      }
+    }
+
+    let bestContainer: Structure | null = null;
+    let bestScore = -Infinity;
+
+    for (const container of containers) {
+      const energy = (container as AnyStoreStructure).store.getUsedCapacity(
+        RESOURCE_ENERGY
+      );
+      const distance = creep.pos.getRangeTo(container);
+      const targetingCount = targetCounts[container.id] || 0;
+
+      // Skip if not enough energy
+      if (energy < minEnergy) continue;
+
+      // Score formula:
+      // - Prioritize containers with more energy (energy * 2)
+      // - Penalize distance (distance * 50)
+      // - Heavily penalize containers already being targeted (targetingCount * 500)
+      const score = energy * 2 - distance * 50 - targetingCount * 500;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestContainer = container;
+      }
+    }
+
+    return bestContainer;
+  }
+
+  /**
    * Smart energy collection - finds best source based on availability and distance
    */
   static collectEnergy(creep: Creep): ActionResult {
     // Priority: Containers > Storage > Terminal > Sources
 
-    // 1. Try containers with energy
+    // 1. Try containers with energy (using smart selection)
     const containers = creep.room.find(FIND_STRUCTURES, {
       filter: (s: StructureContainer) =>
         s.structureType === STRUCTURE_CONTAINER && s.store.energy > 0,
     }) as StructureContainer[];
 
     if (containers.length > 0) {
-      const container = creep.pos.findClosestByRange(containers);
+      const container = this.findBestEnergyContainer(creep, containers);
       if (container) {
+        // Store target so other creeps can see it
+        creep.memory.targetId = container.id;
         return this.withdrawFromStructure(creep, container.id);
       }
     }
