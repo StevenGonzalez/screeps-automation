@@ -10,10 +10,10 @@ import {
 } from "../defense/maintenance";
 
 export function runRepairer(creep: Creep, intel: any): void {
-  // EMERGENCY MODE: Only critical repairs during energy crisis
+  // EMERGENCY MODE: Only critical repairs during energy crisis (only if storage exists)
   const storage = creep.room.storage;
   const energyStored = (storage?.store.energy || 0);
-  const isEmergencyMode = energyStored < 20000 && intel.economy?.netFlow < 0;
+  const isEmergencyMode = storage && energyStored < 20000 && intel.economy?.netFlow < 0;
 
   // If towers are well-stocked, let them handle most emergency repairs.
   const towers = getTowersInRoom(creep.room);

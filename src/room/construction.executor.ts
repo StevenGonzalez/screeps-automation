@@ -17,9 +17,10 @@ export function executeConstructionPlan(
 
   // EMERGENCY MODE: Skip most construction during energy crisis
   // EXCEPTION: Allow critical structures first, then source containers
+  // Only applies to rooms with storage (RCL 4+), not new rooms
   const storage = room.storage;
   const energyStored = (storage?.store.energy || 0);
-  const isEmergencyMode = energyStored < 20000 && intel.economy?.netFlow < 0;
+  const isEmergencyMode = storage && energyStored < 20000 && intel.economy?.netFlow < 0;
   
   if (isEmergencyMode) {
     // Filter plan to only allow critical structures and source containers

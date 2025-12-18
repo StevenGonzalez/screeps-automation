@@ -63,7 +63,8 @@ function determineEconomicStrategy(
   const { basic, economy, military, creeps } = intel;
 
   // EMERGENCY MODE: Critical energy shortage - survival mode
-  if (economy.energyStored < 20000 && economy.netFlow < 0) {
+  // Only applies to established rooms with storage (RCL 4+)
+  if (basic.rcl >= 4 && economy.energyStored < 20000 && economy.netFlow < 0) {
     return "DEFENSE"; // Reuse DEFENSE strategy for minimal creeps
   }
 
@@ -106,7 +107,8 @@ function calculateDynamicUpgraders(intel: RoomIntelligence): number {
   let upgraders = 1;
 
   // Calculate based on stored energy thresholds
-  if (energyStored < 20000) {
+  // Only apply crisis mode if storage exists (RCL 4+)
+  if (rcl >= 4 && energyStored < 20000) {
     // CRISIS MODE: Absolute minimum upgrading
     upgraders = netFlow < -3 ? 1 : 1;
   } else if (energyStored < 50000) {

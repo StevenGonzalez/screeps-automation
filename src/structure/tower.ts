@@ -110,9 +110,10 @@ export function performAutoRepair(room: Room): void {
   if (towers.length === 0) return;
 
   // EMERGENCY MODE: Skip all repairs during energy crisis (let towers save energy for defense)
+  // Only applies to rooms with storage (RCL 4+)
   const storage = room.storage;
   const energyStored = (storage?.store.energy || 0);
-  const isEmergencyMode = energyStored < 20000;
+  const isEmergencyMode = storage && energyStored < 20000;
   if (isEmergencyMode) return;
 
   // Per-tick guard to avoid multiple towers repairing the same target

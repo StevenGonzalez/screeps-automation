@@ -557,10 +557,10 @@ function getBuilderNeed(room: Room, composition: any): number {
 }
 
 function assessRepairDemand(room: Room): { recommendedRepairers: number } {
-  // EMERGENCY MODE: No repairers during energy crisis
+  // EMERGENCY MODE: No repairers during energy crisis (only if storage exists)
   const storage = room.storage;
   const energyStored = (storage?.store.energy || 0);
-  if (energyStored < 20000) {
+  if (storage && energyStored < 20000) {
     return { recommendedRepairers: 0 };
   }
 
