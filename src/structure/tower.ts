@@ -109,6 +109,12 @@ export function performAutoRepair(room: Room): void {
   const towers = getTowersInRoom(room);
   if (towers.length === 0) return;
 
+  // EMERGENCY MODE: Skip all repairs during energy crisis (let towers save energy for defense)
+  const storage = room.storage;
+  const energyStored = (storage?.store.energy || 0);
+  const isEmergencyMode = energyStored < 20000;
+  if (isEmergencyMode) return;
+
   // Per-tick guard to avoid multiple towers repairing the same target
   if (!Memory.rooms) Memory.rooms = {} as any;
   if (!Memory.rooms[room.name]) (Memory.rooms as any)[room.name] = {};
@@ -207,6 +213,7 @@ export function performAutoRepair(room: Room): void {
     }
 
     // 2) Ramparts (light topping) when very full and no hostiles
+    // Only repair ramparts when we have abundant energy (>50k in storage)
     if (
       !hostile &&
       energy >= minWallsRepair &&

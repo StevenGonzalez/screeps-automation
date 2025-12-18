@@ -209,6 +209,12 @@ function trySpawnEconomicCreeps(
       current: current.harvester,
     },
     {
+      role: "builder",
+      // During emergency mode, prioritize builders if there are source container sites
+      needed: hasConstruction ? getBuilderNeed(room, composition) : 0,
+      current: current.builder,
+    },
+    {
       role: "hauler",
       // Dynamically scale haulers based on source container fullness and needy structures
       needed: hasContainersOrStorage
@@ -221,12 +227,6 @@ function trySpawnEconomicCreeps(
       // Always keep at least 1 upgrader if we have a controller
       needed: Math.max(1, composition.upgraders || 1),
       current: current.upgrader,
-    },
-    {
-      role: "builder",
-      // Only spawn builders when there are construction sites
-      needed: hasConstruction ? composition.builders || 1 : 0,
-      current: current.builder,
     },
     {
       role: "repairer",
@@ -533,6 +533,27 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
   cache.tick = Game.time;
 
   return counts;
+}
+
+function getBuilderNeed(room: Room, composition: any): number {
+  const storage = room.storage;
+  const energyStored = (storage?.store.energy || 0);
+  const isEmergencyMode = energyStored < 20000;
+  
+  if (isEmergencyMode) {
+    // During emergency, only spawn builders if there are source container sites
+    const sources = room.find(FIND_SOURCES);
+    const containerSites = room.find(FIND_CONSTRUCTION_SITES, {
+      filter: (site) => {
+        if (site.structureType !== STRUCTURE_CONTAINER) return false;
+        return sources.some(source => site.pos.getRangeTo(source.pos) <= 2);
+      }
+    });
+    return containerSites.length > 0 ? 1 : 0;
+  }
+  
+  // Normal mode: use composition
+  return composition.builders || 1;
 }
 
 function assessRepairDemand(room: Room): { recommendedRepairers: number } {

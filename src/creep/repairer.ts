@@ -61,7 +61,8 @@ export function runRepairer(creep: Creep, intel: any): void {
     if (critical.length) target = pickMostDamaged(critical);
 
     // 2) Defense structures (ramparts/walls) using intelligent prioritization
-    if (!target) {
+    // SKIP IN EMERGENCY MODE - ramparts/walls are energy sinks
+    if (!target && !isEmergencyMode) {
       const defenseTargets = getDefenseRepairTargets(
         creep.room,
         defensePlan,
@@ -87,7 +88,7 @@ export function runRepairer(creep: Creep, intel: any): void {
     // 4) Roads - only if significantly damaged (40% or less)
     // Skip in emergency mode
     // Roads decay constantly so we only repair when really needed
-    if (!target) {
+    if (!target && !isEmergencyMode) {
       const roads = creep.room.find(FIND_STRUCTURES, {
         filter: (s) =>
           s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * 0.4,
