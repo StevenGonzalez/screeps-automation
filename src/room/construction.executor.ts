@@ -15,6 +15,20 @@ export function executeConstructionPlan(
   if (!room.controller || !room.controller.my) return;
   if (!plan || !plan.queue?.length) return;
 
+  // EMERGENCY MODE: Skip all construction during energy crisis
+  const storage = room.storage;
+  const energyStored = (storage?.store.energy || 0);
+  if (energyStored < 20000 && intel.economy?.netFlow < 0) {
+    // Only place critical spawns/extensions if absolutely needed
+    const spawns = room.find(FIND_MY_SPAWNS);
+    const extensions = room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_EXTENSION
+    });
+    if (spawns.length > 0 && extensions.length >= 3) {
+      return; // Skip all construction during crisis
+    }
+  }
+
   // Respect global construction site cap
   const totalSites = Object.keys(Game.constructionSites).length;
   const remainingGlobal = Math.max(0, 100 - GLOBAL_SITE_BUFFER - totalSites);

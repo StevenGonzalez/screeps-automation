@@ -536,6 +536,13 @@ function getCurrentCreepCounts(room: Room): { [role: string]: number } {
 }
 
 function assessRepairDemand(room: Room): { recommendedRepairers: number } {
+  // EMERGENCY MODE: No repairers during energy crisis
+  const storage = room.storage;
+  const energyStored = (storage?.store.energy || 0);
+  if (energyStored < 20000) {
+    return { recommendedRepairers: 0 };
+  }
+
   // Count structures needing repair by category
   const containers = room.find(FIND_STRUCTURES, {
     filter: (s) =>

@@ -60,6 +60,15 @@ export function runMiner(creep: Creep): void {
     CreepPersonality.speak(creep, "harvest");
     // Opportunistic: if there's a link adjacent and the adjacent container is near full, feed the link
     tryFeedAdjacentLink(creep, source);
+    
+    // EMERGENCY: If store is full and no container exists, drop energy for haulers
+    if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+      const hasContainer = creep.pos.lookFor(LOOK_STRUCTURES)
+        .some(s => s.structureType === STRUCTURE_CONTAINER);
+      if (!hasContainer) {
+        creep.drop(RESOURCE_ENERGY);
+      }
+    }
   } else if (res === ERR_NOT_ENOUGH_RESOURCES) {
     // Idle but stay put
     CreepPersonality.speak(creep, "idle");

@@ -10,6 +10,11 @@ import {
 } from "../defense/maintenance";
 
 export function runRepairer(creep: Creep, intel: any): void {
+  // EMERGENCY MODE: Only critical repairs during energy crisis
+  const storage = creep.room.storage;
+  const energyStored = (storage?.store.energy || 0);
+  const isEmergencyMode = energyStored < 20000 && intel.economy?.netFlow < 0;
+
   // If towers are well-stocked, let them handle most emergency repairs.
   const towers = getTowersInRoom(creep.room);
   const towerHighEnergy = towers.some(
@@ -41,7 +46,8 @@ export function runRepairer(creep: Creep, intel: any): void {
 
     // 1) Prioritize truly critical non-fortification structures
     // If towers are high on energy, tighten threshold so towers take most of this load
-    const criticalThreshold = towerHighEnergy ? 0.2 : 0.3;
+    // In emergency mode, only repair things at 10% or less
+    const criticalThreshold = isEmergencyMode ? 0.1 : (towerHighEnergy ? 0.2 : 0.3);
     const critical = creep.room.find(FIND_STRUCTURES, {
       filter: (s) =>
         s.hits < s.hitsMax * criticalThreshold &&
@@ -69,7 +75,8 @@ export function runRepairer(creep: Creep, intel: any): void {
     }
 
     // 3) Containers - repair early to prevent decay (at 80%)
-    if (!target) {
+    // Skip in emergency mode - let them decay if needed
+    if (!target && !isEmergencyMode) {
       const containers = creep.room.find(FIND_STRUCTURES, {
         filter: (s) =>
           s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.8,
@@ -78,6 +85,7 @@ export function runRepairer(creep: Creep, intel: any): void {
     }
 
     // 4) Roads - only if significantly damaged (40% or less)
+    // Skip in emergency mode
     // Roads decay constantly so we only repair when really needed
     if (!target) {
       const roads = creep.room.find(FIND_STRUCTURES, {
