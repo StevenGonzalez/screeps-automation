@@ -441,7 +441,7 @@ function generateContainerTasks(intel: RoomIntelligence): ConstructionTask[] {
         tasks.push({
           type: STRUCTURE_CONTAINER,
           pos,
-          priority: 88,
+          priority: 78,
           reason: `Container for source at ${source.pos.x},${source.pos.y}`,
           estimatedCost: 5000,
           dependencies: [],
@@ -463,7 +463,7 @@ function generateContainerTasks(intel: RoomIntelligence): ConstructionTask[] {
         tasks.push({
           type: STRUCTURE_CONTAINER,
           pos,
-          priority: 82,
+          priority: 70,
           reason: "Controller container for upgraders",
           estimatedCost: 5000,
           dependencies: [],

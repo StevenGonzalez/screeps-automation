@@ -16,27 +16,37 @@ export function executeConstructionPlan(
   if (!plan || !plan.queue?.length) return;
 
   // EMERGENCY MODE: Skip most construction during energy crisis
-  // EXCEPTION: Allow source containers - they're critical for economy recovery
+  // EXCEPTION: Allow critical structures first, then source containers
   const storage = room.storage;
   const energyStored = (storage?.store.energy || 0);
   const isEmergencyMode = energyStored < 20000 && intel.economy?.netFlow < 0;
   
   if (isEmergencyMode) {
-    // Filter plan to only allow source containers and critical structures
+    // Filter plan to only allow critical structures and source containers
     const sources = room.find(FIND_SOURCES);
+    const extensions = room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_EXTENSION
+    });
+    
     const allowedTasks = plan.queue.filter(task => {
-      // Allow containers near sources (within 2 tiles)
+      // Priority 1: Spawns and extensions (if we have < 5)
+      if (task.type === STRUCTURE_SPAWN) return true;
+      if (task.type === STRUCTURE_EXTENSION && extensions.length < 5) return true;
+      
+      // Priority 2: Towers (if we have < 1)
+      if (task.type === STRUCTURE_TOWER) {
+        const towers = room.find(FIND_MY_STRUCTURES, {
+          filter: s => s.structureType === STRUCTURE_TOWER
+        });
+        return towers.length < 1;
+      }
+      
+      // Priority 3: Source containers (within 2 tiles of sources)
       if (task.type === STRUCTURE_CONTAINER) {
         return sources.some(source => 
           task.pos.getRangeTo(source.pos) <= 2
         );
       }
-      // Allow spawns/extensions if we have very few
-      if (task.type === STRUCTURE_SPAWN) return true;
-      const extensions = room.find(FIND_MY_STRUCTURES, {
-        filter: s => s.structureType === STRUCTURE_EXTENSION
-      });
-      if (task.type === STRUCTURE_EXTENSION && extensions.length < 3) return true;
       
       return false;
     });

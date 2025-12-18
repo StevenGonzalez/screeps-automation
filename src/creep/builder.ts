@@ -39,45 +39,55 @@ export function runBuilder(
     }
 
     // Prioritize construction sites by importance:
-    // 1. Containers (critical for economy)
-    // 2. Spawns, extensions, towers (critical structures)
-    // 3. Storage, terminal, labs (important structures)
-    // 4. Roads (low priority - can wait)
+    // 1. Spawns, extensions, towers (critical structures)
+    // 2. Storage, terminal (important economy)
+    // 3. Containers (nice to have for economy)
+    // 4. Links, labs (optimization)
+    // 5. Roads (low priority - can wait)
     let sites = RoomCache.constructionSites(creep.room);
 
-    // Priority 1: Containers
+    // Priority 1: Critical structures
     let target = creep.pos.findClosestByPath(
       sites.filter(
-        (s: ConstructionSite) => s.structureType === STRUCTURE_CONTAINER
+        (s: ConstructionSite) =>
+          s.structureType === STRUCTURE_SPAWN ||
+          s.structureType === STRUCTURE_EXTENSION ||
+          s.structureType === STRUCTURE_TOWER
       )
     );
 
-    // Priority 2: Critical structures
-    if (!target) {
-      target = creep.pos.findClosestByPath(
-        sites.filter(
-          (s: ConstructionSite) =>
-            s.structureType === STRUCTURE_SPAWN ||
-            s.structureType === STRUCTURE_EXTENSION ||
-            s.structureType === STRUCTURE_TOWER
-        )
-      );
-    }
-
-    // Priority 3: Important structures
+    // Priority 2: Important economy structures
     if (!target) {
       target = creep.pos.findClosestByPath(
         sites.filter(
           (s: ConstructionSite) =>
             s.structureType === STRUCTURE_STORAGE ||
-            s.structureType === STRUCTURE_TERMINAL ||
+            s.structureType === STRUCTURE_TERMINAL
+        )
+      );
+    }
+
+    // Priority 3: Containers
+    if (!target) {
+      target = creep.pos.findClosestByPath(
+        sites.filter(
+          (s: ConstructionSite) => s.structureType === STRUCTURE_CONTAINER
+        )
+      );
+    }
+
+    // Priority 4: Labs and links
+    if (!target) {
+      target = creep.pos.findClosestByPath(
+        sites.filter(
+          (s: ConstructionSite) =>
             s.structureType === STRUCTURE_LAB ||
             s.structureType === STRUCTURE_LINK
         )
       );
     }
 
-    // Priority 4: Everything else (including roads)
+    // Priority 5: Everything else (including roads)
     if (!target) {
       target = creep.pos.findClosestByPath(sites);
     }
