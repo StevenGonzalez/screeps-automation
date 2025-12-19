@@ -5,6 +5,45 @@ import { CreepPersonality } from "./personality";
 export function runHarvester(creep: Creep, intel: any): void {
   // State: harvesting when not full, delivering when full
   if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+    // Priority 1: Pick up dropped energy
+    const droppedEnergy = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+      filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+    });
+    if (droppedEnergy) {
+      if (creep.pickup(droppedEnergy) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(droppedEnergy, { ...visualPath("harvest") });
+        CreepPersonality.speak(creep, "move");
+      } else {
+        CreepPersonality.speak(creep, "withdraw");
+      }
+      return;
+    }
+
+    // Priority 2: Withdraw from containers (if miners exist, don't compete at sources)
+    const miners = creep.room.find(FIND_MY_CREEPS, {
+      filter: (c) => c.memory.role === "miner"
+    });
+    
+    if (miners.length > 0) {
+      // Miners exist - collect from containers instead of harvesting
+      const containers = creep.room.find(FIND_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
+          (s as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0
+      }) as StructureContainer[];
+      
+      const target = creep.pos.findClosestByPath(containers);
+      if (target) {
+        if (creep.withdraw(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(target, { ...visualPath("harvest") });
+          CreepPersonality.speak(creep, "move");
+        } else {
+          CreepPersonality.speak(creep, "withdraw");
+        }
+        return;
+      }
+    }
+
+    // Priority 3: Only harvest from source if no miners or no containers
     // Assign a source if none
     if (!creep.memory.sourceId) {
       const sources = creep.room.find(FIND_SOURCES);
@@ -14,7 +53,7 @@ export function runHarvester(creep: Creep, intel: any): void {
             filter: (c) =>
               c.memory.role === "harvester" && c.memory.sourceId === s.id,
           }).length;
-          return assigned < 2;
+          return assigned < 1; // Only 1 harvester per source max
         }) || sources[0];
       if (source) creep.memory.sourceId = source.id;
     }

@@ -45,9 +45,9 @@ export function runRepairer(creep: Creep, intel: any): void {
     const defensePlan = planRoomDefense(creep.room);
 
     // 1) Prioritize truly critical non-fortification structures
-    // If towers are high on energy, tighten threshold so towers take most of this load
-    // In emergency mode, only repair things at 10% or less
-    const criticalThreshold = isEmergencyMode ? 0.1 : (towerHighEnergy ? 0.2 : 0.3);
+    // ALWAYS repair spawns, towers, storage, extensions at <30%
+    // In emergency: also repair containers and extensions at <50%
+    const criticalThreshold = isEmergencyMode ? 0.3 : (towerHighEnergy ? 0.2 : 0.3);
     const critical = creep.room.find(FIND_STRUCTURES, {
       filter: (s) =>
         s.hits < s.hitsMax * criticalThreshold &&
@@ -59,6 +59,18 @@ export function runRepairer(creep: Creep, intel: any): void {
 
     let target: Structure | null = null;
     if (critical.length) target = pickMostDamaged(critical);
+
+    // EMERGENCY MODE CRITICAL: Repair containers and extensions before they decay completely
+    if (!target && isEmergencyMode) {
+      const emergencyCritical = creep.room.find(FIND_STRUCTURES, {
+        filter: (s) =>
+          (s.structureType === STRUCTURE_CONTAINER && s.hits < s.hitsMax * 0.5) ||
+          (s.structureType === STRUCTURE_EXTENSION && s.hits < s.hitsMax * 0.5)
+      });
+      if (emergencyCritical.length) {
+        target = pickMostDamaged(emergencyCritical);
+      }
+    }
 
     // 2) Defense structures (ramparts/walls) using intelligent prioritization
     // SKIP IN EMERGENCY MODE - ramparts/walls are energy sinks

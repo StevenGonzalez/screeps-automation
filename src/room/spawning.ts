@@ -557,11 +557,20 @@ function getBuilderNeed(room: Room, composition: any): number {
 }
 
 function assessRepairDemand(room: Room): { recommendedRepairers: number } {
-  // EMERGENCY MODE: No repairers during energy crisis (only if storage exists)
+  // EMERGENCY MODE: Still need repairers if critical structures are decaying
   const storage = room.storage;
   const energyStored = (storage?.store.energy || 0);
-  if (storage && energyStored < 20000) {
-    return { recommendedRepairers: 0 };
+  const isEmergency = storage && energyStored < 20000;
+  
+  if (isEmergency) {
+    // Check if containers or extensions are decaying badly
+    const criticalDecay = room.find(FIND_STRUCTURES, {
+      filter: (s) =>
+        ((s.structureType === STRUCTURE_CONTAINER || 
+          s.structureType === STRUCTURE_EXTENSION) && 
+         s.hits < s.hitsMax * 0.5)
+    });
+    return { recommendedRepairers: criticalDecay.length > 0 ? 1 : 0 };
   }
 
   // Count structures needing repair by category
