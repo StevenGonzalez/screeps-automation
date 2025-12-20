@@ -8,15 +8,18 @@ export function runBuilder(
   constructionPlan: any,
   intel: any
 ): void {
-  // Toggle
+  // Toggle with hysteresis to prevent flip-flopping
+  // Switch to gathering only when completely empty
   if (
     creep.memory.working &&
     creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0
   )
     creep.memory.working = false;
+  // Switch to working when at least 50% full to prevent loops
+  // This prevents builders from turning around for small amounts of energy
   if (
     !creep.memory.working &&
-    creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0
+    creep.store.getUsedCapacity(RESOURCE_ENERGY) >= creep.store.getCapacity(RESOURCE_ENERGY) * 0.5
   )
     creep.memory.working = true;
 
