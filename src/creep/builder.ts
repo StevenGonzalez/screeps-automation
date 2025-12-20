@@ -90,9 +90,18 @@ export function runBuilder(
       );
     }
 
-    // Priority 5: Everything else (including roads)
+    // Priority 5: Everything else EXCEPT roads (walls, ramparts, etc.)
     if (!target) {
-      target = creep.pos.findClosestByPath(sites);
+      target = creep.pos.findClosestByPath(
+        sites.filter((s: ConstructionSite) => s.structureType !== STRUCTURE_ROAD)
+      );
+    }
+
+    // Priority 6: Roads (lowest priority - only if nothing else to build)
+    if (!target) {
+      target = creep.pos.findClosestByPath(
+        sites.filter((s: ConstructionSite) => s.structureType === STRUCTURE_ROAD)
+      );
     }
     // If no path to any site, try to clean up unreachable sites (e.g., trapped in wall pockets)
     if (!target && sites.length > 0) {
