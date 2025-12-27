@@ -91,3 +91,93 @@ export function isLikelyHarassmentUnit(creep: Creep): boolean {
   
   return (isHealerKiter(creep) || isFastCreep(creep)) && isNearRoomEdge(creep.pos);
 }
+
+/**
+ * Detect if a creep is a drain tank (TOUGH + high HP)
+ * These creeps bait towers into wasting energy
+ */
+export function isDrainTank(creep: Creep): boolean {
+  const toughParts = countBodyParts(creep, TOUGH);
+  const healParts = countBodyParts(creep, HEAL);
+  
+  // Tank characteristics: lots of TOUGH, high HP, maybe some heal
+  return toughParts >= 10 || (toughParts >= 5 && creep.hits > 2000);
+}
+
+/**
+ * Calculate how much energy it would take to kill a creep with tower fire
+ * Accounts for healing from the creep and nearby healers
+ */
+export function estimateEnergyToKill(
+  creep: Creep,
+  towerDistance: number,
+  nearbyHealers: Creep[] = []
+): number {
+  // Tower damage: 600 at range <=5, linear falloff to 150 at range 20+
+  let towerDamage = 600;
+  if (towerDistance > 5) {
+    towerDamage = Math.max(150, 600 - (towerDistance - 5) * 30);
+  }
+  
+  // Calculate heal rate (self + nearby healers)
+  const selfHeal = countBodyParts(creep, HEAL) * 12;
+  const externalHeal = nearbyHealers.reduce((sum, healer) => {
+    return sum + countBodyParts(healer, HEAL) * 12;
+  }, 0);
+  const totalHealRate = selfHeal + externalHeal;
+  
+  // Net damage per tower shot
+  const netDamage = Math.max(1, towerDamage - totalHealRate);
+  
+  // Energy needed (10 energy per shot)
+  const shotsNeeded = Math.ceil(creep.hits / netDamage);
+  return shotsNeeded * 10;
+}
+
+/**
+ * Check if attacking a creep would be energy-efficient
+ * Returns false if it would waste too much energy
+ */
+export function isEfficientTarget(
+  creep: Creep,
+  tower: StructureTower,
+  room: Room,
+  maxEnergyToSpend: number = 500
+): boolean {
+  const distance = tower.pos.getRangeTo(creep);
+  
+  // Find nearby healers
+  const nearbyHealers = room.find(FIND_HOSTILE_CREEPS, {
+    filter: (h) => {
+      if (h.id === creep.id) return false;
+      if (countBodyParts(h, HEAL) === 0) return false;
+      return h.pos.getRangeTo(creep) <= 3;
+    },
+  });
+  
+  const energyNeeded = estimateEnergyToKill(creep, distance, nearbyHealers);
+  
+  // Don't attack if:
+  // 1. Would take more than maxEnergyToSpend
+  // 2. Would use more than half our tower energy
+  // 3. Net damage is too low (< 100)
+  
+  if (energyNeeded > maxEnergyToSpend) {
+    return false;
+  }
+  
+  const towerEnergy = tower.store.getUsedCapacity(RESOURCE_ENERGY);
+  if (energyNeeded > towerEnergy * 0.5) {
+    return false;
+  }
+  
+  // Calculate net damage
+  let towerDamage = 600;
+  if (distance > 5) {
+    towerDamage = Math.max(150, 600 - (distance - 5) * 30);
+  }
+  const totalHeal = countBodyParts(creep, HEAL) * 12 + 
+    nearbyHealers.reduce((sum, h) => sum + countBodyParts(h, HEAL) * 12, 0);
+  
+  return (towerDamage - totalHeal) >= 100;
+}

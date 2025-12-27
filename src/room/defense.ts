@@ -74,6 +74,10 @@ export interface DefenseStructureOrder {
  */
 export function planDefense(intel: RoomIntelligence): DefensePlan {
   const threatAssessment = assessThreats(intel);
+  
+  // CRITICAL: Check for safe mode trigger conditions
+  checkSafeModeConditions(intel, threatAssessment);
+  
   const towerActions = coordinateTowers(intel, threatAssessment);
   const creepOrders = planDefenseCreeps(intel, threatAssessment);
   const defenseStructures = planDefenseStructures(intel, threatAssessment);
@@ -734,3 +738,138 @@ function findPerimeterPositions(
 
   return positions.slice(0, 20); // Limit to reasonable number
 }
+
+/**
+ * CRITICAL: Check if safe mode should be activated
+ * Triggers safe mode automatically when base is under severe threat
+ */
+function checkSafeModeConditions(
+  intel: RoomIntelligence,
+  threat: DefensePlan["threatAssessment"]
+): void {
+  const room = Game.rooms[intel.basic.name];
+  if (!room || !room.controller || !room.controller.my) return;
+  if (!room.controller.safeModeAvailable) return;
+  if (room.controller.safeMode) return; // Already in safe mode
+  
+  const controller = room.controller;
+  
+  // Condition 1: Controller under direct attack
+  if (controller.hits && controller.hits < controller.hitsMax * 0.8) {
+    console.log(`🚨🚨🚨 SAFE MODE: Controller under attack! (${controller.hits}/${controller.hitsMax} HP)`);
+    const result = controller.activateSafeMode();
+    if (result === OK) {
+      console.log(`✅ Safe mode activated successfully!`);
+    } else {
+      console.log(`❌ Failed to activate safe mode: ${result}`);
+    }
+    return;
+  }
+  
+  // Condition 2: Critical ramparts falling
+  const criticalRamparts = room.find(FIND_STRUCTURES, {
+    filter: (s) => {
+      if (s.structureType !== STRUCTURE_RAMPART) return false;
+      // Check if rampart protects critical structure
+      const protectedStructures = s.pos.lookFor(LOOK_STRUCTURES);
+      const hasCritical = protectedStructures.some((ps) =>
+        ps.structureType === STRUCTURE_SPAWN ||
+        ps.structureType === STRUCTURE_STORAGE ||
+        ps.structureType === STRUCTURE_TERMINAL ||
+        ps.structureType === STRUCTURE_TOWER
+      );
+      return hasCritical && s.hits < 20000; // Critical rampart below 20k HP
+    },
+  });
+  
+  if (criticalRamparts.length > 0 && threat.currentThreat === "CRITICAL") {
+    console.log(`🚨🚨🚨 SAFE MODE: ${criticalRamparts.length} critical ramparts failing during attack!`);
+    const result = controller.activateSafeMode();
+    if (result === OK) {
+      console.log(`✅ Safe mode activated successfully!`);
+    } else {
+      console.log(`❌ Failed to activate safe mode: ${result}`);
+    }
+    return;
+  }
+  
+  // Condition 3: Spawn/Tower under direct attack
+  const attackedCriticalStructures = room.find(FIND_MY_STRUCTURES, {
+    filter: (s) =>
+      (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER) &&
+      s.hits < s.hitsMax * 0.5,
+  });
+  
+  if (attackedCriticalStructures.length > 0) {
+    console.log(`🚨🚨🚨 SAFE MODE: ${attackedCriticalStructures.length} critical structures damaged!`);
+    const result = controller.activateSafeMode();
+    if (result === OK) {
+      console.log(`✅ Safe mode activated successfully!`);
+    } else {
+      console.log(`❌ Failed to activate safe mode: ${result}`);
+    }
+    return;
+  }
+  
+  // Condition 4: Overwhelming force (high DPS + close to spawn)
+  const hostiles = room.find(FIND_HOSTILE_CREEPS);
+  const spawn = room.find(FIND_MY_SPAWNS)[0];
+  if (spawn && threat.currentThreat === "CRITICAL") {
+    const closeHostiles = hostiles.filter((h) => h.pos.getRangeTo(spawn) <= 5);
+    const totalDPS = closeHostiles.reduce((sum, h) => {
+      return sum + calculateAttackPower(h.body.map((p) => p.type));
+    }, 0);
+    
+    if (totalDPS > 800 && closeHostiles.length >= 2) {
+      console.log(`🚨🚨🚨 SAFE MODE: Overwhelming force near spawn (${totalDPS} DPS from ${closeHostiles.length} creeps)!`);
+      const result = controller.activateSafeMode();
+      if (result === OK) {
+        console.log(`✅ Safe mode activated successfully!`);
+      } else {
+        console.log(`❌ Failed to activate safe mode: ${result}`);
+      }
+      return;
+    }
+  }
+  
+  // Condition 5: Controller being drained (CLAIM/reserveController attempts)
+  const controllerDrainers = hostiles.filter((h) => {
+    if (!controller) return false;
+    const claimParts = countBodyParts(h, CLAIM);
+    return claimParts > 0 && h.pos.getRangeTo(controller) <= 3;
+  });
+  
+  if (controllerDrainers.length > 0) {
+    console.log(`🚨🚨🚨 SAFE MODE: ${controllerDrainers.length} creeps attempting to drain controller!`);
+    const result = controller.activateSafeMode();
+    if (result === OK) {
+      console.log(`✅ Safe mode activated successfully!`);
+    } else {
+      console.log(`❌ Failed to activate safe mode: ${result}`);
+    }
+    return;
+  }
+  
+  // Condition 6: Energy drain attack detected (towers running dry)
+  const towers = room.find(FIND_MY_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_TOWER,
+  }) as StructureTower[];
+  
+  if (towers.length > 0 && hostiles.length > 0) {
+    const avgTowerEnergy = towers.reduce((sum, t) => sum + t.store.getUsedCapacity(RESOURCE_ENERGY), 0) / towers.length;
+    const allTowersLow = towers.every((t) => t.store.getUsedCapacity(RESOURCE_ENERGY) < 200);
+    
+    // If all towers are critically low during an attack, it's likely a drain attack
+    if (allTowersLow && (threat.currentThreat === "HIGH" || threat.currentThreat === "CRITICAL")) {
+      console.log(`🚨🚨🚨 SAFE MODE: DRAIN ATTACK - All towers depleted (avg: ${Math.floor(avgTowerEnergy)})`);
+      const result = controller.activateSafeMode();
+      if (result === OK) {
+        console.log(`✅ Safe mode activated successfully!`);
+      } else {
+        console.log(`❌ Failed to activate safe mode: ${result}`);
+      }
+      return;
+    }
+  }
+}
+

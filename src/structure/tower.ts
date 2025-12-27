@@ -21,16 +21,16 @@ function getTowerFloor(hostile: boolean): number {
 }
 
 function getRampartTarget(rcl: number): number {
-  if (rcl < 4) return 3000;
-  if (rcl < 6) return 10000;
-  if (rcl < 8) return 30000;
-  return 100000;
+  if (rcl < 4) return 10000;
+  if (rcl < 6) return 50000;
+  if (rcl < 8) return 300000;
+  return 1000000; // 1M HP at RCL 8 - much safer!
 }
 
 function getWallTarget(rcl: number): number {
-  if (rcl < 6) return 5000;
-  if (rcl < 8) return 20000;
-  return 50000;
+  if (rcl < 6) return 10000;
+  if (rcl < 8) return 100000;
+  return 500000; // 500k HP at RCL 8
 }
 
 /// <reference types="@types/screeps" />
@@ -39,7 +39,9 @@ import {
   countBodyParts,
   isFastCreep,
   isNearRoomEdge,
-  isHealerKiter
+  isHealerKiter,
+  isDrainTank,
+  isEfficientTarget
 } from "../utils/combat.utils";
 
 /**
@@ -148,11 +150,12 @@ export function performAutoRepair(room: Room): void {
     if (repaired) break;
     const energy = tower.store.getUsedCapacity(RESOURCE_ENERGY);
 
-    // CRITICAL: Save dying structures first
+    // CRITICAL: Save dying structures first - INCREASED THRESHOLDS
     const dyingStructures = tower.pos.findInRange(FIND_STRUCTURES, 20, {
       filter: (s) =>
-        (s.structureType === STRUCTURE_RAMPART && s.hits < 300) ||
-        (s.structureType === STRUCTURE_CONTAINER && s.hits < 500),
+        (s.structureType === STRUCTURE_RAMPART && s.hits < 5000) || // Ramparts decay fast!
+        (s.structureType === STRUCTURE_CONTAINER && s.hits < 1500) ||
+        (s.structureType === STRUCTURE_ROAD && s.hits < 500),
     });
 
     if (dyingStructures.length > 0 && energy >= 10) {
@@ -187,8 +190,8 @@ export function performAutoRepair(room: Room): void {
             s.structureType === STRUCTURE_SPAWN ||
             s.structureType === STRUCTURE_TOWER
           );
-        // Emergency: ramparts with < 100 HP will decay and die!
-        if (s.structureType === STRUCTURE_RAMPART && s.hits < 100) {
+        // Emergency: ramparts with < 10k HP need immediate attention!
+        if (s.structureType === STRUCTURE_RAMPART && s.hits < 10000) {
           return true;
         }
         return false;
@@ -213,16 +216,12 @@ export function performAutoRepair(room: Room): void {
       continue;
     }
 
-    // 2) Ramparts (light topping) when very full and no hostiles
-    // Only repair ramparts when we have abundant energy (>50k in storage)
-    if (
-      !hostile &&
-      energy >= minWallsRepair &&
-      room.storage &&
-      room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 50000
-    ) {
+    // 2) Ramparts - maintain healthy levels even during threats
+    // Repair ramparts more aggressively to prevent breakthrough
+    const rampartRepairThreshold = hostile ? 50000 : rampartTarget * 0.8;
+    if (energy >= minWallsRepair) {
       const ramparts = tower.pos.findInRange(FIND_STRUCTURES, 20, {
-        filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < 2000,
+        filter: (s) => s.structureType === STRUCTURE_RAMPART && s.hits < rampartRepairThreshold,
       }) as StructureRampart[];
       if (ramparts.length > 0) {
         const target = ramparts.reduce((a, b) => (a.hits < b.hits ? a : b));
@@ -239,9 +238,10 @@ export function performAutoRepair(room: Room): void {
         continue;
       }
 
-      // 3) Walls (only extreme lows) when very full and no hostiles
+      // 3) Walls - maintain healthy levels
+      const wallRepairThreshold = hostile ? 30000 : wallTarget * 0.7;
       const walls = tower.pos.findInRange(FIND_STRUCTURES, 20, {
-        filter: (s) => s.structureType === STRUCTURE_WALL && s.hits < 5000,
+        filter: (s) => s.structureType === STRUCTURE_WALL && s.hits < wallRepairThreshold,
       }) as StructureWall[];
       if (walls.length > 0) {
         const target = walls.reduce((a, b) => (a.hits < b.hits ? a : b));
@@ -271,16 +271,50 @@ export function getTowersInRoom(room: Room): StructureTower[] {
 function runBasicTowerAI(room: Room): void {
   const towers = getTowersInRoom(room);
   for (const tower of towers) {
-    // 1) Attack closest hostile, but filter out kiters
+    const towerEnergy = tower.store.getUsedCapacity(RESOURCE_ENERGY);
+    
+    // CRITICAL: Preserve energy during drain attacks
+    // If tower is low on energy, be VERY selective about targets
+    const energyPreserveMode = towerEnergy < 500;
+    const maxEnergyPerTarget = energyPreserveMode ? 200 : 500;
+    
+    // 1) Attack viable hostiles, but AVOID ENERGY DRAINS
     const hostiles = RoomCache.hostileCreeps(room);
     const viableHostiles = hostiles.filter((hostile: Creep) => {
-      // Filter out harassment/kiting targets
-      const healParts = countBodyParts(hostile, HEAL);
       const distance = tower.pos.getRangeTo(hostile.pos);
-
-      // Skip if it's a kiter that can outheal us or has mostly heals
-      if (healParts > 0 && (isHealerKiter(hostile) || isFastCreep(hostile)) && isNearRoomEdge(hostile.pos)) {
-        // Tower damage formula: 600 at range <=5, linear falloff to 150 at range 20+
+      
+      // ANTI-DRAIN: Skip tanks with TOUGH parts that would drain our energy
+      if (isDrainTank(hostile)) {
+        // Check if there are healers nearby supporting this tank
+        const nearbyHealers = hostiles.filter((h: Creep) => {
+          return h.id !== hostile.id && 
+                 countBodyParts(h, HEAL) > 0 && 
+                 h.pos.getRangeTo(hostile.pos) <= 3;
+        });
+        
+        if (nearbyHealers.length > 0 || countBodyParts(hostile, HEAL) > 0) {
+          if (Game.time % 50 === 0) {
+            console.log(
+              `🚫 DRAIN DETECTED: Ignoring tank ${hostile.owner.username} with ${nearbyHealers.length} healers - PRESERVING ENERGY`
+            );
+          }
+          return false;
+        }
+      }
+      
+      // ANTI-DRAIN: Check energy efficiency before attacking
+      if (!isEfficientTarget(hostile, tower, room, maxEnergyPerTarget)) {
+        if (Game.time % 50 === 0) {
+          console.log(
+            `🚫 Energy inefficient target ${hostile.owner.username} - would waste ${maxEnergyPerTarget}+ energy`
+          );
+        }
+        return false;
+      }
+      
+      // Skip edge kiters (harassment)
+      const healParts = countBodyParts(hostile, HEAL);
+      if (healParts > 3 && isHealerKiter(hostile) && isNearRoomEdge(hostile.pos)) {
         let towerDamage = 600;
         if (distance > 5) {
           towerDamage = Math.max(150, 600 - (distance - 5) * 30);
@@ -288,18 +322,17 @@ function runBasicTowerAI(room: Room): void {
         const healRate = healParts * 12;
         const netDamage = towerDamage - healRate;
 
-        if (netDamage <= 200) {
-          // Need at least 200 net damage - otherwise takes too many hits
+        if (netDamage <= 50) {
           if (Game.time % 100 === 0) {
             console.log(
-              `🚫 Ignoring kiter ${
+              `🚫 Ignoring invulnerable kiter ${
                 hostile.owner.username
               }: ${healParts} HEAL vs ${Math.round(
                 towerDamage
               )} dmg (net: ${Math.round(netDamage)})`
             );
           }
-          return false; // Don't waste energy
+          return false;
         }
       }
 
@@ -314,7 +347,17 @@ function runBasicTowerAI(room: Room): void {
       if (res === OK && Game.time % 50 === 0) {
         console.log(`🏹 Tower ${tower.pos.x},${tower.pos.y} attacking hostile`);
       }
+      
+      // Warn if energy is getting critically low
+      if (towerEnergy < 300 && Game.time % 25 === 0) {
+        console.log(`⚠️ Tower ${tower.pos.x},${tower.pos.y} low energy: ${towerEnergy} - DRAIN ATTACK?`);
+      }
       continue;
+    } else if (hostiles.length > 0 && viableHostiles.length === 0) {
+      // All hostiles filtered out - likely drain attack!
+      if (Game.time % 50 === 0) {
+        console.log(`🛡️ DRAIN ATTACK DETECTED - All ${hostiles.length} hostiles filtered as energy drains`);
+      }
     }
 
     // 2) Heal friendly creeps if injured
