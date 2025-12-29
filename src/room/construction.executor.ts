@@ -149,6 +149,11 @@ export function executeConstructionPlan(
       continue;
     }
 
+    // Skip roads at positions reserved for non-road structures (prevents oscillation)
+    if (task.type === STRUCTURE_ROAD && reservedForStructures.has(`${task.pos.x}:${task.pos.y}`)) {
+      continue;
+    }
+
     if (!dependenciesSatisfied(room, task)) continue;
     if (!withinRclLimits(room, task.type)) continue;
     if (!isBuildable(room, task.pos, task.type)) {
