@@ -21,6 +21,7 @@ import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
+import { CovenantVisuals } from '../visuals/CovenantVisuals';
 
 export interface HighCharityMemory {
   level: number;
@@ -67,6 +68,9 @@ export class HighCharity {
   // Planning
   planner: RoomPlanner;
   
+  // Visuals
+  visuals: CovenantVisuals;
+  
   // Level
   level: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   
@@ -109,6 +113,9 @@ export class HighCharity {
     
     // Initialize room planner
     this.planner = new RoomPlanner(room);
+    
+    // Initialize visuals
+    this.visuals = new CovenantVisuals(this);
     
     this.level = (room.controller?.level || 1) as any;
   }
@@ -168,6 +175,11 @@ export class HighCharity {
     // Run all Arbiters
     for (const arbiterName in this.arbiters) {
       this.arbiters[arbiterName].run();
+    }
+    
+    // Draw visuals
+    if (Game.time % 5 === 0) {
+      this.visuals.drawHUD();
     }
     
     // Update statistics
