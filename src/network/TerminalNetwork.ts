@@ -234,6 +234,20 @@ export class TerminalNetwork {
           }
         }
       }
+      
+      // Power needs (for RCL 8 power processing)
+      if (colony.level === 8) {
+        const powerAmount = colony.terminal.store.getUsedCapacity(RESOURCE_POWER) || 0;
+        if (powerAmount < 5000) {
+          needs.push({
+            roomName: colony.name,
+            resourceType: RESOURCE_POWER,
+            amount: 10000 - powerAmount,
+            priority: 'medium',
+            reason: 'Power processing needs'
+          });
+        }
+      }
     }
     
     return needs.sort((a, b) => this.priorityValue(b.priority) - this.priorityValue(a.priority));
@@ -294,6 +308,16 @@ export class TerminalNetwork {
             });
           }
         }
+      }
+      
+      // Power surpluses
+      const powerAmount = colony.terminal.store.getUsedCapacity(RESOURCE_POWER) || 0;
+      if (powerAmount > 20000) {
+        surpluses.push({
+          roomName: colony.name,
+          resourceType: RESOURCE_POWER,
+          amount: powerAmount - 10000 // Keep 10k reserve
+        });
       }
     }
     

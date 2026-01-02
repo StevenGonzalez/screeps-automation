@@ -40,6 +40,12 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Prioritized need-matching algorithm
   - Compound distribution from labs to combat colonies
   - Real-time transfer monitoring and statistics
+- **Power Processing**: Automated ops generation
+  - Converts power to ops in Power Spawns at RCL 8
+  - Smart energy management (only processes when surplus available)
+  - Automatic power delivery requests via terminal network
+  - Tracks efficiency metrics and ops generation
+  - Console monitoring with `Game.cov.powerProcessing()`
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

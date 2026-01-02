@@ -44,6 +44,7 @@ import { SafeModeManager } from '../defense/SafeModeManager';
 import { MarketManager } from '../market/MarketManager';
 import { RemoteOperations } from '../operations/RemoteOperations';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
+import { PowerManager } from '../power/PowerManager';
 
 export interface HighCharityMemory {
   level: number;
@@ -55,6 +56,12 @@ export interface HighCharityMemory {
     creepCount: number;
   };
   remote?: any; // Remote operations memory
+  powerProcessing?: {
+    totalOpsGenerated: number;
+    totalPowerConsumed: number;
+    processingTicks: number;
+    efficiency: number;
+  };
 }
 
 /**
@@ -105,6 +112,9 @@ export class HighCharity {
   // Economy
   marketManager: MarketManager;
   remoteOperations: RemoteOperations;
+  
+  // Power
+  powerManager: PowerManager;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -185,6 +195,9 @@ export class HighCharity {
     
     // Initialize remote operations
     this.remoteOperations = new RemoteOperations(this);
+    
+    // Initialize power manager
+    this.powerManager = new PowerManager(this);
     
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
@@ -327,6 +340,13 @@ export class HighCharity {
         !TickBudget.shouldSkipExpensive(0.85)) {
       Profiler.wrap('RemoteOperations_run', () => {
         this.remoteOperations.run();
+      });
+    }
+    
+    // Run power processing (RCL 8 colonies)
+    if (this.level === 8 && !TickBudget.shouldSkipExpensive(0.85)) {
+      Profiler.wrap('PowerManager_run', () => {
+        this.powerManager.run();
       });
     }
     

@@ -769,4 +769,50 @@ export class CovenantCommands {
     this.covenant.terminalNetwork.forceEnergyTransfer(targetRoom, amount);
     console.log(`✅ Scheduled emergency energy transfer to ${targetRoom}`);
   }
+  
+  /**
+   * Show power processing status
+   * Usage: Game.cov.powerProcessing()
+   */
+  powerProcessing(): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⚡ POWER PROCESSING STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    let totalOps = 0;
+    let totalPowerConsumed = 0;
+    let activeProcessors = 0;
+    
+    for (const roomName in this.covenant.highCharities) {
+      const charity = this.covenant.highCharities[roomName];
+      if (charity.level !== 8) continue; // Only RCL 8 can have power spawns
+      
+      const status = charity.powerManager.getStatus();
+      
+      if (!status.hasPowerSpawn) continue;
+      
+      console.log(`\n🏛️ ${roomName}:`);
+      console.log(`  Power: ${status.powerInSpawn} (spawn) + ${status.powerInTerminal} (terminal) + ${status.powerInStorage} (storage)`);
+      console.log(`  Energy: ${status.energyInSpawn.toLocaleString()} in spawn`);
+      console.log(`  Ops available: ${status.opsAvailable.toLocaleString()}`);
+      console.log(`  Processing: ${status.isProcessing ? '✅ Active' : '❌ Idle'}`);
+      console.log(`  Statistics:`);
+      console.log(`    - Ops generated: ${status.statistics.totalOpsGenerated.toLocaleString()}`);
+      console.log(`    - Power consumed: ${status.statistics.totalPowerConsumed.toLocaleString()}`);
+      console.log(`    - Efficiency: ${status.statistics.efficiency.toFixed(2)} ops/power`);
+      console.log(`    - Processing ticks: ${status.statistics.processingTicks.toLocaleString()}`);
+      
+      if (status.isProcessing) activeProcessors++;
+      totalOps += status.statistics.totalOpsGenerated;
+      totalPowerConsumed += status.statistics.totalPowerConsumed;
+    }
+    
+    console.log(`\n📊 Empire Totals:`);
+    console.log(`  Active processors: ${activeProcessors}`);
+    console.log(`  Total ops generated: ${totalOps.toLocaleString()}`);
+    console.log(`  Total power consumed: ${totalPowerConsumed.toLocaleString()}`);
+    console.log(`  Average efficiency: ${totalPowerConsumed > 0 ? (totalOps / totalPowerConsumed).toFixed(2) : '0.00'} ops/power`);
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
 }
