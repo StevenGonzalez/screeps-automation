@@ -41,6 +41,15 @@ export class ExtractorArbiter extends Arbiter {
       this.container = containers[0] || null;
     }
     
+    // Request boosts for miners at powerhouse colonies
+    if (this.highCharity.memory.phase === 'powerhouse' && this.highCharity.boostTemple?.isReady()) {
+      for (const miner of this.miners) {
+        if (!this.highCharity.boostTemple.isCreepBoosted(miner.name)) {
+          this.highCharity.boostTemple.requestBoost(miner.name, 'elite_miner', ArbiterPriority.economy.mining);
+        }
+      }
+    }
+    
     // Request miners if needed
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;

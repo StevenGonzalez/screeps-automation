@@ -27,6 +27,7 @@ import { CommandTemple } from '../temples/CommandTemple';
 import { IntelligenceTemple } from '../temples/IntelligenceTemple';
 import { DefenseTemple } from '../temples/DefenseTemple';
 import { LabTemple } from '../temples/LabTemple';
+import { BoostTemple } from '../temples/BoostTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { RoadBuilder } from '../planning/RoadBuilder';
@@ -73,6 +74,7 @@ export class HighCharity {
   intelligenceTemple: IntelligenceTemple;
   defenseTemple: DefenseTemple;
   labTemple: LabTemple | null;
+  boostTemple: BoostTemple | null;
   
   // Logistics
   prophetsWill: ProphetsWill;
@@ -101,6 +103,7 @@ export class HighCharity {
     this.miningTemples = [];
     this.commandTemple = null;
     this.labTemple = null;
+    this.boostTemple = null;
     
     // Initialize memory FIRST before any temples
     if (!Memory.rooms[this.name]) {
@@ -132,6 +135,7 @@ export class HighCharity {
     // Initialize lab temple if we have labs (RCL 6+)
     if (this.room.controller && this.room.controller.level >= 6) {
       this.labTemple = new LabTemple(this);
+      this.boostTemple = new BoostTemple(this);
     }
     
     // Initialize room planner
@@ -304,6 +308,11 @@ export class HighCharity {
     // Build Lab Temple (reactions) if available
     if (this.labTemple) {
       this.temples['lab'] = this.labTemple;
+    }
+    
+    // Build Boost Temple (creep enhancement) if available
+    if (this.boostTemple) {
+      this.temples['boost'] = this.boostTemple;
     }
     
     // Scan for remote mining opportunities (mature colonies only)

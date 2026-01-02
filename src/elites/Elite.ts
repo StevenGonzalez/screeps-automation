@@ -119,6 +119,35 @@ export class Elite {
   }
   
   /**
+   * Check if the Elite is boosted
+   */
+  get isBoosted(): boolean {
+    return this.body.some(part => !!part.boost);
+  }
+  
+  /**
+   * Get the boost labs for this Elite's room
+   */
+  getBoostLabs(): StructureLab[] {
+    return this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_LAB
+    }) as StructureLab[];
+  }
+  
+  /**
+   * Move to nearest boost lab
+   */
+  goToBoostLab(): number {
+    const labs = this.getBoostLabs();
+    if (labs.length === 0) return ERR_NOT_FOUND;
+    
+    const nearestLab = this.pos.findClosestByPath(labs);
+    if (!nearestLab) return ERR_NOT_FOUND;
+    
+    return this.goTo(nearestLab);
+  }
+  
+  /**
    * Smart movement to a target
    */
   goTo(target: RoomPosition | { pos: RoomPosition }, options: MoveToOpts = {}): number {

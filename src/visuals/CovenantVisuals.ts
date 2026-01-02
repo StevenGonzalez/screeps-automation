@@ -29,6 +29,7 @@ export class CovenantVisuals {
     this.drawControllerInfo();
     this.drawEnergyInfo();
     this.drawCreepInfo();
+    this.drawBoostInfo();
     this.drawThreatInfo();
   }
   
@@ -159,6 +160,46 @@ export class CovenantVisuals {
         }
       );
       y += 0.7;
+    }
+  }
+  
+  /**
+   * Draw boost status
+   */
+  private drawBoostInfo(): void {
+    if (!this.highCharity.boostTemple) return;
+    
+    const boostQueue = this.highCharity.boostTemple.getBoostQueue();
+    
+    if (boostQueue.length > 0) {
+      this.visual.text(
+        `⚗️ Boost Queue: ${boostQueue.length}`,
+        2, 3,
+        {
+          align: 'left',
+          color: '#FF00FF',
+          font: 0.6,
+          backgroundColor: '#000000',
+          backgroundPadding: 0.1
+        }
+      );
+    }
+    
+    // Show boost indicators on boosted creeps
+    for (const creep of this.highCharity.elites) {
+      if (creep.body.some(part => part.boost)) {
+        this.visual.text(
+          '✨',
+          creep.pos.x, creep.pos.y - 1,
+          {
+            align: 'center',
+            color: '#FFFF00',
+            font: 0.6,
+            stroke: '#000000',
+            strokeWidth: 0.05
+          }
+        );
+      }
     }
   }
   

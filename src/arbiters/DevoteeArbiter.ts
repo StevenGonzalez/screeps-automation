@@ -27,6 +27,16 @@ export class DevoteeArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
+    // Request boosts for workers at mature colonies
+    if (this.highCharity.memory.phase === 'powerhouse' && this.highCharity.boostTemple?.isReady()) {
+      for (const worker of this.workers) {
+        // Only boost workers that aren't already boosted
+        if (!this.highCharity.boostTemple.isCreepBoosted(worker.name)) {
+          this.highCharity.boostTemple.requestBoost(worker.name, 'elite_upgrader', ArbiterPriority.economy.upgrading);
+        }
+      }
+    }
+    
     // Request workers if needed
     const desiredWorkers = this.calculateDesiredWorkers();
     const currentWorkers = this.workers.length;
