@@ -52,6 +52,12 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Production prioritization based on available components
   - Tracks production statistics by commodity type
   - Console monitoring with `Game.cov.factories()`
+- **Market Automation**: Automated commodity sales
+  - Sells factory-produced commodities automatically
+  - Price intelligence with historical tracking
+  - Threshold-based selling (1000+ for L0, 500+ for L1)
+  - Tracks revenue and sales statistics
+  - Integrated with existing buy/sell logic
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration
