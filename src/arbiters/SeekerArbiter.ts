@@ -23,7 +23,7 @@ interface RemoteMiningMemory extends ArbiterMemory {
 /**
  * Remote Mining Arbiter - Manages one remote source
  */
-export class RemoteMiningArbiter extends Arbiter {
+export class SeekerArbiter extends Arbiter {
   targetRoom: string;
   sourceId: Id<Source>;
   miners: Elite[];
@@ -280,7 +280,7 @@ export class RemoteMiningArbiter extends Arbiter {
   
   private requestRemoteMiner(): void {
     const body = this.calculateMinerBody();
-    const name = `remoteMiner_${this.targetRoom}_${Game.time}`;
+    const name = `Seeker_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_remoteMiner', // Covenant themed role
@@ -291,7 +291,7 @@ export class RemoteMiningArbiter extends Arbiter {
   
   private requestRemoteHauler(): void {
     const body = this.calculateHaulerBody();
-    const name = `remoteHauler_${this.targetRoom}_${Game.time}`;
+    const name = `Convoy_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_remoteHauler', // Covenant themed role

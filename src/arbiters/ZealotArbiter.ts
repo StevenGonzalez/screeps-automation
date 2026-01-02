@@ -16,7 +16,7 @@ import { Elite } from '../elites/Elite';
 /**
  * Defense Arbiter - Manages room defense
  */
-export class DefenseArbiter extends Arbiter {
+export class ZealotArbiter extends Arbiter {
   defenders: Elite[];
   hostiles: Creep[];
   
@@ -261,7 +261,7 @@ export class DefenseArbiter extends Arbiter {
   
   private requestDefender(): void {
     const body = this.calculateDefenderBody();
-    const name = `defender_${Game.time}`;
+    const name = `Zealot_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_defender' // Covenant themed role

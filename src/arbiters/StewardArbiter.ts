@@ -17,7 +17,7 @@ import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/Log
 /**
  * Hauler Arbiter - Manages energy distribution
  */
-export class HaulerArbiter extends Arbiter {
+export class StewardArbiter extends Arbiter {
   haulers: Elite[];
   
   constructor(highCharity: HighCharity) {
@@ -217,7 +217,7 @@ export class HaulerArbiter extends Arbiter {
   
   private requestHauler(): void {
     const body = this.calculateHaulerBody();
-    const name = `hauler_${Game.time}`;
+    const name = `Steward_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_hauler', // Covenant themed role

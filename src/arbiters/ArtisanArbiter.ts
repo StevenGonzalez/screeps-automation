@@ -16,7 +16,7 @@ import { Elite } from '../elites/Elite';
 /**
  * Builder Arbiter - Manages construction and repair
  */
-export class BuilderArbiter extends Arbiter {
+export class ArtisanArbiter extends Arbiter {
   builders: Elite[];
   
   constructor(highCharity: HighCharity) {
@@ -240,7 +240,7 @@ export class BuilderArbiter extends Arbiter {
   
   private requestBuilder(): void {
     const body = this.calculateBuilderBody();
-    const name = `builder_${Game.time}`;
+    const name = `Artisan_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_builder', // Covenant themed role

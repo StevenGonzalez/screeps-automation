@@ -16,7 +16,7 @@ import { Elite } from '../elites/Elite';
 /**
  * Mining Arbiter - Manages energy harvesting
  */
-export class MiningArbiter extends Arbiter {
+export class ExtractorArbiter extends Arbiter {
   source: Source | null;
   container: StructureContainer | null;
   miners: Elite[];
@@ -113,7 +113,7 @@ export class MiningArbiter extends Arbiter {
   
   private requestMiner(): void {
     const body = this.calculateMinerBody();
-    const name = `miner_${this.source?.id}_${Game.time}`;
+    const name = `Extractor_${this.source?.id}_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_miner', // Covenant themed role

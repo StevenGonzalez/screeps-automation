@@ -16,7 +16,7 @@ import { Elite } from '../elites/Elite';
 /**
  * Worker Arbiter - Manages controller upgrading
  */
-export class WorkerArbiter extends Arbiter {
+export class DevoteeArbiter extends Arbiter {
   workers: Elite[];
   
   constructor(highCharity: HighCharity) {
@@ -143,7 +143,7 @@ export class WorkerArbiter extends Arbiter {
   
   private requestWorker(): void {
     const body = this.calculateWorkerBody();
-    const name = `worker_${Game.time}`;
+    const name = `Devotee_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_worker', // Covenant themed role

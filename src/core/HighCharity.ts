@@ -11,16 +11,16 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter } from '../arbiters/Arbiter';
-import { MiningArbiter } from '../arbiters/MiningArbiter';
-import { HaulerArbiter } from '../arbiters/HaulerArbiter';
-import { WorkerArbiter } from '../arbiters/WorkerArbiter';
-import { BuilderArbiter } from '../arbiters/BuilderArbiter';
-import { DefenseArbiter } from '../arbiters/DefenseArbiter';
-import { RemoteMiningArbiter } from '../arbiters/RemoteMiningArbiter';
-import { RepairerArbiter } from '../arbiters/RepairerArbiter';
-import { MineralMiningArbiter } from '../arbiters/MineralMiningArbiter';
+import { ExtractorArbiter } from '../arbiters/ExtractorArbiter';
+import { StewardArbiter } from '../arbiters/StewardArbiter';
+import { DevoteeArbiter } from '../arbiters/DevoteeArbiter';
+import { ArtisanArbiter } from '../arbiters/ArtisanArbiter';
+import { ZealotArbiter } from '../arbiters/ZealotArbiter';
+import { SeekerArbiter } from '../arbiters/SeekerArbiter';
+import { GuardianArbiter } from '../arbiters/GuardianArbiter';
+import { ExcavatorArbiter } from '../arbiters/ExcavatorArbiter';
 import { TerminalArbiter } from '../arbiters/TerminalArbiter';
-import { ClaimerArbiter } from '../arbiters/ClaimerArbiter';
+import { HeraldArbiter } from '../arbiters/HeraldArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
@@ -298,24 +298,24 @@ export class HighCharity {
    * Build Arbiters for this High Charity
    */
   protected buildArbiters(): void {
-    // Build Mining Arbiters for each source
+    // Build Extractor Arbiters for each source
     const sources = this.room.find(FIND_SOURCES);
     for (const source of sources) {
-      new MiningArbiter(this, source);
+      new ExtractorArbiter(this, source);
     }
     
     // Build core Arbiters
-    new HaulerArbiter(this);  // Energy logistics
-    new WorkerArbiter(this);  // Controller upgrading
-    new BuilderArbiter(this); // Construction and repair
-    new DefenseArbiter(this); // Military defense
-    new RepairerArbiter(this); // Fortification maintenance (RCL 5+)
+    new StewardArbiter(this);  // Energy logistics
+    new DevoteeArbiter(this);  // Controller upgrading
+    new ArtisanArbiter(this); // Construction and repair
+    new ZealotArbiter(this); // Military defense
+    new GuardianArbiter(this); // Fortification maintenance (RCL 5+)
     
-    // Build Mineral Mining Arbiter (RCL 6+)
+    // Build Excavator Arbiter (RCL 6+)
     if (this.room.controller && this.room.controller.level >= 6) {
       const minerals = this.room.find(FIND_MINERALS);
       if (minerals.length > 0) {
-        new MineralMiningArbiter(this, minerals[0]);
+        new ExcavatorArbiter(this, minerals[0]);
       }
       
       // Build Terminal Arbiter if we have a terminal
@@ -326,19 +326,19 @@ export class HighCharity {
     
     // Build Remote Mining Arbiters (mature+ colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
-      this.buildRemoteMiningArbiters();
+      this.buildSeekerArbiters();
       
-      // Build Claimer Arbiters for expansion (powerhouse colonies only)
+      // Build Herald Arbiters for expansion (powerhouse colonies only)
       if (this.memory.phase === 'powerhouse' && this.level === 8) {
-        this.buildClaimerArbiters();
+        this.buildHeraldArbiters();
       }
     }
   }
   
   /**
-   * Build Remote Mining Arbiters for profitable nearby sources
+   * Build Seeker Arbiters for profitable nearby sources
    */
-  private buildRemoteMiningArbiters(): void {
+  private buildSeekerArbiters(): void {
     const targets = this.intelligenceTemple.getRemoteMiningTargets();
     
     // Limit to 3 remote sources maximum
@@ -348,14 +348,14 @@ export class HighCharity {
       // Don't create duplicate arbiters
       if (this.arbiters[arbiterName]) continue;
       
-      new RemoteMiningArbiter(this, target.roomName, target.sourceId);
+      new SeekerArbiter(this, target.roomName, target.sourceId);
     }
   }
   
   /**
-   * Build Claimer Arbiters for expansion targets
+   * Build Herald Arbiters for expansion targets
    */
-  private buildClaimerArbiters(): void {
+  private buildHeraldArbiters(): void {
     const targets = this.intelligenceTemple.getExpansionTargets();
     
     // Limit to 1 active expansion at a time
@@ -368,7 +368,7 @@ export class HighCharity {
       // Only expand if we have spare capacity (>50% storage, >100k energy)
       if (this.storage && this.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 100000) {
         console.log(`[HighCharity ${this.room.name}] 🎯 The Hierarchs have decreed expansion to ${target.roomName}!`);
-        new ClaimerArbiter(this, target.roomName);
+        new HeraldArbiter(this, target.roomName);
       }
     }
   }

@@ -23,7 +23,7 @@ export interface ClaimerMemory {
 /**
  * Claimer Arbiter - Manages room claiming and expansion
  */
-export class ClaimerArbiter extends Arbiter {
+export class HeraldArbiter extends Arbiter {
   targetRoom: string;
   targetController: Id<StructureController> | null;
   claimers: Elite[];
@@ -271,7 +271,7 @@ export class ClaimerArbiter extends Arbiter {
   
   private requestClaimer(): void {
     const body = this.calculateClaimerBody();
-    const name = `claimer_${this.targetRoom}_${Game.time}`;
+    const name = `Herald_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_claimer',
@@ -281,7 +281,7 @@ export class ClaimerArbiter extends Arbiter {
   
   private requestPioneer(): void {
     const body = this.calculatePioneerBody();
-    const name = `pioneer_${this.targetRoom}_${Game.time}`;
+    const name = `Vanguard_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_pioneer',

@@ -16,7 +16,7 @@ import { Elite } from '../elites/Elite';
 /**
  * Mineral Mining Arbiter - Manages mineral extraction
  */
-export class MineralMiningArbiter extends Arbiter {
+export class ExcavatorArbiter extends Arbiter {
   mineral: Mineral;
   extractor: StructureExtractor | null;
   container: StructureContainer | null;
@@ -116,7 +116,7 @@ export class MineralMiningArbiter extends Arbiter {
   
   private requestMiner(): void {
     const body = this.calculateMinerBody();
-    const name = `mineralMiner_${Game.time}`;
+    const name = `Excavator_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_mineralMiner' // Covenant themed role

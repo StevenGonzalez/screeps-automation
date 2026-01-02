@@ -5,13 +5,13 @@
  */
 
 export { Arbiter, ArbiterPriority } from './Arbiter';
-export { MiningArbiter } from './MiningArbiter';
-export { HaulerArbiter } from './HaulerArbiter';
-export { WorkerArbiter } from './WorkerArbiter';
-export { BuilderArbiter } from './BuilderArbiter';
-export { DefenseArbiter } from './DefenseArbiter';
-export { RemoteMiningArbiter } from './RemoteMiningArbiter';
-export { RepairerArbiter } from './RepairerArbiter';
-export { MineralMiningArbiter } from './MineralMiningArbiter';
+export { ExtractorArbiter } from './ExtractorArbiter';
+export { StewardArbiter } from './StewardArbiter';
+export { DevoteeArbiter } from './DevoteeArbiter';
+export { ArtisanArbiter } from './ArtisanArbiter';
+export { ZealotArbiter } from './ZealotArbiter';
+export { SeekerArbiter } from './SeekerArbiter';
+export { GuardianArbiter } from './GuardianArbiter';
+export { ExcavatorArbiter } from './ExcavatorArbiter';
 export { TerminalArbiter } from './TerminalArbiter';
-export { ClaimerArbiter } from './ClaimerArbiter';
+export { HeraldArbiter } from './HeraldArbiter';
