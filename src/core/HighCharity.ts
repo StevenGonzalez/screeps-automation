@@ -18,11 +18,13 @@ import { BuilderArbiter } from '../arbiters/BuilderArbiter';
 import { DefenseArbiter } from '../arbiters/DefenseArbiter';
 import { RemoteMiningArbiter } from '../arbiters/RemoteMiningArbiter';
 import { RepairerArbiter } from '../arbiters/RepairerArbiter';
+import { MineralMiningArbiter } from '../arbiters/MineralMiningArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
 import { IntelligenceTemple } from '../temples/IntelligenceTemple';
 import { DefenseTemple } from '../temples/DefenseTemple';
+import { LabTemple } from '../temples/LabTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { CovenantVisuals } from '../visuals/CovenantVisuals';
@@ -67,6 +69,7 @@ export class HighCharity {
   commandTemple: CommandTemple | null;
   intelligenceTemple: IntelligenceTemple;
   defenseTemple: DefenseTemple;
+  labTemple: LabTemple | null;
   
   // Logistics
   prophetsWill: ProphetsWill;
@@ -93,6 +96,7 @@ export class HighCharity {
     this.temples = {};
     this.miningTemples = [];
     this.commandTemple = null;
+    this.labTemple = null;
     
     // Initialize memory FIRST before any temples
     if (!Memory.rooms[this.name]) {
@@ -120,6 +124,11 @@ export class HighCharity {
     // Initialize temples AFTER memory is set up
     this.intelligenceTemple = new IntelligenceTemple(this);
     this.defenseTemple = new DefenseTemple(this);
+    
+    // Initialize lab temple if we have labs (RCL 6+)
+    if (this.room.controller && this.room.controller.level >= 6) {
+      this.labTemple = new LabTemple(this);
+    }
     
     // Initialize room planner
     this.planner = new RoomPlanner(room);
@@ -262,6 +271,11 @@ export class HighCharity {
     // Build Defense Temple (fortifications)
     this.temples['defense'] = this.defenseTemple;
     
+    // Build Lab Temple (reactions) if available
+    if (this.labTemple) {
+      this.temples['lab'] = this.labTemple;
+    }
+    
     // Scan for remote mining opportunities (mature colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
       this.intelligenceTemple.scan();
@@ -284,6 +298,14 @@ export class HighCharity {
     new BuilderArbiter(this); // Construction and repair
     new DefenseArbiter(this); // Military defense
     new RepairerArbiter(this); // Fortification maintenance (RCL 5+)
+    
+    // Build Mineral Mining Arbiter (RCL 6+)
+    if (this.room.controller && this.room.controller.level >= 6) {
+      const minerals = this.room.find(FIND_MINERALS);
+      if (minerals.length > 0) {
+        new MineralMiningArbiter(this, minerals[0]);
+      }
+    }
     
     // Build Remote Mining Arbiters (mature+ colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {

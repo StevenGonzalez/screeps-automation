@@ -164,6 +164,20 @@ export class Elite {
   }
   
   /**
+   * Harvest from a mineral
+   */
+  harvestMineral(mineral: Mineral | null): number {
+    if (!mineral) return ERR_INVALID_TARGET;
+    
+    if (!this.pos.inRangeTo(mineral, 1)) {
+      this.goTo(mineral);
+      return ERR_NOT_IN_RANGE;
+    }
+    
+    return this.creep.harvest(mineral);
+  }
+  
+  /**
    * Transfer resources to a target
    */
   transferTo(
