@@ -10,6 +10,8 @@
 
 /// <reference types="@types/screeps" />
 
+// Forward declaration to avoid circular dependency
+import type { Covenant } from './Covenant';
 import { Arbiter } from '../arbiters/Arbiter';
 import { ExtractorArbiter } from '../arbiters/ExtractorArbiter';
 import { StewardArbiter } from '../arbiters/StewardArbiter';
@@ -22,6 +24,7 @@ import { ExcavatorArbiter } from '../arbiters/ExcavatorArbiter';
 import { TerminalArbiter } from '../arbiters/TerminalArbiter';
 import { HeraldArbiter } from '../arbiters/HeraldArbiter';
 import { PowerHarvesterArbiter } from '../arbiters/PowerHarvesterArbiter';
+import { PioneerArbiter } from '../expansion/PioneerArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
@@ -61,6 +64,7 @@ export class HighCharity {
   room: Room;
   name: string;
   memory: HighCharityMemory;
+  covenant: Covenant;
   
   // Core references
   controller: StructureController | undefined;
@@ -108,9 +112,10 @@ export class HighCharity {
   // Level
   level: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   
-  constructor(room: Room) {
+  constructor(room: Room, covenant: Covenant) {
     this.room = room;
     this.name = room.name;
+    this.covenant = covenant;
     this.controller = room.controller;
     this.spawns = [];
     this.extensions = [];
@@ -475,6 +480,9 @@ export class HighCharity {
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
       this.buildSeekerArbiters();
       
+      // Build Pioneer Arbiters for expansion
+      this.buildPioneerArbiters();
+      
       // Build Herald Arbiters for expansion (powerhouse colonies only)
       if (this.memory.phase === 'powerhouse' && this.level === 8) {
         this.buildHeraldArbiters();
@@ -525,6 +533,25 @@ export class HighCharity {
         new HeraldArbiter(this, target.roomName);
       }
     }
+  }
+  
+  /**
+   * Build Pioneer Arbiters for active expansions
+   */
+  private buildPioneerArbiters(): void {
+    const expansionTarget = this.covenant.reclaimationCouncil.getStatus();
+    
+    // Only spawn pioneers if there's an active expansion
+    if (!expansionTarget) return;
+    
+    // Only the nearest colony spawns pioneers
+    if (expansionTarget.claimingFrom !== this.room.name) return;
+    
+    // Create pioneer arbiter for this expansion
+    const arbiterName = `pioneer_${expansionTarget.roomName}`;
+    if (this.arbiters[arbiterName]) return; // Already exists
+    
+    new PioneerArbiter(this, expansionTarget.roomName);
   }
   
   /**

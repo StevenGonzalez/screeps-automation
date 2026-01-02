@@ -658,4 +658,59 @@ export class CovenantCommands {
       console.log(`${!anyEnabled ? '✅ Enabled' : '❌ Disabled'} base plan visualization for all rooms`);
     }
   }
+  
+  /**
+   * Show expansion status
+   * Usage: Game.cov.expansion()
+   */
+  expansion(): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🚀 EXPANSION STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const currentTarget = this.covenant.reclaimationCouncil.getStatus();
+    
+    if (currentTarget) {
+      console.log(`\n📍 Current Target: ${currentTarget.roomName}`);
+      console.log(`   Status: ${currentTarget.status}`);
+      console.log(`   Score: ${currentTarget.score}/100`);
+      console.log(`   Sources: ${currentTarget.sources}`);
+      console.log(`   Mineral: ${currentTarget.mineral || 'unknown'}`);
+      console.log(`   Distance: ${currentTarget.distance} rooms`);
+      console.log(`   Claiming from: ${currentTarget.claimingFrom}`);
+      console.log(`   Started: ${currentTarget.claimedAt ? Game.time - currentTarget.claimedAt : 0} ticks ago`);
+    } else {
+      console.log('\nNo active expansion');
+      
+      // Show top expansion candidates
+      const candidates = this.covenant.observerNetwork.getExpansionCandidates().slice(0, 5);
+      if (candidates.length > 0) {
+        console.log('\n🎯 Top Expansion Candidates:');
+        for (let i = 0; i < candidates.length; i++) {
+          const candidate = candidates[i];
+          console.log(`${i + 1}. ${candidate.roomName} (Score: ${candidate.score}/100, ${candidate.sources?.length || 0} sources)`);
+        }
+      }
+    }
+    
+    // Show history
+    const history = this.covenant.reclaimationCouncil.getHistory();
+    if (history.length > 0) {
+      console.log('\n📜 Expansion History:');
+      for (const entry of history.slice(-5)) {
+        const status = entry.success ? '✅' : '❌';
+        console.log(`${status} ${entry.roomName} (${Game.time - entry.claimedAt} ticks ago)`);
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Cancel current expansion
+   * Usage: Game.cov.cancelExpansion()
+   */
+  cancelExpansion(): void {
+    this.covenant.reclaimationCouncil.cancelExpansion();
+  }
 }

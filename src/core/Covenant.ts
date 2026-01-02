@@ -16,6 +16,7 @@ import { Arbiter } from '../arbiters/Arbiter';
 import { Crusade } from '../crusades/Crusade';
 import { CovenantCommands } from '../utils/CovenantCommands';
 import { ObserverNetwork } from '../intel/ObserverNetwork';
+import { ReclaimationCouncil } from '../expansion/ReclaimationCouncil';
 
 interface CovenantMemory {
   version: string;
@@ -42,6 +43,7 @@ export class Covenant {
   arbiters: { [ref: string]: Arbiter };
   crusades: { [name: string]: Crusade };
   observerNetwork: ObserverNetwork;
+  reclaimationCouncil: ReclaimationCouncil;
   
   shouldBuild: boolean;
   cache: any; // Will hold cached data for the tick
@@ -57,6 +59,7 @@ export class Covenant {
     this.shouldBuild = true;
     this.cache = {};
     this.observerNetwork = new ObserverNetwork();
+    this.reclaimationCouncil = new ReclaimationCouncil(this);
     
     // Initialize console commands
     this.commands = new CovenantCommands(this);
@@ -111,7 +114,7 @@ export class Covenant {
     for (const roomName in Game.rooms) {
       const room = Game.rooms[roomName];
       if (room.controller && room.controller.my) {
-        this.highCharities[roomName] = new HighCharity(room);
+        this.highCharities[roomName] = new HighCharity(room, this);
       }
     }
     
@@ -168,6 +171,9 @@ export class Covenant {
     if (Game.time % 5 === 0) { // Run every 5 ticks
       this.observerNetwork.run();
     }
+    
+    // Run expansion system (colony growth)
+    this.reclaimationCouncil.run();
     
     // Run all High Charities
     for (const roomName in this.highCharities) {

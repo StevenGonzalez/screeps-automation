@@ -28,6 +28,12 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Hostile reservation and structure checks
   - Cheap creep bodies to minimize losses (max 800 energy)
   - Auto re-enable when rooms become safe
+- **Autonomous Expansion**: Intelligent colony growth system
+  - Evaluates expansion targets from observer intel
+  - Scores rooms based on sources, minerals, distance, and threats
+  - Spawns claimer and pioneer creeps automatically
+  - Bootstraps new colonies with initial infrastructure
+  - Monitors expansion progress and handles failures
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

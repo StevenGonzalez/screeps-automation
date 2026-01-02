@@ -20,6 +20,11 @@ declare global {
       [key: string]: any;
     };
     intel?: { [roomName: string]: any }; // Room intelligence data
+    expansion?: { // Expansion system data
+      currentTarget?: any;
+      history: Array<{ roomName: string; claimedAt: number; success: boolean }>;
+      lastEvaluation: number;
+    };
   }
   
   interface CreepMemory {
