@@ -17,10 +17,12 @@ import { WorkerArbiter } from '../arbiters/WorkerArbiter';
 import { BuilderArbiter } from '../arbiters/BuilderArbiter';
 import { DefenseArbiter } from '../arbiters/DefenseArbiter';
 import { RemoteMiningArbiter } from '../arbiters/RemoteMiningArbiter';
+import { RepairerArbiter } from '../arbiters/RepairerArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
 import { IntelligenceTemple } from '../temples/IntelligenceTemple';
+import { DefenseTemple } from '../temples/DefenseTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { CovenantVisuals } from '../visuals/CovenantVisuals';
@@ -64,6 +66,7 @@ export class HighCharity {
   miningTemples: MiningTemple[];
   commandTemple: CommandTemple | null;
   intelligenceTemple: IntelligenceTemple;
+  defenseTemple: DefenseTemple;
   
   // Logistics
   prophetsWill: ProphetsWill;
@@ -90,9 +93,8 @@ export class HighCharity {
     this.temples = {};
     this.miningTemples = [];
     this.commandTemple = null;
-    this.intelligenceTemple = new IntelligenceTemple(this);
     
-    // Initialize memory FIRST
+    // Initialize memory FIRST before any temples
     if (!Memory.rooms[this.name]) {
       Memory.rooms[this.name] = {} as any;
     }
@@ -114,6 +116,10 @@ export class HighCharity {
     
     // Initialize logistics network AFTER memory is set up
     this.prophetsWill = new ProphetsWill(this);
+    
+    // Initialize temples AFTER memory is set up
+    this.intelligenceTemple = new IntelligenceTemple(this);
+    this.defenseTemple = new DefenseTemple(this);
     
     // Initialize room planner
     this.planner = new RoomPlanner(room);
@@ -253,6 +259,9 @@ export class HighCharity {
     this.commandTemple = new CommandTemple(this);
     this.temples['command'] = this.commandTemple;
     
+    // Build Defense Temple (fortifications)
+    this.temples['defense'] = this.defenseTemple;
+    
     // Scan for remote mining opportunities (mature colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
       this.intelligenceTemple.scan();
@@ -274,6 +283,7 @@ export class HighCharity {
     new WorkerArbiter(this);  // Controller upgrading
     new BuilderArbiter(this); // Construction and repair
     new DefenseArbiter(this); // Military defense
+    new RepairerArbiter(this); // Fortification maintenance (RCL 5+)
     
     // Build Remote Mining Arbiters (mature+ colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {

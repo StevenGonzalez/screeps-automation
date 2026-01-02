@@ -103,12 +103,45 @@ export class BuilderArbiter extends Arbiter {
   }
   
   private repairSomething(builder: Elite): boolean {
-    // Find structures needing repair (under 75% health)
+    // Check DefenseTemple for fortification repair needs first
+    const defenseTemple = this.highCharity.defenseTemple;
+    
+    // Priority 1: Ramparts needing repair
+    const ramparts = defenseTemple.getRampartsNeedingRepair();
+    if (ramparts.length > 0) {
+      const target = ramparts[0];
+      const result = builder.repairStructure(target);
+      if (result === OK || result === ERR_NOT_IN_RANGE) {
+        builder.say('🛡️');
+        return true;
+      }
+    }
+    
+    // Priority 2: Walls needing repair
+    const walls = defenseTemple.getWallsNeedingRepair();
+    if (walls.length > 0) {
+      const target = walls[0];
+      const result = builder.repairStructure(target);
+      if (result === OK || result === ERR_NOT_IN_RANGE) {
+        builder.say('🧱');
+        return true;
+      }
+    }
+    
+    // Priority 3: Other damaged structures
     const damaged = this.room.find(FIND_STRUCTURES, {
       filter: (s) => {
+        // Skip walls and ramparts (handled above)
         if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
-          return s.hits < 10000; // Don't over-repair walls/ramparts
+          return false;
         }
+        // Repair critical structures immediately
+        if (s.structureType === STRUCTURE_SPAWN ||
+            s.structureType === STRUCTURE_TOWER ||
+            s.structureType === STRUCTURE_STORAGE) {
+          return s.hits < s.hitsMax;
+        }
+        // Other structures at 75% HP
         return s.hits < s.hitsMax * 0.75;
       }
     });
