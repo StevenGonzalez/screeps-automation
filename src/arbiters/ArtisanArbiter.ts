@@ -256,7 +256,7 @@ export class ArtisanArbiter extends Arbiter {
     }).length > 0;
     
     const priority = (this.highCharity.isBootstrapping && hasUrgentSites) ?
-      SpawnPriority.ECONOMY :
+      SpawnPriority.EXPANSION : // Don't compete with critical economy (extractors/haulers)
       SpawnPriority.EXPANSION; // Use EXPANSION priority (5) for builders normally
     
     this.requestSpawn(body, name, {
