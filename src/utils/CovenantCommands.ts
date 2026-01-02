@@ -242,8 +242,66 @@ export class CovenantCommands {
     console.log('Game.cov.war(room?) - Show war targets and squads');
     console.log('Game.cov.power(room?) - Show power harvesting status');
     console.log('Game.cov.showPlan(room?) - Visualize base layout (toggle)');
+    console.log('Game.cov.defense(room?) - Show defense and threat status');
+    console.log('Game.cov.safeMode(room, enable?) - Control auto safe mode');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Show defense and threat status
+   * Usage: Game.cov.defense() or Game.cov.defense('W1N1')
+   */
+  defense(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🛡️ DEFENSE STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity) continue;
+      
+      console.log(`\n${charity.safeModeManager.getStatus()}`);
+      
+      // Show rampart status
+      const ramparts = charity.defenseTemple.getRampartsNeedingRepair();
+      const walls = charity.defenseTemple.getWallsNeedingRepair();
+      
+      console.log(`  Ramparts needing repair: ${ramparts.length}`);
+      console.log(`  Walls needing repair: ${walls.length}`);
+      
+      if (ramparts.length > 0) {
+        const weakest = ramparts[0];
+        console.log(`  Weakest rampart: ${weakest.hits.toLocaleString()} HP`);
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Control automatic safe mode activation
+   * Usage: Game.cov.safeMode('W1N1', true) - Enable
+   *        Game.cov.safeMode('W1N1', false) - Disable
+   *        Game.cov.safeMode('W1N1') - Toggle
+   */
+  safeMode(roomName: string, enable?: boolean): void {
+    const charity = this.covenant.highCharities[roomName];
+    if (!charity) {
+      console.log(`❌ No colony found in ${roomName}`);
+      return;
+    }
+    
+    if (enable === undefined) {
+      // Toggle
+      const current = charity.safeModeManager.memory.autoSafeModeEnabled;
+      charity.safeModeManager.setAutoSafeMode(!current);
+    } else {
+      charity.safeModeManager.setAutoSafeMode(enable);
+    }
   }
   
   /**

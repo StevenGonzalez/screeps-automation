@@ -37,6 +37,7 @@ import { CovenantVisuals } from '../visuals/CovenantVisuals';
 import { Profiler, TickBudget } from '../utils/Profiler';
 import { CacheSystem, StructureCache } from '../utils/CacheSystem';
 import { WarCouncil } from '../military/WarCouncil';
+import { SafeModeManager } from '../defense/SafeModeManager';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 
 export interface HighCharityMemory {
@@ -92,6 +93,7 @@ export class HighCharity {
   
   // Military
   warCouncil: WarCouncil;
+  safeModeManager: SafeModeManager;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -162,6 +164,9 @@ export class HighCharity {
     
     // Initialize war council (only at powerhouse phase)
     this.warCouncil = new WarCouncil(this);
+    
+    // Initialize safe mode manager
+    this.safeModeManager = new SafeModeManager(this);
     
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
@@ -281,6 +286,13 @@ export class HighCharity {
     if (this.memory.phase === 'powerhouse' && !TickBudget.shouldSkipExpensive(0.9)) {
       Profiler.wrap('WarCouncil_run', () => {
         this.warCouncil.run();
+      });
+    }
+    
+    // Assess threats and manage safe mode
+    if (!TickBudget.shouldSkipExpensive(0.85)) {
+      Profiler.wrap('SafeModeManager_assess', () => {
+        this.safeModeManager.assess();
       });
     }
     

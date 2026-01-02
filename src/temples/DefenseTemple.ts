@@ -56,11 +56,18 @@ export class DefenseTemple extends Temple {
   }
   
   run(): void {
-    // Monitor threat level
-    this.assessThreatLevel();
+    // Get threat level from safe mode manager
+    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    
+    // Update memory threat level
+    const memory = this.memory as any as DefenseTempleMemory;
+    memory.threatLevel = threatLevel;
+    
+    // Set rampart HP targets based on threat
+    this.maintainRamparts(threatLevel);
     
     // Emergency rampart reinforcement if under attack
-    if (this.memory.threatLevel > 0) {
+    if (threatLevel > 3) {
       this.emergencyReinforce();
     }
   }
@@ -236,37 +243,6 @@ export class DefenseTemple extends Temple {
   }
   
   /**
-   * Assess current threat level
-   */
-  private assessThreatLevel(): void {
-    const hostiles = this.room.find(FIND_HOSTILE_CREEPS);
-    const memory = this.memory as any as DefenseTempleMemory;
-    
-    let threatLevel = 0;
-    
-    for (const hostile of hostiles) {
-      // Count dangerous body parts
-      const attackParts = hostile.body.filter(p => p.type === ATTACK).length;
-      const rangedParts = hostile.body.filter(p => p.type === RANGED_ATTACK).length;
-      const workParts = hostile.body.filter(p => p.type === WORK).length;
-      const healParts = hostile.body.filter(p => p.type === HEAL).length;
-      
-      // Calculate threat contribution
-      threatLevel += attackParts * 30;
-      threatLevel += rangedParts * 10;
-      threatLevel += workParts * 5;
-      threatLevel += healParts * 15; // Healers extend combat significantly
-    }
-    
-    memory.threatLevel = threatLevel;
-    
-    // Alert if under serious attack
-    if (threatLevel > 500 && Game.time % 10 === 0) {
-      console.log(`🚨 ${this.highCharity.name}: HIGH THREAT DETECTED! Level: ${threatLevel}`);
-    }
-  }
-  
-  /**
    * Emergency rampart reinforcement during attacks
    */
   private emergencyReinforce(): void {
@@ -327,23 +303,57 @@ export class DefenseTemple extends Temple {
   }
   
   /**
-   * Get target HP for ramparts based on RCL
+   * Get target HP for ramparts based on RCL and threat level
    */
   private getRampartTargetHP(): number {
     const level = this.room.controller!.level;
-    if (level < 4) return 10000;
-    if (level < 6) return 50000;
-    if (level < 8) return 300000;
-    return 1000000;
+    const threatLevel = (this.memory as any as DefenseTempleMemory).threatLevel || 0;
+    
+    // Base HP by RCL
+    let baseHP = 10000;
+    if (level >= 8) baseHP = 1000000;
+    else if (level >= 6) baseHP = 300000;
+    else if (level >= 4) baseHP = 50000;
+    
+    // Increase target during threats
+    const threatMultiplier = 1 + (threatLevel * 0.2); // Up to 3x at threat 10
+    
+    return Math.floor(baseHP * threatMultiplier);
   }
   
   /**
-   * Get target HP for walls based on RCL
+   * Get target HP for walls based on RCL and threat level
    */
   private getWallTargetHP(): number {
     const level = this.room.controller!.level;
-    if (level < 6) return 10000;
-    if (level < 8) return 100000;
-    return 500000;
+    const threatLevel = (this.memory as any as DefenseTempleMemory).threatLevel || 0;
+    
+    // Base HP by RCL (walls generally lower than ramparts)
+    let baseHP = 5000;
+    if (level >= 8) baseHP = 500000;
+    else if (level >= 6) baseHP = 100000;
+    else if (level >= 4) baseHP = 25000;
+    
+    // Increase target during threats
+    const threatMultiplier = 1 + (threatLevel * 0.2);
+    
+    return Math.floor(baseHP * threatMultiplier);
+  }
+  
+  /**
+   * Maintain ramparts at target HP
+   */
+  private maintainRamparts(threatLevel: number): void {
+    // Priority repair during high threat
+    if (threatLevel > 5) {
+      const criticalRamparts = this.ramparts.filter(r => r.hits < 10000);
+      
+      if (criticalRamparts.length > 0) {
+        console.log(
+          `🛡️ ${this.room.name}: ${criticalRamparts.length} ramparts critically low! ` +
+          `(Threat: ${threatLevel}/10)`
+        );
+      }
+    }
   }
 }

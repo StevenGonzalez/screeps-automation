@@ -31,6 +31,8 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.war = (room?: string) => Cov.commands.war(room);
 (Game as any).cov.power = (room?: string) => Cov.commands.power(room);
 (Game as any).cov.showPlan = (room?: string) => Cov.commands.showPlan(room);
+(Game as any).cov.defense = (room?: string) => Cov.commands.defense(room);
+(Game as any).cov.safeMode = (room: string, enable?: boolean) => Cov.commands.safeMode(room, enable);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**
