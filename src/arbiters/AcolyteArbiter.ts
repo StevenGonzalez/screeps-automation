@@ -49,11 +49,8 @@ export class AcolyteArbiter extends Arbiter {
   }
   
   run(): void {
-    // Only active during bootstrap
-    if (!this.shouldBeActive()) {
-      return;
-    }
-    
+    // Always run existing acolytes until they die naturally
+    // (even after containers exist - let them finish their life)
     for (const acolyte of this.acolytes) {
       this.runAcolyte(acolyte);
     }
@@ -63,12 +60,20 @@ export class AcolyteArbiter extends Arbiter {
    * Check if acolyte arbiter should be active
    */
   private shouldBeActive(): boolean {
-    // Active if no containers exist OR during bootstrap phase
-    const containers = this.room.find(FIND_STRUCTURES, {
-      filter: s => s.structureType === STRUCTURE_CONTAINER
-    });
+    // Check if there are containers at sources (Extractors taking over)
+    const sources = this.room.find(FIND_SOURCES);
+    for (const source of sources) {
+      const containers = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: s => s.structureType === STRUCTURE_CONTAINER
+      });
+      if (containers.length > 0) {
+        // Containers at sources exist - Extractors handle energy now
+        return false;
+      }
+    }
     
-    return containers.length === 0 || this.highCharity.isBootstrapping;
+    // No source containers - Acolytes still needed
+    return true;
   }
   
   /**

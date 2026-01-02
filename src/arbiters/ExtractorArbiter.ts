@@ -54,16 +54,16 @@ export class ExtractorArbiter extends Arbiter {
       }
     }
     
-    // Request miners if needed (once per 10 ticks to avoid spam)
+    // Request extractors if needed (once per 10 ticks to avoid spam)
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
     if (Game.time % 50 === 0) {
       if (currentMiners > 0) {
-        const minerNames = this.miners.map(m => `${m.name}(${m.memory.role})`).join(', ');
-        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners: ${minerNames}`);
+        const extractorNames = this.miners.map(m => `${m.name}(${m.memory.role})`).join(', ');
+        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} extractors: ${extractorNames}`);
       } else {
-        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners - requesting spawn`);
+        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} extractors - requesting spawn`);
       }
     }
     
@@ -110,10 +110,10 @@ export class ExtractorArbiter extends Arbiter {
   }
   
   private calculateDesiredMiners(): number {
-    // Miners only spawn when there's a container AT THIS SOURCE
+    // Extractors only spawn when there's a container AT THIS SOURCE
     // Before container: AcolyteArbiter handles energy collection
     
-    // With container near this source, 1 dedicated miner is optimal
+    // With container near this source, 1 dedicated extractor is optimal
     if (this.container) {
       return 1;
     }
@@ -126,7 +126,7 @@ export class ExtractorArbiter extends Arbiter {
     const body = this.calculateMinerBody();
     const name = `Extractor_${this.source?.id}_${Game.time}`;
     
-    // First miners are CRITICAL priority during bootstrap
+    // First extractors are CRITICAL priority during bootstrap
     const priority = this.highCharity.isBootstrapping && this.miners.length === 0 ?
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
@@ -140,17 +140,16 @@ export class ExtractorArbiter extends Arbiter {
   }
   
   private calculateMinerBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap to get started quickly
-    const energy = this.highCharity.isBootstrapping ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+    // Use capacity for body planning (not current available energy)
+    // SpawnQueue will handle waiting for enough energy
+    const energy = this.highCharity.energyCapacity;
     
-    // Emergency: Minimal miner (200 energy) - use during very early bootstrap
+    // Emergency: Minimal extractor (200 energy) - use during very early bootstrap
     if (energy <= 300) {
       return [WORK, MOVE, CARRY];
     }
     
-    // Early game: Small miner (300 energy)
+    // Early game: Small extractor (300 energy)
     if (energy < 550) {
       return [WORK, WORK, MOVE, CARRY];
     }
