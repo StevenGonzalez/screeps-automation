@@ -15,6 +15,7 @@ import { HighCharity } from './HighCharity';
 import { Arbiter } from '../arbiters/Arbiter';
 import { Crusade } from '../crusades/Crusade';
 import { CovenantCommands } from '../utils/CovenantCommands';
+import { ObserverNetwork } from '../intel/ObserverNetwork';
 
 interface CovenantMemory {
   version: string;
@@ -40,6 +41,7 @@ export class Covenant {
   highCharities: { [roomName: string]: HighCharity };
   arbiters: { [ref: string]: Arbiter };
   crusades: { [name: string]: Crusade };
+  observerNetwork: ObserverNetwork;
   
   shouldBuild: boolean;
   cache: any; // Will hold cached data for the tick
@@ -54,6 +56,7 @@ export class Covenant {
     this.crusades = {};
     this.shouldBuild = true;
     this.cache = {};
+    this.observerNetwork = new ObserverNetwork();
     
     // Initialize console commands
     this.commands = new CovenantCommands(this);
@@ -161,6 +164,11 @@ export class Covenant {
   run(): void {
     const startCpu = Game.cpu.getUsed();
     
+    // Run observer network (intel gathering)
+    if (Game.time % 5 === 0) { // Run every 5 ticks
+      this.observerNetwork.run();
+    }
+    
     // Run all High Charities
     for (const roomName in this.highCharities) {
       this.highCharities[roomName].run();
@@ -188,6 +196,11 @@ export class Covenant {
   endOfTick(): void {
     // Update stats
     this.updateStats();
+    
+    // Clean old intel (every 1000 ticks)
+    if (Game.time % 1000 === 0) {
+      this.observerNetwork.cleanOldIntel();
+    }
     
     // Visuals
     if (Game.time % 10 === 0) {

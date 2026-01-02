@@ -21,6 +21,7 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
 - **Defense System**: Threat assessment and automatic safe mode activation
 - **Market Automation**: Intelligent buy/sell with price history tracking
 - **Lab Automation**: Automatic compound production with reaction chains
+- **Observer Network**: Automatic room scanning and intelligence gathering
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

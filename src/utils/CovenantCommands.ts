@@ -385,6 +385,128 @@ export class CovenantCommands {
   }
   
   /**
+   * Show intel on a specific room or all scanned rooms
+   * Usage: Game.cov.intel('W1N1') or Game.cov.intel()
+   */
+  intel(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔍 INTELLIGENCE REPORT');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    if (roomName) {
+      // Show specific room intel
+      const intel = this.covenant.observerNetwork.getIntel(roomName);
+      if (!intel) {
+        console.log(`❌ No intel available for ${roomName}`);
+        return;
+      }
+      
+      console.log(`\n📍 ${intel.roomName}`);
+      console.log(`  Scanned: ${Game.time - intel.scannedAt} ticks ago`);
+      
+      if (intel.owner) {
+        console.log(`  Owner: ${intel.owner} (RCL ${intel.level})`);
+        if (intel.safeMode) {
+          console.log(`  Safe Mode: ${intel.safeMode} ticks remaining`);
+        }
+      } else {
+        console.log(`  Owner: None (unclaimed)`);
+      }
+      
+      console.log(`  Sources: ${intel.sources?.length || 0}`);
+      if (intel.mineral) {
+        console.log(`  Mineral: ${intel.mineral.type} (${intel.mineral.amount.toLocaleString()})`);
+      }
+      
+      console.log(`  Structures: ${intel.spawns || 0} spawns, ${intel.extensions || 0} ext, ${intel.labs || 0} labs`);
+      console.log(`  Defense: ${intel.hostileTowers || 0} towers, ${intel.ramparts || 0} ramparts`);
+      console.log(`  Economy: ${intel.storage ? '✓' : '✗'} storage, ${intel.terminal ? '✓' : '✗'} terminal`);
+      
+      if (intel.hostileCreeps && intel.hostileCreeps > 0) {
+        console.log(`  ⚠️ Hostile creeps: ${intel.hostileCreeps}`);
+      }
+      
+      console.log(`  Score: ${intel.score}/100`);
+      console.log(`  Threat: ${intel.threat}/10`);
+    } else {
+      // Show top 10 rooms by score
+      const allIntel = this.covenant.observerNetwork.getAllIntel().slice(0, 10);
+      
+      if (allIntel.length === 0) {
+        console.log('No intel data available. Build observers to scan rooms.');
+        return;
+      }
+      
+      console.log('\nTop scanned rooms:');
+      for (let i = 0; i < allIntel.length; i++) {
+        const intel = allIntel[i];
+        const owner = intel.owner || 'unclaimed';
+        const age = Math.floor((Game.time - intel.scannedAt) / 100) / 10;
+        console.log(`  ${i + 1}. ${intel.roomName} - Score: ${intel.score}, Threat: ${intel.threat}, Owner: ${owner} (${age}k ticks)`);
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Show rooms suitable for expansion
+   * Usage: Game.cov.expand()
+   */
+  expand(): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🏗️ EXPANSION CANDIDATES');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const candidates = this.covenant.observerNetwork.getExpansionCandidates().slice(0, 10);
+    
+    if (candidates.length === 0) {
+      console.log('No expansion candidates found. Scan more rooms.');
+      return;
+    }
+    
+    for (let i = 0; i < candidates.length; i++) {
+      const intel = candidates[i];
+      console.log(`\n${i + 1}. ${intel.roomName} (Score: ${intel.score})`);
+      console.log(`   Sources: ${intel.sources?.length || 0}`);
+      if (intel.mineral) {
+        console.log(`   Mineral: ${intel.mineral.type}`);
+      }
+      console.log(`   Threat: ${intel.threat}/10`);
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Show detected threats
+   * Usage: Game.cov.threats()
+   */
+  threats(): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⚔️ DETECTED THREATS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const threats = this.covenant.observerNetwork.getThreats(5);
+    
+    if (threats.length === 0) {
+      console.log('✅ No significant threats detected.');
+      return;
+    }
+    
+    for (const intel of threats) {
+      console.log(`\n⚠️ ${intel.roomName} - Threat Level: ${intel.threat}/10`);
+      if (intel.owner) {
+        console.log(`   Owner: ${intel.owner} (RCL ${intel.level})`);
+      }
+      console.log(`   Hostiles: ${intel.hostileCreeps || 0} creeps`);
+      console.log(`   Defense: ${intel.hostileTowers || 0} towers, ${intel.ramparts || 0} ramparts`);
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
    * Show help for all commands
    * Usage: Game.cov.help()
    */
@@ -411,6 +533,9 @@ export class CovenantCommands {
     console.log('Game.cov.labs(room?) - Show lab production status');
     console.log('Game.cov.produce(compound, amount, room?) - Queue compound');
     console.log('Game.cov.autoLabs(room, enable?) - Control auto-production');
+    console.log('Game.cov.intel(room?) - Show room intelligence');
+    console.log('Game.cov.expand() - Show expansion candidates');
+    console.log('Game.cov.threats() - Show detected threats');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }

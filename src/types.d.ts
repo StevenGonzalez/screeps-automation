@@ -19,6 +19,7 @@ declare global {
       visualize?: { [roomName: string]: boolean };
       [key: string]: any;
     };
+    intel?: { [roomName: string]: any }; // Room intelligence data
   }
   
   interface CreepMemory {
