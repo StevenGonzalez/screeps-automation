@@ -14,3 +14,4 @@ export { RemoteMiningArbiter } from './RemoteMiningArbiter';
 export { RepairerArbiter } from './RepairerArbiter';
 export { MineralMiningArbiter } from './MineralMiningArbiter';
 export { TerminalArbiter } from './TerminalArbiter';
+export { ClaimerArbiter } from './ClaimerArbiter';

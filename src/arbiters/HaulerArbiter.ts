@@ -226,9 +226,17 @@ export class HaulerArbiter extends Arbiter {
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy during bootstrap to get started quickly
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
-    // Early game: Small hauler
+    // Emergency: Minimal hauler (150 energy)
+    if (energy < 250) {
+      return [CARRY, MOVE];
+    }
+    
+    // Early game: Small hauler (200 energy)
     if (energy < 400) {
       return [CARRY, CARRY, MOVE, MOVE];
     }
@@ -247,6 +255,7 @@ export class HaulerArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
+        creep.memory.role === 'elite_hauler' ||
         creep.memory.role === 'hauler'
     });
   }

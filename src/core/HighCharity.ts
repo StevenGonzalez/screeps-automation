@@ -20,6 +20,7 @@ import { RemoteMiningArbiter } from '../arbiters/RemoteMiningArbiter';
 import { RepairerArbiter } from '../arbiters/RepairerArbiter';
 import { MineralMiningArbiter } from '../arbiters/MineralMiningArbiter';
 import { TerminalArbiter } from '../arbiters/TerminalArbiter';
+import { ClaimerArbiter } from '../arbiters/ClaimerArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
@@ -178,6 +179,16 @@ export class HighCharity {
     for (const arbiterName in this.arbiters) {
       this.arbiters[arbiterName].init();
     }
+    
+    // Debug output every 50 ticks
+    if (Game.time % 50 === 0) {
+      const totalCreeps = this.elites.length;
+      const arbiterCount = Object.keys(this.arbiters).length;
+      const spawnStatus = this.primarySpawn ? 
+        (this.primarySpawn.spawning ? `🔄 Spawning ${this.primarySpawn.spawning.name}` : '✅ Idle') : 
+        '❌ No spawn';
+      console.log(`📜 ${this.print}: RCL${this.level} ${this.memory.phase} | ${totalCreeps} creeps | ${arbiterCount} arbiters | ${spawnStatus} | Energy: ${this.energyAvailable}/${this.energyCapacity}`);
+    }
   }
   
   /**
@@ -230,20 +241,6 @@ export class HighCharity {
    */
   private refreshCreeps(): void {
     this.elites = this.room.find(FIND_MY_CREEPS);
-    
-    // TRANSITION: Clear legacy roles from existing creeps so Covenant can manage them
-    for (const creep of this.elites) {
-      // If creep doesn't have an arbiter assigned, it's a legacy creep
-      if (!creep.memory.arbiter) {
-        // Map legacy roles to Covenant roles for transition
-        const legacyRole = creep.memory.role;
-        if (legacyRole) {
-          console.log(`🔄 Transitioning legacy ${legacyRole} ${creep.name} to Covenant management`);
-          // Keep the role but mark it as transitioning
-          creep.memory.transitioning = true;
-        }
-      }
-    }
   }
   
   /**
@@ -330,6 +327,11 @@ export class HighCharity {
     // Build Remote Mining Arbiters (mature+ colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
       this.buildRemoteMiningArbiters();
+      
+      // Build Claimer Arbiters for expansion (powerhouse colonies only)
+      if (this.memory.phase === 'powerhouse' && this.level === 8) {
+        this.buildClaimerArbiters();
+      }
     }
   }
   
@@ -347,6 +349,27 @@ export class HighCharity {
       if (this.arbiters[arbiterName]) continue;
       
       new RemoteMiningArbiter(this, target.roomName, target.sourceId);
+    }
+  }
+  
+  /**
+   * Build Claimer Arbiters for expansion targets
+   */
+  private buildClaimerArbiters(): void {
+    const targets = this.intelligenceTemple.getExpansionTargets();
+    
+    // Limit to 1 active expansion at a time
+    for (const target of targets.slice(0, 1)) {
+      const arbiterName = `claimer_${target.roomName}`;
+      
+      // Don't create duplicate arbiters
+      if (this.arbiters[arbiterName]) continue;
+      
+      // Only expand if we have spare capacity (>50% storage, >100k energy)
+      if (this.storage && this.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 100000) {
+        console.log(`[HighCharity ${this.room.name}] 🎯 The Hierarchs have decreed expansion to ${target.roomName}!`);
+        new ClaimerArbiter(this, target.roomName);
+      }
     }
   }
   

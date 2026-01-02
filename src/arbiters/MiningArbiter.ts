@@ -45,6 +45,15 @@ export class MiningArbiter extends Arbiter {
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
+    if (Game.time % 50 === 0) {
+      if (currentMiners > 0) {
+        const minerNames = this.miners.map(m => `${m.name}(${m.memory.role})`).join(', ');
+        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners: ${minerNames}`);
+      } else {
+        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners - requesting spawn`);
+      }
+    }
+    
     if (currentMiners < desiredMiners) {
       this.requestMiner();
     }
@@ -54,6 +63,11 @@ export class MiningArbiter extends Arbiter {
     // Direct each miner to harvest
     for (const miner of this.miners) {
       this.runMiner(miner);
+    }
+    
+    // Debug: Show we're managing creeps
+    if (Game.time % 100 === 0 && this.miners.length > 0) {
+      console.log(`⛏️ ${this.print}: Managing ${this.miners.length} miners`);
     }
   }
   
@@ -108,9 +122,17 @@ export class MiningArbiter extends Arbiter {
   }
   
   private calculateMinerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy during bootstrap to get started quickly
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
-    // Early game: Small miner
+    // Emergency: Minimal miner (200 energy)
+    if (energy < 300) {
+      return [WORK, MOVE, CARRY];
+    }
+    
+    // Early game: Small miner (300 energy)
     if (energy < 550) {
       return [WORK, WORK, MOVE, CARRY];
     }
@@ -130,6 +152,7 @@ export class MiningArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
+        (creep.memory.role === 'elite_miner' && creep.memory.sourceId === this.source?.id) ||
         (creep.memory.role === 'miner' && creep.memory.sourceId === this.source?.id)
     });
   }

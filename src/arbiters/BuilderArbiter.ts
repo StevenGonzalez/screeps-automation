@@ -249,9 +249,17 @@ export class BuilderArbiter extends Arbiter {
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy during bootstrap to get started quickly
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
-    // Early game: Small builder
+    // Emergency: Minimal builder (200 energy)
+    if (energy < 300) {
+      return [WORK, CARRY, MOVE];
+    }
+    
+    // Early game: Small builder (250 energy)
     if (energy < 400) {
       return [WORK, CARRY, MOVE, MOVE];
     }
@@ -270,6 +278,7 @@ export class BuilderArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
+        creep.memory.role === 'elite_builder' ||
         creep.memory.role === 'builder'
     });
   }

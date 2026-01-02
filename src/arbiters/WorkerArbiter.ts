@@ -152,9 +152,17 @@ export class WorkerArbiter extends Arbiter {
   }
   
   private calculateWorkerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy during bootstrap to get started quickly
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
-    // Early game: Small worker
+    // Emergency: Minimal worker (200 energy)
+    if (energy < 300) {
+      return [WORK, CARRY, MOVE];
+    }
+    
+    // Early game: Small worker (250 energy)
     if (energy < 400) {
       return [WORK, CARRY, MOVE, MOVE];
     }
@@ -173,6 +181,7 @@ export class WorkerArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
+        creep.memory.role === 'elite_worker' ||
         creep.memory.role === 'worker' ||
         creep.memory.role === 'upgrader'
     });
