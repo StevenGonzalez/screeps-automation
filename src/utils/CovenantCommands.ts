@@ -725,39 +725,7 @@ export class CovenantCommands {
   }
   
   /**
-   * Show terminal network status
-   * Usage: Game.cov.network()
-   */
-  network(): void {
-    console.log('═══════════════════════════════════════════════════════');
-    console.log('🌐 TERMINAL NETWORK');
-    console.log('═══════════════════════════════════════════════════════');
-    
-    const stats = this.covenant.terminalNetwork.getStatistics();
-    const pending = this.covenant.terminalNetwork.getPendingTransfers();
-    
-    console.log(`\n📊 Statistics:`);
-    console.log(`  Total transfers: ${stats.totalTransfers}`);
-    console.log(`  Energy shared: ${stats.energyShared.toLocaleString()}`);
-    console.log(`  Minerals shared: ${stats.mineralsShared.toLocaleString()}`);
-    console.log(`  Compounds shared: ${stats.compoundsShared.toLocaleString()}`);
-    
-    if (pending.length > 0) {
-      console.log(`\n📦 Pending Transfers (${pending.length}):`);
-      for (const transfer of pending.slice(0, 10)) {
-        console.log(`  ${transfer.from} → ${transfer.to}: ${transfer.amount} ${transfer.resourceType}`);
-      }
-      if (pending.length > 10) {
-        console.log(`  ... and ${pending.length - 10} more`);
-      }
-    } else {
-      console.log(`\nNo pending transfers`);
-    }
-    
-    // Show terminal status for each colony
-    console.log(`\n🏛️ Colony Terminal Status:`);
-    for (const roomName in this.covenant.highCharities) {
-      const charity = this.covenant.highCharities[roomName];
+   * Show intel on a specific room
       if (!charity.terminal) continue;
       
       const energy = charity.terminal.store.getUsedCapacity(RESOURCE_ENERGY);
@@ -1343,6 +1311,55 @@ export class CovenantCommands {
     }
     
     charity.boostManager.setMilitaryMode(enabled);
+  }
+  
+  /**
+   * Show terminal network status
+   * Usage: Game.cov.network()
+   */
+  network(): void {
+    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[sourceRoom];
+    
+    if (!charity || !charity.terminalNetwork) {
+      console.log('❌ Terminal Network not available');
+      return;
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(charity.terminalNetwork.getStatus());
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Send resources between rooms
+   * Usage: Game.cov.send('W1N1', 'W2N2', RESOURCE_ENERGY, 50000)
+   */
+  send(from: string, to: string, resource: ResourceConstant, amount: number): void {
+    const charity = this.covenant.highCharities[from];
+    
+    if (!charity || !charity.terminalNetwork) {
+      console.log('❌ Terminal Network not available');
+      return;
+    }
+    
+    charity.terminalNetwork.queueTransfer(from, to, resource, amount, 5);
+    console.log(`✅ Queued: Send ${amount} ${resource} from ${from} to ${to}`);
+  }
+  
+  /**
+   * Emergency resource transfer (high priority)
+   * Usage: Game.cov.emergency('W1N1', 'W2N2', RESOURCE_ENERGY, 50000)
+   */
+  emergency(from: string, to: string, resource: ResourceConstant, amount: number): void {
+    const charity = this.covenant.highCharities[from];
+    
+    if (!charity || !charity.terminalNetwork) {
+      console.log('❌ Terminal Network not available');
+      return;
+    }
+    
+    charity.terminalNetwork.emergencyTransfer(from, to, resource, amount);
   }
   
   /**

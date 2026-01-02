@@ -20,6 +20,23 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
 - **Power Harvesting**: PowerTemple and PowerHarvesterArbiter automation
 - **Defense System**: Threat assessment and automatic safe mode activation
 - **Market Automation**: Intelligent buy/sell with price history tracking
+  - **Price Tracking**: Monitors market prices every 100 ticks, maintains rolling history
+  - **Smart Selling**: Automatically sells excess resources when price >= 90% of average
+  - **Smart Buying**: Purchases needed resources when price <= 110% of average
+  - **Credit Management**: Maintains configurable minimum credit reserve (default 10k)
+  - **Resource Thresholds**: Customizable buy/sell thresholds per resource type
+  - **Automatic Commodity Sales**: Sells factory-produced commodities when stockpiled
+  - **Trade History**: Tracks last 100 trades with profit/loss analysis
+  - Console commands: `Game.cov.market()`, `Game.cov.price()`, `Game.cov.trade()`
+- **Terminal Network**: Multi-room resource distribution
+  - **Energy Balancing**: Automatically shares energy between colonies (surplus > 150k, deficit < 50k)
+  - **Mineral Distribution**: Balances base minerals across empire for boost production
+  - **Priority Queue**: Transfer requests with priority levels (10=emergency, 5=normal)
+  - **Emergency Transfers**: High-priority resource transfers for colonies under threat
+  - **Cost Optimization**: Calculates transfer costs, ensures sufficient energy reserves
+  - **Network Monitoring**: Real-time transfer queue and colony terminal status
+  - **Automatic Integration**: Works with boost production and military systems
+  - Console commands: `Game.cov.network()`, `Game.cov.send()`, `Game.cov.emergency()`
 - **Lab Automation**: Automatic compound production with reaction chains
 - **Observer Network**: Automatic room scanning and intelligence gathering
 - **Remote Mining**: Secure resource extraction with multi-layer threat detection

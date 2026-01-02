@@ -44,6 +44,7 @@ import { CacheSystem, StructureCache } from '../utils/CacheSystem';
 import { WarCouncil } from '../military/WarCouncil';
 import { SafeModeManager } from '../defense/SafeModeManager';
 import { MarketManager } from '../market/MarketManager';
+import { TerminalNetwork } from '../market/TerminalNetwork';
 import { RemoteOperations } from '../operations/RemoteOperations';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 import { PowerManager } from '../power/PowerManager';
@@ -141,6 +142,7 @@ export class HighCharity {
   
   // Economy
   marketManager: MarketManager;
+  terminalNetwork: TerminalNetwork;
   remoteOperations: RemoteOperations;
   
   // Power
@@ -235,6 +237,9 @@ export class HighCharity {
     
     // Initialize market manager
     this.marketManager = new MarketManager(this);
+    
+    // Initialize terminal network
+    this.terminalNetwork = new TerminalNetwork();
     
     // Initialize remote operations
     this.remoteOperations = new RemoteOperations(this);
@@ -397,6 +402,11 @@ export class HighCharity {
         this.terminal && !TickBudget.shouldSkipExpensive(0.9)) {
       Profiler.wrap('MarketManager_run', () => {
         this.marketManager.run();
+      });
+      
+      // Run terminal network (resource distribution across empire)
+      Profiler.wrap('TerminalNetwork_run', () => {
+        this.terminalNetwork.run();
       });
     }
     
