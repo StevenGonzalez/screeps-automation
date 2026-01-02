@@ -27,6 +27,9 @@ export class GuardianArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
+    // Update repairers list from elites
+    this.repairers = this.elites;
+    
     // Only spawn repairers at RCL 5+ when fortifications become important
     if (this.room.controller!.level < 5) return;
     

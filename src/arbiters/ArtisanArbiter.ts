@@ -28,6 +28,9 @@ export class ArtisanArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
+    // Update builders list from elites
+    this.builders = this.elites;
+    
     // Place construction sites based on room plan
     if (Game.time % 50 === 0) {
       this.placeConstructionSites();

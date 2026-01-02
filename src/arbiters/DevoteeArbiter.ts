@@ -27,6 +27,9 @@ export class DevoteeArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
+    // Update workers list from elites
+    this.workers = this.elites;
+    
     // Request boosts for workers at mature colonies
     if (this.highCharity.memory.phase === 'powerhouse' && this.highCharity.boostTemple?.isReady()) {
       for (const worker of this.workers) {

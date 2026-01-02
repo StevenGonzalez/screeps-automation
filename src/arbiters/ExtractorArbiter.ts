@@ -33,6 +33,9 @@ export class ExtractorArbiter extends Arbiter {
     // Refresh miners
     this.refresh();
     
+    // Update miners list from elites
+    this.miners = this.elites;
+    
     // Find container near source
     if (this.source) {
       const containers = this.source.pos.findInRange(FIND_STRUCTURES, 1, {

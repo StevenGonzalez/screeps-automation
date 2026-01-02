@@ -29,6 +29,9 @@ export class ZealotArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
+    // Update defenders list from elites
+    this.defenders = this.elites;
+    
     // Detect hostiles
     this.hostiles = this.room.find(FIND_HOSTILE_CREEPS);
     

@@ -28,6 +28,9 @@ export class StewardArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
+    // Update haulers list from elites
+    this.haulers = this.elites;
+    
     // Request haulers if needed (once per 10 ticks to avoid spam)
     const desiredHaulers = this.calculateDesiredHaulers();
     const currentHaulers = this.haulers.length;
