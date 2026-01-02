@@ -38,6 +38,7 @@ import { Profiler, TickBudget } from '../utils/Profiler';
 import { CacheSystem, StructureCache } from '../utils/CacheSystem';
 import { WarCouncil } from '../military/WarCouncil';
 import { SafeModeManager } from '../defense/SafeModeManager';
+import { MarketManager } from '../market/MarketManager';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 
 export interface HighCharityMemory {
@@ -94,6 +95,9 @@ export class HighCharity {
   // Military
   warCouncil: WarCouncil;
   safeModeManager: SafeModeManager;
+  
+  // Economy
+  marketManager: MarketManager;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -167,6 +171,9 @@ export class HighCharity {
     
     // Initialize safe mode manager
     this.safeModeManager = new SafeModeManager(this);
+    
+    // Initialize market manager
+    this.marketManager = new MarketManager(this);
     
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
@@ -293,6 +300,14 @@ export class HighCharity {
     if (!TickBudget.shouldSkipExpensive(0.85)) {
       Profiler.wrap('SafeModeManager_assess', () => {
         this.safeModeManager.assess();
+      });
+    }
+    
+    // Run market operations (mature+ colonies with terminal)
+    if ((this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') && 
+        this.terminal && !TickBudget.shouldSkipExpensive(0.9)) {
+      Profiler.wrap('MarketManager_run', () => {
+        this.marketManager.run();
       });
     }
     

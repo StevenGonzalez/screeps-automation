@@ -224,6 +224,67 @@ export class CovenantCommands {
   }
   
   /**
+   * Show market and trading status
+   * Usage: Game.cov.market() or Game.cov.market('W1N1')
+   */
+  market(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('💰 MARKET STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity || !charity.terminal) continue;
+      
+      console.log(`\n${charity.marketManager.getStats()}`);
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Get price report for a resource
+   * Usage: Game.cov.price('energy') or Game.cov.price('power', 'W1N1')
+   */
+  price(resource: ResourceConstant, roomName?: string): void {
+    const targetRoom = roomName || Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[targetRoom];
+    
+    if (!charity || !charity.terminal) {
+      console.log(`❌ No terminal in ${targetRoom}`);
+      return;
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(charity.marketManager.getPriceReport(resource));
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Control market auto-trading
+   * Usage: Game.cov.trade('W1N1', true) - Enable
+   *        Game.cov.trade('W1N1', false) - Disable
+   */
+  trade(roomName: string, enable?: boolean): void {
+    const charity = this.covenant.highCharities[roomName];
+    if (!charity || !charity.terminal) {
+      console.log(`❌ No terminal in ${roomName}`);
+      return;
+    }
+    
+    if (enable === undefined) {
+      // Toggle
+      const current = charity.marketManager.memory.autoTradeEnabled;
+      charity.marketManager.setAutoTrade(!current);
+    } else {
+      charity.marketManager.setAutoTrade(enable);
+    }
+  }
+  
+  /**
    * Show help for all commands
    * Usage: Game.cov.help()
    */
@@ -244,6 +305,9 @@ export class CovenantCommands {
     console.log('Game.cov.showPlan(room?) - Visualize base layout (toggle)');
     console.log('Game.cov.defense(room?) - Show defense and threat status');
     console.log('Game.cov.safeMode(room, enable?) - Control auto safe mode');
+    console.log('Game.cov.market(room?) - Show trading statistics');
+    console.log('Game.cov.price(resource, room?) - Show price report');
+    console.log('Game.cov.trade(room, enable?) - Control auto-trading');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }
