@@ -19,6 +19,7 @@ import { DefenseArbiter } from '../arbiters/DefenseArbiter';
 import { RemoteMiningArbiter } from '../arbiters/RemoteMiningArbiter';
 import { RepairerArbiter } from '../arbiters/RepairerArbiter';
 import { MineralMiningArbiter } from '../arbiters/MineralMiningArbiter';
+import { TerminalArbiter } from '../arbiters/TerminalArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
@@ -318,6 +319,11 @@ export class HighCharity {
       const minerals = this.room.find(FIND_MINERALS);
       if (minerals.length > 0) {
         new MineralMiningArbiter(this, minerals[0]);
+      }
+      
+      // Build Terminal Arbiter if we have a terminal
+      if (this.terminal) {
+        new TerminalArbiter(this);
       }
     }
     
