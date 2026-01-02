@@ -548,7 +548,7 @@ export class CovenantCommands {
    */
   deposits(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
-    console.log('💎 DEPOSIT HARVESTING STATUS');
+    console.log('� PILGRIMAGE STATUS - Sacred Deposit Harvesting');
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
@@ -566,12 +566,12 @@ export class CovenantCommands {
       const activeDeposits = deposits.filter(d => d.active && !d.disabled);
       
       console.log(`   Total deposits: ${deposits.length}`);
-      console.log(`   Active operations: ${activeDeposits.length}`);
+      console.log(`   Active pilgrimages: ${activeDeposits.length}`);
       
       if (deposits.length > 0) {
-        console.log(`\n   Discovered Deposits:`);
+        console.log(`\n   Sacred Deposits Discovered:`);
         for (const deposit of deposits) {
-          const status = deposit.active ? '✅ ACTIVE' : deposit.disabled ? '❌ DISABLED' : '⏸️ INACTIVE';
+          const status = deposit.active ? '✅ PILGRIMAGE' : deposit.disabled ? '❌ DISABLED' : '⏸️ WAITING';
           console.log(`     ${status} ${deposit.depositType} in ${deposit.roomName}`);
           console.log(`       Distance: ${deposit.distance} rooms | Profit: ${deposit.profitability.toFixed(2)}`);
         }

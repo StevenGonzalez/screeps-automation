@@ -110,24 +110,16 @@ export class ExtractorArbiter extends Arbiter {
   }
   
   private calculateDesiredMiners(): number {
-    // Only use miners once containers exist
-    // Before containers, HarvesterArbiter handles energy collection
-    const containers = this.room.find(FIND_STRUCTURES, {
-      filter: s => s.structureType === STRUCTURE_CONTAINER
-    });
-    
-    // No containers yet - harvesters handle it
-    if (containers.length === 0 && this.highCharity.level < 4) {
-      return 0; // Let harvesters handle early game
-    }
+    // Miners only spawn when there's a container AT THIS SOURCE
+    // Before container: AcolyteArbiter handles energy collection
     
     // With container near this source, 1 dedicated miner is optimal
     if (this.container) {
       return 1;
     }
     
-    // No container yet but RCL 4+ - need 1 miner per source
-    return 1;
+    // No container at this source yet - acolytes handle it
+    return 0;
   }
   
   private requestMiner(): void {

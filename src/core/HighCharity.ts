@@ -14,7 +14,7 @@
 import type { Covenant } from './Covenant';
 import { Arbiter } from '../arbiters/Arbiter';
 import { ExtractorArbiter } from '../arbiters/ExtractorArbiter';
-import { HarvesterArbiter } from '../arbiters/HarvesterArbiter';
+import { AcolyteArbiter } from '../arbiters/AcolyteArbiter';
 import { StewardArbiter } from '../arbiters/StewardArbiter';
 import { DevoteeArbiter } from '../arbiters/DevoteeArbiter';
 import { ArtisanArbiter } from '../arbiters/ArtisanArbiter';
@@ -579,9 +579,9 @@ export class HighCharity {
    * Build Arbiters for this High Charity
    */
   protected buildArbiters(): void {
-    // Build Harvester Arbiter FIRST (early game energy collection)
-    // This is critical for bootstrap - harvesters directly collect and deliver energy
-    new HarvesterArbiter(this);
+    // Build Acolyte Arbiter FIRST (early game energy collection)
+    // This is critical for bootstrap - acolytes directly collect and deliver energy
+    new AcolyteArbiter(this);
     
     // Build Extractor Arbiters for each source (static miners on containers)
     const sources = this.room.find(FIND_SOURCES);

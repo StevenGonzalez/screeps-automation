@@ -1,10 +1,10 @@
 /**
- * HARVESTER ARBITER - Early Game Energy Collection
+ * ACOLYTE ARBITER - Sacred Initiates
  * 
- * "In the beginning, all must toil to gather the sacred energy"
+ * "The youngest of the faithful gather energy for the Covenant"
  * 
- * Manages harvester Elites during bootstrap phase (RCL 1-3).
- * Harvesters directly harvest energy sources and deliver to spawns/extensions.
+ * Manages Acolyte initiates during bootstrap phase (RCL 1-3).
+ * Acolytes directly harvest energy sources and deliver to spawns/extensions.
  * Transitions to miner+hauler system once containers are built.
  */
 
@@ -16,35 +16,35 @@ import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 
 /**
- * Harvester Arbiter - Manages early-game energy harvesting
+ * Acolyte Arbiter - Manages early-game energy harvesting
  */
-export class HarvesterArbiter extends Arbiter {
-  harvesters: Elite[];
+export class AcolyteArbiter extends Arbiter {
+  acolytes: Elite[];
   
   constructor(highCharity: HighCharity) {
-    super(highCharity, 'harvester', ArbiterPriority.economy.mining - 1); // Higher priority than miners
-    this.harvesters = [];
+    super(highCharity, 'acolyte', ArbiterPriority.economy.mining - 1); // Higher priority than miners
+    this.acolytes = [];
   }
   
   init(): void {
     this.refresh();
-    this.harvesters = this.elites;
+    this.acolytes = this.elites;
     
     // Only active during bootstrap phase (no containers yet)
     if (!this.shouldBeActive()) {
       return;
     }
     
-    // Calculate desired harvesters
-    const desired = this.calculateDesiredHarvesters();
-    const current = this.harvesters.length;
+    // Calculate desired acolytes
+    const desired = this.calculateDesiredAcolytes();
+    const current = this.acolytes.length;
     
     if (Game.time % 10 === 0 && current < desired) {
-      this.requestHarvester();
+      this.requestAcolyte();
     }
     
     if (Game.time % 50 === 0) {
-      console.log(`🌾 ${this.print}: ${current}/${desired} harvesters`);
+      console.log(`🙏 ${this.print}: ${current}/${desired} acolytes`);
     }
   }
   
@@ -54,13 +54,13 @@ export class HarvesterArbiter extends Arbiter {
       return;
     }
     
-    for (const harvester of this.harvesters) {
-      this.runHarvester(harvester);
+    for (const acolyte of this.acolytes) {
+      this.runAcolyte(acolyte);
     }
   }
   
   /**
-   * Check if harvester arbiter should be active
+   * Check if acolyte arbiter should be active
    */
   private shouldBeActive(): boolean {
     // Active if no containers exist OR during bootstrap phase
@@ -72,62 +72,77 @@ export class HarvesterArbiter extends Arbiter {
   }
   
   /**
-   * Run individual harvester logic
+   * Run individual acolyte logic - simple state machine
    */
-  private runHarvester(harvester: Elite): void {
-    // If empty, go harvest
-    if (harvester.store.getUsedCapacity() === 0) {
-      const source = this.findBestSource(harvester);
-      if (source) {
-        const result = harvester.harvestSource(source);
-        if (result === OK) {
-          harvester.say('⛏️');
-        }
-      }
-      return;
-    }
+  private runAcolyte(acolyte: Elite): void {
+    // State: HARVESTING or DELIVERING (based on carry capacity)
+    const isHarvesting = acolyte.store.getFreeCapacity() > 0;
     
-    // If full, deliver energy
-    const target = this.findDeliveryTarget(harvester);
-    if (target) {
-      const result = harvester.transferTo(target);
-      if (result === OK) {
-        harvester.say('💰');
-      } else if (result === ERR_FULL) {
-        // Target full, find another
-        const nextTarget = this.findDeliveryTarget(harvester, [target.id]);
-        if (nextTarget) {
-          harvester.transferTo(nextTarget);
+    if (isHarvesting) {
+      // HARVEST STATE: Go to assigned source and harvest
+      let source: Source | null = null;
+      
+      // Check if we have an assigned source
+      if (acolyte.memory.sourceId) {
+        source = Game.getObjectById(acolyte.memory.sourceId as Id<Source>);
+      }
+      
+      // If no assigned source or source is invalid, find a new one
+      if (!source) {
+        source = this.findBestSource(acolyte);
+      }
+      
+      if (source) {
+        const result = acolyte.harvestSource(source);
+        if (result === OK) {
+          acolyte.say('⛏️');
+        } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
+          // Source depleted, clear assignment to find a new one
+          acolyte.memory.sourceId = undefined;
         }
       }
     } else {
-      // No targets need energy, park near spawn
-      const spawn = this.highCharity.spawns[0];
-      if (spawn && !harvester.pos.isNearTo(spawn)) {
-        harvester.goTo(spawn.pos);
+      // DELIVER STATE: Take energy to spawn/extension
+      const target = this.findDeliveryTarget(acolyte);
+      if (target) {
+        const result = acolyte.transferTo(target);
+        if (result === OK) {
+          acolyte.say('💰');
+        } else if (result === ERR_FULL) {
+          // Target full, find another
+          const nextTarget = this.findDeliveryTarget(acolyte, [target.id]);
+          if (nextTarget) {
+            acolyte.transferTo(nextTarget);
+          }
+        }
+      } else {
+        // No targets need energy, park near spawn
+        const spawn = this.highCharity.spawns[0];
+        if (spawn && !acolyte.pos.isNearTo(spawn)) {
+          acolyte.goTo(spawn.pos);
+        }
+        acolyte.say('⏸️');
       }
-      harvester.say('⏸️');
     }
   }
   
   /**
-   * Find best source to harvest from
+   * Find best source to harvest from (assigns permanently)
    */
-  private findBestSource(harvester: Elite): Source | null {
-    // Find source with fewest harvesters assigned
+  private findBestSource(acolyte: Elite): Source | null {
     const sources = this.room.find(FIND_SOURCES_ACTIVE);
     if (sources.length === 0) return null;
     
-    // Count harvesters per source
+    // Count acolytes per source
     const counts: { [id: string]: number } = {};
-    for (const h of this.harvesters) {
-      const targetSource = h.memory.sourceId as string | undefined;
+    for (const a of this.acolytes) {
+      const targetSource = a.memory.sourceId as string | undefined;
       if (targetSource) {
         counts[targetSource] = (counts[targetSource] || 0) + 1;
       }
     }
     
-    // Find source with least harvesters
+    // Find source with least acolytes
     let bestSource = sources[0];
     let leastCount = counts[bestSource.id] || 0;
     
@@ -139,8 +154,8 @@ export class HarvesterArbiter extends Arbiter {
       }
     }
     
-    // Assign this harvester to the source
-    harvester.memory.sourceId = bestSource.id;
+    // Assign this acolyte to the source permanently
+    acolyte.memory.sourceId = bestSource.id;
     
     return bestSource;
   }
@@ -149,7 +164,7 @@ export class HarvesterArbiter extends Arbiter {
    * Find best delivery target (spawn/extension)
    */
   private findDeliveryTarget(
-    harvester: Elite, 
+    acolyte: Elite, 
     excludeIds: Id<Structure>[] = []
   ): StructureSpawn | StructureExtension | null {
     // Priority: Spawns first, then extensions
@@ -159,7 +174,7 @@ export class HarvesterArbiter extends Arbiter {
     });
     
     if (spawns.length > 0) {
-      return harvester.pos.findClosestByPath(spawns);
+      return acolyte.pos.findClosestByPath(spawns);
     }
     
     const extensions = this.room.find(FIND_MY_STRUCTURES, {
@@ -170,16 +185,16 @@ export class HarvesterArbiter extends Arbiter {
     });
     
     if (extensions.length > 0) {
-      return harvester.pos.findClosestByPath(extensions);
+      return acolyte.pos.findClosestByPath(extensions);
     }
     
     return null;
   }
   
   /**
-   * Calculate desired number of harvesters
+   * Calculate desired number of acolytes
    */
-  private calculateDesiredHarvesters(): number {
+  private calculateDesiredAcolytes(): number {
     const sources = this.room.find(FIND_SOURCES);
     const spawns = this.highCharity.spawns.length;
     const extensions = this.room.find(FIND_MY_STRUCTURES, {
@@ -190,12 +205,12 @@ export class HarvesterArbiter extends Arbiter {
     // Formula: 2 per source at RCL 1, scale down as we get containers
     
     if (this.highCharity.level === 1) {
-      // RCL 1: 2 harvesters per source minimum
+      // RCL 1: 2 acolytes per source minimum
       return Math.max(sources.length * 2, 2);
     }
     
     if (this.highCharity.level === 2) {
-      // RCL 2: Still need multiple harvesters
+      // RCL 2: Still need multiple acolytes
       return Math.max(sources.length * 2, 3);
     }
     
@@ -205,7 +220,7 @@ export class HarvesterArbiter extends Arbiter {
     });
     
     if (containers.length > 0) {
-      // Containers exist, phase out harvesters
+      // Containers exist, phase out acolytes
       return 0;
     }
     
@@ -214,30 +229,30 @@ export class HarvesterArbiter extends Arbiter {
   }
   
   /**
-   * Request a harvester spawn
+   * Request an acolyte spawn
    */
-  private requestHarvester(): void {
-    const body = this.calculateHarvesterBody();
-    const name = `Harvester_${Game.time}`;
+  private requestAcolyte(): void {
+    const body = this.calculateAcolyteBody();
+    const name = `Acolyte_${Game.time}`;
     
-    // Harvesters are CRITICAL during bootstrap (no energy = no spawning)
-    const priority = this.highCharity.isBootstrapping && this.harvesters.length < 2 ?
+    // Acolytes are CRITICAL during bootstrap (no energy = no spawning)
+    const priority = this.highCharity.isBootstrapping && this.acolytes.length < 2 ?
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
     
-    const important = this.highCharity.isBootstrapping && this.harvesters.length < 2;
+    const important = this.highCharity.isBootstrapping && this.acolytes.length < 2;
     
     this.requestSpawn(body, name, {
-      role: 'harvester',
+      role: 'acolyte',
       sourceId: undefined // Will be assigned dynamically
     } as any, priority, important);
   }
   
   /**
-   * Calculate harvester body based on available energy
+   * Calculate acolyte body based on available energy
    */
-  private calculateHarvesterBody(): BodyPartConstant[] {
-    // Harvesters need balanced WORK, CARRY, MOVE
+  private calculateAcolyteBody(): BodyPartConstant[] {
+    // Acolytes need balanced WORK, CARRY, MOVE
     const energy = this.highCharity.isBootstrapping ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;

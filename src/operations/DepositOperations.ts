@@ -1,9 +1,9 @@
 /**
- * DEPOSIT OPERATIONS - High-Value Resource Extraction
+ * DEPOSIT OPERATIONS - Sacred Pilgrimages to Ancient Treasures
  * 
- * "Claim the ancient treasures hidden in the void"
+ * "Send the faithful to claim the ancient treasures hidden in the void"
  * 
- * Manages deposit harvesting operations for biomass, silicon,
+ * Manages Pilgrim expeditions to harvest biomass, silicon,
  * metal, and mist deposits in highway rooms.
  */
 
@@ -131,7 +131,7 @@ export class DepositOperations {
     };
     
     this.memory.deposits[depositId] = target;
-    console.log(`💎 DepositOps: Discovered ${deposit.depositType} in ${deposit.room!.name} (profit: ${profitability.toFixed(2)})`);
+    console.log(`� Pilgrimage: Discovered ${deposit.depositType} in ${deposit.room!.name} (profit: ${profitability.toFixed(2)})`);
   }
   
   /**
@@ -212,7 +212,7 @@ export class DepositOperations {
         
         // Remove if deposit is gone
         if (!deposit) {
-          console.log(`💎 DepositOps: Deposit ${target.depositType} in ${target.roomName} expired`);
+          console.log(`� Pilgrimage: Deposit ${target.depositType} in ${target.roomName} fully harvested`);
           delete this.memory.deposits[depositId];
         }
       }
@@ -238,7 +238,7 @@ export class DepositOperations {
       
       for (const deposit of toActivate) {
         deposit.active = true;
-        console.log(`💎 DepositOps: Activating ${deposit.depositType} harvest in ${deposit.roomName}`);
+        console.log(`� Pilgrimage: Sending faithful to ${deposit.depositType} in ${deposit.roomName}`);
       }
     }
   }
@@ -263,7 +263,7 @@ export class DepositOperations {
     target.disabled = !enable;
     target.active = enable;
     
-    console.log(`💎 DepositOps: ${enable ? 'Enabled' : 'Disabled'} ${target.depositType} in ${target.roomName}`);
+    console.log(`� Pilgrimage: ${enable ? 'Enabled' : 'Disabled'} ${target.depositType} in ${target.roomName}`);
   }
   
   /**

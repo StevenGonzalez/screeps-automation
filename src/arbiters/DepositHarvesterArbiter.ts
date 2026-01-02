@@ -1,10 +1,10 @@
 /**
- * DEPOSIT HARVESTER ARBITER - Extracts High-Value Resources
+ * PILGRIM ARBITER - Sacred Journey to Distant Treasures
  * 
- * "Claim the riches of the void"
+ * "The faithful journey far to claim the sacred gifts"
  * 
- * Manages specialized squads for harvesting deposits.
- * Spawns heavy harvesters and haulers for deposit extraction.
+ * Manages Pilgrim squads that travel to highway deposits.
+ * Pilgrims extract resources while Caravans shuttle them home.
  */
 
 /// <reference types="@types/screeps" />
@@ -105,8 +105,8 @@ export class DepositHarvesterArbiter extends Arbiter {
    * Update squad members from elites
    */
   private updateSquad(): void {
-    this.squad.harvesters = this.elites.filter(e => e.memory.role === 'deposit_harvester');
-    this.squad.haulers = this.elites.filter(e => e.memory.role === 'deposit_hauler');
+    this.squad.harvesters = this.elites.filter(e => e.memory.role === 'pilgrim');
+    this.squad.haulers = this.elites.filter(e => e.memory.role === 'caravan');
   }
   
   /**
@@ -133,7 +133,7 @@ export class DepositHarvesterArbiter extends Arbiter {
     
     if (ready) {
       this.squad.status = 'moving';
-      console.log(`💎 DepositHarvester: Squad formed, moving to ${this.targetRoom}`);
+      console.log(`� Pilgrim: Sacred journey begins to ${this.targetRoom}`);
     }
   }
   
@@ -153,7 +153,7 @@ export class DepositHarvesterArbiter extends Arbiter {
     
     if (allInRoom) {
       this.squad.status = 'harvesting';
-      console.log(`💎 DepositHarvester: Squad arrived at ${this.targetRoom}, beginning harvest`);
+      console.log(`� Pilgrim: Arrived at ${this.targetRoom}, gathering sacred resources`);
       return;
     }
     
@@ -180,18 +180,21 @@ export class DepositHarvesterArbiter extends Arbiter {
     const deposit = Game.getObjectById(this.depositId as Id<Deposit>);
     if (!deposit) {
       this.squad.status = 'complete';
-      console.log(`💎 DepositHarvester: Deposit exhausted, mission complete`);
+      console.log(`� Pilgrim: Sacred deposit exhausted, pilgrimage complete`);
       return;
     }
     
-    // Harvesters extract from deposit
+    // Harvesters extract from deposit and drop resources
     for (const harvester of this.squad.harvesters) {
-      if (harvester.isFull) {
-        // Wait for hauler
-        harvester.say('⏸️');
-        continue;
+      // If full, drop resources on ground for haulers
+      if (harvester.store.getUsedCapacity() > 0) {
+        for (const resourceType in harvester.store) {
+          harvester.creep.drop(resourceType as ResourceConstant);
+        }
+        harvester.say('📤');
       }
       
+      // Stay at deposit and harvest continuously
       const result = harvester.creep.harvest(deposit);
       if (result === ERR_NOT_IN_RANGE) {
         harvester.goTo(deposit.pos, { range: 1 });
@@ -199,7 +202,12 @@ export class DepositHarvesterArbiter extends Arbiter {
       } else if (result === OK) {
         harvester.say('⛏️💎');
       } else if (result === ERR_NOT_ENOUGH_RESOURCES || result === ERR_TIRED) {
-        // Deposit on cooldown
+        // Deposit on cooldown - drop any carried resources
+        if (harvester.store.getUsedCapacity() > 0) {
+          for (const resourceType in harvester.store) {
+            harvester.creep.drop(resourceType as ResourceConstant);
+          }
+        }
         harvester.say('💤');
       }
     }
@@ -269,56 +277,58 @@ export class DepositHarvesterArbiter extends Arbiter {
   }
   
   /**
-   * Request deposit harvester
+   * Request deposit harvester (Pilgrim)
    */
   private requestDepositHarvester(): void {
     const body = this.calculateHarvesterBody();
-    const name = `DepositHarvester_${Game.time}`;
+    const name = `Pilgrim_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'deposit_harvester',
+      role: 'pilgrim',
       targetRoom: this.targetRoom,
       depositId: this.depositId
     } as any, SpawnPriority.ECONOMY);
   }
   
   /**
-   * Request deposit hauler
+   * Request deposit hauler (Caravan)
    */
   private requestDepositHauler(): void {
     const body = this.calculateHaulerBody();
-    const name = `DepositHauler_${Game.time}`;
+    const name = `Caravan_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'deposit_hauler',
+      role: 'caravan',
       targetRoom: this.targetRoom,
       depositId: this.depositId
     } as any, SpawnPriority.ECONOMY);
   }
   
   /**
-   * Calculate harvester body (heavy WORK focus)
+   * Calculate harvester body (heavy WORK focus, minimal CARRY)
    */
   private calculateHarvesterBody(): BodyPartConstant[] {
     const energy = this.highCharity.room.energyCapacityAvailable;
     const body: BodyPartConstant[] = [];
     
-    // Heavy harvester: maximize WORK parts for fast extraction
-    // Deposits have cooldown, so we want to extract as much as possible per harvest
+    // Pilgrim harvester: maximize WORK parts for fast extraction
+    // Deposits have cooldown, so extract maximum per harvest
+    // Minimal CARRY (just 3) since we drop resources on ground immediately
     
-    // Calculate max WORK parts we can afford
-    // Each WORK + CARRY + MOVE = 250 energy
-    const maxParts = Math.floor(energy / 250);
-    const workParts = Math.min(maxParts, 25); // Cap at 25 WORK (50 harvest/tick)
+    // Calculate max WORK parts (each WORK = 100 energy)
+    let remainingEnergy = energy;
     
-    // Build body: WORK, CARRY, MOVE (1:1:1 ratio for balanced speed and capacity)
+    // Add 3 CARRY + 3 MOVE first (300 energy)
+    for (let i = 0; i < 3; i++) {
+      body.push(CARRY);
+      body.push(MOVE);
+    }
+    remainingEnergy -= 600;
+    
+    // Fill rest with WORK + MOVE pairs
+    const workParts = Math.min(Math.floor(remainingEnergy / 150), 30); // Cap at 30 WORK
     for (let i = 0; i < workParts; i++) {
       body.push(WORK);
-    }
-    for (let i = 0; i < workParts; i++) {
-      body.push(CARRY);
-    }
-    for (let i = 0; i < workParts; i++) {
       body.push(MOVE);
     }
     
