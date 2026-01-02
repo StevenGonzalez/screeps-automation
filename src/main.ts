@@ -1,18 +1,27 @@
 /**
- * Main Entry Point - Screeps Automation
+ * Main Entry Point - COVENANT System
  *
- * Beautiful, high-quality automation that orchestrates all room operations
- * through modular, focused systems for maximum efficiency and maintainability.
+ * "The Great Journey begins with a single step"
+ * 
+ * The COVENANT system manages all High Charities, Arbiters, and Crusades
+ * to dominate the Screeps world with superior strategy and coordination.
  */
 
 /// <reference types="@types/screeps" />
 
+import { Covenant } from "./core/Covenant";
 import { processRoom } from "./room/orchestration";
 import {
   cleanupMemory,
   initializeMemory,
   updateGlobalStats,
 } from "./global.memory";
+
+// Initialize global Covenant instance
+const Cov = Covenant.getInstance();
+
+// Store in Game object for global access
+(Game as any).cov = Cov;
 
 /**
  * Main game loop - executed every tick
@@ -22,22 +31,23 @@ export const loop = (): void => {
   const startCpu = Game.cpu.getUsed();
 
   try {
-    // PHASE 1: MEMORY MANAGEMENT
-    initializeMemory();
-
-    // Cleanup memory less frequently (every 10 ticks)
+    // COVENANT ARCHITECTURE
+    // Phase 1: Build - Construct all High Charities, Arbiters, and Crusades
+    Cov.build();
+    
+    // Phase 2: Init - Initialize all systems
+    Cov.init();
+    
+    // Phase 3: Run - Execute all operations
+    Cov.run();
+    
+    // Phase 4: End of tick - Stats and cleanup
+    Cov.endOfTick();
+    
+    // LEGACY SUPPORT (will gradually migrate to COVENANT)
+    // Keep old system running in parallel during transition
     if (Game.time % 10 === 0) {
       cleanupMemory();
-    }
-
-    // PHASE 2: ROOM PROCESSING
-    for (const roomName in Game.rooms) {
-      processRoom(roomName);
-    }
-
-    // PHASE 3: GLOBAL OPERATIONS
-    // Update stats less frequently (every 10 ticks)
-    if (Game.time % 10 === 0) {
       updateGlobalStats();
     }
     processGlobalOperations(); // PHASE 4: PERFORMANCE MONITORING

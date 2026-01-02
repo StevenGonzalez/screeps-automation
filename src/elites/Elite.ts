@@ -1,0 +1,302 @@
+/**
+ * ELITE - Enhanced Creep Wrapper
+ * 
+ * "Warriors of the Covenant"
+ * 
+ * Elites are enhanced wrappers around Creep objects that provide additional
+ * functionality for movement, tasks, boosting, and combat.
+ * 
+ * Based on Overmind's Zerg class but themed for COVENANT.
+ */
+
+/// <reference types="@types/screeps" />
+
+import { Arbiter } from '../arbiters/Arbiter';
+
+/**
+ * Elite - Enhanced creep wrapper
+ */
+export class Elite {
+  creep: Creep;
+  arbiter: Arbiter | null;
+  
+  // Cached properties
+  private _body: BodyPartDefinition[];
+  private _name: string;
+  private _pos: RoomPosition;
+  private _room: Room;
+  
+  constructor(creep: Creep, arbiter: Arbiter | null = null) {
+    this.creep = creep;
+    this.arbiter = arbiter;
+    
+    // Cache frequently accessed properties
+    this._body = creep.body;
+    this._name = creep.name;
+    this._pos = creep.pos;
+    this._room = creep.room;
+  }
+  
+  // === Wrapper Properties ===
+  
+  get name(): string {
+    return this._name;
+  }
+  
+  get pos(): RoomPosition {
+    return this.creep.pos;
+  }
+  
+  get room(): Room {
+    return this.creep.room;
+  }
+  
+  get memory(): CreepMemory {
+    return this.creep.memory;
+  }
+  
+  set memory(value: CreepMemory) {
+    this.creep.memory = value;
+  }
+  
+  get body(): BodyPartDefinition[] {
+    return this._body;
+  }
+  
+  get hits(): number {
+    return this.creep.hits;
+  }
+  
+  get hitsMax(): number {
+    return this.creep.hitsMax;
+  }
+  
+  get carry(): StoreDefinition {
+    return this.creep.carry;
+  }
+  
+  get store(): StoreDefinition {
+    return this.creep.store;
+  }
+  
+  get carryCapacity(): number {
+    return this.creep.carryCapacity;
+  }
+  
+  get fatigue(): number {
+    return this.creep.fatigue;
+  }
+  
+  get spawning(): boolean {
+    return this.creep.spawning;
+  }
+  
+  get ticksToLive(): number | undefined {
+    return this.creep.ticksToLive;
+  }
+  
+  // === Enhanced Methods ===
+  
+  /**
+   * Check if the Elite is idle (no task assigned)
+   */
+  get isIdle(): boolean {
+    return !this.memory.task && !this.memory.working;
+  }
+  
+  /**
+   * Check if the Elite needs energy
+   */
+  get needsEnergy(): boolean {
+    return this.store.getUsedCapacity(RESOURCE_ENERGY) === 0;
+  }
+  
+  /**
+   * Check if the Elite is full of energy
+   */
+  get isFull(): boolean {
+    return this.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
+  }
+  
+  /**
+   * Smart movement to a target
+   */
+  goTo(target: RoomPosition | { pos: RoomPosition }, options: MoveToOpts = {}): number {
+    const targetPos = target instanceof RoomPosition ? target : target.pos;
+    
+    // Default options
+    const moveOpts: MoveToOpts = {
+      visualizePathStyle: { stroke: '#ffffff' },
+      reusePath: 5,
+      ...options
+    };
+    
+    return this.creep.moveTo(targetPos, moveOpts);
+  }
+  
+  /**
+   * Go to a room
+   */
+  goToRoom(roomName: string): number {
+    const exitDir = this.room.findExitTo(roomName);
+    if (exitDir === ERR_NO_PATH || exitDir === ERR_INVALID_ARGS) {
+      return ERR_NO_PATH;
+    }
+    
+    const exit = this.pos.findClosestByPath(exitDir);
+    if (!exit) return ERR_NO_PATH;
+    
+    return this.goTo(exit);
+  }
+  
+  /**
+   * Harvest from a source
+   */
+  harvestSource(source: Source | null): number {
+    if (!source) return ERR_INVALID_TARGET;
+    
+    if (!this.pos.inRangeTo(source, 1)) {
+      this.goTo(source);
+      return ERR_NOT_IN_RANGE;
+    }
+    
+    return this.creep.harvest(source);
+  }
+  
+  /**
+   * Transfer resources to a target
+   */
+  transferTo(
+    target: Structure | Creep,
+    resourceType: ResourceConstant = RESOURCE_ENERGY,
+    amount?: number
+  ): number {
+    if (!this.pos.inRangeTo(target, 1)) {
+      this.goTo(target);
+      return ERR_NOT_IN_RANGE;
+    }
+    
+    return this.creep.transfer(target, resourceType, amount);
+  }
+  
+  /**
+   * Withdraw resources from a target
+   */
+  withdrawFrom(
+    target: Structure | Tombstone | Ruin,
+    resourceType: ResourceConstant = RESOURCE_ENERGY,
+    amount?: number
+  ): number {
+    if (!this.pos.inRangeTo(target, 1)) {
+      this.goTo(target);
+      return ERR_NOT_IN_RANGE;
+    }
+    
+    return this.creep.withdraw(target, resourceType, amount);
+  }
+  
+  /**
+   * Build a construction site
+   */
+  buildSite(site: ConstructionSite | null): number {
+    if (!site) return ERR_INVALID_TARGET;
+    
+    if (!this.pos.inRangeTo(site, 3)) {
+      this.goTo(site);
+      return ERR_NOT_IN_RANGE;
+    }
+    
+    return this.creep.build(site);
+  }
+  
+  /**
+   * Repair a structure
+   */
+  repairStructure(structure: Structure | null): number {
+    if (!structure) return ERR_INVALID_TARGET;
+    
+    if (!this.pos.inRangeTo(structure, 3)) {
+      this.goTo(structure);
+      return ERR_NOT_IN_RANGE;
+    }
+    
+    return this.creep.repair(structure);
+  }
+  
+  /**
+   * Upgrade the controller
+   */
+  upgradeController(): number {
+    const controller = this.room.controller;
+    if (!controller) return ERR_INVALID_TARGET;
+    
+    if (!this.pos.inRangeTo(controller, 3)) {
+      this.goTo(controller);
+      return ERR_NOT_IN_RANGE;
+    }
+    
+    return this.creep.upgradeController(controller);
+  }
+  
+  /**
+   * Say something (with emoji support)
+   */
+  say(message: string, isPublic: boolean = false): number {
+    return this.creep.say(message, isPublic);
+  }
+  
+  /**
+   * Reassign this Elite to a new Arbiter
+   */
+  reassign(newArbiter: Arbiter, newRole?: string): void {
+    this.arbiter = newArbiter;
+    this.memory.arbiter = newArbiter.ref;
+    if (newRole) {
+      this.memory.role = newRole;
+    }
+    // Clear task
+    delete this.memory.task;
+    delete this.memory.working;
+  }
+  
+  /**
+   * Print representation
+   */
+  get print(): string {
+    return `<a href="#!/room/${Game.shard.name}/${this.pos.roomName}">[Elite ${this.name}]</a>`;
+  }
+  
+  // === Wrapper for all other Creep methods ===
+  
+  attack(target: Creep | Structure): number {
+    return this.creep.attack(target);
+  }
+  
+  rangedAttack(target: Creep | Structure): number {
+    return this.creep.rangedAttack(target);
+  }
+  
+  heal(target: Creep): number {
+    return this.creep.heal(target);
+  }
+  
+  rangedHeal(target: Creep): number {
+    return this.creep.rangedHeal(target);
+  }
+  
+  pickup(resource: Resource): number {
+    return this.creep.pickup(resource);
+  }
+  
+  drop(resourceType: ResourceConstant, amount?: number): number {
+    return this.creep.drop(resourceType, amount);
+  }
+  
+  claimController(controller: StructureController): number {
+    return this.creep.claimController(controller);
+  }
+  
+  reserveController(controller: StructureController): number {
+    return this.creep.reserveController(controller);
+  }
+}

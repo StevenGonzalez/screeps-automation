@@ -1,40 +1,112 @@
-# Screeps Automation Architecture
+# 🔱 COVENANT Architecture
 
 ## 🎯 Overview
 
-This is a beautiful, high-quality Screeps automation system designed to win from RCL 1 to max level. It uses a modular, domain-driven architecture that separates concerns and provides maximum maintainability.
+**"The will of the Prophets guides all"**
 
-## 🏗️ Architecture
+COVENANT is a powerful, Halo-inspired automation system for Screeps that manages colonies through a hierarchical command structure. Inspired by Overmind's architectural patterns but with unique theming and strategic implementation.
 
-### Core Entry Point
+### Core Philosophy
+- **Distributed Intelligence**: Each High Charity operates autonomously while coordinating with the Covenant
+- **Hierarchical Command**: Arbiters manage specialized Elite teams for specific objectives
+- **Dynamic Response**: Crusades allow flag-based strategic intervention
+- **Efficient Execution**: Optimized three-phase execution (Build → Init → Run)
 
-- **`main.ts`** - Clean orchestration of all systems with performance monitoring
+## 🏗️ COVENANT Architecture
 
-### Global Systems
+### 🔱 Core Components
 
-- **`global.memory.ts`** - Centralized memory cleanup, initialization, and global statistics
+#### **Covenant** (`core/Covenant.ts`)
+The central AI coordinator that manages all operations across the entire game world. Responsible for:
+- Managing all High Charities (colonies)
+- Coordinating Arbiters across rooms
+- Processing Crusades (flag-based directives)
+- Global statistics and performance monitoring
 
-### Room Systems
+#### **High Charity** (`core/HighCharity.ts`)
+Colony manager for a single owned room. Each High Charity:
+- Manages room structures (spawns, towers, links, storage, etc.)
+- Spawns and coordinates Arbiters
+- Tracks economic and military statistics
+- Determines operational phase (bootstrap, developing, mature, powerhouse)
 
-- **`room.orchestration.ts`** - Orchestrates all room-level operations and creep coordination
-- **`room.intelligence.ts`** - Pure functional room analysis and intelligence gathering
-- **`room.economy.ts`** - Economic planning and optimization
-- **`room.construction.ts`** - Intelligent construction prioritization
-- **`room.defense.ts`** - Threat assessment and defense coordination
-- **`room.spawning.ts`** - Advanced spawning management with priority queues
-- **`room.structures.ts`** - Structure orchestration coordinator
+#### **Arbiter** (`arbiters/Arbiter.ts`)
+Specialized creep controllers that manage teams of Elites. Types include:
+- **MiningArbiter** - Harvesting operations at sources
+- **WorkerArbiter** - Building, repairing, upgrading
+- **HaulerArbiter** - Energy and resource logistics
+- **DefenseArbiter** - Military operations and protection
+- **UpgraderArbiter** - Controller upgrading optimization
 
-### Structure Systems
+#### **Elite** (`elites/Elite.ts`)
+Enhanced creep wrapper providing:
+- Smart movement and pathfinding
+- Task management system
+- Boosting and combat utilities
+- Simplified creep control interface
 
-- **`structure.tower.ts`** - Tower automation (attack, heal, repair, auto-repair)
-- **`structure.link.ts`** - Link energy distribution and logistics
-- **`structure.extension.ts`** - Extension energy management and monitoring
-- **`structure.spawn.ts`** - Spawn status tracking and energy management
+#### **Crusade** (`crusades/Crusade.ts`)
+Flag-based directive system for dynamic strategic response:
+- Room claiming and colonization
+- Defense operations
+- Resource extraction
+- Strategic objectives
 
-### Creep Systems
+### 📂 Legacy Systems (Being Migrated)
 
-- **`creep.actions.ts`** - Modular creep behavior system
-- **`creep.personality.ts`** - Entertainment system with spawn phrases
+The following systems are being gradually migrated to COVENANT architecture:
+
+- **`room.orchestration.ts`** - Will be replaced by HighCharity
+- **`room.spawning.ts`** - Will be replaced by Arbiter spawning logic
+- **`creep.actions.ts`** - Will be replaced by Elite methods
+- **Structure systems** - Will be replaced by Temple (HiveCluster) pattern
+
+## 🔄 Execution Flow
+
+COVENANT uses a three-phase execution model each tick:
+
+### **Phase 1: Build** 
+Construct the world state and object graph
+- Clean up memory (dead creeps, removed flags)
+- Create High Charity objects for each owned room
+- Build Arbiters for each High Charity
+- Parse flags into Crusades
+- Refresh structure and creep references
+
+### **Phase 2: Init**
+Initialize all systems for execution
+- High Charities initialize their Arbiters
+- Arbiters refresh their Elite teams
+- Arbiters calculate spawning needs
+- Crusades initialize their objectives
+
+### **Phase 3: Run**
+Execute all operations
+- High Charities run their operations
+- Arbiters direct their Elites
+- Crusades execute their strategies
+- Structures perform automated tasks
+
+### **Phase 4: End of Tick**
+Performance monitoring and stats
+- Update global statistics
+- Generate visuals
+- Report performance metrics
+- Pixel generation
+
+## 🎮 COVENANT Terminology
+
+Inspired by Halo's Covenant faction:
+
+| COVENANT | Overmind | Description |
+|----------|----------|-------------|
+| **Covenant** | Overmind | Central AI coordinator |
+| **High Charity** | Colony | Room/colony manager |
+| **Arbiter** | Overlord | Creep controller for specific roles |
+| **Elite** | Zerg | Enhanced creep wrapper |
+| **Crusade** | Directive | Flag-based task system |
+| **Temple** | HiveCluster | Structure group (planned) |
+| **Prophets Will** | LogisticsNetwork | Resource distribution (planned) |
 
 ## � File Structure Overview
 
