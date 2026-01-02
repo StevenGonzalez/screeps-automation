@@ -264,7 +264,7 @@ export class DefenseArbiter extends Arbiter {
     const name = `defender_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'defender'
+      role: 'elite_defender' // Covenant themed role
     } as any);
   }
   

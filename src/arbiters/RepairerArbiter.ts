@@ -183,7 +183,7 @@ export class RepairerArbiter extends Arbiter {
     const name = `repairer_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'repairer',
+      role: 'elite_repairer', // Covenant themed role
       repairing: false
     } as any);
   }

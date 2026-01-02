@@ -146,7 +146,7 @@ export class WorkerArbiter extends Arbiter {
     const name = `worker_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'worker',
+      role: 'elite_worker', // Covenant themed role
       upgrading: false
     } as any);
   }

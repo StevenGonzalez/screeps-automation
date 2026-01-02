@@ -283,7 +283,7 @@ export class RemoteMiningArbiter extends Arbiter {
     const name = `remoteMiner_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'remoteMiner',
+      role: 'elite_remoteMiner', // Covenant themed role
       targetRoom: this.targetRoom,
       sourceId: this.sourceId
     } as any);
@@ -294,7 +294,7 @@ export class RemoteMiningArbiter extends Arbiter {
     const name = `remoteHauler_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'remoteHauler',
+      role: 'elite_remoteHauler', // Covenant themed role
       targetRoom: this.targetRoom,
       sourceId: this.sourceId,
       collecting: true

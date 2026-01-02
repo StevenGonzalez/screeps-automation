@@ -220,7 +220,7 @@ export class HaulerArbiter extends Arbiter {
     const name = `hauler_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'hauler',
+      role: 'elite_hauler', // Covenant themed role
       collecting: true
     } as any);
   }

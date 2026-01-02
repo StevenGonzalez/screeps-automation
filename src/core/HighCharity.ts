@@ -229,6 +229,20 @@ export class HighCharity {
    */
   private refreshCreeps(): void {
     this.elites = this.room.find(FIND_MY_CREEPS);
+    
+    // TRANSITION: Clear legacy roles from existing creeps so Covenant can manage them
+    for (const creep of this.elites) {
+      // If creep doesn't have an arbiter assigned, it's a legacy creep
+      if (!creep.memory.arbiter) {
+        // Map legacy roles to Covenant roles for transition
+        const legacyRole = creep.memory.role;
+        if (legacyRole) {
+          console.log(`🔄 Transitioning legacy ${legacyRole} ${creep.name} to Covenant management`);
+          // Keep the role but mark it as transitioning
+          creep.memory.transitioning = true;
+        }
+      }
+    }
   }
   
   /**

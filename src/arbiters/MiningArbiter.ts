@@ -102,7 +102,7 @@ export class MiningArbiter extends Arbiter {
     const name = `miner_${this.source?.id}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'miner',
+      role: 'elite_miner', // Covenant themed role
       sourceId: this.source?.id
     } as any);
   }

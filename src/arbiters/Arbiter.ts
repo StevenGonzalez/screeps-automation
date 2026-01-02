@@ -16,6 +16,9 @@ import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 
 export interface ArbiterMemory {
+  role: string;
+  arbiter?: string;
+  highCharity?: string;
   [key: string]: any;
 }
 
@@ -140,7 +143,14 @@ export abstract class Arbiter {
     memory: CreepMemory = {} as any
   ): void {
     const spawn = this.highCharity.primarySpawn;
-    if (!spawn || spawn.spawning) return;
+    if (!spawn) {
+      if (Game.time % 50 === 0) {
+        console.log(`⚠️ ${this.print}: No spawn available`);
+      }
+      return;
+    }
+    
+    if (spawn.spawning) return;
     
     // Add Arbiter reference to memory
     const spawnMemory: any = {
@@ -152,9 +162,11 @@ export abstract class Arbiter {
     const result = spawn.spawnCreep(body, name, { memory: spawnMemory });
     
     if (result === OK) {
-      console.log(`✨ ${this.print}: Spawning ${name}`);
-    } else if (result === ERR_NOT_ENOUGH_ENERGY && Game.time % 50 === 0) {
-      console.log(`⚡ ${this.print}: Waiting for energy to spawn ${name}`);
+      console.log(`✨ ${this.print}: Spawning ${name} [${memory.role}]`);
+    } else if (result === ERR_NOT_ENOUGH_ENERGY && Game.time % 100 === 0) {
+      console.log(`⚡ ${this.print}: Need ${this.highCharity.energyAvailable}/${this.highCharity.energyCapacity} energy for ${name}`);
+    } else if (result < 0 && Game.time % 100 === 0) {
+      console.log(`❌ ${this.print}: Spawn failed for ${name} - Error ${result}`);
     }
   }
   

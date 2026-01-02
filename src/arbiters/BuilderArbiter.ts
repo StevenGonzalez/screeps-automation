@@ -243,7 +243,7 @@ export class BuilderArbiter extends Arbiter {
     const name = `builder_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'builder',
+      role: 'elite_builder', // Covenant themed role
       building: false
     } as any);
   }
