@@ -94,6 +94,15 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Console Control**: Launch attacks, change formations, recall units on the fly
   - **VanguardArbiter Integration**: Seamless integration with existing military system
   - Commands: `Game.cov.attack()`, `Game.cov.squads()`, `Game.cov.recall()`, `Game.cov.formation()`, `Game.cov.tactic()`
+- **Boost Production System**: Automated military enhancement automation
+  - **Automatic Production**: Monitors stock levels and queues boost compound production
+  - **Military Mode**: Detects active combat and prioritizes military boosts
+  - **Target Management**: Maintains stockpiles of Tier 3 (6k) and Tier 4 (3k) boosts
+  - **Smart Prioritization**: Prioritizes XUH2O, XLHO2, XKHO2, XGHO2, XZO2 for combat
+  - **Mineral Requests**: Automatically identifies missing base minerals
+  - **Boost Assignment**: Automatically requests boosts for newly spawned combat creeps
+  - **Integration**: Works with LabTemple, BoostTemple, and VanguardArbiter
+  - **Console Monitoring**: `Game.cov.boosts()` for status, `Game.cov.militaryBoosts(true)` for aggressive mode
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

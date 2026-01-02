@@ -47,6 +47,7 @@ import { RemoteOperations } from '../operations/RemoteOperations';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 import { PowerManager } from '../power/PowerManager';
 import { PowerCreepManager } from '../power/PowerCreepManager';
+import { BoostManager } from '../boost/BoostManager';
 import { FactoryManager } from '../factory/FactoryManager';
 import { SpawnQueue } from '../spawning/SpawnQueue';
 
@@ -148,6 +149,9 @@ export class HighCharity {
   // Factory
   factoryManager: FactoryManager;
   
+  // Boost
+  boostManager: BoostManager;
+  
   // Spawning
   spawnQueue: SpawnQueue;
   
@@ -242,6 +246,9 @@ export class HighCharity {
     
     // Initialize factory manager
     this.factoryManager = new FactoryManager(this);
+    
+    // Initialize boost manager
+    this.boostManager = new BoostManager(this);
     
     // Initialize spawn queue
     this.spawnQueue = new SpawnQueue(this);
@@ -416,6 +423,13 @@ export class HighCharity {
     if (this.level >= 7 && !TickBudget.shouldSkipExpensive(0.85)) {
       Profiler.wrap('FactoryManager_run', () => {
         this.factoryManager.run();
+      });
+    }
+    
+    // Run boost manager (RCL 6+ with labs)
+    if (this.level >= 6 && this.labTemple && !TickBudget.shouldSkipExpensive(0.85)) {
+      Profiler.wrap('BoostManager_run', () => {
+        this.boostManager.run();
       });
     }
     

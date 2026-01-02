@@ -581,6 +581,8 @@ export class CovenantCommands {
     console.log('Game.cov.recall() - Recall all military units');
     console.log('Game.cov.formation(type) - Change squad formation');
     console.log('Game.cov.tactic(type) - Change squad tactic');
+    console.log('Game.cov.boosts(room?) - Show boost production status');
+    console.log('Game.cov.militaryBoosts(enabled) - Toggle military boost mode');
     console.log('');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
@@ -1246,6 +1248,115 @@ export class CovenantCommands {
     vanguard.setTactic(tactic);
     
     console.log(`✅ Tactic changed to: ${tactic}`);
+  }
+  
+  /**
+   * Show boost production status
+   * Usage: Game.cov.boosts('W1N1')
+   */
+  boosts(roomName?: string): void {
+    const targetRoom = roomName || Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[targetRoom];
+    
+    if (!charity) {
+      console.log(`❌ No colony found in ${targetRoom}`);
+      return;
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(`⚗️ BOOST PRODUCTION - ${charity.name}`);
+    console.log('═══════════════════════════════════════════════════════');
+    
+    if (!charity.boostManager) {
+      console.log('  Boost Manager not available (need RCL 6+ and labs)');
+      console.log('═══════════════════════════════════════════════════════');
+      return;
+    }
+    
+    const status = charity.boostManager.getStatus();
+    
+    console.log(`  Military Mode: ${status.militaryMode ? '✅ ACTIVE' : '⏸️  IDLE'}`);
+    console.log(`  Production Targets: ${status.productionTargets}`);
+    console.log(`  Total Boosts Produced: ${status.boostsProduced}`);
+    console.log(`  Total Creeps Boosted: ${status.creepsBoosted}`);
+    console.log('');
+    
+    // Show current stock levels for key boosts
+    console.log('Combat Boost Inventory:');
+    
+    const militaryBoosts = [
+      { name: 'XUH2O (Attack)', resource: RESOURCE_CATALYZED_UTRIUM_ACID },
+      { name: 'XLHO2 (Heal)', resource: RESOURCE_CATALYZED_LEMERGIUM_ALKALIDE },
+      { name: 'XKHO2 (Ranged)', resource: RESOURCE_CATALYZED_KEANIUM_ALKALIDE },
+      { name: 'XGHO2 (Tough)', resource: RESOURCE_CATALYZED_GHODIUM_ALKALIDE },
+      { name: 'XZO2 (Move)', resource: RESOURCE_CATALYZED_ZYNTHIUM_ALKALIDE },
+      { name: 'XZH2O (Dismantle)', resource: RESOURCE_CATALYZED_ZYNTHIUM_ACID },
+    ];
+    
+    for (const boost of militaryBoosts) {
+      const storage = charity.storage?.store.getUsedCapacity(boost.resource) || 0;
+      const terminal = charity.terminal?.store.getUsedCapacity(boost.resource) || 0;
+      const total = storage + terminal;
+      
+      const bar = this.makeBar(total, 3000, 20);
+      console.log(`  ${boost.name}: ${bar} ${total.toLocaleString()}`);
+    }
+    
+    console.log('');
+    console.log('Base Minerals:');
+    
+    const baseMinerals = [
+      { name: 'Hydrogen', resource: RESOURCE_HYDROGEN, target: 10000 },
+      { name: 'Oxygen', resource: RESOURCE_OXYGEN, target: 10000 },
+      { name: 'Catalyst', resource: RESOURCE_CATALYST, target: 5000 },
+      { name: 'Hydroxide', resource: RESOURCE_HYDROXIDE, target: 5000 },
+    ];
+    
+    for (const mineral of baseMinerals) {
+      const storage = charity.storage?.store.getUsedCapacity(mineral.resource) || 0;
+      const terminal = charity.terminal?.store.getUsedCapacity(mineral.resource) || 0;
+      const total = storage + terminal;
+      
+      const bar = this.makeBar(total, mineral.target, 20);
+      console.log(`  ${mineral.name}: ${bar} ${total.toLocaleString()}`);
+    }
+    
+    console.log('');
+    console.log('💡 Commands:');
+    console.log('  Game.cov.militaryBoosts(true) - Enable aggressive production');
+    console.log('  Game.cov.militaryBoosts(false) - Disable aggressive production');
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Toggle military boost mode
+   * Usage: Game.cov.militaryBoosts(true)
+   */
+  militaryBoosts(enabled: boolean): void {
+    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[sourceRoom];
+    
+    if (!charity || !charity.boostManager) {
+      console.log('❌ Boost Manager not available');
+      return;
+    }
+    
+    charity.boostManager.setMilitaryMode(enabled);
+  }
+  
+  /**
+   * Helper to create visual bars
+   */
+  private makeBar(current: number, target: number, width: number = 20): string {
+    const percentage = Math.min(current / target, 1);
+    const filled = Math.floor(percentage * width);
+    const empty = width - filled;
+    
+    const bar = '█'.repeat(filled) + '░'.repeat(empty);
+    const color = percentage >= 1 ? '🟢' : percentage >= 0.5 ? '🟡' : '🔴';
+    
+    return `${color} ${bar}`;
   }
 }
 

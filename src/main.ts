@@ -56,6 +56,8 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.recall = () => Cov.commands.recall();
 (Game as any).cov.formation = (formation: string) => Cov.commands.formation(formation);
 (Game as any).cov.tactic = (tactic: string) => Cov.commands.tactic(tactic);
+(Game as any).cov.boosts = (room?: string) => Cov.commands.boosts(room);
+(Game as any).cov.militaryBoosts = (enabled: boolean) => Cov.commands.militaryBoosts(enabled);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**

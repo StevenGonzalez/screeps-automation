@@ -75,6 +75,25 @@ export class VanguardArbiter extends Arbiter {
     this.attackers = this.elites.filter(e => e.memory.role === 'attacker');
     this.healers = this.elites.filter(e => e.memory.role === 'healer');
     
+    // Request boosts for newly spawned combat creeps
+    for (const attacker of this.attackers) {
+      if (!attacker.creep.ticksToLive || attacker.creep.ticksToLive >= 1450) {
+        // Newly spawned, request boosts
+        if (this.highCharity.boostManager) {
+          this.highCharity.boostManager.requestBoosts(attacker.creep, 'attacker');
+        }
+      }
+    }
+    
+    for (const healer of this.healers) {
+      if (!healer.creep.ticksToLive || healer.creep.ticksToLive >= 1450) {
+        // Newly spawned, request boosts
+        if (this.highCharity.boostManager) {
+          this.highCharity.boostManager.requestBoosts(healer.creep, 'healer');
+        }
+      }
+    }
+    
     // Add members to squad
     if (this.squad) {
       for (const attacker of this.attackers) {
