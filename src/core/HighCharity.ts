@@ -16,9 +16,11 @@ import { HaulerArbiter } from '../arbiters/HaulerArbiter';
 import { WorkerArbiter } from '../arbiters/WorkerArbiter';
 import { BuilderArbiter } from '../arbiters/BuilderArbiter';
 import { DefenseArbiter } from '../arbiters/DefenseArbiter';
+import { RemoteMiningArbiter } from '../arbiters/RemoteMiningArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
+import { IntelligenceTemple } from '../temples/IntelligenceTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { CovenantVisuals } from '../visuals/CovenantVisuals';
@@ -61,6 +63,7 @@ export class HighCharity {
   temples: { [name: string]: Temple };
   miningTemples: MiningTemple[];
   commandTemple: CommandTemple | null;
+  intelligenceTemple: IntelligenceTemple;
   
   // Logistics
   prophetsWill: ProphetsWill;
@@ -87,6 +90,7 @@ export class HighCharity {
     this.temples = {};
     this.miningTemples = [];
     this.commandTemple = null;
+    this.intelligenceTemple = new IntelligenceTemple(this);
     
     // Initialize memory FIRST
     if (!Memory.rooms[this.name]) {
@@ -248,6 +252,11 @@ export class HighCharity {
     // Build Command Temple (core colony management)
     this.commandTemple = new CommandTemple(this);
     this.temples['command'] = this.commandTemple;
+    
+    // Scan for remote mining opportunities (mature colonies only)
+    if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
+      this.intelligenceTemple.scan();
+    }
   }
   
   /**
@@ -265,6 +274,28 @@ export class HighCharity {
     new WorkerArbiter(this);  // Controller upgrading
     new BuilderArbiter(this); // Construction and repair
     new DefenseArbiter(this); // Military defense
+    
+    // Build Remote Mining Arbiters (mature+ colonies only)
+    if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
+      this.buildRemoteMiningArbiters();
+    }
+  }
+  
+  /**
+   * Build Remote Mining Arbiters for profitable nearby sources
+   */
+  private buildRemoteMiningArbiters(): void {
+    const targets = this.intelligenceTemple.getRemoteMiningTargets();
+    
+    // Limit to 3 remote sources maximum
+    for (const target of targets.slice(0, 3)) {
+      const arbiterName = `remoteMining_${target.roomName}_${target.sourceId}`;
+      
+      // Don't create duplicate arbiters
+      if (this.arbiters[arbiterName]) continue;
+      
+      new RemoteMiningArbiter(this, target.roomName, target.sourceId);
+    }
   }
   
   /**

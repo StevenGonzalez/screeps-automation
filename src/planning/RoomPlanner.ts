@@ -199,60 +199,70 @@ export class RoomPlanner {
   
   /**
    * Plan core structures (storage, terminal, factory, power spawn)
+   * COVENANT THEME: Central sacred anchor with symmetrical holy structures
    */
   private planCoreStructures(plan: RoomPlan): void {
     const anchor = plan.anchor;
     
-    // Storage at anchor
+    // SACRED CORE: Storage at the holy anchor (High Charity's heart)
     plan.storage = anchor;
     
-    // Terminal adjacent to storage
-    plan.terminal = new RoomPosition(anchor.x + 1, anchor.y, this.room.name);
+    // Terminal forms a cross pattern with storage (religious symbolism)
+    plan.terminal = new RoomPosition(anchor.x + 2, anchor.y, this.room.name);
     
-    // Factory near storage
-    plan.factory = new RoomPosition(anchor.x, anchor.y + 1, this.room.name);
+    // Factory on opposite side of the cross
+    plan.factory = new RoomPosition(anchor.x - 2, anchor.y, this.room.name);
     
-    // Power spawn nearby
-    plan.powerSpawn = new RoomPosition(anchor.x + 1, anchor.y + 1, this.room.name);
+    // Power spawn completes the vertical cross
+    plan.powerSpawn = new RoomPosition(anchor.x, anchor.y + 2, this.room.name);
     
-    // Spawns around the core
-    plan.spawns.push(new RoomPosition(anchor.x - 2, anchor.y, this.room.name));
-    plan.spawns.push(new RoomPosition(anchor.x + 2, anchor.y + 2, this.room.name));
-    plan.spawns.push(new RoomPosition(anchor.x, anchor.y - 2, this.room.name));
+    // HIERARCHS' THRONES: Spawns arranged in triangular formation (3 points of hierarchy)
+    // North spawn (Prophet of Truth)
+    plan.spawns.push(new RoomPosition(anchor.x, anchor.y - 3, this.room.name));
+    // Southwest spawn (Prophet of Regret)
+    plan.spawns.push(new RoomPosition(anchor.x - 3, anchor.y + 2, this.room.name));
+    // Southeast spawn (Prophet of Mercy)
+    plan.spawns.push(new RoomPosition(anchor.x + 3, anchor.y + 2, this.room.name));
     
-    // Observer and nuker on opposite sides
-    plan.observer = new RoomPosition(anchor.x - 3, anchor.y - 3, this.room.name);
-    plan.nuker = new RoomPosition(anchor.x + 3, anchor.y + 3, this.room.name);
+    // Observer and nuker flanking the sacred core
+    plan.observer = new RoomPosition(anchor.x - 1, anchor.y - 2, this.room.name);
+    plan.nuker = new RoomPosition(anchor.x + 1, anchor.y - 2, this.room.name);
   }
   
   /**
-   * Plan extensions in efficient clusters
+   * Plan extensions in radial Covenant pattern
+   * COVENANT THEME: Radiating rings like the sacred city's tiers
    */
   private planExtensions(plan: RoomPlan): void {
     const anchor = plan.anchor;
     const maxExtensions = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][this.room.controller!.level];
     
-    // Place extensions in a grid pattern around the core
     const positions: RoomPosition[] = [];
     
-    // Spiral pattern outward from anchor
-    for (let radius = 3; radius <= 8 && positions.length < maxExtensions; radius++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        for (let dy = -radius; dy <= radius; dy++) {
-          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) {
-            continue; // Only edges of square
-          }
-          
-          const x = anchor.x + dx;
-          const y = anchor.y + dy;
+    // COVENANT PATTERN: Concentric hexagonal rings emanating from sacred core
+    // Create 6-fold symmetry (religious/ceremonial significance)
+    const angles = [0, 60, 120, 180, 240, 300]; // 6 cardinal directions
+    
+    for (let ring = 1; ring <= 6 && positions.length < maxExtensions; ring++) {
+      const radius = 3 + ring;
+      
+      // Place extensions along each of the 6 radial arms
+      for (const angle of angles) {
+        // Convert to radians
+        const rad = (angle * Math.PI) / 180;
+        
+        // Create multiple extensions along this arm
+        for (let dist = radius - 1; dist <= radius + 1; dist++) {
+          const x = Math.round(anchor.x + Math.cos(rad) * dist);
+          const y = Math.round(anchor.y + Math.sin(rad) * dist);
           
           if (x < 2 || x > 47 || y < 2 || y > 47) continue;
           if (this.terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
           
           const pos = new RoomPosition(x, y, this.room.name);
           
-          // Skip if position is reserved for other structures
           if (this.isPositionReserved(pos, plan)) continue;
+          if (positions.some(p => p.x === pos.x && p.y === pos.y)) continue;
           
           positions.push(pos);
           
@@ -266,20 +276,23 @@ export class RoomPlanner {
   }
   
   /**
-   * Plan towers for optimal defense coverage
+   * Plan towers in defensive perimeter
+   * COVENANT THEME: Towers arranged as guardian sentinels
    */
   private planTowers(plan: RoomPlan): void {
     const anchor = plan.anchor;
     const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][this.room.controller!.level];
     
-    // Place towers near core for quick energy access
+    // DEFENSIVE FORMATION: Towers form a protective ring
+    // Positioned to create overlapping fields of fire
     const towerPositions: RoomPosition[] = [
-      new RoomPosition(anchor.x - 2, anchor.y - 2, this.room.name),
-      new RoomPosition(anchor.x + 2, anchor.y - 2, this.room.name),
-      new RoomPosition(anchor.x - 2, anchor.y + 2, this.room.name),
-      new RoomPosition(anchor.x + 2, anchor.y + 2, this.room.name),
-      new RoomPosition(anchor.x, anchor.y + 3, this.room.name),
-      new RoomPosition(anchor.x, anchor.y - 3, this.room.name)
+      // Inner defensive ring
+      new RoomPosition(anchor.x, anchor.y - 4, this.room.name),     // North guardian
+      new RoomPosition(anchor.x + 3, anchor.y - 2, this.room.name), // Northeast guardian
+      new RoomPosition(anchor.x + 3, anchor.y + 2, this.room.name), // Southeast guardian
+      new RoomPosition(anchor.x, anchor.y + 4, this.room.name),     // South guardian
+      new RoomPosition(anchor.x - 3, anchor.y + 2, this.room.name), // Southwest guardian
+      new RoomPosition(anchor.x - 3, anchor.y - 2, this.room.name)  // Northwest guardian
     ];
     
     plan.towers = towerPositions.slice(0, maxTowers);
@@ -287,23 +300,28 @@ export class RoomPlanner {
   
   /**
    * Plan labs in compact cluster for reactions
+   * COVENANT THEME: Labs arranged in a research sanctum
    */
   private planLabs(plan: RoomPlan): void {
     const anchor = plan.anchor;
     const maxLabs = CONTROLLER_STRUCTURES[STRUCTURE_LAB][this.room.controller!.level];
     
-    // Labs in a tight cluster for efficient reactions
+    // RESEARCH SANCTUM: Labs form a tight ceremonial cluster
+    // Arranged in a 'flower' pattern for optimal reaction efficiency
     const labPositions: RoomPosition[] = [
-      new RoomPosition(anchor.x + 3, anchor.y, this.room.name),
+      // Central labs (reagent sources)
       new RoomPosition(anchor.x + 4, anchor.y, this.room.name),
-      new RoomPosition(anchor.x + 3, anchor.y + 1, this.room.name),
-      new RoomPosition(anchor.x + 4, anchor.y + 1, this.room.name),
-      new RoomPosition(anchor.x + 3, anchor.y - 1, this.room.name),
-      new RoomPosition(anchor.x + 4, anchor.y - 1, this.room.name),
       new RoomPosition(anchor.x + 5, anchor.y, this.room.name),
-      new RoomPosition(anchor.x + 5, anchor.y + 1, this.room.name),
+      
+      // Surrounding reaction labs (hexagonal pattern)
+      new RoomPosition(anchor.x + 4, anchor.y - 1, this.room.name),
       new RoomPosition(anchor.x + 5, anchor.y - 1, this.room.name),
-      new RoomPosition(anchor.x + 6, anchor.y, this.room.name)
+      new RoomPosition(anchor.x + 4, anchor.y + 1, this.room.name),
+      new RoomPosition(anchor.x + 5, anchor.y + 1, this.room.name),
+      new RoomPosition(anchor.x + 3, anchor.y, this.room.name),
+      new RoomPosition(anchor.x + 6, anchor.y, this.room.name),
+      new RoomPosition(anchor.x + 3, anchor.y - 1, this.room.name),
+      new RoomPosition(anchor.x + 6, anchor.y + 1, this.room.name)
     ];
     
     plan.labs = labPositions.slice(0, maxLabs);

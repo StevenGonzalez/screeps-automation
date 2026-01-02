@@ -10,3 +10,4 @@ export { HaulerArbiter } from './HaulerArbiter';
 export { WorkerArbiter } from './WorkerArbiter';
 export { BuilderArbiter } from './BuilderArbiter';
 export { DefenseArbiter } from './DefenseArbiter';
+export { RemoteMiningArbiter } from './RemoteMiningArbiter';
