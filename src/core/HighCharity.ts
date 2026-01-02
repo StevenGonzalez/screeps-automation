@@ -80,10 +80,7 @@ export class HighCharity {
     this.miningTemples = [];
     this.commandTemple = null;
     
-    // Initialize logistics network
-    this.prophetsWill = new ProphetsWill(this);
-    
-    // Initialize memory
+    // Initialize memory FIRST
     if (!Memory.rooms[this.name]) {
       Memory.rooms[this.name] = {} as any;
     }
@@ -102,6 +99,9 @@ export class HighCharity {
         creepCount: 0
       };
     }
+    
+    // Initialize logistics network AFTER memory is set up
+    this.prophetsWill = new ProphetsWill(this);
     
     this.level = (room.controller?.level || 1) as any;
   }
