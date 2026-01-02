@@ -29,6 +29,8 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.colony = (room: string) => Cov.commands.colony(room);
 (Game as any).cov.colonies = () => Cov.commands.colonies();
 (Game as any).cov.war = (room?: string) => Cov.commands.war(room);
+(Game as any).cov.power = (room?: string) => Cov.commands.power(room);
+(Game as any).cov.showPlan = (room?: string) => Cov.commands.showPlan(room);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**
