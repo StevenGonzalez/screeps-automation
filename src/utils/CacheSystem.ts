@@ -172,7 +172,7 @@ export class StructureCache {
     return CacheSystem.get(key, ttl, () => {
       return room.find(FIND_STRUCTURES, {
         filter: s => s.structureType === structureType
-      }) as T[];
+      }) as unknown as T[];
     });
   }
   
@@ -189,7 +189,7 @@ export class StructureCache {
     return CacheSystem.get(key, ttl, () => {
       return room.find(FIND_MY_STRUCTURES, {
         filter: s => s.structureType === structureType
-      }) as T[];
+      }) as unknown as T[];
     });
   }
 }

@@ -9,9 +9,9 @@
 
 /// <reference types="@types/screeps" />
 
-import { Profiler } from './utils/Profiler';
-import { CacheSystem } from './utils/CacheSystem';
-import { Covenant } from './core/Covenant';
+import { Profiler } from './Profiler';
+import { CacheSystem } from './CacheSystem';
+import { Covenant } from '../core/Covenant';
 
 /**
  * Global console commands accessible via Game.cov
