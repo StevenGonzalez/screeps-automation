@@ -16,6 +16,14 @@
 import { Temple } from './Temple';
 import { HighCharity } from '../core/HighCharity';
 
+interface SpawnRequest {
+  priority: number;
+  name: string;
+  body: BodyPartConstant[];
+  memory: CreepMemory;
+  arbiter: string;
+}
+
 /**
  * Command Temple - Manages core colony structures
  */
@@ -25,6 +33,7 @@ export class CommandTemple extends Temple {
   terminal: StructureTerminal | null;
   powerSpawn: StructurePowerSpawn | null;
   links: StructureLink[];
+  spawnQueue: SpawnRequest[];
   
   constructor(highCharity: HighCharity) {
     // Center on primary spawn or storage
@@ -38,6 +47,7 @@ export class CommandTemple extends Temple {
     this.terminal = null;
     this.powerSpawn = null;
     this.links = [];
+    this.spawnQueue = [];
   }
   
   init(): void {
@@ -61,6 +71,9 @@ export class CommandTemple extends Temple {
   }
   
   run(): void {
+    // Process spawn queue
+    this.processSpawnQueue();
+    
     // Link operations
     this.manageLinks();
     
@@ -69,6 +82,39 @@ export class CommandTemple extends Temple {
     
     // Power spawn operations (if implemented)
     // this.managePowerSpawn();
+  }
+  
+  /**
+   * Add a spawn request to the queue
+   */
+  addSpawnRequest(priority: number, name: string, body: BodyPartConstant[], memory: CreepMemory, arbiter: string): void {
+    this.spawnQueue.push({ priority, name, body, memory, arbiter });
+  }
+  
+  /**
+   * Process spawn queue with priority
+   */
+  private processSpawnQueue(): void {
+    if (!this.spawn || this.spawn.spawning) return;
+    if (this.spawnQueue.length === 0) return;
+    
+    // Sort queue by priority (lowest number = highest priority)
+    this.spawnQueue.sort((a, b) => a.priority - b.priority);
+    
+    // Try to spawn highest priority request
+    const request = this.spawnQueue[0];
+    const result = this.spawn.spawnCreep(request.body, request.name, { memory: request.memory });
+    
+    if (result === OK) {
+      this.spawnQueue.shift(); // Remove from queue
+      console.log(`✨ [CommandTemple] Spawning ${request.name} (priority: ${request.priority})`);
+    } else if (result === ERR_NOT_ENOUGH_ENERGY) {
+      // Keep in queue, try again next tick
+    } else {
+      // Other error, remove from queue
+      this.spawnQueue.shift();
+      console.log(`❌ [CommandTemple] Failed to spawn ${request.name}: ${result}`);
+    }
   }
   
   private manageLinks(): void {

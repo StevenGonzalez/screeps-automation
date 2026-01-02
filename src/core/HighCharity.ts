@@ -29,6 +29,7 @@ import { DefenseTemple } from '../temples/DefenseTemple';
 import { LabTemple } from '../temples/LabTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
+import { RoadBuilder } from '../planning/RoadBuilder';
 import { CovenantVisuals } from '../visuals/CovenantVisuals';
 
 export interface HighCharityMemory {
@@ -78,6 +79,7 @@ export class HighCharity {
   
   // Planning
   planner: RoomPlanner;
+  roadBuilder: RoadBuilder;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -134,6 +136,9 @@ export class HighCharity {
     
     // Initialize room planner
     this.planner = new RoomPlanner(room);
+    
+    // Initialize road builder
+    this.roadBuilder = new RoadBuilder(room);
     
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
@@ -206,6 +211,19 @@ export class HighCharity {
     // Run all Arbiters
     for (const arbiterName in this.arbiters) {
       this.arbiters[arbiterName].run();
+    }
+    
+    // Automatic road building
+    this.roadBuilder.recordTraffic();
+    
+    // Build critical roads immediately at RCL 3
+    if (this.level === 3 && Game.time % 500 === 0) {
+      this.roadBuilder.buildCriticalRoads();
+    }
+    
+    // Build traffic-based roads at mature colonies
+    if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
+      this.roadBuilder.buildRoads();
     }
     
     // Draw visuals
