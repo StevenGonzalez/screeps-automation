@@ -5,3 +5,4 @@
  */
 
 export { RoomPlanner } from './RoomPlanner';
+export { AutoPlanner } from './AutoPlanner';

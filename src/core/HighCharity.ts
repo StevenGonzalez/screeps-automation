@@ -35,6 +35,7 @@ import { BoostTemple } from '../temples/BoostTemple';
 import { PowerTemple } from '../temples/PowerTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
+import { AutoPlanner } from '../planning/AutoPlanner';
 import { RoadBuilder } from '../planning/RoadBuilder';
 import { CovenantVisuals } from '../visuals/CovenantVisuals';
 import { Profiler, TickBudget } from '../utils/Profiler';
@@ -75,6 +76,13 @@ export interface HighCharityMemory {
     spawnedThisTick: number;
     totalSpawned: number;
     statistics: any;
+  };
+  autoPlanner?: {
+    lastRCL: number;
+    trafficMap: { [key: string]: number };
+    lastTrafficUpdate: number;
+    defensePlanned: boolean;
+    roadPlannedAt: number;
   };
 }
 
@@ -117,6 +125,7 @@ export class HighCharity {
   
   // Planning
   planner: RoomPlanner;
+  autoPlanner: AutoPlanner;
   roadBuilder: RoadBuilder;
   
   // Military
@@ -200,6 +209,9 @@ export class HighCharity {
     
     // Initialize room planner
     this.planner = new RoomPlanner(room);
+    
+    // Initialize auto planner
+    this.autoPlanner = new AutoPlanner(room, this.planner);
     
     // Initialize road builder
     this.roadBuilder = new RoadBuilder(room);
@@ -318,6 +330,11 @@ export class HighCharity {
     // Process spawn queue first (critical for colony function)
     Profiler.wrap('SpawnQueue_run', () => {
       this.spawnQueue.run();
+    });
+    
+    // Run auto planner (construction automation)
+    Profiler.wrap('AutoPlanner_run', () => {
+      this.autoPlanner.run();
     });
     
     // Run all Temples

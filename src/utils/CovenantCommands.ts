@@ -940,4 +940,52 @@ export class CovenantCommands {
     
     console.log('═══════════════════════════════════════════════════════');
   }
+  
+  /**
+   * Show room layout and auto-planner status
+   * Usage: Game.cov.layout(roomName)
+   */
+  layout(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📐 ROOM LAYOUT & AUTO-PLANNER');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] :
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity) continue;
+      
+      const status = charity.autoPlanner.getStatus();
+      console.log(`\n${status}`);
+      
+      const plan = charity.planner.getPlan();
+      if (plan) {
+        console.log(`  Plan Details:`);
+        console.log(`    - Anchor: (${plan.anchor.x}, ${plan.anchor.y})`);
+        console.log(`    - Spawns planned: ${plan.spawns.length}`);
+        console.log(`    - Extensions planned: ${plan.extensions.length}`);
+        console.log(`    - Towers planned: ${plan.towers.length}`);
+        console.log(`    - Labs planned: ${plan.labs.length}`);
+        console.log(`    - Roads planned: ${plan.roads.length}`);
+        
+        if (plan.storage) {
+          console.log(`    - Storage: (${plan.storage.x}, ${plan.storage.y})`);
+        }
+        if (plan.terminal) {
+          console.log(`    - Terminal: (${plan.terminal.x}, ${plan.terminal.y})`);
+        }
+        if (plan.factory) {
+          console.log(`    - Factory: (${plan.factory.x}, ${plan.factory.y})`);
+        }
+        
+        // Show visualization command
+        console.log(`  💡 Run: charity.planner.visualize() to see layout`);
+        console.log(`  💡 Run: charity.autoPlanner.visualizeTraffic() to see traffic heatmap`);
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
 }

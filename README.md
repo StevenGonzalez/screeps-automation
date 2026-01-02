@@ -65,6 +65,14 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Lifecycle tracking for replacement spawning
   - Emergency minimal bodies when under attack
   - Queue statistics and monitoring with `Game.cov.spawns()`
+- **Auto-Planner**: Automated construction and layout system
+  - Automatic construction site placement on RCL upgrades
+  - Traffic-based road planning (builds roads where creeps frequently travel)
+  - Defense perimeter planning with automatic ramparts on critical structures
+  - Sacred geometry layouts with hexagonal symmetry
+  - Integration with RoomPlanner for optimal structure placement
+  - Visualization tools for layout and traffic heatmaps
+  - Console monitoring with `Game.cov.layout()`
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration
