@@ -152,6 +152,31 @@ export class CovenantCommands {
   }
   
   /**
+   * Show war status and targets
+   * Usage: Game.cov.war()
+   */
+  war(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⚔️ WAR COUNCIL STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity || charity.memory.phase !== 'powerhouse') continue;
+      
+      const status = charity.warCouncil.getStatus();
+      console.log(`\n🏛️ ${charity.name}:`);
+      console.log(`   Targets identified: ${status.targets}`);
+      console.log(`   Active squads: ${status.activeSquads}`);
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
    * Show help for all commands
    * Usage: Game.cov.help()
    */
@@ -167,6 +192,7 @@ export class CovenantCommands {
     console.log('Game.cov.topCpu(count) - Show top CPU consumers');
     console.log('Game.cov.colony(room) - Show colony status');
     console.log('Game.cov.colonies() - List all colonies');
+    console.log('Game.cov.war(room?) - Show war targets and squads');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }

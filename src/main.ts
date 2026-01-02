@@ -28,6 +28,7 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.topCpu = (count?: number) => Cov.commands.topCpu(count);
 (Game as any).cov.colony = (room: string) => Cov.commands.colony(room);
 (Game as any).cov.colonies = () => Cov.commands.colonies();
+(Game as any).cov.war = (room?: string) => Cov.commands.war(room);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**

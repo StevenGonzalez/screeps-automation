@@ -34,6 +34,7 @@ import { RoadBuilder } from '../planning/RoadBuilder';
 import { CovenantVisuals } from '../visuals/CovenantVisuals';
 import { Profiler, TickBudget } from '../utils/Profiler';
 import { CacheSystem, StructureCache } from '../utils/CacheSystem';
+import { WarCouncil } from '../military/WarCouncil';
 
 export interface HighCharityMemory {
   level: number;
@@ -84,6 +85,9 @@ export class HighCharity {
   // Planning
   planner: RoomPlanner;
   roadBuilder: RoadBuilder;
+  
+  // Military
+  warCouncil: WarCouncil;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -146,6 +150,9 @@ export class HighCharity {
     // Initialize road builder
     this.roadBuilder = new RoadBuilder(room);
     
+    // Initialize war council (only at powerhouse phase)
+    this.warCouncil = new WarCouncil(this);
+    
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
     
@@ -203,6 +210,13 @@ export class HighCharity {
       });
     }
     
+    // Initialize war council
+    if (this.memory.phase === 'powerhouse') {
+      Profiler.wrap('WarCouncil_init', () => {
+        this.warCouncil.init();
+      });
+    }
+    
     // Debug output every 50 ticks
     if (Game.time % 50 === 0) {
       const totalCreeps = this.elites.length;
@@ -210,7 +224,9 @@ export class HighCharity {
       const spawnStatus = this.primarySpawn ? 
         (this.primarySpawn.spawning ? `🔄 Spawning ${this.primarySpawn.spawning.name}` : '✅ Idle') : 
         '❌ No spawn';
-      console.log(`📜 ${this.print}: RCL${this.level} ${this.memory.phase} | ${totalCreeps} creeps | ${arbiterCount} arbiters | ${spawnStatus} | Energy: ${this.energyAvailable}/${this.energyCapacity}`);
+      const warStatus = this.memory.phase === 'powerhouse' ? 
+        ` | War: ${this.warCouncil.getStatus().targets} targets, ${this.warCouncil.getStatus().activeSquads} squads` : '';
+      console.log(`📜 ${this.print}: RCL${this.level} ${this.memory.phase} | ${totalCreeps} creeps | ${arbiterCount} arbiters | ${spawnStatus} | Energy: ${this.energyAvailable}/${this.energyCapacity}${warStatus}`);
     }
     
     Profiler.end(`HighCharity_${this.name}_init`);
@@ -243,6 +259,13 @@ export class HighCharity {
       
       Profiler.wrap(`Arbiter_${arbiterName}_run`, () => {
         this.arbiters[arbiterName].run();
+      });
+    }
+    
+    // Run war council (skip if over budget)
+    if (this.memory.phase === 'powerhouse' && !TickBudget.shouldSkipExpensive(0.9)) {
+      Profiler.wrap('WarCouncil_run', () => {
+        this.warCouncil.run();
       });
     }
     
