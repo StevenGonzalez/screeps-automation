@@ -195,13 +195,25 @@ export class StewardArbiter extends Arbiter {
   private calculateDesiredHaulers(): number {
     const phase = this.highCharity.memory.phase;
     const hasStorage = !!this.highCharity.storage;
-    const containerCount = this.room.find(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_CONTAINER
-    }).length;
     
-    // Bootstrap: 1-2 haulers
+    // Check if there are containers near sources (Extractors active)
+    const sources = this.room.find(FIND_SOURCES);
+    let sourceContainers = 0;
+    for (const source of sources) {
+      const containers = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: s => s.structureType === STRUCTURE_CONTAINER
+      });
+      if (containers.length > 0) sourceContainers++;
+    }
+    
+    // No source containers = Acolytes handling energy themselves
+    if (sourceContainers === 0) {
+      return 0; // Acolytes deliver directly, no haulers needed
+    }
+    
+    // Bootstrap: 1-2 haulers once miners are active
     if (phase === 'bootstrap') {
-      return containerCount > 0 ? 2 : 1;
+      return sourceContainers >= 2 ? 2 : 1;
     }
     
     // Developing: 2-3 haulers
