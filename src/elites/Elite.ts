@@ -148,15 +148,15 @@ export class Elite {
   }
   
   /**
-   * Smart movement to a target
+   * Smart movement to a target with path caching
    */
   goTo(target: RoomPosition | { pos: RoomPosition }, options: MoveToOpts = {}): number {
     const targetPos = target instanceof RoomPosition ? target : target.pos;
     
-    // Default options
+    // Default options with longer path reuse for CPU savings
     const moveOpts: MoveToOpts = {
       visualizePathStyle: { stroke: '#ffffff' },
-      reusePath: 5,
+      reusePath: 20, // Increased from 5 for better CPU performance
       ...options
     };
     

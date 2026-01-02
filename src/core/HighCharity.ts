@@ -32,6 +32,8 @@ import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { RoadBuilder } from '../planning/RoadBuilder';
 import { CovenantVisuals } from '../visuals/CovenantVisuals';
+import { Profiler, TickBudget } from '../utils/Profiler';
+import { CacheSystem, StructureCache } from '../utils/CacheSystem';
 
 export interface HighCharityMemory {
   level: number;
@@ -154,6 +156,8 @@ export class HighCharity {
    * Build phase - gather references and create structures
    */
   build(): void {
+    Profiler.start(`HighCharity_${this.name}_build`);
+    
     // Gather structure references
     this.refreshStructures();
     
@@ -170,23 +174,33 @@ export class HighCharity {
     this.buildArbiters();
     
     this.memory.lastBuilt = Game.time;
+    
+    Profiler.end(`HighCharity_${this.name}_build`);
   }
   
   /**
    * Initialize phase - prepare for execution
    */
   init(): void {
+    Profiler.start(`HighCharity_${this.name}_init`);
+    
     // Initialize all Temples
     for (const templeName in this.temples) {
-      this.temples[templeName].init();
+      Profiler.wrap(`Temple_${templeName}_init`, () => {
+        this.temples[templeName].init();
+      });
     }
     
     // Initialize logistics network
-    this.prophetsWill.init();
+    Profiler.wrap(`ProphetsWill_init`, () => {
+      this.prophetsWill.init();
+    });
     
     // Initialize all Arbiters
     for (const arbiterName in this.arbiters) {
-      this.arbiters[arbiterName].init();
+      Profiler.wrap(`Arbiter_${arbiterName}_init`, () => {
+        this.arbiters[arbiterName].init();
+      });
     }
     
     // Debug output every 50 ticks
@@ -198,61 +212,83 @@ export class HighCharity {
         '❌ No spawn';
       console.log(`📜 ${this.print}: RCL${this.level} ${this.memory.phase} | ${totalCreeps} creeps | ${arbiterCount} arbiters | ${spawnStatus} | Energy: ${this.energyAvailable}/${this.energyCapacity}`);
     }
+    
+    Profiler.end(`HighCharity_${this.name}_init`);
   }
   
   /**
    * Run phase - execute operations
    */
   run(): void {
+    Profiler.start(`HighCharity_${this.name}_run`);
+    
     // Run all Temples
     for (const templeName in this.temples) {
-      this.temples[templeName].run();
+      Profiler.wrap(`Temple_${templeName}_run`, () => {
+        this.temples[templeName].run();
+      });
     }
     
     // Run logistics network
-    this.prophetsWill.run();
+    Profiler.wrap(`ProphetsWill_run`, () => {
+      this.prophetsWill.run();
+    });
     
-    // Run all Arbiters
+    // Run all Arbiters (with CPU budget awareness)
     for (const arbiterName in this.arbiters) {
-      this.arbiters[arbiterName].run();
+      // Skip expensive arbiters if over budget
+      if (TickBudget.shouldSkipExpensive(0.85)) {
+        continue;
+      }
+      
+      Profiler.wrap(`Arbiter_${arbiterName}_run`, () => {
+        this.arbiters[arbiterName].run();
+      });
     }
     
-    // Automatic road building
-    this.roadBuilder.recordTraffic();
-    
-    // Build critical roads immediately at RCL 3
-    if (this.level === 3 && Game.time % 500 === 0) {
-      this.roadBuilder.buildCriticalRoads();
+    // Automatic road building (skip if over budget)
+    if (!TickBudget.shouldSkipExpensive(0.9)) {
+      this.roadBuilder.recordTraffic();
+      
+      // Build critical roads immediately at RCL 3
+      if (this.level === 3 && Game.time % 500 === 0) {
+        this.roadBuilder.buildCriticalRoads();
+      }
+      
+      // Build traffic-based roads at mature colonies
+      if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
+        this.roadBuilder.buildRoads();
+      }
     }
     
-    // Build traffic-based roads at mature colonies
-    if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
-      this.roadBuilder.buildRoads();
-    }
-    
-    // Draw visuals
-    if (Game.time % 5 === 0) {
+    // Draw visuals (skip if over budget)
+    if (Game.time % 5 === 0 && !TickBudget.shouldSkipExpensive(0.95)) {
       this.visuals.drawHUD();
     }
     
     // Update statistics
     this.updateStatistics();
+    
+    Profiler.end(`HighCharity_${this.name}_run`);
   }
   
   /**
-   * Refresh structure references
+   * Refresh structure references (cached)
    */
   private refreshStructures(): void {
-    this.spawns = this.room.find(FIND_MY_SPAWNS);
-    this.extensions = this.room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_EXTENSION
-    }) as StructureExtension[];
-    this.towers = this.room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_TOWER
-    }) as StructureTower[];
-    this.links = this.room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_LINK
-    }) as StructureLink[];
+    // Use cached structure lookups (TTL: 10 ticks)
+    this.spawns = StructureCache.getMyStructures<StructureSpawn>(
+      this.room, STRUCTURE_SPAWN, 10
+    );
+    this.extensions = StructureCache.getMyStructures<StructureExtension>(
+      this.room, STRUCTURE_EXTENSION, 10
+    );
+    this.towers = StructureCache.getMyStructures<StructureTower>(
+      this.room, STRUCTURE_TOWER, 10
+    );
+    this.links = StructureCache.getMyStructures<StructureLink>(
+      this.room, STRUCTURE_LINK, 10
+    );
     
     this.storage = this.room.storage;
     this.terminal = this.room.terminal;

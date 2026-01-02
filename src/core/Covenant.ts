@@ -14,6 +14,7 @@
 import { HighCharity } from './HighCharity';
 import { Arbiter } from '../arbiters/Arbiter';
 import { Crusade } from '../crusades/Crusade';
+import { CovenantCommands } from '../utils/CovenantCommands';
 
 interface CovenantMemory {
   version: string;
@@ -42,6 +43,9 @@ export class Covenant {
   shouldBuild: boolean;
   cache: any; // Will hold cached data for the tick
   
+  // Console commands
+  commands: CovenantCommands;
+  
   constructor() {
     this.memory = Memory as any;
     this.highCharities = {};
@@ -49,6 +53,9 @@ export class Covenant {
     this.crusades = {};
     this.shouldBuild = true;
     this.cache = {};
+    
+    // Initialize console commands
+    this.commands = new CovenantCommands(this);
     
     // Initialize memory structure
     this.initializeMemory();

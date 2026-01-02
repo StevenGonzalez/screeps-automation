@@ -10,12 +10,28 @@
 /// <reference types="@types/screeps" />
 
 import { Covenant } from "./core/Covenant";
+import { Profiler } from "./utils/Profiler";
+import { CacheSystem, PathCache } from "./utils/CacheSystem";
 
 // Initialize global Covenant instance
 const Cov = Covenant.getInstance();
 
-// Store in Game object for global access
-(Game as any).cov = Cov;
+// Store in Game object for global access with console commands
+(Game as any).cov = {
+  // Direct access to Covenant instance
+  ...Cov,
+  
+  // Console command shortcuts
+  profile: (minCpu?: number) => Cov.commands.profile(minCpu),
+  resetProfile: () => Cov.commands.resetProfile(),
+  cacheStats: () => Cov.commands.cacheStats(),
+  clearCache: () => Cov.commands.clearCache(),
+  cpuStatus: () => Cov.commands.cpuStatus(),
+  topCpu: (count?: number) => Cov.commands.topCpu(count),
+  colony: (room: string) => Cov.commands.colony(room),
+  colonies: () => Cov.commands.colonies(),
+  help: () => Cov.commands.help()
+};
 
 /**
  * Main game loop - executed every tick
@@ -26,17 +42,33 @@ export const loop = (): void => {
 
   try {
     // COVENANT ARCHITECTURE
+    Profiler.start('Covenant_build');
     // Phase 1: Build - Construct all High Charities, Arbiters, and Crusades
     Cov.build();
+    Profiler.end('Covenant_build');
     
+    Profiler.start('Covenant_init');
     // Phase 2: Init - Initialize all systems
     Cov.init();
+    Profiler.end('Covenant_init');
     
+    Profiler.start('Covenant_run');
     // Phase 3: Run - Execute all operations
     Cov.run();
+    Profiler.end('Covenant_run');
     
+    Profiler.start('Covenant_endOfTick');
     // Phase 4: End of tick - Stats and cleanup
     Cov.endOfTick();
+    Profiler.end('Covenant_endOfTick');
+    
+    // CACHE CLEANUP
+    if (Game.time % 10 === 0) {
+      CacheSystem.cleanExpired();
+    }
+    if (Game.time % 100 === 0) {
+      PathCache.cleanOld();
+    }
     
     // PERFORMANCE MONITORING
     if (Game.time % 100 === 0) {
@@ -104,6 +136,12 @@ function logPerformanceMetrics(): void {
   console.log(
     `📊 Global Status - CPU: ${stats.cpu.used}/${stats.cpu.limit}, Bucket: ${stats.cpu.bucket}, Rooms: ${stats.rooms}, Creeps: ${stats.creeps}`
   );
+  
+  // Show top CPU consumers
+  const topConsumers = Profiler.getTopConsumers(3);
+  if (topConsumers.length > 0) {
+    console.log('🔥 Top CPU: ' + topConsumers.map(c => `${c.name}(${c.cpu.toFixed(2)})`).join(', '));
+  }
 
   if (Game.time % 500 === 0) {
     const gclProgress = Math.round(
