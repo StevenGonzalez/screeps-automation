@@ -10,6 +10,7 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
+import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { getSpawnName } from '../utils/SpawnNames';
@@ -246,10 +247,22 @@ export class ArtisanArbiter extends Arbiter {
     const body = this.calculateBuilderBody();
     const name = `Artisan_${Game.time}`;
     
+    // Builders use SUPPORT priority (lower than miners/haulers)
+    // Exception: During bootstrap with construction sites, use ECONOMY
+    const hasUrgentSites = this.room.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: s => s.structureType === STRUCTURE_SPAWN || 
+                   s.structureType === STRUCTURE_EXTENSION ||
+                   s.structureType === STRUCTURE_CONTAINER
+    }).length > 0;
+    
+    const priority = (this.highCharity.isBootstrapping && hasUrgentSites) ?
+      SpawnPriority.ECONOMY :
+      SpawnPriority.EXPANSION; // Use EXPANSION priority (5) for builders normally
+    
     this.requestSpawn(body, name, {
       role: 'elite_builder', // Covenant themed role
       building: false
-    } as any);
+    } as any, priority);
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {

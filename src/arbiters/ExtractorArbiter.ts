@@ -101,7 +101,7 @@ export class ExtractorArbiter extends Arbiter {
     }
     
     // If miner is full and no container, transfer to nearby structures
-    if (miner.isFull && !this.container) {
+    if (miner.store.getFreeCapacity() === 0 && !this.container) {
       const nearbySpawn = miner.pos.findInRange(FIND_MY_SPAWNS, 1)[0];
       if (nearbySpawn && nearbySpawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         miner.transferTo(nearbySpawn);
@@ -110,18 +110,24 @@ export class ExtractorArbiter extends Arbiter {
   }
   
   private calculateDesiredMiners(): number {
-    // Early game: 1 miner per source
-    // Later: Depends on source energy and room phase
-    if (this.highCharity.level < 3) {
-      return 1;
+    // Only use miners once containers exist
+    // Before containers, HarvesterArbiter handles energy collection
+    const containers = this.room.find(FIND_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_CONTAINER
+    });
+    
+    // No containers yet - harvesters handle it
+    if (containers.length === 0 && this.highCharity.level < 4) {
+      return 0; // Let harvesters handle early game
     }
     
-    // With container, 1 dedicated miner is optimal
+    // With container near this source, 1 dedicated miner is optimal
     if (this.container) {
       return 1;
     }
     
-    return 2; // Without container, use 2 miners
+    // No container yet but RCL 4+ - need 1 miner per source
+    return 1;
   }
   
   private requestMiner(): void {

@@ -14,6 +14,7 @@
 import type { Covenant } from './Covenant';
 import { Arbiter } from '../arbiters/Arbiter';
 import { ExtractorArbiter } from '../arbiters/ExtractorArbiter';
+import { HarvesterArbiter } from '../arbiters/HarvesterArbiter';
 import { StewardArbiter } from '../arbiters/StewardArbiter';
 import { DevoteeArbiter } from '../arbiters/DevoteeArbiter';
 import { ArtisanArbiter } from '../arbiters/ArtisanArbiter';
@@ -553,14 +554,18 @@ export class HighCharity {
    * Build Arbiters for this High Charity
    */
   protected buildArbiters(): void {
-    // Build Extractor Arbiters for each source
+    // Build Harvester Arbiter FIRST (early game energy collection)
+    // This is critical for bootstrap - harvesters directly collect and deliver energy
+    new HarvesterArbiter(this);
+    
+    // Build Extractor Arbiters for each source (static miners on containers)
     const sources = this.room.find(FIND_SOURCES);
     for (const source of sources) {
       new ExtractorArbiter(this, source);
     }
     
     // Build core Arbiters
-    new StewardArbiter(this);  // Energy logistics
+    new StewardArbiter(this);  // Energy logistics (haulers)
     new DevoteeArbiter(this);  // Controller upgrading
     new ArtisanArbiter(this); // Construction and repair
     new ZealotArbiter(this); // Military defense

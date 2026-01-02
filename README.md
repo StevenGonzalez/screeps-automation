@@ -60,6 +60,8 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Integrated with existing buy/sell logic
 - **Spawn Queue System**: Priority-based spawn management
   - 6-tier priority system (Emergency → Defense → Critical → Economy → Expansion → Military)
+  - **Early Game Harvester System**: Dedicated harvesters for RCL 1-3 that directly collect and deliver energy
+  - **Mid-Late Game Miner+Hauler**: Transitions to static miners on containers + hauler logistics
   - Dynamic body optimization based on energy capacity
   - Spawn load balancing across multiple spawns
   - Lifecycle tracking for replacement spawning
