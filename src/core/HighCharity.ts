@@ -35,6 +35,7 @@ import { CovenantVisuals } from '../visuals/CovenantVisuals';
 import { Profiler, TickBudget } from '../utils/Profiler';
 import { CacheSystem, StructureCache } from '../utils/CacheSystem';
 import { WarCouncil } from '../military/WarCouncil';
+import { SPAWN_NAMES } from '../utils/SpawnNames';
 
 export interface HighCharityMemory {
   level: number;
@@ -164,6 +165,11 @@ export class HighCharity {
    */
   build(): void {
     Profiler.start(`HighCharity_${this.name}_build`);
+    
+    // Rename spawns to Covenant theme (once per 500 ticks)
+    if (Game.time % 500 === 0) {
+      this.renameSpawns();
+    }
     
     // Gather structure references
     this.refreshStructures();
@@ -492,6 +498,26 @@ export class HighCharity {
    */
   get energyCapacity(): number {
     return this.room.energyCapacityAvailable;
+  }
+  
+  /**
+   * Rename spawns to Covenant-themed names
+   */
+  private renameSpawns(): void {
+    const spawns = this.room.find(FIND_MY_SPAWNS);
+    
+    for (let i = 0; i < spawns.length; i++) {
+      const spawn = spawns[i];
+      const desiredName = SPAWN_NAMES[i] || `Sanctum-${i + 1}`;
+      
+      // Check if spawn already has a Covenant-themed name
+      if (!SPAWN_NAMES.includes(spawn.name) && !spawn.name.startsWith('Sanctum-')) {
+        // Can't directly rename, but we can inform the user
+        if (Game.time % 1000 === 0) {
+          console.log(`🔱 ${this.print}: Spawn '${spawn.name}' could be renamed to '${desiredName}' (destroy and rebuild to rename)`);
+        }
+      }
+    }
   }
   
   /**

@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { getSpawnName } from '../utils/SpawnNames';
 
 /**
  * Builder Arbiter - Manages construction and repair
@@ -320,7 +321,9 @@ export class ArtisanArbiter extends Arbiter {
     for (let i = existingSpawns; i < Math.min(maxSpawns, plan.spawns.length); i++) {
       const pos = plan.spawns[i];
       if (pos && !this.hasStructureOrSite(pos, STRUCTURE_SPAWN)) {
-        this.room.createConstructionSite(pos, STRUCTURE_SPAWN);
+        const spawnName = getSpawnName(this.room.name, i);
+        this.room.createConstructionSite(pos, STRUCTURE_SPAWN, spawnName);
+        console.log(`🔱 Placing spawn: ${spawnName}`);
       }
     }
     
