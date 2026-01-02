@@ -507,6 +507,42 @@ export class CovenantCommands {
   }
   
   /**
+   * Show remote mining operations
+   * Usage: Game.cov.remote() or Game.cov.remote('W1N1')
+   */
+  remote(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🌍 REMOTE OPERATIONS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity) continue;
+      
+      console.log(charity.remoteOperations.getStatus());
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Control remote mining for a specific room
+   * Usage: Game.cov.remoteToggle('W1N1', 'W2N1', true)
+   */
+  remoteToggle(homeRoom: string, remoteRoom: string, enable: boolean): void {
+    const charity = this.covenant.highCharities[homeRoom];
+    if (!charity) {
+      console.log(`❌ No colony found in ${homeRoom}`);
+      return;
+    }
+    
+    charity.remoteOperations.setRemoteRoomActive(remoteRoom, enable);
+  }
+  
+  /**
    * Show help for all commands
    * Usage: Game.cov.help()
    */
@@ -536,6 +572,8 @@ export class CovenantCommands {
     console.log('Game.cov.intel(room?) - Show room intelligence');
     console.log('Game.cov.expand() - Show expansion candidates');
     console.log('Game.cov.threats() - Show detected threats');
+    console.log('Game.cov.remote(room?) - Show remote mining ops');
+    console.log('Game.cov.remoteToggle(home, remote, enable) - Control remote mining');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }

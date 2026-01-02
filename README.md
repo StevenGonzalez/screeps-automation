@@ -22,6 +22,12 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
 - **Market Automation**: Intelligent buy/sell with price history tracking
 - **Lab Automation**: Automatic compound production with reaction chains
 - **Observer Network**: Automatic room scanning and intelligence gathering
+- **Remote Mining**: Secure resource extraction with multi-layer threat detection
+  - Real-time hostile detection and automatic retreat
+  - Construction site griefing protection
+  - Hostile reservation and structure checks
+  - Cheap creep bodies to minimize losses (max 800 energy)
+  - Auto re-enable when rooms become safe
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

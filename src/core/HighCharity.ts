@@ -39,6 +39,7 @@ import { CacheSystem, StructureCache } from '../utils/CacheSystem';
 import { WarCouncil } from '../military/WarCouncil';
 import { SafeModeManager } from '../defense/SafeModeManager';
 import { MarketManager } from '../market/MarketManager';
+import { RemoteOperations } from '../operations/RemoteOperations';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 
 export interface HighCharityMemory {
@@ -50,6 +51,7 @@ export interface HighCharityMemory {
     energySpent: number;
     creepCount: number;
   };
+  remote?: any; // Remote operations memory
 }
 
 /**
@@ -98,6 +100,7 @@ export class HighCharity {
   
   // Economy
   marketManager: MarketManager;
+  remoteOperations: RemoteOperations;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -174,6 +177,9 @@ export class HighCharity {
     
     // Initialize market manager
     this.marketManager = new MarketManager(this);
+    
+    // Initialize remote operations
+    this.remoteOperations = new RemoteOperations(this);
     
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
@@ -308,6 +314,14 @@ export class HighCharity {
         this.terminal && !TickBudget.shouldSkipExpensive(0.9)) {
       Profiler.wrap('MarketManager_run', () => {
         this.marketManager.run();
+      });
+    }
+    
+    // Run remote operations (mature+ colonies)
+    if ((this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') && 
+        !TickBudget.shouldSkipExpensive(0.85)) {
+      Profiler.wrap('RemoteOperations_run', () => {
+        this.remoteOperations.run();
       });
     }
     
@@ -477,16 +491,18 @@ export class HighCharity {
    * Build Seeker Arbiters for profitable nearby sources
    */
   private buildSeekerArbiters(): void {
-    const targets = this.intelligenceTemple.getRemoteMiningTargets();
+    // Use RemoteOperations to get active remote rooms
+    const activeRooms = this.remoteOperations.getActiveRemoteRooms();
     
-    // Limit to 3 remote sources maximum
-    for (const target of targets.slice(0, 3)) {
-      const arbiterName = `remoteMining_${target.roomName}_${target.sourceId}`;
-      
-      // Don't create duplicate arbiters
-      if (this.arbiters[arbiterName]) continue;
-      
-      new SeekerArbiter(this, target.roomName, target.sourceId);
+    for (const room of activeRooms) {
+      for (const sourceId of room.sourceIds) {
+        const arbiterName = `remoteMining_${room.roomName}_${sourceId}`;
+        
+        // Don't create duplicate arbiters
+        if (this.arbiters[arbiterName]) continue;
+        
+        new SeekerArbiter(this, room.roomName, sourceId);
+      }
     }
   }
   

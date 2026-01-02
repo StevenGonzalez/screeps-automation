@@ -42,6 +42,8 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.intel = (room?: string) => Cov.commands.intel(room);
 (Game as any).cov.expand = () => Cov.commands.expand();
 (Game as any).cov.threats = () => Cov.commands.threats();
+(Game as any).cov.remote = (room?: string) => Cov.commands.remote(room);
+(Game as any).cov.remoteToggle = (home: string, remote: string, enable: boolean) => Cov.commands.remoteToggle(home, remote, enable);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**
