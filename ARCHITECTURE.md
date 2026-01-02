@@ -121,6 +121,41 @@ Inspired by Halo's Covenant faction:
 | **BoostTemple** | Creep enhancement | 6+ |
 | **PowerTemple** | PowerBank harvesting & processing | 8 |
 
+### 🎨 Covenant Base Layout - Sacred Geometry
+
+Our automatic structure placement uses **distinctive Covenant religious architecture**:
+
+**SACRED CORE** (Cross Pattern):
+- Storage at holy anchor (High Charity's heart) 
+- Terminal, Factory, Power Spawn form cross pattern (religious symbolism)
+
+**HIERARCHS' THRONES** (Triangular Formation):
+- 3 spawns arranged in triangle representing the 3 Prophets
+- North: Prophet of Truth, SW: Prophet of Regret, SE: Prophet of Mercy
+
+**RINGS OF HIGH CHARITY** (6-Fold Sacred Geometry):
+- Extensions arranged in hexagonal mandala pattern
+- Concentric rings representing tiers of the holy city
+- 6-fold symmetry (ceremonial/religious significance)
+- Inner sanctum → Middle tiers → Outer tiers progression
+
+**GUARDIAN SENTINELS** (Defensive Hexagon):
+- 6 towers form protective ring around core
+- Overlapping fields of fire
+- Positioned at cardinal hexagonal points
+
+**RESEARCH SANCTUM** (Lab Cluster):
+- Labs arranged in tight flower pattern
+- Optimized for reaction chains
+- Central reagent sources with surrounding reaction labs
+
+**Visualization**: Toggle with `Game.cov.showPlan()` to see:
+- Golden cross pattern at sacred core
+- Purple concentric hexagons (Rings of High Charity)
+- Magenta triangle connecting Hierarchs' Thrones
+- Red hexagon connecting Guardian Sentinels
+- Tier-colored extensions showing city layers
+
 ### ⚔️ Military Systems
 
 - **War Council**: Scans nearby rooms for attack targets, evaluates threat levels

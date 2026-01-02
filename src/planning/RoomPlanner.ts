@@ -231,7 +231,8 @@ export class RoomPlanner {
   
   /**
    * Plan extensions in radial Covenant pattern
-   * COVENANT THEME: Radiating rings like the sacred city's tiers
+   * COVENANT THEME: RINGS OF HIGH CHARITY - Sacred geometric tiers
+   * Forms distinctive hexagonal mandala pattern representing the holy city's layers
    */
   private planExtensions(plan: RoomPlan): void {
     const anchor = plan.anchor;
@@ -239,40 +240,96 @@ export class RoomPlanner {
     
     const positions: RoomPosition[] = [];
     
-    // COVENANT PATTERN: Concentric hexagonal rings emanating from sacred core
-    // Create 6-fold symmetry (religious/ceremonial significance)
-    const angles = [0, 60, 120, 180, 240, 300]; // 6 cardinal directions
+    // RINGS OF HIGH CHARITY: 6-fold sacred symmetry (Covenant religious architecture)
+    // Each ring represents a tier of the holy city, extensions are prayer shrines
+    const baseAngles = [0, 60, 120, 180, 240, 300]; // Primary cardinal directions
     
-    for (let ring = 1; ring <= 6 && positions.length < maxExtensions; ring++) {
-      const radius = 3 + ring;
+    // Ring 1: Inner Sanctum - 6 extensions forming perfect hexagon
+    for (const angle of baseAngles) {
+      const rad = (angle * Math.PI) / 180;
+      const dist = 4;
+      const x = Math.round(anchor.x + Math.cos(rad) * dist);
+      const y = Math.round(anchor.y + Math.sin(rad) * dist);
       
-      // Place extensions along each of the 6 radial arms
-      for (const angle of angles) {
-        // Convert to radians
-        const rad = (angle * Math.PI) / 180;
-        
-        // Create multiple extensions along this arm
-        for (let dist = radius - 1; dist <= radius + 1; dist++) {
-          const x = Math.round(anchor.x + Math.cos(rad) * dist);
-          const y = Math.round(anchor.y + Math.sin(rad) * dist);
-          
-          if (x < 2 || x > 47 || y < 2 || y > 47) continue;
-          if (this.terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-          
+      if (x >= 2 && x <= 47 && y >= 2 && y <= 47) {
+        if (this.terrain.get(x, y) !== TERRAIN_MASK_WALL) {
           const pos = new RoomPosition(x, y, this.room.name);
-          
-          if (this.isPositionReserved(pos, plan)) continue;
-          if (positions.some(p => p.x === pos.x && p.y === pos.y)) continue;
-          
-          positions.push(pos);
-          
-          if (positions.length >= maxExtensions) break;
+          if (!this.isPositionReserved(pos, plan) && !positions.some(p => p.x === pos.x && p.y === pos.y)) {
+            positions.push(pos);
+          }
         }
-        if (positions.length >= maxExtensions) break;
       }
     }
     
-    plan.extensions = positions;
+    // Rings 2-4: Middle Tiers - Extensions between cardinal points (12-fold symmetry)
+    const secondaryAngles = [30, 90, 150, 210, 270, 330]; // Secondary directions
+    for (let ring = 2; ring <= 4 && positions.length < maxExtensions; ring++) {
+      const radius = 3 + ring;
+      
+      // Primary cardinal points (stronger)
+      for (const angle of baseAngles) {
+        for (let offset = -0.5; offset <= 0.5; offset += 0.5) {
+          const rad = ((angle + offset * 15) * Math.PI) / 180;
+          const x = Math.round(anchor.x + Math.cos(rad) * radius);
+          const y = Math.round(anchor.y + Math.sin(rad) * radius);
+          
+          if (x >= 2 && x <= 47 && y >= 2 && y <= 47) {
+            if (this.terrain.get(x, y) !== TERRAIN_MASK_WALL) {
+              const pos = new RoomPosition(x, y, this.room.name);
+              if (!this.isPositionReserved(pos, plan) && !positions.some(p => p.x === pos.x && p.y === pos.y)) {
+                positions.push(pos);
+                if (positions.length >= maxExtensions) break;
+              }
+            }
+          }
+        }
+        if (positions.length >= maxExtensions) break;
+      }
+      
+      // Secondary points (filling gaps)
+      if (ring >= 3) {
+        for (const angle of secondaryAngles) {
+          const rad = (angle * Math.PI) / 180;
+          const x = Math.round(anchor.x + Math.cos(rad) * radius);
+          const y = Math.round(anchor.y + Math.sin(rad) * radius);
+          
+          if (x >= 2 && x <= 47 && y >= 2 && y <= 47) {
+            if (this.terrain.get(x, y) !== TERRAIN_MASK_WALL) {
+              const pos = new RoomPosition(x, y, this.room.name);
+              if (!this.isPositionReserved(pos, plan) && !positions.some(p => p.x === pos.x && p.y === pos.y)) {
+                positions.push(pos);
+                if (positions.length >= maxExtensions) break;
+              }
+            }
+          }
+        }
+      }
+      if (positions.length >= maxExtensions) break;
+    }
+    
+    // Rings 5-6: Outer Tiers - Dense spiral pattern for remaining extensions
+    for (let ring = 5; ring <= 6 && positions.length < maxExtensions; ring++) {
+      const radius = 3 + ring;
+      const angleCount = 18; // More positions in outer rings
+      
+      for (let i = 0; i < angleCount && positions.length < maxExtensions; i++) {
+        const angle = (360 / angleCount) * i;
+        const rad = (angle * Math.PI) / 180;
+        const x = Math.round(anchor.x + Math.cos(rad) * radius);
+        const y = Math.round(anchor.y + Math.sin(rad) * radius);
+        
+        if (x >= 2 && x <= 47 && y >= 2 && y <= 47) {
+          if (this.terrain.get(x, y) !== TERRAIN_MASK_WALL) {
+            const pos = new RoomPosition(x, y, this.room.name);
+            if (!this.isPositionReserved(pos, plan) && !positions.some(p => p.x === pos.x && p.y === pos.y)) {
+              positions.push(pos);
+            }
+          }
+        }
+      }
+    }
+    
+    plan.extensions = positions.slice(0, maxExtensions);
   }
   
   /**
@@ -393,50 +450,197 @@ export class RoomPlanner {
   }
   
   /**
-   * Visualize the room plan
+   * Visualize the room plan with COVENANT SACRED GEOMETRY
    */
   visualize(): void {
     const plan = this.getPlan();
     if (!plan) return;
     
     const visual = this.room.visual;
+    const anchor = plan.anchor;
     
-    // Draw anchor
-    visual.circle(plan.anchor, { fill: 'yellow', radius: 0.5 });
+    // SACRED CORE: Draw cross pattern (religious symbolism)
+    visual.line(anchor.x - 3, anchor.y, anchor.x + 3, anchor.y, {
+      color: '#FFD700',
+      width: 0.05,
+      opacity: 0.5
+    });
+    visual.line(anchor.x, anchor.y - 3, anchor.x, anchor.y + 3, {
+      color: '#FFD700',
+      width: 0.05,
+      opacity: 0.5
+    });
     
-    // Draw storage
+    // RINGS OF HIGH CHARITY: Draw concentric hexagons
+    const hexColors = ['#9370DB', '#8A2BE2', '#9400D3', '#8B008B'];
+    for (let ring = 1; ring <= 4; ring++) {
+      const radius = 3 + ring;
+      const points: {x: number, y: number}[] = [];
+      
+      for (let i = 0; i <= 6; i++) {
+        const angle = (i * 60 * Math.PI) / 180;
+        const x = anchor.x + Math.cos(angle) * radius;
+        const y = anchor.y + Math.sin(angle) * radius;
+        points.push({x, y});
+      }
+      
+      for (let i = 0; i < points.length - 1; i++) {
+        visual.line(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y, {
+          color: hexColors[ring - 1] || '#9370DB',
+          width: 0.03,
+          opacity: 0.3
+        });
+      }
+    }
+    
+    // HIERARCHS' TRIANGLE: Draw lines connecting spawns
+    if (plan.spawns.length >= 3) {
+      for (let i = 0; i < 3; i++) {
+        const start = plan.spawns[i];
+        const end = plan.spawns[(i + 1) % 3];
+        visual.line(start, end, {
+          color: '#FF00FF',
+          width: 0.08,
+          opacity: 0.4
+        });
+      }
+    }
+    
+    // GUARDIAN RING: Draw hexagon connecting towers
+    if (plan.towers.length >= 6) {
+      for (let i = 0; i < 6; i++) {
+        visual.line(plan.towers[i], plan.towers[(i + 1) % 6], {
+          color: '#FF0000',
+          width: 0.05,
+          opacity: 0.3
+        });
+      }
+    }
+    
+    // Draw anchor (Holy Center)
+    visual.circle(anchor, { 
+      fill: '#FFD700', 
+      radius: 0.6,
+      opacity: 0.8
+    });
+    visual.text('⚜', anchor, { 
+      color: '#FFFFFF', 
+      font: 0.7,
+      stroke: '#000000',
+      strokeWidth: 0.05
+    });
+    
+    // Draw storage (Sacred Vault)
     if (plan.storage) {
-      visual.circle(plan.storage, { fill: 'gold', radius: 0.4 });
-      visual.text('S', plan.storage, { color: 'black', font: 0.5 });
+      visual.circle(plan.storage, { 
+        fill: '#FFD700', 
+        radius: 0.45,
+        opacity: 0.8 
+      });
+      visual.text('💎', plan.storage, { font: 0.5 });
     }
     
-    // Draw terminal
+    // Draw terminal (Trade Sanctum)
     if (plan.terminal) {
-      visual.circle(plan.terminal, { fill: 'cyan', radius: 0.4 });
-      visual.text('T', plan.terminal, { color: 'black', font: 0.5 });
+      visual.circle(plan.terminal, { 
+        fill: '#00CED1', 
+        radius: 0.4,
+        opacity: 0.8
+      });
+      visual.text('📡', plan.terminal, { font: 0.5 });
     }
     
-    // Draw spawns
-    for (const pos of plan.spawns) {
-      visual.circle(pos, { fill: 'purple', radius: 0.4 });
-      visual.text('Sp', pos, { color: 'white', font: 0.4 });
+    // Draw factory (Forge)
+    if (plan.factory) {
+      visual.circle(plan.factory, { 
+        fill: '#FF8C00', 
+        radius: 0.4,
+        opacity: 0.8
+      });
+      visual.text('⚙', plan.factory, { font: 0.5 });
     }
     
-    // Draw towers
+    // Draw power spawn (Ancient Power)
+    if (plan.powerSpawn) {
+      visual.circle(plan.powerSpawn, { 
+        fill: '#FF1493', 
+        radius: 0.4,
+        opacity: 0.8
+      });
+      visual.text('⚡', plan.powerSpawn, { font: 0.5 });
+    }
+    
+    // Draw spawns (Hierarchs' Thrones)
+    for (let i = 0; i < plan.spawns.length; i++) {
+      const pos = plan.spawns[i];
+      visual.circle(pos, { 
+        fill: '#9370DB', 
+        radius: 0.5,
+        opacity: 0.8
+      });
+      visual.text('👑', pos, { font: 0.6 });
+    }
+    
+    // Draw towers (Guardian Sentinels)
     for (const pos of plan.towers) {
-      visual.circle(pos, { fill: 'red', radius: 0.4 });
-      visual.text('Tw', pos, { color: 'white', font: 0.4 });
+      visual.circle(pos, { 
+        fill: '#DC143C', 
+        radius: 0.4,
+        opacity: 0.8
+      });
+      visual.text('🗼', pos, { font: 0.5 });
     }
     
-    // Draw extensions (simplified - just circles)
-    for (const pos of plan.extensions) {
-      visual.circle(pos, { fill: 'blue', radius: 0.3 });
+    // Draw extensions (Prayer Shrines) with tier coloring
+    const tierColors = ['#4169E1', '#1E90FF', '#87CEEB', '#B0E0E6'];
+    for (let i = 0; i < plan.extensions.length; i++) {
+      const pos = plan.extensions[i];
+      const tier = Math.floor(i / 15); // Color by tier
+      const color = tierColors[Math.min(tier, tierColors.length - 1)];
+      
+      visual.circle(pos, { 
+        fill: color, 
+        radius: 0.25,
+        opacity: 0.7
+      });
     }
     
-    // Draw labs
+    // Draw labs (Research Sanctum)
     for (const pos of plan.labs) {
-      visual.circle(pos, { fill: 'green', radius: 0.3 });
-      visual.text('L', pos, { color: 'white', font: 0.3 });
+      visual.circle(pos, { 
+        fill: '#32CD32', 
+        radius: 0.35,
+        opacity: 0.8
+      });
+      visual.text('🧪', pos, { font: 0.4 });
     }
+    
+    // Draw observer and nuker
+    if (plan.observer) {
+      visual.circle(plan.observer, {
+        fill: '#4B0082',
+        radius: 0.35,
+        opacity: 0.8
+      });
+      visual.text('👁', plan.observer, { font: 0.5 });
+    }
+    
+    if (plan.nuker) {
+      visual.circle(plan.nuker, {
+        fill: '#8B0000',
+        radius: 0.35,
+        opacity: 0.8
+      });
+      visual.text('☢', plan.nuker, { font: 0.5 });
+    }
+    
+    // Draw legend
+    visual.text('⚜ COVENANT BASE LAYOUT ⚜', 25, 1, {
+      color: '#FFD700',
+      font: 0.6,
+      align: 'center',
+      stroke: '#000000',
+      strokeWidth: 0.1
+    });
   }
 }

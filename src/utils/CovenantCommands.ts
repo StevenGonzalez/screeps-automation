@@ -241,7 +241,33 @@ export class CovenantCommands {
     console.log('Game.cov.colonies() - List all colonies');
     console.log('Game.cov.war(room?) - Show war targets and squads');
     console.log('Game.cov.power(room?) - Show power harvesting status');
+    console.log('Game.cov.showPlan(room?) - Visualize base layout (toggle)');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Toggle base plan visualization
+   * Usage: Game.cov.showPlan() or Game.cov.showPlan('W1N1')
+   */
+  showPlan(roomName?: string): void {
+    if (!Memory.covenant) Memory.covenant = {};
+    if (!Memory.covenant.visualize) Memory.covenant.visualize = {};
+    
+    if (roomName) {
+      // Toggle for specific room
+      const current = Memory.covenant.visualize![roomName] || false;
+      Memory.covenant.visualize![roomName] = !current;
+      console.log(`${!current ? '✅ Enabled' : '❌ Disabled'} base plan visualization for ${roomName}`);
+    } else {
+      // Toggle for all rooms
+      const charities = Object.values(this.covenant.highCharities);
+      const anyEnabled = charities.some(c => Memory.covenant?.visualize?.[c.name]);
+      
+      for (const charity of charities) {
+        Memory.covenant.visualize![charity.name] = !anyEnabled;
+      }
+      console.log(`${!anyEnabled ? '✅ Enabled' : '❌ Disabled'} base plan visualization for all rooms`);
+    }
   }
 }

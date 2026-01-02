@@ -20,6 +20,7 @@ interface CovenantMemory {
   version: string;
   lastTick: number;
   highCharities: { [roomName: string]: any };
+  visualize?: { [roomName: string]: boolean }; // Toggle base plan visualization
   stats: {
     gcl: number;
     gclProgress: number;

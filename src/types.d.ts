@@ -13,6 +13,14 @@ declare global {
     }
   }
   
+  interface Memory {
+    covenant?: {
+      version?: string;
+      visualize?: { [roomName: string]: boolean };
+      [key: string]: any;
+    };
+  }
+  
   interface CreepMemory {
     role?: string;
     arbiter?: string;

@@ -31,6 +31,11 @@ export class CovenantVisuals {
     this.drawCreepInfo();
     this.drawBoostInfo();
     this.drawThreatInfo();
+    
+    // Draw base plan if enabled
+    if (Memory.covenant?.visualize?.[this.highCharity.name]) {
+      this.drawPlan();
+    }
   }
   
   /**
