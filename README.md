@@ -53,6 +53,16 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Hostile Reservation Detection**: Detects and disables when enemy players reserve rooms
   - **Re-evaluation System**: Checks disabled rooms every 1000 ticks to see if safe again
   - Console commands: `Game.cov.remote()`, `Game.cov.remoteToggle()`
+- **Deposit Harvesting**: High-value resource extraction from highway deposits
+  - **Automatic Discovery**: Scans highway rooms within 7 range for deposits (biomass, silicon, metal, mist)
+  - **Profitability Scoring**: Evaluates deposits based on cooldown, distance, and decay time
+  - **Heavy Harvesters**: Spawns creeps with up to 25 WORK parts (50 harvest/tick)
+  - **Shuttle Haulers**: 2 dedicated haulers with 25 CARRY parts per deposit (1250 capacity each)
+  - **Cooldown Awareness**: Harvesters wait during deposit cooldown to maximize efficiency
+  - **Multi-Deposit Operations**: Runs up to 2 deposit operations simultaneously
+  - **Powerhouse Colonies Only**: Requires RCL 7+, 100k+ energy reserves
+  - **Automatic Cleanup**: Removes expired deposits from memory when harvested
+  - Console commands: `Game.cov.deposits()`, `Game.cov.depositToggle()`
 - **Autonomous Expansion**: Intelligent colony growth system
   - Evaluates expansion targets from observer intel
   - Scores rooms based on sources, minerals, distance, and threats

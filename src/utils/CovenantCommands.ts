@@ -543,6 +543,61 @@ export class CovenantCommands {
   }
   
   /**
+   * Show deposit harvesting status
+   * Usage: Game.cov.deposits() or Game.cov.deposits('W1N1')
+   */
+  deposits(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('💎 DEPOSIT HARVESTING STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity) continue;
+      
+      console.log(`\n🏛️ ${charity.name}:`);
+      console.log(`   RCL: ${charity.level}`);
+      console.log(`   Phase: ${charity.memory.phase}`);
+      
+      const deposits = charity.depositOperations.getAllDeposits();
+      const activeDeposits = deposits.filter(d => d.active && !d.disabled);
+      
+      console.log(`   Total deposits: ${deposits.length}`);
+      console.log(`   Active operations: ${activeDeposits.length}`);
+      
+      if (deposits.length > 0) {
+        console.log(`\n   Discovered Deposits:`);
+        for (const deposit of deposits) {
+          const status = deposit.active ? '✅ ACTIVE' : deposit.disabled ? '❌ DISABLED' : '⏸️ INACTIVE';
+          console.log(`     ${status} ${deposit.depositType} in ${deposit.roomName}`);
+          console.log(`       Distance: ${deposit.distance} rooms | Profit: ${deposit.profitability.toFixed(2)}`);
+        }
+      } else {
+        console.log(`   No deposits discovered yet (scanning every 1000 ticks)`);
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Toggle deposit harvesting
+   * Usage: Game.cov.depositToggle('W1N1', 'depositId', true)
+   */
+  depositToggle(homeRoom: string, depositId: string, enable: boolean): void {
+    const charity = this.covenant.highCharities[homeRoom];
+    if (!charity) {
+      console.log(`❌ No colony found in ${homeRoom}`);
+      return;
+    }
+    
+    charity.depositOperations.toggleDeposit(depositId, enable);
+  }
+  
+  /**
    * Show help for all commands
    * Usage: Game.cov.help()
    */
@@ -574,6 +629,8 @@ export class CovenantCommands {
     console.log('Game.cov.threats() - Show detected threats');
     console.log('Game.cov.remote(room?) - Show remote mining ops');
     console.log('Game.cov.remoteToggle(home, remote, enable) - Control remote mining');
+    console.log('Game.cov.deposits(room?) - Show deposit harvesting');
+    console.log('Game.cov.depositToggle(home, depositId, enable) - Control deposits');
     console.log('');
     console.log('⚔️ MILITARY COMMANDS:');
     console.log('Game.cov.squads(room?) - Show squad status and formations');

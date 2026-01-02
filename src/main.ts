@@ -44,6 +44,8 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.threats = () => Cov.commands.threats();
 (Game as any).cov.remote = (room?: string) => Cov.commands.remote(room);
 (Game as any).cov.remoteToggle = (home: string, remote: string, enable: boolean) => Cov.commands.remoteToggle(home, remote, enable);
+(Game as any).cov.deposits = (room?: string) => Cov.commands.deposits(room);
+(Game as any).cov.depositToggle = (home: string, depositId: string, enable: boolean) => Cov.commands.depositToggle(home, depositId, enable);
 (Game as any).cov.network = () => Cov.commands.network();
 (Game as any).cov.sendEnergy = (targetRoom: string, amount?: number) => Cov.commands.sendEnergy(targetRoom, amount);
 (Game as any).cov.powerProcessing = () => Cov.commands.powerProcessing();

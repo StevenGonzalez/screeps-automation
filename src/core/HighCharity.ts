@@ -47,6 +47,8 @@ import { SafeModeManager } from '../defense/SafeModeManager';
 import { MarketManager } from '../market/MarketManager';
 import { TerminalNetwork } from '../market/TerminalNetwork';
 import { RemoteOperations } from '../operations/RemoteOperations';
+import { DepositOperations } from '../operations/DepositOperations';
+import { DepositHarvesterArbiter } from '../arbiters/DepositHarvesterArbiter';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 import { PowerManager } from '../power/PowerManager';
 import { PowerCreepManager } from '../power/PowerCreepManager';
@@ -64,6 +66,7 @@ export interface HighCharityMemory {
     creepCount: number;
   };
   remote?: any; // Remote operations memory
+  deposits?: any; // Deposit operations memory
   powerProcessing?: {
     totalOpsGenerated: number;
     totalPowerConsumed: number;
@@ -145,6 +148,7 @@ export class HighCharity {
   marketManager: MarketManager;
   terminalNetwork: TerminalNetwork;
   remoteOperations: RemoteOperations;
+  depositOperations: DepositOperations;
   
   // Power
   powerManager: PowerManager;
@@ -244,6 +248,9 @@ export class HighCharity {
     
     // Initialize remote operations
     this.remoteOperations = new RemoteOperations(this);
+    
+    // Initialize deposit operations
+    this.depositOperations = new DepositOperations(this);
     
     // Initialize power manager
     this.powerManager = new PowerManager(this);
@@ -416,6 +423,13 @@ export class HighCharity {
         !TickBudget.shouldSkipExpensive(0.85)) {
       Profiler.wrap('RemoteOperations_run', () => {
         this.remoteOperations.run();
+      });
+    }
+    
+    // Run deposit operations (powerhouse colonies)
+    if (this.memory.phase === 'powerhouse' && !TickBudget.shouldSkipExpensive(0.85)) {
+      Profiler.wrap('DepositOperations_run', () => {
+        this.depositOperations.run();
       });
     }
     
@@ -599,6 +613,11 @@ export class HighCharity {
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
       this.buildSeekerArbiters();
       
+      // Build Deposit Harvester Arbiters (powerhouse colonies)
+      if (this.memory.phase === 'powerhouse') {
+        this.buildDepositHarvesterArbiters();
+      }
+      
       // Build Pioneer Arbiters for expansion
       this.buildPioneerArbiters();
       
@@ -657,6 +676,22 @@ export class HighCharity {
         console.log(`[HighCharity ${this.room.name}] 🎯 The Hierarchs have decreed expansion to ${target.roomName}!`);
         new HeraldArbiter(this, target.roomName);
       }
+    }
+  }
+  
+  /**
+   * Build Deposit Harvester Arbiters for active deposits
+   */
+  private buildDepositHarvesterArbiters(): void {
+    const activeDeposits = this.depositOperations.getActiveDeposits();
+    
+    for (const deposit of activeDeposits) {
+      const arbiterName = `depositHarvester_${deposit.depositId}`;
+      
+      // Don't create duplicate arbiters
+      if (this.arbiters[arbiterName]) continue;
+      
+      new DepositHarvesterArbiter(this, deposit.depositId, deposit.roomName, deposit.depositType);
     }
   }
   
