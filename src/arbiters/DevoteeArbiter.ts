@@ -13,6 +13,20 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 
+// Covenant-themed controller signs
+const COVENANT_SIGNS = [
+  "🔱 The Covenant's will is absolute",
+  "⚡ By the Prophets' grace, this world ascends",
+  "🌟 The Great Journey begins here",
+  "🔥 Heretics shall be purged",
+  "✨ The Forerunners smile upon this place",
+  "⚔️ Sacred ground of the Covenant",
+  "🛡️ Protected by the Hierarchs' decree",
+  "💫 The Path is clear, the Journey ordained",
+  "🔱 Glory to the Covenant Empire",
+  "⚡ This realm serves the Prophets"
+];
+
 /**
  * Worker Arbiter - Manages controller upgrading
  */
@@ -58,6 +72,18 @@ export class DevoteeArbiter extends Arbiter {
   private runWorker(worker: Elite): void {
     const controller = this.room.controller;
     if (!controller) return;
+    
+    // Sign the controller if not signed or sign is old
+    if (controller.my) {
+      const needsSigning = !controller.sign || 
+                          controller.sign.username !== worker.creep.owner.username ||
+                          Game.time - controller.sign.time > 100000; // Re-sign every 100k ticks
+      
+      if (needsSigning && worker.pos.isNearTo(controller)) {
+        const randomSign = COVENANT_SIGNS[Math.floor(Math.random() * COVENANT_SIGNS.length)];
+        worker.creep.signController(controller, randomSign);
+      }
+    }
     
     // State machine: harvesting → upgrading
     if (worker.memory.upgrading && worker.needsEnergy) {
