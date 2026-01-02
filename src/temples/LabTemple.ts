@@ -11,10 +11,13 @@
 
 import { HighCharity } from '../core/HighCharity';
 import { Temple } from './Temple';
+import { ReactionPlanner } from '../labs/ReactionPlanner';
 
 export interface LabTempleMemory {
   reactionQueue: ReactionTask[];
   currentReaction: ReactionTask | null;
+  autoProduction: boolean; // Auto-produce based on stock levels
+  lastProductionCheck: number; // Last tick we checked what to produce
 }
 
 export interface ReactionTask {
@@ -120,28 +123,39 @@ export class LabTemple extends Temple {
   run(): void {
     if (this.labs.length < 3) return;
     
+    // Auto-production: Check what we should produce every 100 ticks
+    const memory = this.memory as LabTempleMemory;
+    if (memory.autoProduction !== false) { // Default to true
+      if (!memory.lastProductionCheck || Game.time - memory.lastProductionCheck >= 100) {
+        this.planAutoProduction();
+        memory.lastProductionCheck = Game.time;
+      }
+    }
+    
     // Check if we have a current reaction
-    const currentReaction = (this.memory as LabTempleMemory).currentReaction;
+    const currentReaction = memory.currentReaction;
     
     if (currentReaction) {
       this.executeReaction(currentReaction);
     } else {
       // Check for queued reactions
-      const queue = (this.memory as LabTempleMemory).reactionQueue || [];
+      const queue = memory.reactionQueue || [];
       if (queue.length > 0) {
-        (this.memory as LabTempleMemory).currentReaction = queue.shift()!;
+        memory.currentReaction = queue.shift()!;
       }
     }
   }
   
   private executeReaction(task: ReactionTask): void {
-    const [input1, input2] = REACTIONS[task.product];
+    const ingredients = ReactionPlanner.getIngredients(task.product);
     
-    if (!input1 || !input2) {
+    if (!ingredients) {
       console.log(`⚠️ Unknown reaction: ${task.product}`);
       (this.memory as LabTempleMemory).currentReaction = null;
       return;
     }
+    
+    const [input1, input2] = ingredients;
     
     // Check input labs have the right resources
     const lab1 = this.inputLabs[0];
@@ -188,11 +202,42 @@ export class LabTemple extends Temple {
   }
   
   /**
+   * Automatically plan production based on stock levels
+   */
+  private planAutoProduction(): void {
+    // Get top priority compounds to produce
+    const priorities = ReactionPlanner.planProduction(
+      this.highCharity.storage || null,
+      this.highCharity.terminal || null
+    );
+    
+    if (priorities.length === 0) return;
+    
+    // Queue reactions for each priority compound
+    for (const compound of priorities) {
+      // Get full reaction chain needed
+      const chain = ReactionPlanner.getReactionChain(compound);
+      
+      // Queue each step in the chain
+      for (const product of chain) {
+        // Check if we can produce it
+        const amount = 3000; // Produce 3000 units
+        if (ReactionPlanner.canProduce(product, amount, this.highCharity.storage || null, this.highCharity.terminal || null)) {
+          const ingredients = ReactionPlanner.getIngredients(product);
+          if (ingredients) {
+            this.queueReaction(product, amount);
+          }
+        }
+      }
+    }
+  }
+  
+  /**
    * Queue a reaction to produce a compound
    */
   queueReaction(product: MineralCompoundConstant, amount: number): void {
-    const recipe = REACTIONS[product];
-    if (!recipe) {
+    const ingredients = ReactionPlanner.getIngredients(product);
+    if (!ingredients) {
       console.log(`⚠️ No recipe for ${product}`);
       return;
     }
@@ -200,17 +245,26 @@ export class LabTemple extends Temple {
     const task: ReactionTask = {
       product,
       amount,
-      ingredient1: recipe[0],
-      ingredient2: recipe[1]
+      ingredient1: ingredients[0],
+      ingredient2: ingredients[1]
     };
     
     const memory = this.memory as LabTempleMemory;
     if (!memory.reactionQueue) {
       memory.reactionQueue = [];
     }
+    
+    // Check if already queued
+    const alreadyQueued = memory.reactionQueue.some(t => t.product === product);
+    const isCurrentReaction = memory.currentReaction?.product === product;
+    
+    if (alreadyQueued || isCurrentReaction) {
+      return; // Already producing this
+    }
+    
     memory.reactionQueue.push(task);
     
-    console.log(`📋 Queued reaction: ${amount}x ${product}`);
+    console.log(`⚗️ Queued reaction: ${amount}x ${product}`);
   }
   
   /**

@@ -14,10 +14,15 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
 - **Crusades**: Flag-based directive system for strategic operations
 
 ### 🏗️ Advanced Features
-- Role dispatching via memory-based creep manager
-- Strategic automation modules for building, expansion, and resource control
-- Structure logic for towers, links, and future lab automation
-- Optional enhancements: memory cleanup, task queues, room planning
+- **CPU Optimization**: CacheSystem, Profiler, and TickBudget management
+- **Sacred Geometry**: Covenant-themed base layouts with hexagonal symmetry
+- **Combat System**: WarCouncil and VanguardArbiter for military operations
+- **Power Harvesting**: PowerTemple and PowerHarvesterArbiter automation
+- **Defense System**: Threat assessment and automatic safe mode activation
+- **Market Automation**: Intelligent buy/sell with price history tracking
+- **Lab Automation**: Automatic compound production with reaction chains
+- Structure logic for towers, links, spawns, and terminals
+- Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration
 
 ## 🛠️ Tech Stack

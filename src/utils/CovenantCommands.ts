@@ -285,6 +285,106 @@ export class CovenantCommands {
   }
   
   /**
+   * Show lab production status
+   * Usage: Game.cov.labs() or Game.cov.labs('W1N1')
+   */
+  labs(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⚗️ LAB STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity || !charity.labTemple) continue;
+      
+      const temple = charity.labTemple;
+      const memory = temple.memory as any;
+      
+      console.log(`\n📍 ${charity.name}`);
+      console.log(`  Labs: ${temple.labs.length} (${temple.inputLabs.length} input, ${temple.outputLabs.length} output)`);
+      console.log(`  Auto-production: ${memory.autoProduction !== false ? '✅ Enabled' : '❌ Disabled'}`);
+      
+      if (memory.currentReaction) {
+        console.log(`  Current: ${memory.currentReaction.amount}x ${memory.currentReaction.product}`);
+      } else {
+        console.log(`  Current: None`);
+      }
+      
+      const queue = memory.reactionQueue || [];
+      console.log(`  Queue: ${queue.length} reactions`);
+      if (queue.length > 0) {
+        for (let i = 0; i < Math.min(3, queue.length); i++) {
+          const task = queue[i];
+          console.log(`    ${i + 1}. ${task.amount}x ${task.product}`);
+        }
+        if (queue.length > 3) {
+          console.log(`    ... and ${queue.length - 3} more`);
+        }
+      }
+      
+      // Show top compound stocks
+      const storage = charity.storage;
+      if (storage) {
+        console.log(`  Top compounds:`);
+        const compounds = ['XUH2O', 'XUHO2', 'XKHO2', 'XLH2O', 'XLHO2', 'XZH2O', 'XZHO2', 'XGH2O', 'XGHO2'];
+        for (const compound of compounds.slice(0, 5)) {
+          const amount = storage.store.getUsedCapacity(compound as ResourceConstant) || 0;
+          if (amount > 0) {
+            console.log(`    ${compound}: ${amount.toLocaleString()}`);
+          }
+        }
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Queue a compound for production
+   * Usage: Game.cov.produce('XUH2O', 3000) or Game.cov.produce('XUH2O', 3000, 'W1N1')
+   */
+  produce(compound: MineralCompoundConstant, amount: number, roomName?: string): void {
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity || !charity.labTemple) continue;
+      
+      charity.labTemple.queueReaction(compound, amount);
+      console.log(`✅ Queued ${amount}x ${compound} in ${charity.name}`);
+    }
+  }
+  
+  /**
+   * Control automatic lab production
+   * Usage: Game.cov.autoLabs('W1N1', true) - Enable
+   *        Game.cov.autoLabs('W1N1', false) - Disable
+   *        Game.cov.autoLabs('W1N1') - Toggle
+   */
+  autoLabs(roomName: string, enable?: boolean): void {
+    const charity = this.covenant.highCharities[roomName];
+    if (!charity || !charity.labTemple) {
+      console.log(`❌ No lab temple found in ${roomName}`);
+      return;
+    }
+    
+    const memory = charity.labTemple.memory as any;
+    if (enable === undefined) {
+      // Toggle
+      const current = memory.autoProduction !== false;
+      memory.autoProduction = !current;
+      console.log(`${!current ? '✅ Enabled' : '❌ Disabled'} auto-production in ${roomName}`);
+    } else {
+      memory.autoProduction = enable;
+      console.log(`${enable ? '✅ Enabled' : '❌ Disabled'} auto-production in ${roomName}`);
+    }
+  }
+  
+  /**
    * Show help for all commands
    * Usage: Game.cov.help()
    */
@@ -308,6 +408,9 @@ export class CovenantCommands {
     console.log('Game.cov.market(room?) - Show trading statistics');
     console.log('Game.cov.price(resource, room?) - Show price report');
     console.log('Game.cov.trade(room, enable?) - Control auto-trading');
+    console.log('Game.cov.labs(room?) - Show lab production status');
+    console.log('Game.cov.produce(compound, amount, room?) - Queue compound');
+    console.log('Game.cov.autoLabs(room, enable?) - Control auto-production');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }

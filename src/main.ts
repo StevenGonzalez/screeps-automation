@@ -36,6 +36,9 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.market = (room?: string) => Cov.commands.market(room);
 (Game as any).cov.price = (resource: ResourceConstant, room?: string) => Cov.commands.price(resource, room);
 (Game as any).cov.trade = (room: string, enable?: boolean) => Cov.commands.trade(room, enable);
+(Game as any).cov.labs = (room?: string) => Cov.commands.labs(room);
+(Game as any).cov.produce = (compound: MineralCompoundConstant, amount: number, room?: string) => Cov.commands.produce(compound, amount, room);
+(Game as any).cov.autoLabs = (room: string, enable?: boolean) => Cov.commands.autoLabs(room, enable);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**
