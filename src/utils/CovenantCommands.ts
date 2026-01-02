@@ -177,6 +177,53 @@ export class CovenantCommands {
   }
   
   /**
+   * Show power harvesting status
+   * Usage: Game.cov.power()
+   */
+  power(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⚡ POWER HARVESTING STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] : 
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity || !charity.powerTemple) continue;
+      
+      const temple = charity.powerTemple;
+      const targets = temple.getAvailableTargets();
+      const best = temple.getBestTarget();
+      
+      console.log(`\n🏛️ ${charity.name}:`);
+      console.log(`   RCL: ${charity.level}`);
+      console.log(`   Ready: ${temple.isReady ? '✅' : '❌'}`);
+      console.log(`   Power Banks found: ${targets.length}`);
+      
+      if (best) {
+        console.log(`   Best target: ${best.roomName}`);
+        console.log(`   Power: ${best.power}`);
+        console.log(`   Decay: ${best.decayTime} ticks`);
+        console.log(`   Distance: ${best.distance} rooms`);
+      }
+      
+      // Show power processing
+      const powerSpawn = charity.room.find(FIND_MY_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_POWER_SPAWN
+      })[0] as StructurePowerSpawn | undefined;
+      
+      if (powerSpawn && charity.storage) {
+        const power = charity.storage.store.getUsedCapacity(RESOURCE_POWER) || 0;
+        console.log(`   Storage Power: ${power}`);
+        console.log(`   Power Spawn: ${powerSpawn.store[RESOURCE_POWER]}/${powerSpawn.store[RESOURCE_ENERGY]}`);
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
    * Show help for all commands
    * Usage: Game.cov.help()
    */
@@ -193,6 +240,7 @@ export class CovenantCommands {
     console.log('Game.cov.colony(room) - Show colony status');
     console.log('Game.cov.colonies() - List all colonies');
     console.log('Game.cov.war(room?) - Show war targets and squads');
+    console.log('Game.cov.power(room?) - Show power harvesting status');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }

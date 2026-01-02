@@ -21,6 +21,7 @@ import { GuardianArbiter } from '../arbiters/GuardianArbiter';
 import { ExcavatorArbiter } from '../arbiters/ExcavatorArbiter';
 import { TerminalArbiter } from '../arbiters/TerminalArbiter';
 import { HeraldArbiter } from '../arbiters/HeraldArbiter';
+import { PowerHarvesterArbiter } from '../arbiters/PowerHarvesterArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
@@ -28,6 +29,7 @@ import { IntelligenceTemple } from '../temples/IntelligenceTemple';
 import { DefenseTemple } from '../temples/DefenseTemple';
 import { LabTemple } from '../temples/LabTemple';
 import { BoostTemple } from '../temples/BoostTemple';
+import { PowerTemple } from '../temples/PowerTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { RoadBuilder } from '../planning/RoadBuilder';
@@ -79,6 +81,7 @@ export class HighCharity {
   defenseTemple: DefenseTemple;
   labTemple: LabTemple | null;
   boostTemple: BoostTemple | null;
+  powerTemple: PowerTemple | null;
   
   // Logistics
   prophetsWill: ProphetsWill;
@@ -111,6 +114,7 @@ export class HighCharity {
     this.commandTemple = null;
     this.labTemple = null;
     this.boostTemple = null;
+    this.powerTemple = null;
     
     // Initialize memory FIRST before any temples
     if (!Memory.rooms[this.name]) {
@@ -143,6 +147,11 @@ export class HighCharity {
     if (this.room.controller && this.room.controller.level >= 6) {
       this.labTemple = new LabTemple(this);
       this.boostTemple = new BoostTemple(this);
+    }
+    
+    // Initialize power temple at RCL 8
+    if (this.room.controller && this.room.controller.level >= 8) {
+      this.powerTemple = new PowerTemple(this);
     }
     
     // Initialize room planner
@@ -380,6 +389,11 @@ export class HighCharity {
       this.temples['boost'] = this.boostTemple;
     }
     
+    // Build Power Temple (power harvesting) if available
+    if (this.powerTemple) {
+      this.temples['power'] = this.powerTemple;
+    }
+    
     // Scan for remote mining opportunities (mature colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
       this.intelligenceTemple.scan();
@@ -423,6 +437,11 @@ export class HighCharity {
       // Build Herald Arbiters for expansion (powerhouse colonies only)
       if (this.memory.phase === 'powerhouse' && this.level === 8) {
         this.buildHeraldArbiters();
+      }
+      
+      // Build Power Harvester Arbiter (powerhouse colonies with power temple)
+      if (this.memory.phase === 'powerhouse' && this.powerTemple) {
+        new PowerHarvesterArbiter(this);
       }
     }
   }

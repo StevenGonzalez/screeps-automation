@@ -201,6 +201,24 @@ export class CovenantVisuals {
         );
       }
     }
+    
+    // Show power bank information (RCL 8+)
+    if (this.highCharity.powerTemple && this.highCharity.powerTemple.isReady) {
+      const targets = this.highCharity.powerTemple.getAvailableTargets();
+      if (targets.length > 0) {
+        this.visual.text(
+          `⚡ POWER BANKS: ${targets.length}`,
+          45, 2,
+          {
+            align: 'right',
+            color: '#00FFFF',
+            font: 0.6,
+            backgroundColor: '#000000',
+            backgroundPadding: 0.1
+          }
+        );
+      }
+    }
   }
   
   /**

@@ -105,8 +105,28 @@ Inspired by Halo's Covenant faction:
 | **Arbiter** | Creep controller for specific roles |
 | **Elite** | Enhanced creep wrapper |
 | **Crusade** | Flag-based task system |
-| **Temple** | Structure group (planned) |
-| **Prophets Will** | Resource distribution (planned) |
+| **Temple** | Structure group (e.g., MiningTemple, PowerTemple) |
+| **Prophets Will** | Resource distribution network |
+| **War Council** | Combat target scanning and squad management |
+
+### 🏛️ Core Temples
+
+| Temple | Purpose | RCL Required |
+|--------|---------|--------------|
+| **MiningTemple** | Energy harvesting operations | 1 |
+| **CommandTemple** | Spawn queue and colony commands | 1 |
+| **IntelligenceTemple** | Remote room scanning | 3+ |
+| **DefenseTemple** | Fortification management | 1 |
+| **LabTemple** | Chemical reactions | 6+ |
+| **BoostTemple** | Creep enhancement | 6+ |
+| **PowerTemple** | PowerBank harvesting & processing | 8 |
+
+### ⚔️ Military Systems
+
+- **War Council**: Scans nearby rooms for attack targets, evaluates threat levels
+- **VanguardArbiter**: Coordinates attack/healer squads for offensive operations
+- **PowerHarvesterArbiter**: Manages PowerBank assault and collection operations
+- **ZealotArbiter**: Defensive combat operations
 
 ## � File Structure Overview
 
