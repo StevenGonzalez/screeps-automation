@@ -17,6 +17,7 @@ import { Crusade } from '../crusades/Crusade';
 import { CovenantCommands } from '../utils/CovenantCommands';
 import { ObserverNetwork } from '../intel/ObserverNetwork';
 import { ReclaimationCouncil } from '../expansion/ReclaimationCouncil';
+import { TerminalNetwork } from '../network/TerminalNetwork';
 
 interface CovenantMemory {
   version: string;
@@ -44,6 +45,7 @@ export class Covenant {
   crusades: { [name: string]: Crusade };
   observerNetwork: ObserverNetwork;
   reclaimationCouncil: ReclaimationCouncil;
+  terminalNetwork: TerminalNetwork;
   
   shouldBuild: boolean;
   cache: any; // Will hold cached data for the tick
@@ -60,6 +62,7 @@ export class Covenant {
     this.cache = {};
     this.observerNetwork = new ObserverNetwork();
     this.reclaimationCouncil = new ReclaimationCouncil(this);
+    this.terminalNetwork = new TerminalNetwork(this);
     
     // Initialize console commands
     this.commands = new CovenantCommands(this);
@@ -174,6 +177,9 @@ export class Covenant {
     
     // Run expansion system (colony growth)
     this.reclaimationCouncil.run();
+    
+    // Run terminal network (resource sharing)
+    this.terminalNetwork.run();
     
     // Run all High Charities
     for (const roomName in this.highCharities) {

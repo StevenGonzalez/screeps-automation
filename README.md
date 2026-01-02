@@ -34,6 +34,12 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Spawns claimer and pioneer creeps automatically
   - Bootstraps new colonies with initial infrastructure
   - Monitors expansion progress and handles failures
+- **Terminal Network**: Inter-colony resource sharing
+  - Automatically balances energy, minerals, and compounds
+  - Emergency transfers for colonies under attack or bootstrapping
+  - Prioritized need-matching algorithm
+  - Compound distribution from labs to combat colonies
+  - Real-time transfer monitoring and statistics
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

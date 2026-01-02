@@ -25,6 +25,11 @@ declare global {
       history: Array<{ roomName: string; claimedAt: number; success: boolean }>;
       lastEvaluation: number;
     };
+    terminalNetwork?: { // Terminal network data
+      transfers: any[];
+      lastBalancing: number;
+      statistics: any;
+    };
   }
   
   interface CreepMemory {

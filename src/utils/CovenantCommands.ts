@@ -713,4 +713,60 @@ export class CovenantCommands {
   cancelExpansion(): void {
     this.covenant.reclaimationCouncil.cancelExpansion();
   }
+  
+  /**
+   * Show terminal network status
+   * Usage: Game.cov.network()
+   */
+  network(): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🌐 TERMINAL NETWORK');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const stats = this.covenant.terminalNetwork.getStatistics();
+    const pending = this.covenant.terminalNetwork.getPendingTransfers();
+    
+    console.log(`\n📊 Statistics:`);
+    console.log(`  Total transfers: ${stats.totalTransfers}`);
+    console.log(`  Energy shared: ${stats.energyShared.toLocaleString()}`);
+    console.log(`  Minerals shared: ${stats.mineralsShared.toLocaleString()}`);
+    console.log(`  Compounds shared: ${stats.compoundsShared.toLocaleString()}`);
+    
+    if (pending.length > 0) {
+      console.log(`\n📦 Pending Transfers (${pending.length}):`);
+      for (const transfer of pending.slice(0, 10)) {
+        console.log(`  ${transfer.from} → ${transfer.to}: ${transfer.amount} ${transfer.resourceType}`);
+      }
+      if (pending.length > 10) {
+        console.log(`  ... and ${pending.length - 10} more`);
+      }
+    } else {
+      console.log(`\nNo pending transfers`);
+    }
+    
+    // Show terminal status for each colony
+    console.log(`\n🏛️ Colony Terminal Status:`);
+    for (const roomName in this.covenant.highCharities) {
+      const charity = this.covenant.highCharities[roomName];
+      if (!charity.terminal) continue;
+      
+      const energy = charity.terminal.store.getUsedCapacity(RESOURCE_ENERGY);
+      const capacity = charity.terminal.store.getCapacity();
+      const used = charity.terminal.store.getUsedCapacity();
+      const cooldown = charity.terminal.cooldown || 0;
+      
+      console.log(`  ${roomName}: ${energy.toLocaleString()} energy, ${used.toLocaleString()}/${capacity.toLocaleString()} used, cooldown ${cooldown}`);
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Force emergency energy transfer
+   * Usage: Game.cov.sendEnergy('W1N1', 20000)
+   */
+  sendEnergy(targetRoom: string, amount: number = 20000): void {
+    this.covenant.terminalNetwork.forceEnergyTransfer(targetRoom, amount);
+    console.log(`✅ Scheduled emergency energy transfer to ${targetRoom}`);
+  }
 }
