@@ -6,8 +6,6 @@
  * Arbiters are responsible for managing groups of Elites (creeps) to accomplish
  * specific tasks. Each Arbiter specializes in a particular role (mining, building,
  * defense, logistics, etc.)
- * 
- * Based on Overmind's Overlord pattern but with unique COVENANT theming.
  */
 
 /// <reference types="@types/screeps" />

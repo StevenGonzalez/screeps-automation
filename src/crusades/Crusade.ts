@@ -6,8 +6,6 @@
  * Crusades are flag-based directives that allow dynamic task assignment and
  * strategic response to game events. Each Crusade spawns appropriate Arbiters
  * and manages complex multi-step operations.
- * 
- * Based on Overmind's Directive system but themed for COVENANT.
  */
 
 /// <reference types="@types/screeps" />

@@ -5,8 +5,6 @@
  * 
  * Elites are enhanced wrappers around Creep objects that provide additional
  * functionality for movement, tasks, boosting, and combat.
- * 
- * Based on Overmind's Zerg class but themed for COVENANT.
  */
 
 /// <reference types="@types/screeps" />

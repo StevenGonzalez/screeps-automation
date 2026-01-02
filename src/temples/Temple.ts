@@ -6,8 +6,6 @@
  * Temples are clusters of related structures that work together.
  * Examples: Mining temples (source + container), Command temples (spawn + extensions),
  * War temples (towers + ramparts)
- * 
- * Based on Overmind's HiveCluster pattern but themed for COVENANT.
  */
 
 /// <reference types="@types/screeps" />

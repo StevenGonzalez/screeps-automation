@@ -4,7 +4,7 @@
 
 **"The will of the Prophets guides all"**
 
-COVENANT is a powerful, Halo-inspired automation system for Screeps that manages colonies through a hierarchical command structure. Inspired by Overmind's architectural patterns but with unique theming and strategic implementation.
+COVENANT is a powerful, Halo-inspired automation system for Screeps that manages colonies through a hierarchical command structure with unique theming and strategic implementation.
 
 ### Core Philosophy
 - **Distributed Intelligence**: Each High Charity operates autonomously while coordinating with the Covenant
@@ -98,15 +98,15 @@ Performance monitoring and stats
 
 Inspired by Halo's Covenant faction:
 
-| COVENANT | Overmind | Description |
-|----------|----------|-------------|
-| **Covenant** | Overmind | Central AI coordinator |
-| **High Charity** | Colony | Room/colony manager |
-| **Arbiter** | Overlord | Creep controller for specific roles |
-| **Elite** | Zerg | Enhanced creep wrapper |
-| **Crusade** | Directive | Flag-based task system |
-| **Temple** | HiveCluster | Structure group (planned) |
-| **Prophets Will** | LogisticsNetwork | Resource distribution (planned) |
+| Component | Description |
+|-----------|-------------|
+| **Covenant** | Central AI coordinator |
+| **High Charity** | Room/colony manager |
+| **Arbiter** | Creep controller for specific roles |
+| **Elite** | Enhanced creep wrapper |
+| **Crusade** | Flag-based task system |
+| **Temple** | Structure group (planned) |
+| **Prophets Will** | Resource distribution (planned) |
 
 ## � File Structure Overview
 

@@ -17,21 +17,18 @@ import { CacheSystem, PathCache } from "./utils/CacheSystem";
 const Cov = Covenant.getInstance();
 
 // Store in Game object for global access with console commands
-(Game as any).cov = {
-  // Direct access to Covenant instance
-  ...Cov,
-  
-  // Console command shortcuts
-  profile: (minCpu?: number) => Cov.commands.profile(minCpu),
-  resetProfile: () => Cov.commands.resetProfile(),
-  cacheStats: () => Cov.commands.cacheStats(),
-  clearCache: () => Cov.commands.clearCache(),
-  cpuStatus: () => Cov.commands.cpuStatus(),
-  topCpu: (count?: number) => Cov.commands.topCpu(count),
-  colony: (room: string) => Cov.commands.colony(room),
-  colonies: () => Cov.commands.colonies(),
-  help: () => Cov.commands.help()
-};
+(Game as any).cov = Cov;
+
+// Add console command shortcuts as properties
+(Game as any).cov.profile = (minCpu?: number) => Cov.commands.profile(minCpu);
+(Game as any).cov.resetProfile = () => Cov.commands.resetProfile();
+(Game as any).cov.cacheStats = () => Cov.commands.cacheStats();
+(Game as any).cov.clearCache = () => Cov.commands.clearCache();
+(Game as any).cov.cpuStatus = () => Cov.commands.cpuStatus();
+(Game as any).cov.topCpu = (count?: number) => Cov.commands.topCpu(count);
+(Game as any).cov.colony = (room: string) => Cov.commands.colony(room);
+(Game as any).cov.colonies = () => Cov.commands.colonies();
+(Game as any).cov.help = () => Cov.commands.help();
 
 /**
  * Main game loop - executed every tick

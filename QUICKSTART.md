@@ -4,7 +4,7 @@ Welcome to **COVENANT** - A Halo-inspired Screeps AI system!
 
 ## 🎮 What is COVENANT?
 
-COVENANT is a powerful automation system for Screeps inspired by Overmind's architecture but with unique Halo theming and strategic implementation. It manages your colonies through a hierarchical command structure with autonomous agents.
+COVENANT is a powerful automation system for Screeps with unique Halo theming and strategic implementation. It manages your colonies through a hierarchical command structure with autonomous agents.
 
 ## 🏗️ Architecture Overview
 
@@ -165,7 +165,6 @@ export class DefenseCrusade extends Crusade {
 ## 📚 Further Reading
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed system architecture
-- [Overmind GitHub](https://github.com/bencbartlett/Overmind) - Original inspiration
 - [Screeps API Docs](https://docs.screeps.com/) - Game mechanics
 
 ## 🤝 Contributing
