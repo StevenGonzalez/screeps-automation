@@ -58,6 +58,13 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Threshold-based selling (1000+ for L0, 500+ for L1)
   - Tracks revenue and sales statistics
   - Integrated with existing buy/sell logic
+- **Spawn Queue System**: Priority-based spawn management
+  - 6-tier priority system (Emergency → Defense → Critical → Economy → Expansion → Military)
+  - Dynamic body optimization based on energy capacity
+  - Spawn load balancing across multiple spawns
+  - Lifecycle tracking for replacement spawning
+  - Emergency minimal bodies when under attack
+  - Queue statistics and monitoring with `Game.cov.spawns()`
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

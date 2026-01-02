@@ -12,6 +12,7 @@
 
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { SpawnPriority, SpawnRequest } from '../spawning/SpawnQueue';
 
 export interface ArbiterMemory {
   role: string;
@@ -133,17 +134,19 @@ export abstract class Arbiter {
   abstract run(): void;
   
   /**
-   * Request to spawn a creep with specific body parts (via CommandTemple priority queue)
+   * Request to spawn a creep with specific body parts (via SpawnQueue)
    */
   protected requestSpawn(
     body: BodyPartConstant[],
     name: string,
-    memory: CreepMemory = {} as any
+    memory: CreepMemory = {} as any,
+    priority: SpawnPriority = SpawnPriority.ECONOMY,
+    important: boolean = false
   ): void {
-    const commandTemple = this.highCharity.commandTemple;
-    if (!commandTemple) {
+    const spawnQueue = this.highCharity.spawnQueue;
+    if (!spawnQueue) {
       if (Game.time % 50 === 0) {
-        console.log(`⚠️ ${this.print}: No CommandTemple available`);
+        console.log(`⚠️ ${this.print}: No SpawnQueue available`);
       }
       return;
     }
@@ -155,12 +158,24 @@ export abstract class Arbiter {
       highCharity: this.highCharity.name
     };
     
-    // Add to priority queue via CommandTemple
-    commandTemple.addSpawnRequest(this.priority, name, body, spawnMemory, this.name);
+    // Calculate energy cost
+    const energyCost = body.reduce((sum, part) => sum + BODYPART_COST[part], 0);
     
-    if (Game.time % 100 === 0) {
-      console.log(`📋 ${this.print}: Requested ${name} [${memory.role}] with priority ${this.priority}`);
-    }
+    // Create spawn request
+    const request: SpawnRequest = {
+      id: `${this.ref}_${name}_${Game.time}`,
+      priority,
+      body,
+      name,
+      memory: spawnMemory,
+      arbiter: this.name,
+      important,
+      energyCost,
+      tickRequested: Game.time
+    };
+    
+    // Add to queue
+    spawnQueue.enqueue(request);
   }
   
   /**

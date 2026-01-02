@@ -46,6 +46,7 @@ import { RemoteOperations } from '../operations/RemoteOperations';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 import { PowerManager } from '../power/PowerManager';
 import { FactoryManager } from '../factory/FactoryManager';
+import { SpawnQueue } from '../spawning/SpawnQueue';
 
 export interface HighCharityMemory {
   level: number;
@@ -68,6 +69,12 @@ export interface HighCharityMemory {
     productionsByType: { [commodity: string]: number };
     totalCooldown: number;
     lastProduction: number;
+  };
+  spawnQueue?: {
+    queue: any[];
+    spawnedThisTick: number;
+    totalSpawned: number;
+    statistics: any;
   };
 }
 
@@ -125,6 +132,9 @@ export class HighCharity {
   
   // Factory
   factoryManager: FactoryManager;
+  
+  // Spawning
+  spawnQueue: SpawnQueue;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -211,6 +221,9 @@ export class HighCharity {
     
     // Initialize factory manager
     this.factoryManager = new FactoryManager(this);
+    
+    // Initialize spawn queue
+    this.spawnQueue = new SpawnQueue(this);
     
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
@@ -301,6 +314,11 @@ export class HighCharity {
    */
   run(): void {
     Profiler.start(`HighCharity_${this.name}_run`);
+    
+    // Process spawn queue first (critical for colony function)
+    Profiler.wrap('SpawnQueue_run', () => {
+      this.spawnQueue.run();
+    });
     
     // Run all Temples
     for (const templeName in this.temples) {

@@ -48,6 +48,7 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.sendEnergy = (targetRoom: string, amount?: number) => Cov.commands.sendEnergy(targetRoom, amount);
 (Game as any).cov.powerProcessing = () => Cov.commands.powerProcessing();
 (Game as any).cov.factories = () => Cov.commands.factories();
+(Game as any).cov.spawns = (room?: string) => Cov.commands.spawns(room);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**

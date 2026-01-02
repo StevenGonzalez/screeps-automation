@@ -879,4 +879,65 @@ export class CovenantCommands {
     
     console.log('═══════════════════════════════════════════════════════');
   }
+  
+  /**
+   * Show spawn queue status
+   * Usage: Game.cov.spawns(room)
+   */
+  spawns(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🔱 SPAWN QUEUE STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] :
+      Object.values(this.covenant.highCharities);
+    
+    for (const charity of charities) {
+      if (!charity) continue;
+      
+      const status = charity.spawnQueue.getStatus();
+      const memory = charity.memory.spawnQueue;
+      
+      console.log(`\n🏛️ ${charity.name}:`);
+      console.log(`  Queue length: ${status.queueLength}`);
+      console.log(`  Available spawns: ${status.availableSpawns}/${charity.spawns.length}`);
+      console.log(`  Oldest request: ${status.oldestRequest} ticks ago`);
+      
+      if (status.queueLength > 0) {
+        console.log(`  By priority:`);
+        const priorityNames: { [key: number]: string } = {
+          1: 'EMERGENCY',
+          2: 'DEFENSE',
+          3: 'CRITICAL',
+          4: 'ECONOMY',
+          5: 'EXPANSION',
+          6: 'MILITARY'
+        };
+        for (const priority in status.byPriority) {
+          const count = status.byPriority[priority];
+          const name = priorityNames[parseInt(priority)] || `Priority ${priority}`;
+          console.log(`    - ${name}: ${count}`);
+        }
+      }
+      
+      if (memory) {
+        console.log(`  Statistics:`);
+        console.log(`    - Total spawned: ${memory.totalSpawned}`);
+        console.log(`    - Spawned this tick: ${memory.spawnedThisTick}`);
+        console.log(`    - Avg wait time: ${memory.statistics.averageWaitTime.toFixed(1)} ticks`);
+      }
+      
+      // Show active spawns
+      for (const spawn of charity.spawns) {
+        if (spawn.spawning) {
+          const spawningCreep = Game.creeps[spawn.spawning.name];
+          const remaining = spawn.spawning.remainingTime;
+          console.log(`  ${spawn.name}: Spawning ${spawn.spawning.name} (${remaining} ticks remaining)`);
+        }
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
 }
