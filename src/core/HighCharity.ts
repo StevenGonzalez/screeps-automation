@@ -19,6 +19,7 @@ import { DefenseArbiter } from '../arbiters/DefenseArbiter';
 import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
+import { ProphetsWill } from '../logistics/ProphetsWill';
 
 export interface HighCharityMemory {
   level: number;
@@ -59,6 +60,9 @@ export class HighCharity {
   miningTemples: MiningTemple[];
   commandTemple: CommandTemple | null;
   
+  // Logistics
+  prophetsWill: ProphetsWill;
+  
   // Level
   level: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   
@@ -75,6 +79,9 @@ export class HighCharity {
     this.temples = {};
     this.miningTemples = [];
     this.commandTemple = null;
+    
+    // Initialize logistics network
+    this.prophetsWill = new ProphetsWill(this);
     
     // Initialize memory
     if (!Memory.rooms[this.name]) {
@@ -130,6 +137,9 @@ export class HighCharity {
       this.temples[templeName].init();
     }
     
+    // Initialize logistics network
+    this.prophetsWill.init();
+    
     // Initialize all Arbiters
     for (const arbiterName in this.arbiters) {
       this.arbiters[arbiterName].init();
@@ -144,6 +154,9 @@ export class HighCharity {
     for (const templeName in this.temples) {
       this.temples[templeName].run();
     }
+    
+    // Run logistics network
+    this.prophetsWill.run();
     
     // Run all Arbiters
     for (const arbiterName in this.arbiters) {

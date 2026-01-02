@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
 
 /**
  * Hauler Arbiter - Manages energy distribution
@@ -137,6 +138,55 @@ export class HaulerArbiter extends Arbiter {
     
     // Nothing to do
     hauler.say('✋');
+  }
+  
+  /**
+   * Get logistics requests from this Arbiter
+   */
+  getLogisticsRequests(): LogisticsRequest[] {
+    const requests: LogisticsRequest[] = [];
+    
+    // Create withdraw requests for spawns and extensions
+    const spawnExtensions = this.room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => {
+        if (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION) {
+          return s.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
+        }
+        return false;
+      }
+    });
+    
+    for (const structure of spawnExtensions) {
+      const store = (structure as StructureSpawn | StructureExtension).store;
+      requests.push(new LogisticsRequest({
+        id: `hauler_spawn_${structure.id}`,
+        target: structure,
+        resourceType: RESOURCE_ENERGY,
+        amount: store.getFreeCapacity(RESOURCE_ENERGY),
+        priority: RequestPriority.CRITICAL,
+        type: RequestType.WITHDRAW,
+        arbiterName: this.ref
+      }));
+    }
+    
+    // Create withdraw requests for towers
+    const towers = this.highCharity.towers.filter(t => 
+      t.store.getFreeCapacity(RESOURCE_ENERGY) > 200
+    );
+    
+    for (const tower of towers) {
+      requests.push(new LogisticsRequest({
+        id: `hauler_tower_${tower.id}`,
+        target: tower,
+        resourceType: RESOURCE_ENERGY,
+        amount: tower.store.getFreeCapacity(RESOURCE_ENERGY),
+        priority: RequestPriority.HIGH,
+        type: RequestType.WITHDRAW,
+        arbiterName: this.ref
+      }));
+    }
+    
+    return requests;
   }
   
   private calculateDesiredHaulers(): number {
