@@ -85,9 +85,16 @@ export class CommandTemple extends Temple {
   }
   
   /**
-   * Add a spawn request to the queue
+   * Add a spawn request to the queue (with duplicate checking)
    */
   addSpawnRequest(priority: number, name: string, body: BodyPartConstant[], memory: CreepMemory, arbiter: string): void {
+    // Check if this arbiter already has a pending request
+    const existingRequest = this.spawnQueue.find(r => r.arbiter === arbiter);
+    if (existingRequest) {
+      // Request already exists, don't add duplicate
+      return;
+    }
+    
     this.spawnQueue.push({ priority, name, body, memory, arbiter });
   }
   

@@ -135,22 +135,20 @@ export abstract class Arbiter {
   abstract run(): void;
   
   /**
-   * Request to spawn a creep with specific body parts
+   * Request to spawn a creep with specific body parts (via CommandTemple priority queue)
    */
   protected requestSpawn(
     body: BodyPartConstant[],
     name: string,
     memory: CreepMemory = {} as any
   ): void {
-    const spawn = this.highCharity.primarySpawn;
-    if (!spawn) {
+    const commandTemple = this.highCharity.commandTemple;
+    if (!commandTemple) {
       if (Game.time % 50 === 0) {
-        console.log(`⚠️ ${this.print}: No spawn available`);
+        console.log(`⚠️ ${this.print}: No CommandTemple available`);
       }
       return;
     }
-    
-    if (spawn.spawning) return;
     
     // Add Arbiter reference to memory
     const spawnMemory: any = {
@@ -159,14 +157,11 @@ export abstract class Arbiter {
       highCharity: this.highCharity.name
     };
     
-    const result = spawn.spawnCreep(body, name, { memory: spawnMemory });
+    // Add to priority queue via CommandTemple
+    commandTemple.addSpawnRequest(this.priority, name, body, spawnMemory, this.name);
     
-    if (result === OK) {
-      console.log(`✨ ${this.print}: Spawning ${name} [${memory.role}]`);
-    } else if (result === ERR_NOT_ENOUGH_ENERGY && Game.time % 100 === 0) {
-      console.log(`⚡ ${this.print}: Need ${this.highCharity.energyAvailable}/${this.highCharity.energyCapacity} energy for ${name}`);
-    } else if (result < 0 && Game.time % 100 === 0) {
-      console.log(`❌ ${this.print}: Spawn failed for ${name} - Error ${result}`);
+    if (Game.time % 100 === 0) {
+      console.log(`📋 ${this.print}: Requested ${name} [${memory.role}] with priority ${this.priority}`);
     }
   }
   

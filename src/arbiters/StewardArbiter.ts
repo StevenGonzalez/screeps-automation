@@ -28,11 +28,11 @@ export class StewardArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
-    // Request haulers if needed
+    // Request haulers if needed (once per 10 ticks to avoid spam)
     const desiredHaulers = this.calculateDesiredHaulers();
     const currentHaulers = this.haulers.length;
     
-    if (currentHaulers < desiredHaulers) {
+    if (currentHaulers < desiredHaulers && Game.time % 10 === 0) {
       this.requestHauler();
     }
   }

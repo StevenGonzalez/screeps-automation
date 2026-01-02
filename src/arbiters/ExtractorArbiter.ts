@@ -50,7 +50,7 @@ export class ExtractorArbiter extends Arbiter {
       }
     }
     
-    // Request miners if needed
+    // Request miners if needed (once per 10 ticks to avoid spam)
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
@@ -63,7 +63,7 @@ export class ExtractorArbiter extends Arbiter {
       }
     }
     
-    if (currentMiners < desiredMiners) {
+    if (currentMiners < desiredMiners && Game.time % 10 === 0) {
       this.requestMiner();
     }
   }
