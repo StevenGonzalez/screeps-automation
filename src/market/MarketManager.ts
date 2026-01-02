@@ -33,6 +33,11 @@ export interface MarketManagerMemory {
   minCredits: number; // Don't spend below this
   sellThresholds: { [resource: string]: number }; // Sell when above this
   buyThresholds: { [resource: string]: number };  // Buy when below this
+  commodityStats?: {
+    totalSold: number;
+    totalCreditsEarned: number;
+    salesByType: { [commodity: string]: { amount: number; credits: number } };
+  };
 }
 
 export interface TradeOpportunity {
@@ -67,7 +72,12 @@ export class MarketManager {
         autoTradeEnabled: true,
         minCredits: 10000,
         sellThresholds: this.getDefaultSellThresholds(),
-        buyThresholds: this.getDefaultBuyThresholds()
+        buyThresholds: this.getDefaultBuyThresholds(),
+        commodityStats: {
+          totalSold: 0,
+          totalCreditsEarned: 0,
+          salesByType: {}
+        }
       };
     }
     this.memory = roomMem.market;
@@ -130,7 +140,17 @@ export class MarketManager {
       ZH: 3000,
       ZO: 3000,
       GH: 3000,
-      GO: 3000
+      GO: 3000,
+      // Factory commodities - Level 0 (bars, melts, etc)
+      [RESOURCE_UTRIUM_BAR]: 1000,
+      [RESOURCE_LEMERGIUM_BAR]: 1000,
+      [RESOURCE_ZYNTHIUM_BAR]: 1000,
+      [RESOURCE_KEANIUM_BAR]: 1000,
+      [RESOURCE_GHODIUM_MELT]: 1000,
+      [RESOURCE_OXIDANT]: 1000,
+      [RESOURCE_REDUCTANT]: 1000,
+      [RESOURCE_PURIFIER]: 1000,
+      [RESOURCE_BATTERY]: 1000
     };
   }
   
@@ -430,7 +450,7 @@ export class MarketManager {
     const totalSold = sellTrades.reduce((sum, t) => sum + (t.amount * t.price), 0);
     const netProfit = totalSold - totalBought;
     
-    return (
+    let stats = (
       `Market Manager - ${this.room.name}\n` +
       `  Credits: ${Game.market.credits.toLocaleString()}\n` +
       `  Min Reserve: ${this.memory.minCredits.toLocaleString()}\n` +
@@ -440,6 +460,29 @@ export class MarketManager {
       `    Sold: ${sellTrades.length} orders (${totalSold.toFixed(0)} credits)\n` +
       `    Net Profit: ${netProfit >= 0 ? '+' : ''}${netProfit.toFixed(0)} credits`
     );
+    
+    // Add commodity sales stats
+    if (this.memory.commodityStats && this.memory.commodityStats.totalSold > 0) {
+      stats += `\n  Commodity Sales (Lifetime):\n`;
+      stats += `    Total Sold: ${this.memory.commodityStats.totalSold.toLocaleString()}\n`;
+      stats += `    Total Revenue: ${this.memory.commodityStats.totalCreditsEarned.toLocaleString()} credits`;
+    }
+    
+    return stats;
+  }
+  
+  /**
+   * Check if a resource is a commodity
+   */
+  private isCommodity(resource: ResourceConstant): boolean {
+    const commodities = [
+      RESOURCE_UTRIUM_BAR, RESOURCE_LEMERGIUM_BAR, RESOURCE_ZYNTHIUM_BAR,
+      RESOURCE_KEANIUM_BAR, RESOURCE_GHODIUM_MELT, RESOURCE_OXIDANT,
+      RESOURCE_REDUCTANT, RESOURCE_PURIFIER, RESOURCE_BATTERY,
+      'utrium_bar', 'lemergium_bar', 'zynthium_bar', 'keanium_bar',
+      'ghodium_melt', 'oxidant', 'reductant', 'purifier', 'battery'
+    ];
+    return commodities.includes(resource);
   }
   
   /**

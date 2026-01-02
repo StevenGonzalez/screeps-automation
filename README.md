@@ -46,6 +46,12 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Automatic power delivery requests via terminal network
   - Tracks efficiency metrics and ops generation
   - Console monitoring with `Game.cov.powerProcessing()`
+- **Factory Automation**: Commodity production system
+  - Automatically produces Level 0 and Level 1 commodities
+  - Resource management via storage and terminal
+  - Production prioritization based on available components
+  - Tracks production statistics by commodity type
+  - Console monitoring with `Game.cov.factories()`
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration
