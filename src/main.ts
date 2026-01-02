@@ -51,6 +51,11 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.spawns = (room?: string) => Cov.commands.spawns(room);
 (Game as any).cov.powerCreeps = (room?: string) => Cov.commands.powerCreeps(room);
 (Game as any).cov.layout = (room?: string) => Cov.commands.layout(room);
+(Game as any).cov.squads = (room?: string) => Cov.commands.squads(room);
+(Game as any).cov.attack = (targetRoom: string, formation?: string, tactic?: string) => Cov.commands.attack(targetRoom, formation, tactic);
+(Game as any).cov.recall = () => Cov.commands.recall();
+(Game as any).cov.formation = (formation: string) => Cov.commands.formation(formation);
+(Game as any).cov.tactic = (tactic: string) => Cov.commands.tactic(tactic);
 (Game as any).cov.help = () => Cov.commands.help();
 
 /**

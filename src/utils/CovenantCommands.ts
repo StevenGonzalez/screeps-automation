@@ -574,6 +574,14 @@ export class CovenantCommands {
     console.log('Game.cov.threats() - Show detected threats');
     console.log('Game.cov.remote(room?) - Show remote mining ops');
     console.log('Game.cov.remoteToggle(home, remote, enable) - Control remote mining');
+    console.log('');
+    console.log('⚔️ MILITARY COMMANDS:');
+    console.log('Game.cov.squads(room?) - Show squad status and formations');
+    console.log('Game.cov.attack(target, formation?, tactic?) - Launch attack');
+    console.log('Game.cov.recall() - Recall all military units');
+    console.log('Game.cov.formation(type) - Change squad formation');
+    console.log('Game.cov.tactic(type) - Change squad tactic');
+    console.log('');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }
@@ -1068,4 +1076,176 @@ export class CovenantCommands {
     
     console.log('═══════════════════════════════════════════════════════');
   }
+  
+  /**
+   * Show military squad status
+   * Usage: Game.cov.squads('W1N1')
+   */
+  squads(roomName?: string): void {
+    const targetRoom = roomName || Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[targetRoom];
+    
+    if (!charity) {
+      console.log(`❌ No colony found in ${targetRoom}`);
+      return;
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(`⚔️ MILITARY SQUADS - ${charity.name}`);
+    console.log('═══════════════════════════════════════════════════════');
+    
+    // Find vanguard arbiter
+    const vanguard = Object.values(charity.arbiters).find((a: any) => a.ref === 'vanguard');
+    if (!vanguard) {
+      console.log('  No Vanguard Arbiter active');
+      console.log('═══════════════════════════════════════════════════════');
+      return;
+    }
+    
+    const status = (vanguard as any).getSquadStatus();
+    
+    if (status.status === 'no active squad') {
+      console.log('  No active squads');
+      console.log('  💡 Use: Game.cov.attack(targetRoom, formation, tactic) to launch an attack');
+    } else {
+      console.log(`  Squad Size: ${status.size} creeps`);
+      console.log(`  Formation: ${status.formation}`);
+      console.log(`  Tactic: ${status.tactic}`);
+      console.log(`  Average Health: ${status.avgHealth.toFixed(1)}%`);
+      console.log(`  In Target Room: ${status.inTargetRoom ? '✅ YES' : '❌ NO'}`);
+    }
+    
+    console.log('');
+    console.log('Available Formations:');
+    console.log('  - line: Linear formation for corridor fighting');
+    console.log('  - box: Tanks front, healers center, ranged back');
+    console.log('  - wedge: V-shape with leader at point');
+    console.log('  - scatter: Random spread for area control');
+    console.log('');
+    console.log('Available Tactics:');
+    console.log('  - assault: Aggressive push into enemy room');
+    console.log('  - siege: Focus on dismantling structures');
+    console.log('  - raid: Hit and run on specific targets');
+    console.log('  - defend: Hold position and engage nearby');
+    console.log('  - retreat: Fall back to rally point');
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Launch an attack on a room
+   * Usage: Game.cov.attack('W2N1', 'box', 'assault')
+   */
+  attack(targetRoom: string, formation: string = 'box', tactic: string = 'assault'): void {
+    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[sourceRoom];
+    
+    if (!charity) {
+      console.log('❌ No colony found');
+      return;
+    }
+    
+    // Find or create vanguard arbiter
+    let vanguard = Object.values(charity.arbiters).find((a: any) => a.ref === 'vanguard') as any;
+    
+    if (!vanguard) {
+      console.log('❌ No Vanguard Arbiter available');
+      console.log('💡 Vanguard Arbiter should be automatically created');
+      return;
+    }
+    
+    vanguard.setTarget(targetRoom, formation as any, tactic as any);
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⚔️ ATTACK LAUNCHED');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(`Target: ${targetRoom}`);
+    console.log(`Formation: ${formation}`);
+    console.log(`Tactic: ${tactic}`);
+    console.log('');
+    console.log('Squad will begin spawning combat units...');
+    console.log('💡 Use: Game.cov.squads() to monitor squad status');
+    console.log('💡 Use: Game.cov.recall() to abort and recall units');
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Recall all military units
+   * Usage: Game.cov.recall()
+   */
+  recall(): void {
+    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[sourceRoom];
+    
+    if (!charity) {
+      console.log('❌ No colony found');
+      return;
+    }
+    
+    const vanguard = Object.values(charity.arbiters).find((a: any) => a.ref === 'vanguard') as any;
+    
+    if (!vanguard) {
+      console.log('❌ No Vanguard Arbiter active');
+      return;
+    }
+    
+    vanguard.recall();
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🏳️ MILITARY RECALL');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('All combat units recalled to home');
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Change squad formation
+   * Usage: Game.cov.formation('wedge')
+   */
+  formation(formation: string): void {
+    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[sourceRoom];
+    
+    if (!charity) {
+      console.log('❌ No colony found');
+      return;
+    }
+    
+    const vanguard = Object.values(charity.arbiters).find((a: any) => a.ref === 'vanguard') as any;
+    
+    if (!vanguard) {
+      console.log('❌ No Vanguard Arbiter active');
+      return;
+    }
+    
+    vanguard.setFormation(formation);
+    
+    console.log(`✅ Formation changed to: ${formation}`);
+  }
+  
+  /**
+   * Change squad tactic
+   * Usage: Game.cov.tactic('siege')
+   */
+  tactic(tactic: string): void {
+    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
+    const charity = this.covenant.highCharities[sourceRoom];
+    
+    if (!charity) {
+      console.log('❌ No colony found');
+      return;
+    }
+    
+    const vanguard = Object.values(charity.arbiters).find((a: any) => a.ref === 'vanguard') as any;
+    
+    if (!vanguard) {
+      console.log('❌ No Vanguard Arbiter active');
+      return;
+    }
+    
+    vanguard.setTactic(tactic);
+    
+    console.log(`✅ Tactic changed to: ${tactic}`);
+  }
 }
+

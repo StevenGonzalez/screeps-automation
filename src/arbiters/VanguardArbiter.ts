@@ -4,7 +4,7 @@
  * "The blade of the Covenant strikes true"
  * 
  * Manages offensive combat units for attacking enemy positions.
- * Coordinates attackers and healers in assault squads.
+ * Coordinates attackers and healers in assault squads with advanced tactics.
  */
 
 /// <reference types="@types/screeps" />
@@ -12,28 +12,60 @@
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { SquadCoordinator, CombatRole, TacticMode, SquadFormation } from '../military/SquadCoordinator';
 
 export interface VanguardMemory {
   targetRoom?: string;
   squadId?: string;
-  role: 'attacker' | 'healer';
+  role: CombatRole;
   rallyPoint?: { x: number; y: number; roomName: string };
+  formation?: SquadFormation;
+  tactic?: TacticMode;
 }
 
 /**
- * Vanguard Arbiter - Manages offensive combat units
+ * Vanguard Arbiter - Manages offensive combat units with advanced squad tactics
  */
 export class VanguardArbiter extends Arbiter {
   attackers: Elite[];
   healers: Elite[];
   targetRoom: string | null;
+  private squad: SquadCoordinator | null;
+  private formation: SquadFormation;
+  private tactic: TacticMode;
   
-  constructor(highCharity: HighCharity, targetRoom?: string) {
+  constructor(highCharity: HighCharity, targetRoom?: string, formation: SquadFormation = 'box', tactic: TacticMode = 'assault') {
     super(highCharity, 'vanguard', ArbiterPriority.defense.melee);
     
     this.attackers = [];
     this.healers = [];
     this.targetRoom = targetRoom || null;
+    this.squad = null;
+    this.formation = formation;
+    this.tactic = tactic;
+    
+    // Initialize squad if we have a target
+    if (this.targetRoom) {
+      this.initializeSquad();
+    }
+  }
+  
+  /**
+   * Initialize squad coordinator
+   */
+  private initializeSquad(): void {
+    if (!this.targetRoom) return;
+    
+    const rallyPoint = new RoomPosition(25, 25, this.highCharity.name);
+    
+    this.squad = new SquadCoordinator({
+      formation: this.formation,
+      tactic: this.tactic,
+      rallyPoint: rallyPoint,
+      targetRoom: this.targetRoom,
+      engageRange: 3,
+      fallbackThreshold: 40 // Retreat at 40% health
+    });
   }
   
   init(): void {
@@ -43,10 +75,20 @@ export class VanguardArbiter extends Arbiter {
     this.attackers = this.elites.filter(e => e.memory.role === 'attacker');
     this.healers = this.elites.filter(e => e.memory.role === 'healer');
     
+    // Add members to squad
+    if (this.squad) {
+      for (const attacker of this.attackers) {
+        this.squad.addMember(attacker.creep, 'attacker');
+      }
+      for (const healer of this.healers) {
+        this.squad.addMember(healer.creep, 'healer');
+      }
+    }
+    
     // Request units if we have a target
     if (this.targetRoom && Game.time % 50 === 0) {
-      const desiredAttackers = 2;
-      const desiredHealers = 1;
+      const desiredAttackers = 4;  // More units for coordinated assault
+      const desiredHealers = 2;
       
       if (this.attackers.length < desiredAttackers) {
         this.requestAttacker();
@@ -58,14 +100,18 @@ export class VanguardArbiter extends Arbiter {
   }
   
   run(): void {
-    // Coordinate attackers
-    for (const attacker of this.attackers) {
-      this.runAttacker(attacker);
-    }
-    
-    // Coordinate healers
-    for (const healer of this.healers) {
-      this.runHealer(healer);
+    // Use squad coordinator if initialized
+    if (this.squad) {
+      this.squad.run();
+    } else {
+      // Fallback to simple coordination
+      for (const attacker of this.attackers) {
+        this.runAttacker(attacker);
+      }
+      
+      for (const healer of this.healers) {
+        this.runHealer(healer);
+      }
     }
   }
   
@@ -277,12 +323,44 @@ export class VanguardArbiter extends Arbiter {
   /**
    * Set target room for attacks
    */
-  setTarget(roomName: string): void {
+  setTarget(roomName: string, formation?: SquadFormation, tactic?: TacticMode): void {
     this.targetRoom = roomName;
+    
+    if (formation) {
+      this.formation = formation;
+    }
+    if (tactic) {
+      this.tactic = tactic;
+    }
+    
+    // Reinitialize squad with new parameters
+    this.initializeSquad();
     
     // Update all unit memories
     for (const elite of this.elites) {
       elite.memory.targetRoom = roomName;
+      if (formation) elite.memory.formation = formation;
+      if (tactic) elite.memory.tactic = tactic;
+    }
+  }
+  
+  /**
+   * Change squad formation
+   */
+  setFormation(formation: SquadFormation): void {
+    this.formation = formation;
+    if (this.squad) {
+      this.squad.setFormation(formation);
+    }
+  }
+  
+  /**
+   * Change squad tactic
+   */
+  setTactic(tactic: TacticMode): void {
+    this.tactic = tactic;
+    if (this.squad) {
+      this.squad.setTactic(tactic);
     }
   }
   
@@ -291,10 +369,26 @@ export class VanguardArbiter extends Arbiter {
    */
   recall(): void {
     this.targetRoom = null;
+    this.squad = null;
     
     for (const elite of this.elites) {
       elite.memory.targetRoom = undefined;
+      elite.memory.formation = undefined;
+      elite.memory.tactic = undefined;
     }
+  }
+  
+  /**
+   * Get squad status
+   */
+  getSquadStatus(): any {
+    if (!this.squad) {
+      return {
+        size: this.elites.length,
+        status: 'no active squad'
+      };
+    }
+    return this.squad.getStatus();
   }
   
   protected getCreepsForRole(): Creep[] {

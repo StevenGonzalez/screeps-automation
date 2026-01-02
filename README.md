@@ -84,6 +84,16 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - OPERATE_FACTORY: Reduced cooldown for commodity production
   - GENERATE_OPS: Self-sustaining ops generation from energy
   - Console monitoring with `Game.cov.powerCreeps()`
+- **Advanced Military System**: Squad-based combat with tactical coordination
+  - **Squad Coordinator**: Formation movement with 4 formations (line, box, wedge, scatter)
+  - **Combat Tactics**: 5 tactic modes (assault, siege, raid, defend, retreat)
+  - **Intelligent Targeting**: Priority-based target selection for creeps and structures
+  - **Role-Based Combat**: Attacker, Healer, Ranged, Tank, and Dismantler roles
+  - **Formation Movement**: Units maintain tactical positions relative to squad leader
+  - **Dynamic Adaptation**: Auto-retreat at 40% health, kiting for ranged units
+  - **Console Control**: Launch attacks, change formations, recall units on the fly
+  - **VanguardArbiter Integration**: Seamless integration with existing military system
+  - Commands: `Game.cov.attack()`, `Game.cov.squads()`, `Game.cov.recall()`, `Game.cov.formation()`, `Game.cov.tactic()`
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration
