@@ -90,6 +90,13 @@ export class RemoteOperations {
       const distance = this.calculatePathDistance(roomName);
       if (distance > 150) continue; // Too far
       
+      // Calculate profitability score
+      const profitability = this.calculateProfitability(roomName, intel, distance);
+      if (profitability < 0.3) {
+        console.log(`❌ Skipping unprofitable room: ${roomName} (score: ${profitability.toFixed(2)})`);
+        continue;
+      }
+      
       // Add to remote rooms
       const sourceIds = intel.sources.map((s: any) => s.id as Id<Source>);
       this.memory.rooms[roomName] = {
@@ -102,8 +109,39 @@ export class RemoteOperations {
         disabled: false
       };
       
-      console.log(`🌍 Discovered remote room: ${roomName} (${sourceIds.length} sources, ${distance} distance)`);
+      console.log(`🌍 Discovered remote room: ${roomName} (${sourceIds.length} sources, ${distance} distance, profit score: ${profitability.toFixed(2)})`);
     }
+  }
+  
+  /**
+   * Calculate profitability score for a remote room (0-1)
+   */
+  private calculateProfitability(roomName: string, intel: any, distance: number): number {
+    let score = 0.5; // Base score
+    
+    // More sources = more profit
+    const sourceCount = intel.sources?.length || 0;
+    score += sourceCount * 0.2;
+    
+    // Closer rooms are more profitable
+    if (distance < 50) score += 0.3;
+    else if (distance < 100) score += 0.15;
+    
+    // Safe rooms are more valuable
+    const threat = intel.threat || 0;
+    if (threat === 0) score += 0.2;
+    else if (threat < 3) score += 0.1;
+    else score -= threat * 0.1; // Dangerous rooms lose value
+    
+    // No hostile controller is good
+    if (!intel.controller?.owner) score += 0.1;
+    
+    // No hostile reservation is good
+    if (!intel.controller?.reservation || intel.controller.reservation.username === this.highCharity.room.controller?.owner?.username) {
+      score += 0.1;
+    }
+    
+    return Math.max(0, Math.min(1, score));
   }
   
   /**

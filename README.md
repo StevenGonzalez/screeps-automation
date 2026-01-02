@@ -40,11 +40,19 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
 - **Lab Automation**: Automatic compound production with reaction chains
 - **Observer Network**: Automatic room scanning and intelligence gathering
 - **Remote Mining**: Secure resource extraction with multi-layer threat detection
-  - Real-time hostile detection and automatic retreat
-  - Construction site griefing protection
-  - Hostile reservation and structure checks
-  - Cheap creep bodies to minimize losses (max 800 energy)
-  - Auto re-enable when rooms become safe
+  - **Profitability Scoring**: Evaluates rooms based on sources, distance, safety, and controller status
+  - **Automatic Room Discovery**: Scans adjacent rooms and ranks them by profitability (0-1 score)
+  - **Smart Activation**: Automatically activates top 2 remote rooms based on RCL
+  - **Real-time Threat Detection**: Monitors hostiles, hostile structures, and construction site griefing
+  - **Automatic Defender Spawning**: Creates RemoteDefenderArbiter for rooms with detected threats
+  - **Threat Level Calculation**: Scores threats based on attack/ranged/heal parts
+  - **Cheap Miner Bodies**: Uses max 800 energy to minimize losses during hostile encounters
+  - **Container-Based Mining**: Builds containers at sources for efficient hauling
+  - **Dynamic Hauler Scaling**: 2-5 haulers per room based on distance
+  - **Automatic Retreat**: Disables operations when hostiles detected, re-enables when safe
+  - **Hostile Reservation Detection**: Detects and disables when enemy players reserve rooms
+  - **Re-evaluation System**: Checks disabled rooms every 1000 ticks to see if safe again
+  - Console commands: `Game.cov.remote()`, `Game.cov.remoteToggle()`
 - **Autonomous Expansion**: Intelligent colony growth system
   - Evaluates expansion targets from observer intel
   - Scores rooms based on sources, minerals, distance, and threats

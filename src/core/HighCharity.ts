@@ -20,6 +20,7 @@ import { DevoteeArbiter } from '../arbiters/DevoteeArbiter';
 import { ArtisanArbiter } from '../arbiters/ArtisanArbiter';
 import { ZealotArbiter } from '../arbiters/ZealotArbiter';
 import { SeekerArbiter } from '../arbiters/SeekerArbiter';
+import { RemoteDefenderArbiter } from '../arbiters/RemoteDefenderArbiter';
 import { GuardianArbiter } from '../arbiters/GuardianArbiter';
 import { ExcavatorArbiter } from '../arbiters/ExcavatorArbiter';
 import { TerminalArbiter } from '../arbiters/TerminalArbiter';
@@ -628,6 +629,12 @@ export class HighCharity {
         if (this.arbiters[arbiterName]) continue;
         
         new SeekerArbiter(this, room.roomName, sourceId);
+      }
+      
+      // Build RemoteDefenderArbiter for this room
+      const defenderName = `remoteDefender_${room.roomName}`;
+      if (!this.arbiters[defenderName]) {
+        new RemoteDefenderArbiter(this, room.roomName);
       }
     }
   }
