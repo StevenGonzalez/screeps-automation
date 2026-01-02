@@ -10,12 +10,6 @@
 /// <reference types="@types/screeps" />
 
 import { Covenant } from "./core/Covenant";
-import { processRoom } from "./room/orchestration";
-import {
-  cleanupMemory,
-  initializeMemory,
-  updateGlobalStats,
-} from "./global.memory";
 
 // Initialize global Covenant instance
 const Cov = Covenant.getInstance();
@@ -44,13 +38,7 @@ export const loop = (): void => {
     // Phase 4: End of tick - Stats and cleanup
     Cov.endOfTick();
     
-    // LEGACY SUPPORT (will gradually migrate to COVENANT)
-    // Keep old system running in parallel during transition
-    if (Game.time % 10 === 0) {
-      cleanupMemory();
-      updateGlobalStats();
-    }
-    processGlobalOperations(); // PHASE 4: PERFORMANCE MONITORING
+    // PERFORMANCE MONITORING
     if (Game.time % 100 === 0) {
       logPerformanceMetrics();
     }
@@ -58,28 +46,6 @@ export const loop = (): void => {
     console.log(`💥 Critical error in main loop: ${error}`);
   }
 };
-
-/**
- * Handle global operations across all rooms
- */
-function processGlobalOperations(): void {
-  // Market operations, inter-room logistics, etc.
-
-  // Pixel generation - generate pixels when CPU bucket is high enough
-  processPixelGeneration();
-
-  // CPU monitoring
-  const cpuUsed = Game.cpu.getUsed();
-  const cpuLimit = Game.cpu.limit;
-
-  if (cpuUsed > cpuLimit * 0.9) {
-    console.log(
-      `⚠️ High CPU usage: ${Math.round(cpuUsed)}/${cpuLimit} (${Math.round(
-        (cpuUsed / cpuLimit) * 100
-      )}%)`
-    );
-  }
-}
 
 /**
  * Process pixel generation when CPU bucket is sufficiently high

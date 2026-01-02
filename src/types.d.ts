@@ -12,6 +12,18 @@ declare global {
       Cov: Covenant;
     }
   }
+  
+  interface CreepMemory {
+    role?: string;
+    arbiter?: string;
+    working?: boolean;
+    building?: boolean;
+    collecting?: boolean;
+    task?: any;
+    sourceId?: Id<Source>;
+    targetRoom?: string;
+    [key: string]: any;
+  }
 }
 
 export {};
