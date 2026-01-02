@@ -1,6 +1,8 @@
 /**
  * PowerManager
  * 
+ * "From the sacred power flows the essence of the Gods, refined to fuel our divine purpose"
+ * 
  * Manages automated power processing in Power Spawns to generate ops.
  * Power is essential for operating Power Creeps which provide significant
  * boosts to colony operations.

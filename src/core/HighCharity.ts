@@ -45,6 +45,7 @@ import { MarketManager } from '../market/MarketManager';
 import { RemoteOperations } from '../operations/RemoteOperations';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 import { PowerManager } from '../power/PowerManager';
+import { FactoryManager } from '../factory/FactoryManager';
 
 export interface HighCharityMemory {
   level: number;
@@ -61,6 +62,12 @@ export interface HighCharityMemory {
     totalPowerConsumed: number;
     processingTicks: number;
     efficiency: number;
+  };
+  factory?: {
+    totalProduced: number;
+    productionsByType: { [commodity: string]: number };
+    totalCooldown: number;
+    lastProduction: number;
   };
 }
 
@@ -115,6 +122,9 @@ export class HighCharity {
   
   // Power
   powerManager: PowerManager;
+  
+  // Factory
+  factoryManager: FactoryManager;
   
   // Visuals
   visuals: CovenantVisuals;
@@ -198,6 +208,9 @@ export class HighCharity {
     
     // Initialize power manager
     this.powerManager = new PowerManager(this);
+    
+    // Initialize factory manager
+    this.factoryManager = new FactoryManager(this);
     
     // Initialize visuals
     this.visuals = new CovenantVisuals(this);
@@ -347,6 +360,13 @@ export class HighCharity {
     if (this.level === 8 && !TickBudget.shouldSkipExpensive(0.85)) {
       Profiler.wrap('PowerManager_run', () => {
         this.powerManager.run();
+      });
+    }
+    
+    // Run factory production (RCL 7+ colonies)
+    if (this.level >= 7 && !TickBudget.shouldSkipExpensive(0.85)) {
+      Profiler.wrap('FactoryManager_run', () => {
+        this.factoryManager.run();
       });
     }
     

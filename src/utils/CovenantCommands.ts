@@ -815,4 +815,68 @@ export class CovenantCommands {
     
     console.log('═══════════════════════════════════════════════════════');
   }
+  
+  /**
+   * Show factory production status
+   * Usage: Game.cov.factories()
+   */
+  factories(): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🏭 FACTORY PRODUCTION STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    let totalProduced = 0;
+    let activeFactories = 0;
+    const productionsByType: { [commodity: string]: number } = {};
+    
+    for (const roomName in this.covenant.highCharities) {
+      const charity = this.covenant.highCharities[roomName];
+      if (charity.level < 7) continue; // Only RCL 7+ can have factories
+      
+      const status = charity.factoryManager.getStatus();
+      
+      if (!status.hasFactory) continue;
+      
+      console.log(`\n🏛️ ${roomName}:`);
+      console.log(`  Factory level: ${status.factoryLevel}`);
+      console.log(`  Cooldown: ${status.cooldown}`);
+      console.log(`  Next production: ${status.currentProduction || 'None available'}`);
+      
+      if (Object.keys(status.resources).length > 0) {
+        console.log(`  Factory contents:`);
+        for (const resource in status.resources) {
+          console.log(`    - ${resource}: ${status.resources[resource]}`);
+        }
+      }
+      
+      console.log(`  Statistics:`);
+      console.log(`    - Total produced: ${status.statistics.totalProduced.toLocaleString()}`);
+      console.log(`    - Last production: ${status.statistics.lastProduction > 0 ? Game.time - status.statistics.lastProduction + ' ticks ago' : 'Never'}`);
+      
+      if (Object.keys(status.statistics.productionsByType).length > 0) {
+        console.log(`    - Productions by type:`);
+        for (const commodity in status.statistics.productionsByType) {
+          const amount = status.statistics.productionsByType[commodity];
+          console.log(`      * ${commodity}: ${amount.toLocaleString()}`);
+          productionsByType[commodity] = (productionsByType[commodity] || 0) + amount;
+        }
+      }
+      
+      if (status.cooldown === 0 && status.currentProduction) activeFactories++;
+      totalProduced += status.statistics.totalProduced;
+    }
+    
+    console.log(`\n📊 Empire Totals:`);
+    console.log(`  Active factories: ${activeFactories}`);
+    console.log(`  Total commodities produced: ${totalProduced.toLocaleString()}`);
+    
+    if (Object.keys(productionsByType).length > 0) {
+      console.log(`  Productions by type:`);
+      for (const commodity in productionsByType) {
+        console.log(`    - ${commodity}: ${productionsByType[commodity].toLocaleString()}`);
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
 }
