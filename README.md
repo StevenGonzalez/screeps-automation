@@ -73,6 +73,17 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Integration with RoomPlanner for optimal structure placement
   - Visualization tools for layout and traffic heatmaps
   - Console monitoring with `Game.cov.layout()`
+- **Power Creep Automation**: Immortal units with divine abilities
+  - Automatic power creep creation at GPL 1+ and RCL 8
+  - Spawning and renewal management at Power Spawns
+  - Strategic ability usage prioritization
+  - OPERATE_SPAWN: 50% faster spawn times during active spawning
+  - OPERATE_TOWER: 200% tower range and power during combat
+  - OPERATE_EXTENSION: Free energy distribution from storage
+  - OPERATE_LAB: 4x reaction speed for compound production
+  - OPERATE_FACTORY: Reduced cooldown for commodity production
+  - GENERATE_OPS: Self-sustaining ops generation from energy
+  - Console monitoring with `Game.cov.powerCreeps()`
 - Structure logic for towers, links, spawns, and terminals
 - Console commands via `Game.cov.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration

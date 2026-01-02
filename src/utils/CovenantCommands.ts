@@ -942,6 +942,86 @@ export class CovenantCommands {
   }
   
   /**
+   * Show power creep status
+   * Usage: Game.cov.powerCreeps(room)
+   */
+  powerCreeps(roomName?: string): void {
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('⚡ POWER CREEP STATUS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    console.log(`\n🌟 Global Power Level: ${Game.gpl.level} (${Game.gpl.progress}/${Game.gpl.progressTotal} progress)`);
+    console.log(`   Power Creeps: ${Object.keys(Game.powerCreeps).length} / ${Game.gpl.level}`);
+    
+    const charities = roomName ? 
+      [this.covenant.highCharities[roomName]] :
+      Object.values(this.covenant.highCharities).filter(c => c.level === 8);
+    
+    for (const charity of charities) {
+      if (!charity) continue;
+      
+      const stats = charity.powerCreepManager.getStatus();
+      
+      console.log(`\n🏛️ ${charity.name}:`);
+      
+      if (stats.length === 0) {
+        const canHave = Game.gpl.level > 0 && charity.level === 8;
+        console.log(`   No power creeps ${canHave ? '(will create on next tick)' : '(need GPL 1+)'}`);
+        continue;
+      }
+      
+      for (const pc of stats) {
+        const pcObj = Game.powerCreeps[pc.name];
+        const status = pcObj?.ticksToLive ? 
+          `Active (${pcObj.ticksToLive} ticks)` :
+          pcObj?.spawnCooldownTime ? 
+            `Respawning (${pcObj.spawnCooldownTime} ticks)` :
+            'Not spawned';
+        
+        console.log(`   ${pc.name}:`);
+        console.log(`     Status: ${status}`);
+        console.log(`     Level: ${pc.level}`);
+        console.log(`     Stationed: ${pc.stationed ? '✅' : '❌'}`);
+        console.log(`     Ops generated: ${pc.opsGenerated}`);
+        console.log(`     Abilities used: ${pc.abilitiesUsed}`);
+        
+        console.log(`     Powers:`);
+        const powerNames: { [key: number]: string } = {
+          [PWR_GENERATE_OPS]: 'GENERATE_OPS',
+          [PWR_OPERATE_SPAWN]: 'OPERATE_SPAWN',
+          [PWR_OPERATE_TOWER]: 'OPERATE_TOWER',
+          [PWR_OPERATE_STORAGE]: 'OPERATE_STORAGE',
+          [PWR_OPERATE_LAB]: 'OPERATE_LAB',
+          [PWR_OPERATE_EXTENSION]: 'OPERATE_EXTENSION',
+          [PWR_OPERATE_OBSERVER]: 'OPERATE_OBSERVER',
+          [PWR_OPERATE_TERMINAL]: 'OPERATE_TERMINAL',
+          [PWR_DISRUPT_SPAWN]: 'DISRUPT_SPAWN',
+          [PWR_DISRUPT_TOWER]: 'DISRUPT_TOWER',
+          [PWR_DISRUPT_SOURCE]: 'DISRUPT_SOURCE',
+          [PWR_SHIELD]: 'SHIELD',
+          [PWR_REGEN_SOURCE]: 'REGEN_SOURCE',
+          [PWR_REGEN_MINERAL]: 'REGEN_MINERAL',
+          [PWR_DISRUPT_TERMINAL]: 'DISRUPT_TERMINAL',
+          [PWR_OPERATE_POWER]: 'OPERATE_POWER',
+          [PWR_FORTIFY]: 'FORTIFY',
+          [PWR_OPERATE_CONTROLLER]: 'OPERATE_CONTROLLER',
+          [PWR_OPERATE_FACTORY]: 'OPERATE_FACTORY'
+        };
+        
+        for (const powerKey in pc.powers) {
+          const power = parseInt(powerKey);
+          const powerInfo = pc.powers[power];
+          const name = powerNames[power] || `Power ${power}`;
+          const cooldown = powerInfo.cooldown > 0 ? ` (cooldown: ${powerInfo.cooldown})` : '';
+          console.log(`       - ${name}: Level ${powerInfo.level}${cooldown}`);
+        }
+      }
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
    * Show room layout and auto-planner status
    * Usage: Game.cov.layout(roomName)
    */

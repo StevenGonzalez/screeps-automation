@@ -46,6 +46,7 @@ import { MarketManager } from '../market/MarketManager';
 import { RemoteOperations } from '../operations/RemoteOperations';
 import { SPAWN_NAMES } from '../utils/SpawnNames';
 import { PowerManager } from '../power/PowerManager';
+import { PowerCreepManager } from '../power/PowerCreepManager';
 import { FactoryManager } from '../factory/FactoryManager';
 import { SpawnQueue } from '../spawning/SpawnQueue';
 
@@ -83,6 +84,10 @@ export interface HighCharityMemory {
     lastTrafficUpdate: number;
     defensePlanned: boolean;
     roadPlannedAt: number;
+  };
+  powerCreeps?: {
+    totalOpsGenerated: number;
+    totalAbilitiesUsed: number;
   };
 }
 
@@ -138,6 +143,7 @@ export class HighCharity {
   
   // Power
   powerManager: PowerManager;
+  powerCreepManager: PowerCreepManager;
   
   // Factory
   factoryManager: FactoryManager;
@@ -230,6 +236,9 @@ export class HighCharity {
     
     // Initialize power manager
     this.powerManager = new PowerManager(this);
+    
+    // Initialize power creep manager
+    this.powerCreepManager = new PowerCreepManager(this);
     
     // Initialize factory manager
     this.factoryManager = new FactoryManager(this);
@@ -395,6 +404,11 @@ export class HighCharity {
     if (this.level === 8 && !TickBudget.shouldSkipExpensive(0.85)) {
       Profiler.wrap('PowerManager_run', () => {
         this.powerManager.run();
+      });
+      
+      // Run power creep operations
+      Profiler.wrap('PowerCreepManager_run', () => {
+        this.powerCreepManager.run();
       });
     }
     

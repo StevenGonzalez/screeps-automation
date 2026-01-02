@@ -130,6 +130,9 @@ export class SpawnQueue {
   public run(): void {
     this.colony.memory.spawnQueue!.spawnedThisTick = 0;
     
+    // Refresh spawn references (colony.spawns updated during build phase)
+    this.spawns = this.colony.spawns;
+    
     // Load queue from memory
     this.loadQueue();
     

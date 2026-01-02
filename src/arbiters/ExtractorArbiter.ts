@@ -10,6 +10,7 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
+import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 
@@ -127,10 +128,17 @@ export class ExtractorArbiter extends Arbiter {
     const body = this.calculateMinerBody();
     const name = `Extractor_${this.source?.id}_${Game.time}`;
     
+    // First miners are CRITICAL priority during bootstrap
+    const priority = this.highCharity.isBootstrapping && this.miners.length === 0 ?
+      SpawnPriority.CRITICAL :
+      SpawnPriority.ECONOMY;
+    
+    const important = this.highCharity.isBootstrapping && this.miners.length === 0;
+    
     this.requestSpawn(body, name, {
       role: 'elite_miner', // Covenant themed role
       sourceId: this.source?.id
-    } as any);
+    } as any, priority, important);
   }
   
   private calculateMinerBody(): BodyPartConstant[] {
@@ -139,8 +147,8 @@ export class ExtractorArbiter extends Arbiter {
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Emergency: Minimal miner (200 energy)
-    if (energy < 300) {
+    // Emergency: Minimal miner (200 energy) - use during very early bootstrap
+    if (energy <= 300) {
       return [WORK, MOVE, CARRY];
     }
     
