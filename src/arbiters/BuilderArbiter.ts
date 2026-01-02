@@ -27,6 +27,11 @@ export class BuilderArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
+    // Place construction sites based on room plan
+    if (Game.time % 50 === 0) {
+      this.placeConstructionSites();
+    }
+    
     // Request builders if needed
     const desiredBuilders = this.calculateDesiredBuilders();
     const currentBuilders = this.builders.length;
@@ -234,5 +239,121 @@ export class BuilderArbiter extends Arbiter {
         creep.memory.arbiter === this.ref ||
         creep.memory.role === 'builder'
     });
+  }
+  
+  /**
+   * Place construction sites based on room plan
+   */
+  private placeConstructionSites(): void {
+    const plan = this.highCharity.planner.getPlan();
+    if (!plan) return;
+    
+    const level = this.room.controller!.level;
+    
+    // Get max structures for current RCL
+    const maxSpawns = CONTROLLER_STRUCTURES[STRUCTURE_SPAWN][level];
+    const maxExtensions = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][level];
+    const maxTowers = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][level];
+    const maxLabs = CONTROLLER_STRUCTURES[STRUCTURE_LAB][level];
+    const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK][level];
+    
+    // Count existing structures
+    const existingSpawns = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_SPAWN
+    }).length;
+    const existingExtensions = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_EXTENSION
+    }).length;
+    const existingTowers = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_TOWER
+    }).length;
+    const existingLabs = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_LAB
+    }).length;
+    const existingLinks = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_LINK
+    }).length;
+    
+    // Place spawns
+    for (let i = existingSpawns; i < Math.min(maxSpawns, plan.spawns.length); i++) {
+      const pos = plan.spawns[i];
+      if (pos && !this.hasStructureOrSite(pos, STRUCTURE_SPAWN)) {
+        this.room.createConstructionSite(pos, STRUCTURE_SPAWN);
+      }
+    }
+    
+    // Place extensions
+    for (let i = existingExtensions; i < Math.min(maxExtensions, plan.extensions.length); i++) {
+      const pos = plan.extensions[i];
+      if (pos && !this.hasStructureOrSite(pos, STRUCTURE_EXTENSION)) {
+        const result = this.room.createConstructionSite(pos, STRUCTURE_EXTENSION);
+        if (result !== OK && result !== ERR_FULL) break; // Stop if hit construction site limit
+      }
+    }
+    
+    // Place towers
+    for (let i = existingTowers; i < Math.min(maxTowers, plan.towers.length); i++) {
+      const pos = plan.towers[i];
+      if (pos && !this.hasStructureOrSite(pos, STRUCTURE_TOWER)) {
+        this.room.createConstructionSite(pos, STRUCTURE_TOWER);
+      }
+    }
+    
+    // Place storage (RCL 4+)
+    if (level >= 4 && plan.storage && !this.hasStructureOrSite(plan.storage, STRUCTURE_STORAGE)) {
+      this.room.createConstructionSite(plan.storage, STRUCTURE_STORAGE);
+    }
+    
+    // Place terminal (RCL 6+)
+    if (level >= 6 && plan.terminal && !this.hasStructureOrSite(plan.terminal, STRUCTURE_TERMINAL)) {
+      this.room.createConstructionSite(plan.terminal, STRUCTURE_TERMINAL);
+    }
+    
+    // Place labs (RCL 6+)
+    if (level >= 6) {
+      for (let i = existingLabs; i < Math.min(maxLabs, plan.labs.length); i++) {
+        const pos = plan.labs[i];
+        if (pos && !this.hasStructureOrSite(pos, STRUCTURE_LAB)) {
+          this.room.createConstructionSite(pos, STRUCTURE_LAB);
+        }
+      }
+    }
+    
+    // Place factory (RCL 7+)
+    if (level >= 7 && plan.factory && !this.hasStructureOrSite(plan.factory, STRUCTURE_FACTORY)) {
+      this.room.createConstructionSite(plan.factory, STRUCTURE_FACTORY);
+    }
+    
+    // Place power spawn (RCL 8)
+    if (level >= 8 && plan.powerSpawn && !this.hasStructureOrSite(plan.powerSpawn, STRUCTURE_POWER_SPAWN)) {
+      this.room.createConstructionSite(plan.powerSpawn, STRUCTURE_POWER_SPAWN);
+    }
+    
+    // Place nuker (RCL 8)
+    if (level >= 8 && plan.nuker && !this.hasStructureOrSite(plan.nuker, STRUCTURE_NUKER)) {
+      this.room.createConstructionSite(plan.nuker, STRUCTURE_NUKER);
+    }
+    
+    // Place observer (RCL 8)
+    if (level >= 8 && plan.observer && !this.hasStructureOrSite(plan.observer, STRUCTURE_OBSERVER)) {
+      this.room.createConstructionSite(plan.observer, STRUCTURE_OBSERVER);
+    }
+  }
+  
+  /**
+   * Check if position has structure or construction site
+   */
+  private hasStructureOrSite(pos: RoomPosition, structureType: BuildableStructureConstant): boolean {
+    const structures = pos.lookFor(LOOK_STRUCTURES);
+    if (structures.some(s => s.structureType === structureType)) {
+      return true;
+    }
+    
+    const sites = pos.lookFor(LOOK_CONSTRUCTION_SITES);
+    if (sites.some(s => s.structureType === structureType)) {
+      return true;
+    }
+    
+    return false;
   }
 }

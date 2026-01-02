@@ -20,6 +20,7 @@ import { Temple } from '../temples/Temple';
 import { MiningTemple } from '../temples/MiningTemple';
 import { CommandTemple } from '../temples/CommandTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
+import { RoomPlanner } from '../planning/RoomPlanner';
 
 export interface HighCharityMemory {
   level: number;
@@ -63,6 +64,9 @@ export class HighCharity {
   // Logistics
   prophetsWill: ProphetsWill;
   
+  // Planning
+  planner: RoomPlanner;
+  
   // Level
   level: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   
@@ -102,6 +106,9 @@ export class HighCharity {
     
     // Initialize logistics network AFTER memory is set up
     this.prophetsWill = new ProphetsWill(this);
+    
+    // Initialize room planner
+    this.planner = new RoomPlanner(room);
     
     this.level = (room.controller?.level || 1) as any;
   }
