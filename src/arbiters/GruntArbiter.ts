@@ -258,7 +258,7 @@ export class GruntArbiter extends Arbiter {
    */
   private requestgrunt(): void {
     const body = this.calculategruntBody();
-    const name = `grunt_${Game.time}`;
+    const name = `Grunt_${Game.time}`;
     
     // EMERGENCY if no creeps exist at all
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;

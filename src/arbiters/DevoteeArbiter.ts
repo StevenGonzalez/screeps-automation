@@ -206,7 +206,7 @@ export class DevoteeArbiter extends Arbiter {
     const important = false;
     
     this.requestSpawn(body, name, {
-      role: 'elite_worker', // Covenant themed role
+      role: ROLES.ELITE_DEVOTEE, // Covenant themed role
       upgrading: false
     } as any, priority, important);
   }

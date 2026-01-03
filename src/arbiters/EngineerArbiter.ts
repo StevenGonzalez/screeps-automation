@@ -280,8 +280,7 @@ export class EngineerArbiter extends Arbiter {
     const body = this.calculateBuilderBody();
     const name = `Engineer_${Game.time}`;
     
-    // Builders use SUPPORT priority (lower than miners/haulers)
-    // Exception: During bootstrap with construction sites, use ECONOMY
+    // Builders use ECONOMY priority to ensure they spawn when needed
     const hasUrgentSites = this.room.find(FIND_MY_CONSTRUCTION_SITES, {
       filter: s => s.structureType === STRUCTURE_SPAWN || 
                    s.structureType === STRUCTURE_EXTENSION ||
@@ -289,8 +288,8 @@ export class EngineerArbiter extends Arbiter {
     }).length > 0;
     
     const priority = (this.highCharity.isBootstrapping && hasUrgentSites) ?
-      SpawnPriority.EXPANSION : // Don't compete with critical economy (extractors/haulers)
-      SpawnPriority.EXPANSION; // Use EXPANSION priority (5) for builders normally
+      SpawnPriority.CRITICAL : // Critical priority during bootstrap
+      SpawnPriority.ECONOMY; // Normal economy priority otherwise
     
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_ENGINEER, // Covenant themed role
