@@ -146,6 +146,11 @@ export class EngineerArbiter extends Arbiter {
             s.structureType === STRUCTURE_STORAGE) {
           return s.hits < s.hitsMax;
         }
+        // Containers and roads decay - repair at 90% to prevent loss
+        if (s.structureType === STRUCTURE_CONTAINER || 
+            s.structureType === STRUCTURE_ROAD) {
+          return s.hits < s.hitsMax * 0.9;
+        }
         // Other structures at 75% HP
         return s.hits < s.hitsMax * 0.75;
       }
@@ -156,11 +161,12 @@ export class EngineerArbiter extends Arbiter {
       return false;
     }
     
-    // Prioritize critical structures
+    // Prioritize critical structures and containers
     const critical = damaged.find(s => 
       s.structureType === STRUCTURE_SPAWN ||
       s.structureType === STRUCTURE_TOWER ||
-      s.structureType === STRUCTURE_STORAGE
+      s.structureType === STRUCTURE_STORAGE ||
+      s.structureType === STRUCTURE_CONTAINER
     );
     
     const target = critical || damaged[0];
@@ -221,9 +227,32 @@ export class EngineerArbiter extends Arbiter {
     const sites = this.room.find(FIND_MY_CONSTRUCTION_SITES);
     const phase = this.highCharity.memory.phase;
     
-    // No construction sites
+    // Check if there are structures needing repair
+    const needsRepair = this.room.find(FIND_STRUCTURES, {
+      filter: (s) => {
+        if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
+          return false;
+        }
+        // Containers and roads decay constantly
+        if (s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_ROAD) {
+          return s.hits < s.hitsMax * 0.9;
+        }
+        // Critical structures
+        if (s.structureType === STRUCTURE_SPAWN ||
+            s.structureType === STRUCTURE_TOWER ||
+            s.structureType === STRUCTURE_STORAGE) {
+          return s.hits < s.hitsMax;
+        }
+        return s.hits < s.hitsMax * 0.75;
+      }
+    });
+    
+    // Always maintain 1 engineer if there's repair work
+    const baseEngineers = needsRepair.length > 0 ? 1 : 0;
+    
+    // No construction sites - just maintain base
     if (sites.length === 0) {
-      return phase === 'bootstrap' ? 1 : 0;
+      return phase === 'bootstrap' ? 1 : baseEngineers;
     }
     
     // Scale with construction sites
@@ -239,8 +268,8 @@ export class EngineerArbiter extends Arbiter {
       return Math.max(buildersNeeded, 2);
     }
     
-    // Later phases: Scale with need
-    return buildersNeeded;
+    // Later phases: Scale with need, but maintain base for repairs
+    return Math.max(buildersNeeded, baseEngineers);
   }
   
   private requestBuilder(): void {
