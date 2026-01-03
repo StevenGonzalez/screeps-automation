@@ -14,6 +14,7 @@ import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { ROLES, RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * ranger Arbiter - Provides vision to adjacent rooms
@@ -180,9 +181,8 @@ export class RangerArbiter extends Arbiter {
    * Calculate ranger body - cheap and fast
    */
   private calculaterangerBody(): BodyPartConstant[] {
-    // rangers are cheap - just need movement
-    // 1 MOVE = 50 energy (very cheap!)
-    return [MOVE];
+    // Scout just needs MOVE parts for speed and vision
+    return BodyBuilder.scout(this.highCharity.energyAvailable);
   }
   
   protected getCreepsForRole(): Creep[] {

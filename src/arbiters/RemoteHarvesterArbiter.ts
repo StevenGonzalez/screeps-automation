@@ -11,6 +11,7 @@
 import { Arbiter } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 export class RemoteHarvesterArbiter extends Arbiter {
   sourceId: Id<Source>;
@@ -98,23 +99,9 @@ export class RemoteHarvesterArbiter extends Arbiter {
     
     if (current >= required) return null;
     
-    // Remote harvester body: WORK for mining, CARRY for drops, MOVE for travel
-    // Keep them CHEAP to avoid feeding energy to attackers
-    const energy = this.highCharity.room.energyCapacityAvailable;
-    const body: BodyPartConstant[] = [];
-    
-    // Build efficient but INEXPENSIVE body (max 800 energy)
-    // 2 WORK per CARRY per MOVE ratio
-    let remainingEnergy = Math.min(energy, 800); // Cap at 800 to minimize losses
-    
-    while (remainingEnergy >= 200) {
-      body.push(WORK, WORK, CARRY, MOVE);
-      remainingEnergy -= 200;
-    }
-    
-    if (body.length === 0) {
-      body.push(WORK, CARRY, MOVE); // Minimum (150 energy)
-    }
+    // Remote harvester: flexible miner body capped at 800 energy to minimize losses
+    const energy = Math.min(this.highCharity.room.energyCapacityAvailable, 800);
+    const body = BodyBuilder.miner(energy);
     
     return {
       body,

@@ -15,6 +15,7 @@ import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
 import { ROLES, RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * JACKAL ARBITER - Manages energy distribution
@@ -278,29 +279,14 @@ export class JackalArbiter extends Arbiter {
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap, otherwise use capacity
-    const energy = this.highCharity.isBootstrapping ? 
+    // Use available energy during bootstrap or emergency, otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Emergency: Minimal hauler (150 energy)
-    if (energy < 250) {
-      return [CARRY, MOVE];
-    }
-    
-    // Early game: Small hauler (200 energy)
-    if (energy < 400) {
-      return [CARRY, CARRY, MOVE, MOVE];
-    }
-    
-    // Mid game: Medium hauler
-    if (energy < 800) {
-      return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
-    }
-    
-    // Late game: Large hauler (balanced carry/move)
-    const pattern: BodyPartConstant[] = [CARRY, CARRY, MOVE];
-    return this.calculateBody(pattern, 8);
+    // Use BodyBuilder to create flexible hauler body
+    return BodyBuilder.hauler(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

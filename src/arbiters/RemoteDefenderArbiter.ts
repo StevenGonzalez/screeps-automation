@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { SpawnPriority } from '../spawning/SpawnQueue';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 interface RemoteDefenderMemory extends ArbiterMemory {
   targetRoom: string;
@@ -253,33 +254,12 @@ export class RemoteDefenderArbiter extends Arbiter {
   }
   
   private calculateDefenderBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
     const rdMemory = this.memory as RemoteDefenderMemory;
     const threat = rdMemory.threatLevel;
     
-    // Light defender for low threats
-    if (threat < 10 || energy < 800) {
-      // Cheap ranged defender: 2 ranged, 2 move
-      return [RANGED_ATTACK, RANGED_ATTACK, MOVE, MOVE];
-    }
-    
-    // Medium defender
-    if (energy < 1500) {
-      // Balanced: 3 ranged, 1 heal, 4 move
-      return [
-        RANGED_ATTACK, RANGED_ATTACK, RANGED_ATTACK,
-        HEAL,
-        MOVE, MOVE, MOVE, MOVE
-      ];
-    }
-    
-    // Heavy defender for serious threats
-    // 5 ranged, 2 heal, 7 move
-    return [
-      RANGED_ATTACK, RANGED_ATTACK, RANGED_ATTACK, RANGED_ATTACK, RANGED_ATTACK,
-      HEAL, HEAL,
-      MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE
-    ];
+    // Use ranged defenders, heavier if threat is high
+    const useRanged = true;
+    return BodyBuilder.defender(this.highCharity.energyAvailable, useRanged);
   }
   
   protected getCreepsForRole(): Creep[] {

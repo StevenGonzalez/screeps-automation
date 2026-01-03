@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 interface RemoteMiningMemory extends ArbiterMemory {
   targetRoom: string;
@@ -302,36 +303,13 @@ export class SeekerArbiter extends Arbiter {
   }
   
   private calculateMinerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
-    
-    // Remote miner: Work parts + minimal carry/move
-    if (energy < 550) {
-      return [WORK, WORK, WORK, CARRY, MOVE, MOVE];
-    }
-    
-    if (energy < 800) {
-      return [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE];
-    }
-    
-    // Optimal: 5 work, 1 carry, 3 move
-    return [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE, MOVE, MOVE];
+    // Remote miners need work parts for harvesting
+    return BodyBuilder.miner(this.highCharity.energyAvailable);
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
-    
-    // Remote hauler: Large carry capacity with move
-    if (energy < 550) {
-      return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
-    }
-    
-    if (energy < 1000) {
-      return [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE];
-    }
-    
-    // Large hauler for long distances
-    const pattern: BodyPartConstant[] = [CARRY, CARRY, MOVE];
-    return this.calculateBody(pattern, 10);
+    // Remote haulers need large carry capacity
+    return BodyBuilder.hauler(this.highCharity.energyAvailable);
   }
   
   protected getCreepsForRole(): Creep[] {

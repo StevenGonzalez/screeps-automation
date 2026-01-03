@@ -14,6 +14,7 @@ import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { ROLES, RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Lekgolo Arbiter - Manages energy harvesting
@@ -166,23 +167,8 @@ export class LekgoloArbiter extends Arbiter {
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Emergency: Minimal Lekgolo (200 energy) - use during very early bootstrap
-    if (energy <= 300) {
-      return [WORK, MOVE, CARRY];
-    }
-    
-    // Early game: Small Lekgolo (300 energy)
-    if (energy < 550) {
-      return [WORK, WORK, MOVE, CARRY];
-    }
-    
-    // Mid game: Dedicated miner
-    if (energy < 800) {
-      return [WORK, WORK, WORK, WORK, WORK, MOVE, MOVE];
-    }
-    
-    // Late game: Optimal 5 WORK miner
-    return [WORK, WORK, WORK, WORK, WORK, WORK, MOVE, MOVE, MOVE];
+    // Use BodyBuilder to create flexible miner body
+    return BodyBuilder.miner(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 export interface ClaimerMemory {
   targetRoom: string;
@@ -304,21 +305,8 @@ export class HeraldArbiter extends Arbiter {
   }
   
   private calculatePioneerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
-    
-    // Pioneer needs balanced WORK/CARRY/MOVE for all tasks
-    // Small pioneer: 300 energy
-    if (energy < 600) {
-      return [WORK, CARRY, CARRY, MOVE, MOVE];
-    }
-    
-    // Medium pioneer: 550 energy
-    if (energy < 1000) {
-      return [WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
-    }
-    
-    // Large pioneer: 900 energy
-    return [WORK, WORK, WORK, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
+    // Pioneers are general workers for bootstrapping new rooms
+    return BodyBuilder.worker(this.highCharity.energyAvailable);
   }
   
   protected getCreepsForRole(): Creep[] {

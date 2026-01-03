@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Repairer Arbiter - Manages fortification maintenance
@@ -195,23 +196,13 @@ export class HunterArbiter extends Arbiter {
   }
   
   private calculateRepairerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.isBootstrapping ? 
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Repairer: WORK for repair speed, CARRY for energy capacity, MOVE for mobility
-    
-    if (energy < 550) {
-      return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
-    }
-    
-    if (energy < 1000) {
-      return [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
-    }
-    
-    // Large repairer: 10 WORK, 10 CARRY, 10 MOVE
-    const pattern: BodyPartConstant[] = [WORK, CARRY, MOVE];
-    return this.calculateBody(pattern, 10);
+    // Use BodyBuilder for flexible worker body (repairers are basically workers)
+    return BodyBuilder.worker(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

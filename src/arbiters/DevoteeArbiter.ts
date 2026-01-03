@@ -13,7 +13,8 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
-import { RoleHelpers } from '../constants/Roles';
+import { ROLES, RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 // Covenant-themed controller signs
 const COVENANT_SIGNS = [
@@ -211,29 +212,14 @@ export class DevoteeArbiter extends Arbiter {
   }
   
   private calculateWorkerBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap, otherwise use capacity
-    const energy = this.highCharity.isBootstrapping ? 
+    // Use available energy during bootstrap or emergency, otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Emergency: Minimal worker (200 energy)
-    if (energy < 300) {
-      return [WORK, CARRY, MOVE];
-    }
-    
-    // Early game: Small worker (250 energy)
-    if (energy < 450) {
-      return [WORK, CARRY, MOVE, MOVE];
-    }
-    
-    // Mid game: Balanced worker (450 energy)
-    if (energy < 800) {
-      return [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
-    }
-    
-    // Late game: Large worker (3 WORK per CARRY for efficiency)
-    const pattern: BodyPartConstant[] = [WORK, WORK, WORK, CARRY, MOVE, MOVE];
-    return this.calculateBody(pattern, 5);
+    // Use BodyBuilder for flexible upgrader body
+    return BodyBuilder.upgrader(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

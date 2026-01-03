@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 export interface PowerSquad {
   targetRoom: string;
@@ -338,50 +339,30 @@ export class PowerHarvesterArbiter extends Arbiter {
    * Calculate power attacker body (heavy attack focus)
    */
   private calculatePowerAttackerBody(): BodyPartConstant[] {
-    // PowerBanks have 2M hits, need heavy attack
-    // 20 ATTACK parts = 20 * 80 = 1600 damage per tick
-    const body: BodyPartConstant[] = [];
-    
-    // Add tough parts for protection
-    for (let i = 0; i < 10; i++) body.push(TOUGH);
-    
-    // Add attack parts
-    for (let i = 0; i < 20; i++) body.push(ATTACK);
-    
-    // Add move parts (1:1 ratio for plains speed)
-    for (let i = 0; i < 20; i++) body.push(MOVE);
-    
-    return body;
+    const energy = this.highCharity.energyAvailable;
+    // PowerBanks need heavy attackers - use available energy flexibly
+    // Min: 260 energy (1T, 1A, 2M)
+    const base: BodyPartConstant[] = [TOUGH, ATTACK, MOVE, MOVE];
+    const pattern: BodyPartConstant[] = [ATTACK, MOVE];
+    return BodyBuilder.minPlusRepeat(base, pattern, energy, 25);
   }
   
   /**
    * Calculate power healer body (heavy heal focus)
    */
   private calculatePowerHealerBody(): BodyPartConstant[] {
-    const body: BodyPartConstant[] = [];
-    
-    // Add heal parts
-    for (let i = 0; i < 25; i++) body.push(HEAL);
-    
-    // Add move parts
-    for (let i = 0; i < 25; i++) body.push(MOVE);
-    
-    return body;
+    const energy = this.highCharity.energyAvailable;
+    // Power healers need heal + move - min 300 energy (1H, 1M)
+    const pattern: BodyPartConstant[] = [HEAL, MOVE];
+    return BodyBuilder.repeat(pattern, energy, 25);
   }
   
   /**
    * Calculate power hauler body (pure carry)
    */
   private calculatePowerHaulerBody(): BodyPartConstant[] {
-    const body: BodyPartConstant[] = [];
-    
-    // Add carry parts
-    for (let i = 0; i < 25; i++) body.push(CARRY);
-    
-    // Add move parts
-    for (let i = 0; i < 25; i++) body.push(MOVE);
-    
-    return body;
+    // Power haulers are just large haulers
+    return BodyBuilder.hauler(this.highCharity.energyAvailable);
   }
   
   protected getCreepsForRole(): Creep[] {

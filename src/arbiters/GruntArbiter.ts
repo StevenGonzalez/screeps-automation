@@ -15,6 +15,7 @@ import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { ROLES, RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Grunt Arbiter - Manages early-game energy harvesting
@@ -279,35 +280,14 @@ export class GruntArbiter extends Arbiter {
    * Calculate grunt body based on available energy
    */
   private calculategruntBody(): BodyPartConstant[] {
-    // grunts need balanced WORK, CARRY, MOVE
     // CRITICAL: If no creeps exist, ALWAYS use available energy (emergency bootstrap)
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
     const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Minimal harvester (200 energy): 1W 1C 1M
-    if (energy <= 250) {
-      return [WORK, CARRY, MOVE];
-    }
-    
-    // Small harvester (300 energy): 1W 2C 2M
-    if (energy < 400) {
-      return [WORK, CARRY, CARRY, MOVE, MOVE];
-    }
-    
-    // Standard harvester (450 energy): 2W 2C 2M
-    if (energy < 550) {
-      return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
-    }
-    
-    // Large harvester (550 energy): 2W 3C 3M
-    if (energy < 700) {
-      return [WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
-    }
-    
-    // Max harvester (800 energy): 3W 3C 4M
-    return [WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
+    // Use BodyBuilder to create flexible worker body
+    return BodyBuilder.worker(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { SquadCoordinator, CombatRole, TacticMode, SquadFormation } from '../military/SquadCoordinator';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 export interface VanguardMemory {
   targetRoom?: string;
@@ -288,55 +289,18 @@ export class VanguardArbiter extends Arbiter {
    * Calculate attacker body
    */
   private calculateAttackerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
-    
-    // T1 Attacker (1300 energy): 10 ATTACK, 10 MOVE, 5 TOUGH
-    if (energy >= 1300) {
-      return [
-        TOUGH, TOUGH, TOUGH, TOUGH, TOUGH,
-        MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
-        ATTACK, ATTACK, ATTACK, ATTACK, ATTACK,
-        ATTACK, ATTACK, ATTACK, ATTACK, ATTACK
-      ];
-    }
-    
-    // T2 Attacker (800 energy): 6 ATTACK, 6 MOVE, 2 TOUGH
-    if (energy >= 800) {
-      return [
-        TOUGH, TOUGH,
-        MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
-        ATTACK, ATTACK, ATTACK, ATTACK, ATTACK, ATTACK
-      ];
-    }
-    
-    // T3 Attacker (400 energy): 3 ATTACK, 3 MOVE
-    return [ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE];
+    // Melee attackers with TOUGH for armor
+    return BodyBuilder.defender(this.highCharity.energyAvailable, false);
   }
   
   /**
    * Calculate healer body
    */
   private calculateHealerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
-    
-    // T1 Healer (1300 energy): 10 HEAL, 10 MOVE
-    if (energy >= 1300) {
-      return [
-        MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
-        HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL, HEAL
-      ];
-    }
-    
-    // T2 Healer (800 energy): 6 HEAL, 6 MOVE
-    if (energy >= 800) {
-      return [
-        MOVE, MOVE, MOVE, MOVE, MOVE, MOVE,
-        HEAL, HEAL, HEAL, HEAL, HEAL, HEAL
-      ];
-    }
-    
-    // T3 Healer (400 energy): 3 HEAL, 3 MOVE
-    return [HEAL, HEAL, HEAL, MOVE, MOVE, MOVE];
+    const energy = this.highCharity.energyAvailable;
+    // Healers: HEAL + MOVE pattern, min 300 energy (1H, 1M)
+    const pattern: BodyPartConstant[] = [HEAL, MOVE];
+    return BodyBuilder.repeat(pattern, energy, 25);
   }
   
   /**

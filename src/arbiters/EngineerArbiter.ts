@@ -15,6 +15,7 @@ import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { getSpawnName } from '../utils/SpawnNames';
 import { ROLES, RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Builder Arbiter - Manages construction and repair
@@ -298,29 +299,14 @@ export class EngineerArbiter extends Arbiter {
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap, otherwise use capacity
-    const energy = this.highCharity.isBootstrapping ? 
+    // Use available energy during bootstrap or emergency, otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Emergency: Minimal builder (200 energy)
-    if (energy < 300) {
-      return [WORK, CARRY, MOVE];
-    }
-    
-    // Early game: Small builder (250 energy)
-    if (energy < 400) {
-      return [WORK, CARRY, MOVE, MOVE];
-    }
-    
-    // Mid game: Balanced builder
-    if (energy < 800) {
-      return [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
-    }
-    
-    // Late game: Large builder
-    const pattern: BodyPartConstant[] = [WORK, WORK, CARRY, MOVE, MOVE];
-    return this.calculateBody(pattern, 6);
+    // Use BodyBuilder for flexible builder body
+    return BodyBuilder.builder(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

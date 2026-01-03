@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Mineral Mining Arbiter - Manages mineral extraction
@@ -124,38 +125,8 @@ export class ExcavatorArbiter extends Arbiter {
   }
   
   private calculateMinerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
-    
-    // Mineral miner: WORK for mining, CARRY for storage, MOVE for mobility
-    // Need more WORK parts than energy miners since minerals are harder to extract
-    
-    if (energy < 1000) {
-      return [WORK, WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
-    }
-    
-    if (energy < 1500) {
-      return [WORK, WORK, WORK, WORK, WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE];
-    }
-    
-    // Large mineral miner: 20 WORK, 10 CARRY, 15 MOVE
-    const parts: BodyPartConstant[] = [];
-    
-    // Add WORK parts (max 20)
-    for (let i = 0; i < 20; i++) {
-      parts.push(WORK);
-    }
-    
-    // Add CARRY parts (10)
-    for (let i = 0; i < 10; i++) {
-      parts.push(CARRY);
-    }
-    
-    // Add MOVE parts (15)
-    for (let i = 0; i < 15; i++) {
-      parts.push(MOVE);
-    }
-    
-    return parts;
+    // Mineral miners need lots of WORK parts
+    return BodyBuilder.miner(this.highCharity.energyAvailable);
   }
   
   protected getCreepsForRole(): Creep[] {

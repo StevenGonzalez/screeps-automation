@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { RoleHelpers } from '../constants/Roles';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Defense Arbiter - Manages room defense
@@ -275,23 +276,13 @@ export class ZealotArbiter extends Arbiter {
   }
   
   private calculateDefenderBody(): BodyPartConstant[] {
-    const energy = this.highCharity.isBootstrapping ? 
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
-    // Early game: Small defender
-    if (energy < 400) {
-      return [TOUGH, ATTACK, ATTACK, MOVE, MOVE];
-    }
-    
-    // Mid game: Medium defender
-    if (energy < 800) {
-      return [TOUGH, TOUGH, ATTACK, ATTACK, ATTACK, MOVE, MOVE, MOVE, MOVE];
-    }
-    
-    // Late game: Large defender (balanced for speed)
-    const pattern: BodyPartConstant[] = [TOUGH, ATTACK, ATTACK, MOVE, MOVE];
-    return this.calculateBody(pattern, 6);
+    // Use BodyBuilder for flexible defender body
+    return BodyBuilder.defender(energy, false);
   }
   
   protected getCreepsForRole(): Creep[] {

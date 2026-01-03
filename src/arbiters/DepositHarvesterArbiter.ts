@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { SpawnPriority } from '../spawning/SpawnQueue';
+import { BodyBuilder } from '../utils/BodyBuilder';
 
 interface DepositHarvesterMemory extends ArbiterMemory {
   depositId: string;
@@ -311,50 +312,19 @@ export class DepositHarvesterArbiter extends Arbiter {
    */
   private calculateHarvesterBody(): BodyPartConstant[] {
     const energy = this.highCharity.room.energyCapacityAvailable;
-    const body: BodyPartConstant[] = [];
-    
-    // Pilgrim harvester: maximize WORK parts for fast extraction
-    // Deposits have cooldown, so extract maximum per harvest
-    // Minimal CARRY (just 3) since we drop resources on ground immediately
-    
-    // Calculate max WORK parts (each WORK = 100 energy)
-    let remainingEnergy = energy;
-    
-    // Add 3 CARRY + 3 MOVE first (300 energy)
-    for (let i = 0; i < 3; i++) {
-      body.push(CARRY);
-      body.push(MOVE);
-    }
-    remainingEnergy -= 600;
-    
-    // Fill rest with WORK + MOVE pairs
-    const workParts = Math.min(Math.floor(remainingEnergy / 150), 30); // Cap at 30 WORK
-    for (let i = 0; i < workParts; i++) {
-      body.push(WORK);
-      body.push(MOVE);
-    }
-    
-    return body;
+    // Deposit harvesters need lots of WORK parts
+    // Min base: 300 energy (3W, 3M)
+    const base: BodyPartConstant[] = [WORK, WORK, WORK, MOVE, MOVE, MOVE];
+    const pattern: BodyPartConstant[] = [WORK, MOVE];
+    return BodyBuilder.minPlusRepeat(base, pattern, energy, 30);
   }
   
   /**
    * Calculate hauler body (pure CARRY + MOVE)
    */
   private calculateHaulerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.room.energyCapacityAvailable;
-    const body: BodyPartConstant[] = [];
-    
-    // Hauler: maximize CARRY capacity
-    // Each CARRY + MOVE = 100 energy
-    const maxParts = Math.floor(energy / 100);
-    const carryParts = Math.min(maxParts, 25); // Cap at 25 CARRY (1250 capacity)
-    
-    for (let i = 0; i < carryParts; i++) {
-      body.push(CARRY);
-      body.push(MOVE);
-    }
-    
-    return body;
+    // Deposit haulers are just big haulers
+    return BodyBuilder.hauler(this.highCharity.energyAvailable);
   }
   
   protected getCreepsForRole(): Creep[] {

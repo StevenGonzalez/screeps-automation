@@ -88,14 +88,17 @@ export class SpawnQueue {
    * Add spawn request to queue
    */
   public enqueue(request: SpawnRequest): void {
-    // Check for duplicate requests
+    // Check for duplicate requests by unique ID or exact name match
+    // This allows multiple requests from same arbiter (for multiple creeps of same role)
     const existingIndex = this.queue.findIndex(r => 
-      r.name === request.name || 
-      (r.arbiter === request.arbiter && r.replacingCreep === request.replacingCreep)
+      r.id === request.id || 
+      r.name === request.name ||
+      // Only deduplicate if both are replacing the SAME specific creep
+      (r.replacingCreep && r.replacingCreep === request.replacingCreep)
     );
     
     if (existingIndex !== -1) {
-      // Update priority if higher
+      // Update priority if higher (lower number = higher priority)
       if (request.priority < this.queue[existingIndex].priority) {
         this.queue[existingIndex] = request;
       }
@@ -134,17 +137,6 @@ export class SpawnQueue {
     
     // Refresh spawn references (colony.spawns updated during build phase)
     this.spawns = this.colony.spawns;
-    
-    
-    // DEBUG: Log queue status
-    if (this.queue.length > 0) {
-      console.log(`🔱 ${this.colony.name}: Queue has ${this.queue.length} requests`);
-      for (const req of this.queue.slice(0, 3)) {
-        console.log(`  - ${req.name} (${req.memory.role}) Priority ${req.priority}, Cost: ${req.energyCost}, Available: ${this.colony.energyAvailable}`);
-      }
-    } else {
-      console.log(`🔱 ${this.colony.name}: Spawn queue is empty. Creeps: ${this.colony.elites.length}`);
-    }
     
     // Check for lifecycle spawns (creeps about to die)
     this.checkLifecycle();
@@ -251,23 +243,15 @@ export class SpawnQueue {
       const waitTime = Game.time - request.tickRequested;
       memory.statistics.averageWaitTime = 
         (memory.statistics.averageWaitTime * (memory.totalSpawned - 1) + waitTime) / memory.totalSpawned;
-      
-      console.log(
-        `✅ ${this.colony.name}: Spawned ${request.name} (Priority ${request.priority}, ` +
-        `waited ${waitTime} ticks, ${this.queue.length} left in queue)`
-      );
     } else if (result === ERR_NAME_EXISTS) {
       // Remove duplicate
       this.queue = this.queue.filter(r => r.id !== request.id);
-      console.log(`⚠️ ${this.colony.name}: Removed duplicate spawn request ${request.name}`);
     } else if (result === ERR_NOT_ENOUGH_ENERGY) {
       // Keep in queue, will retry next tick
-      console.log(`⏳ ${this.colony.name}: Not enough energy for ${request.name} (need ${request.energyCost}, have ${this.colony.energyAvailable})`);
     } else if (result === ERR_BUSY) {
       // Spawn is busy, will retry next tick
     } else {
-      // Unknown error - log it and remove from queue to avoid infinite retries
-      console.log(`❌ ${this.colony.name}: Failed to spawn ${request.name}, error: ${result}`);
+      // Unknown error - remove from queue to avoid infinite retries
       this.queue = this.queue.filter(r => r.id !== request.id);
     }
   }
@@ -380,8 +364,18 @@ export class SpawnQueue {
     if (saved && saved.length > 0) {
       this.queue = saved;
       
-      // Clean up old requests (>500 ticks old)
-      this.queue = this.queue.filter(r => Game.time - r.tickRequested < 500);
+      // AGGRESSIVE CLEANUP: Remove old/stale requests
+      this.queue = this.queue.filter(r => {
+        const age = Game.time - r.tickRequested;
+        
+        // Remove if older than 50 ticks (should have spawned by now)
+        if (age > 50) return false;
+        
+        // Remove if creep with this name already exists
+        if (Game.creeps[r.name]) return false;
+        
+        return true;
+      });
     }
   }
 
