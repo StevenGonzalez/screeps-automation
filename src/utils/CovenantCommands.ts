@@ -11,6 +11,7 @@
 
 import { Profiler } from './Profiler';
 import { CacheSystem } from './CacheSystem';
+import { CPUMonitor } from './CPUMonitor';
 import { Covenant } from '../core/Covenant';
 
 /**
@@ -68,20 +69,7 @@ export class CovenantCommands {
    * Usage: Game.cov.cpuStatus()
    */
   cpuStatus(): void {
-    const used = Game.cpu.getUsed();
-    const limit = Game.cpu.limit;
-    const bucket = Game.cpu.bucket;
-    const remaining = Profiler.getRemainingBudget();
-    const percentage = ((used / limit) * 100).toFixed(1);
-    
-    console.log('═══════════════════════════════════════════════════════');
-    console.log('⚡ CPU STATUS');
-    console.log('═══════════════════════════════════════════════════════');
-    console.log(`Used: ${used.toFixed(2)} / ${limit} (${percentage}%)`);
-    console.log(`Remaining: ${remaining.toFixed(2)}`);
-    console.log(`Bucket: ${bucket} / 10000`);
-    console.log(`Over budget: ${Profiler.isOverBudget() ? '❌ YES' : '✅ NO'}`);
-    console.log('═══════════════════════════════════════════════════════');
+    console.log(CPUMonitor.getStatus());
   }
   
   /**

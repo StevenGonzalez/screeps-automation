@@ -12,6 +12,7 @@
 import { Covenant } from "./core/Covenant";
 import { Profiler } from "./utils/Profiler";
 import { CacheSystem, PathCache } from "./utils/CacheSystem";
+import { CPUMonitor } from "./utils/CPUMonitor";
 
 // Initialize global Covenant instance
 const Cov = Covenant.getInstance();
@@ -68,28 +69,43 @@ const Cov = Covenant.getInstance();
 export const loop = (): void => {
   // Performance monitoring
   const startCpu = Game.cpu.getUsed();
+  const throttleLevel = CPUMonitor.getThrottleLevel();
 
   try {
     // COVENANT ARCHITECTURE
+    CPUMonitor.startSystem('Covenant_build');
     Profiler.start('Covenant_build');
     // Phase 1: Build - Construct all High Charities, Arbiters, and Crusades
     Cov.build();
     Profiler.end('Covenant_build');
+    CPUMonitor.endSystem('Covenant_build');
     
+    CPUMonitor.startSystem('Covenant_init');
     Profiler.start('Covenant_init');
     // Phase 2: Init - Initialize all systems
     Cov.init();
     Profiler.end('Covenant_init');
+    CPUMonitor.endSystem('Covenant_init');
     
-    Profiler.start('Covenant_run');
-    // Phase 3: Run - Execute all operations
-    Cov.run();
-    Profiler.end('Covenant_run');
+    // Throttle expensive operations if CPU critical
+    if (throttleLevel < 3) {
+      CPUMonitor.startSystem('Covenant_run');
+      Profiler.start('Covenant_run');
+      // Phase 3: Run - Execute all operations
+      Cov.run();
+      Profiler.end('Covenant_run');
+      CPUMonitor.endSystem('Covenant_run');
+    }
     
-    Profiler.start('Covenant_endOfTick');
-    // Phase 4: End of tick - Stats and cleanup
-    Cov.endOfTick();
-    Profiler.end('Covenant_endOfTick');
+    // Skip end of tick cleanup if emergency throttling
+    if (throttleLevel < 3) {
+      CPUMonitor.startSystem('Covenant_endOfTick');
+      Profiler.start('Covenant_endOfTick');
+      // Phase 4: End of tick - Stats and cleanup
+      Cov.endOfTick();
+      Profiler.end('Covenant_endOfTick');
+      CPUMonitor.endSystem('Covenant_endOfTick');
+    }
     
     // CACHE CLEANUP
     if (Game.time % 10 === 0) {
@@ -97,6 +113,15 @@ export const loop = (): void => {
     }
     if (Game.time % 100 === 0) {
       PathCache.cleanOld();
+    }
+    
+    // CPU MONITORING
+    const tickCpu = Game.cpu.getUsed() - startCpu;
+    CPUMonitor.recordTick(tickCpu);
+    
+    // Alert if CPU critical
+    if (throttleLevel >= 2) {
+      console.log(`⚠️ CPU THROTTLE LEVEL ${throttleLevel} - Bucket: ${Game.cpu.bucket}`);
     }
     
     // PERFORMANCE MONITORING
