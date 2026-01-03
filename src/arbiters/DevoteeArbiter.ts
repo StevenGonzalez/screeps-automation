@@ -107,7 +107,17 @@ export class DevoteeArbiter extends Arbiter {
   }
   
   private getEnergy(worker: Elite): void {
-    // Priority: Containers > Storage > Harvest directly
+    // Priority: Upgrader Link > Containers > Storage > Harvest directly
+    
+    // Check for upgrader/controller link first
+    if (this.highCharity.linkTemple?.isActive()) {
+      const upgraderLink = this.highCharity.linkTemple.getUpgraderLink();
+      if (upgraderLink && upgraderLink.store.getUsedCapacity(RESOURCE_ENERGY) > 50) {
+        worker.withdrawFrom(upgraderLink);
+        worker.say('⚡');
+        return;
+      }
+    }
     
     // Find nearby container with energy
     const container = worker.pos.findClosestByPath(FIND_STRUCTURES, {

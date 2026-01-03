@@ -91,6 +91,22 @@ export class ExtractorArbiter extends Arbiter {
       miner.say('⛏️');
     }
     
+    // Transfer to source link if link network is active
+    if (this.highCharity.linkTemple?.isActive()) {
+      const sourceLinks = this.highCharity.linkTemple.getSourceLinks();
+      const nearbyLink = sourceLinks.find(link => 
+        link.pos.inRangeTo(this.source!, 2) && 
+        link.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      );
+      
+      if (nearbyLink && miner.pos.isNearTo(nearbyLink)) {
+        const result = miner.transferTo(nearbyLink);
+        if (result === OK) {
+          miner.say('⚡');
+        }
+      }
+    }
+    
     // If miner is full and no container, transfer to nearby structures
     if (miner.store.getFreeCapacity() === 0 && !this.container) {
       const nearbySpawn = miner.pos.findInRange(FIND_MY_SPAWNS, 1)[0];

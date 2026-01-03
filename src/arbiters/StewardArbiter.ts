@@ -64,7 +64,17 @@ export class StewardArbiter extends Arbiter {
   }
   
   private collectEnergy(hauler: Elite): void {
-    // Priority: Containers > Dropped resources > Storage
+    // Priority: Storage Link > Containers > Dropped resources > Storage
+    
+    // Check for storage link first (instant energy distribution)
+    if (this.highCharity.linkTemple?.isActive()) {
+      const storageLink = this.highCharity.linkTemple.getStorageLink();
+      if (storageLink && storageLink.store.getUsedCapacity(RESOURCE_ENERGY) > 100) {
+        hauler.withdrawFrom(storageLink);
+        hauler.say('⚡');
+        return;
+      }
+    }
     
     // Find containers with energy
     const containers = this.room.find(FIND_STRUCTURES, {
