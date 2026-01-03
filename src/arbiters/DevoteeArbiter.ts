@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { RoleHelpers } from '../constants/Roles';
 
 // Covenant-themed controller signs
 const COVENANT_SIGNS = [
@@ -59,7 +60,10 @@ export class DevoteeArbiter extends Arbiter {
     const desiredWorkers = this.calculateDesiredWorkers();
     const currentWorkers = this.workers.length;
     
-    if (currentWorkers < desiredWorkers && Game.time % 10 === 0) {
+    console.log(`📚 ${this.print}: ${currentWorkers}/${desiredWorkers} workers (phase: ${this.highCharity.memory.phase})`);
+    
+    // Request immediately if we have 0 but need some, otherwise every 10 ticks
+    if (currentWorkers < desiredWorkers && (currentWorkers === 0 || Game.time % 10 === 0)) {
       this.requestWorker();
     }
   }
@@ -195,12 +199,9 @@ export class DevoteeArbiter extends Arbiter {
     const body = this.calculateWorkerBody();
     const name = `Devotee_${Game.time}`;
     
-    // First devotee is CRITICAL during bootstrap (need to upgrade controller)
-    const priority = this.highCharity.isBootstrapping && this.workers.length === 0 ?
-      SpawnPriority.CRITICAL :
-      SpawnPriority.ECONOMY;
-    
-    const important = this.highCharity.isBootstrapping && this.workers.length === 0;
+    // Workers are ECONOMY priority (can wait until energy is flowing)
+    const priority = SpawnPriority.ECONOMY;
+    const important = false;
     
     this.requestSpawn(body, name, {
       role: 'elite_worker', // Covenant themed role
@@ -209,9 +210,9 @@ export class DevoteeArbiter extends Arbiter {
   }
   
   private calculateWorkerBody(): BodyPartConstant[] {
-    // Use capacity for body planning (not current available energy)
-    // SpawnQueue will handle waiting for enough energy
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy if bootstrapping, otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
     
     // Emergency: Minimal worker (200 energy)
     if (energy < 300) {
@@ -237,9 +238,7 @@ export class DevoteeArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'elite_worker' ||
-        creep.memory.role === 'worker' ||
-        creep.memory.role === 'upgrader'
+        RoleHelpers.isUpgrader(creep.memory.role || '')
     });
   }
 }

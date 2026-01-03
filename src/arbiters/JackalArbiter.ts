@@ -14,7 +14,7 @@ import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
-import { ROLES } from '../constants/Roles';
+import { ROLES, RoleHelpers } from '../constants/Roles';
 
 /**
  * JACKAL ARBITER - Manages energy distribution
@@ -37,7 +37,18 @@ export class JackalArbiter extends Arbiter {
     const desiredHaulers = this.calculateDesiredHaulers();
     const currentHaulers = this.haulers.length;
     
-    if (currentHaulers < desiredHaulers && Game.time % 10 === 0) {
+    const sources = this.room.find(FIND_SOURCES);
+    let sourceContainers = 0;
+    for (const source of sources) {
+      const containers = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: s => s.structureType === STRUCTURE_CONTAINER
+      });
+      if (containers.length > 0) sourceContainers++;
+    }
+    console.log(`🚚 ${this.print}: ${currentHaulers}/${desiredHaulers} haulers (source containers: ${sourceContainers})`);
+    
+    // Request immediately if we have 0 but need some, otherwise every 10 ticks
+    if (currentHaulers < desiredHaulers && (currentHaulers === 0 || Game.time % 10 === 0)) {
       this.requestHauler();
     }
   }
@@ -246,12 +257,18 @@ export class JackalArbiter extends Arbiter {
     const body = this.calculateHaulerBody();
     const name = `Jackal_${Game.time}`;
     
-    // Jackals are CRITICAL during bootstrap (drones need haulers to function)
-    const priority = this.highCharity.isBootstrapping && this.haulers.length === 0 ?
+    // Check if we have any miners active (Jackals need miners to exist first!)
+    const hasMiners = this.room.find(FIND_MY_CREEPS, {
+      filter: c => RoleHelpers.isMiner(c.memory.role || '')
+    }).length > 0;
+    
+    // Jackals are CRITICAL only if miners exist and we're bootstrapping
+    // Otherwise ECONOMY (don't spawn haulers before miners!)
+    const priority = hasMiners && this.highCharity.isBootstrapping && this.haulers.length === 0 ?
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
     
-    const important = this.highCharity.isBootstrapping && this.haulers.length === 0;
+    const important = hasMiners && this.highCharity.isBootstrapping && this.haulers.length === 0;
     
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_JACKAL, // Covenant themed role
@@ -260,9 +277,9 @@ export class JackalArbiter extends Arbiter {
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
-    // Use capacity for body planning (not current available energy)
-    // SpawnQueue will handle waiting for enough energy
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy if bootstrapping, otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
     
     // Emergency: Minimal hauler (150 energy)
     if (energy < 250) {
@@ -288,10 +305,7 @@ export class JackalArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'elite_jackal' ||
-        creep.memory.role === 'jackal' ||
-        creep.memory.role === 'elite_hauler' ||
-        creep.memory.role === 'hauler'
+        RoleHelpers.isHauler(creep.memory.role || '')
     });
   }
 }

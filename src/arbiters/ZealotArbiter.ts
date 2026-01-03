@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { RoleHelpers } from '../constants/Roles';
 
 /**
  * Defense Arbiter - Manages room defense
@@ -293,7 +294,7 @@ export class ZealotArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'defender'
+        RoleHelpers.isDefender(creep.memory.role || '')
     });
   }
 }

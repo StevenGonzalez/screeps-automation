@@ -13,7 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
-import { ROLES } from '../constants/Roles';
+import { ROLES, RoleHelpers } from '../constants/Roles';
 
 /**
  * Drone Arbiter - Manages energy harvesting
@@ -59,7 +59,10 @@ export class DroneArbiter extends Arbiter {
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
-    if (currentMiners < desiredMiners && Game.time % 10 === 0) {
+    console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners (container: ${!!this.container})`);
+    
+    // Request immediately if we have 0 but need some, otherwise every 10 ticks
+    if (currentMiners < desiredMiners && (currentMiners === 0 || Game.time % 10 === 0)) {
       this.requestMiner();
     }
   }
@@ -134,12 +137,20 @@ export class DroneArbiter extends Arbiter {
     const body = this.calculateMinerBody();
     const name = `Drone_${this.source?.id}_${Game.time}`;
     
-    // First Drones are CRITICAL priority during bootstrap
-    const priority = this.highCharity.isBootstrapping && this.miners.length === 0 ?
-      SpawnPriority.CRITICAL :
-      SpawnPriority.ECONOMY;
+    // Count total miners across all sources
+    const allMiners = this.room.find(FIND_MY_CREEPS, {
+      filter: c => RoleHelpers.isMiner(c.memory.role || '')
+    });
     
-    const important = this.highCharity.isBootstrapping && this.miners.length === 0;
+    // First miner is EMERGENCY (no energy production without it!)
+    // Additional miners during bootstrap are CRITICAL
+    const priority = allMiners.length === 0 ? 
+      SpawnPriority.EMERGENCY :
+      (this.highCharity.isBootstrapping && this.miners.length === 0 ?
+        SpawnPriority.CRITICAL :
+        SpawnPriority.ECONOMY);
+    
+    const important = allMiners.length === 0 || (this.highCharity.isBootstrapping && this.miners.length === 0);
     
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_DRONE, // Covenant themed role
@@ -148,9 +159,9 @@ export class DroneArbiter extends Arbiter {
   }
   
   private calculateMinerBody(): BodyPartConstant[] {
-    // Use capacity for body planning (not current available energy)
-    // SpawnQueue will handle waiting for enough energy
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy if bootstrapping, otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
     
     // Emergency: Minimal Drone (200 energy) - use during very early bootstrap
     if (energy <= 300) {
@@ -177,10 +188,7 @@ export class DroneArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        (creep.memory.role === 'elite_drone' && creep.memory.sourceId === this.source?.id) ||
-        (creep.memory.role === 'drone' && creep.memory.sourceId === this.source?.id) ||
-        (creep.memory.role === 'elite_miner' && creep.memory.sourceId === this.source?.id) ||
-        (creep.memory.role === 'miner' && creep.memory.sourceId === this.source?.id)
+        (RoleHelpers.isMiner(creep.memory.role || '') && creep.memory.sourceId === this.source?.id)
     });
   }
 }

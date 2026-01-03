@@ -14,7 +14,7 @@ import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { getSpawnName } from '../utils/SpawnNames';
-import { ROLES } from '../constants/Roles';
+import { ROLES, RoleHelpers } from '../constants/Roles';
 
 /**
  * Builder Arbiter - Manages construction and repair
@@ -296,9 +296,9 @@ export class EngineerArbiter extends Arbiter {
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {
-    // Use capacity for body planning (not current available energy)
-    // SpawnQueue will handle waiting for enough energy
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy if bootstrapping, otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
     
     // Emergency: Minimal builder (200 energy)
     if (energy < 300) {
@@ -324,10 +324,7 @@ export class EngineerArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'elite_engineer' ||
-        creep.memory.role === 'engineer' ||
-        creep.memory.role === 'elite_builder' ||
-        creep.memory.role === 'builder'
+        RoleHelpers.isBuilder(creep.memory.role || '')
     });
   }
   

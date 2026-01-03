@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { RoleHelpers } from '../constants/Roles';
 
 /**
  * Repairer Arbiter - Manages fortification maintenance
@@ -213,7 +214,7 @@ export class HunterArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'repairer'
+        RoleHelpers.isDefender(creep.memory.role || '')
     });
   }
 }

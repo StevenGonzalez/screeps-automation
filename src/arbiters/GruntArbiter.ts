@@ -14,7 +14,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
-import { ROLES } from '../constants/Roles';
+import { ROLES, RoleHelpers } from '../constants/Roles';
 
 /**
  * Grunt Arbiter - Manages early-game energy harvesting
@@ -31,7 +31,10 @@ export class GruntArbiter extends Arbiter {
     this.refresh();
     this.grunts = this.elites;
     
-    // Only active during bootstrap phase (no containers yet)
+    // DEBUG: Log creep finding
+    console.log(`🙏 ${this.print}: Found ${this.grunts.length} grunts. Active: ${this.shouldBeActive()}`);
+    
+    // Only active during bootstrap phase (no containers yet) OR emergency (no creeps)
     if (!this.shouldBeActive()) {
       return;
     }
@@ -39,6 +42,16 @@ export class GruntArbiter extends Arbiter {
     // Calculate desired grunts
     const desired = this.calculateDesiredgrunts();
     const current = this.grunts.length;
+    
+    console.log(`🙏 ${this.print}: ${current}/${desired} grunts (requesting: ${current < desired})`);
+    
+    // If NO creeps exist, request immediately (don't wait for tick % 10)
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    if (totalCreeps === 0 && current < desired) {
+      console.log(`🙏 ${this.print}: EMERGENCY SPAWN REQUEST`);
+      this.requestgrunt();
+      return;
+    }
     
     if (Game.time % 10 === 0 && current < desired) {
       this.requestgrunt();
@@ -61,6 +74,13 @@ export class GruntArbiter extends Arbiter {
    * Check if grunt arbiter should be active
    */
   private shouldBeActive(): boolean {
+    // EMERGENCY: If there are NO creeps at all, bootstrap with grunts
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    if (totalCreeps === 0) {
+      console.log(`🙏 ${this.print}: EMERGENCY BOOTSTRAP - No creeps exist!`);
+      return true;
+    }
+    
     // Check if there are containers at sources (Extractors taking over)
     const sources = this.room.find(FIND_SOURCES);
     for (const source of sources) {
@@ -241,12 +261,15 @@ export class GruntArbiter extends Arbiter {
     const body = this.calculategruntBody();
     const name = `grunt_${Game.time}`;
     
-    // grunts are CRITICAL during bootstrap (no energy = no spawning)
-    const priority = this.highCharity.isBootstrapping && this.grunts.length < 2 ?
-      SpawnPriority.CRITICAL :
-      SpawnPriority.ECONOMY;
+    // EMERGENCY if no creeps exist at all
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const priority = totalCreeps === 0 ? 
+      SpawnPriority.EMERGENCY :
+      (this.highCharity.isBootstrapping && this.grunts.length < 2 ?
+        SpawnPriority.CRITICAL :
+        SpawnPriority.ECONOMY);
     
-    const important = this.highCharity.isBootstrapping && this.grunts.length < 2;
+    const important = totalCreeps === 0 || (this.highCharity.isBootstrapping && this.grunts.length < 2);
     
     this.requestSpawn(body, name, {
       role: ROLES.GRUNT,
@@ -259,8 +282,9 @@ export class GruntArbiter extends Arbiter {
    */
   private calculategruntBody(): BodyPartConstant[] {
     // grunts need balanced WORK, CARRY, MOVE
-    // Use capacity for body planning (not current available energy)
-    const energy = this.highCharity.energyCapacity;
+    // Use available energy if no creeps exist (bootstrap), otherwise use capacity
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
     
     // Minimal harvester (200 energy): 1W 1C 1M
     if (energy <= 250) {
@@ -290,7 +314,7 @@ export class GruntArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'harvester'
+        RoleHelpers.isGrunt(creep.memory.role || '')
     });
   }
 }

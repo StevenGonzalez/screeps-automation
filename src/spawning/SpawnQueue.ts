@@ -137,6 +137,16 @@ export class SpawnQueue {
     // Load queue from memory
     this.loadQueue();
     
+    // DEBUG: Log queue status
+    if (this.queue.length > 0) {
+      console.log(`🔱 ${this.colony.name}: Queue has ${this.queue.length} requests`);
+      for (const req of this.queue.slice(0, 3)) {
+        console.log(`  - ${req.name} (${req.memory.role}) Priority ${req.priority}, Cost: ${req.energyCost}, Available: ${this.colony.energyAvailable}`);
+      }
+    } else {
+      console.log(`🔱 ${this.colony.name}: Spawn queue is empty. Creeps: ${this.colony.elites.length}`);
+    }
+    
     // Check for lifecycle spawns (creeps about to die)
     this.checkLifecycle();
     
@@ -283,6 +293,13 @@ export class SpawnQueue {
     const role = request.memory.role || '';
     
     // Minimal bodies for different roles
+    if (RoleHelpers.isGrunt(role)) {
+      // Grunt: 1 work, 1 carry, 1 move (200)
+      if (availableEnergy >= 200) {
+        return [WORK, CARRY, MOVE];
+      }
+    }
+    
     if (RoleHelpers.isHauler(role)) {
       // Minimal hauler: 1 carry, 1 move
       if (availableEnergy >= 100) {
@@ -294,6 +311,20 @@ export class SpawnQueue {
       // Minimal miner: 1 work, 1 move
       if (availableEnergy >= 150) {
         return [WORK, MOVE];
+      }
+    }
+    
+    if (RoleHelpers.isBuilder(role)) {
+      // Minimal builder: 1 work, 1 carry, 1 move
+      if (availableEnergy >= 200) {
+        return [WORK, CARRY, MOVE];
+      }
+    }
+    
+    if (RoleHelpers.isUpgrader(role)) {
+      // Minimal upgrader: 1 work, 1 carry, 1 move
+      if (availableEnergy >= 200) {
+        return [WORK, CARRY, MOVE];
       }
     }
     

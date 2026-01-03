@@ -13,7 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
-import { ROLES } from '../constants/Roles';
+import { ROLES, RoleHelpers } from '../constants/Roles';
 
 /**
  * ranger Arbiter - Provides vision to adjacent rooms
@@ -186,8 +186,7 @@ export class RangerArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'elite_ranger' ||
-        creep.memory.role === 'ranger'
+        RoleHelpers.isScout(creep.memory.role || '')
     });
   }
 }
