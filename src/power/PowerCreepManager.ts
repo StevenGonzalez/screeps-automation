@@ -276,7 +276,8 @@ export class PowerCreepManager {
    * Check if ability is on cooldown
    */
   private isOnCooldown(powerCreep: PowerCreep, power: PowerConstant): boolean {
-    return powerCreep.powers[power]?.cooldown ? powerCreep.powers[power].cooldown > 0 : false;
+    const powerInfo = powerCreep.powers[power];
+    return powerInfo?.cooldown ? powerInfo.cooldown > 0 : false;
   }
   
   /**

@@ -40,8 +40,9 @@ export class ZealotArbiter extends Arbiter {
     const desiredDefenders = this.calculateDesiredDefenders();
     const currentDefenders = this.defenders.length;
     
-    // Request immediately if we have 0 but need some (or threats exist)
-    if (currentDefenders < desiredDefenders && (currentDefenders === 0 || this.hostiles.length > 0 || Game.time % 10 === 0)) {
+    // Request spawn whenever we need more defenders (removed tick throttle, but keep hostiles check)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (currentDefenders < desiredDefenders) {
       this.requestDefender();
     }
   }

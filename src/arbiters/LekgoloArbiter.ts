@@ -55,14 +55,15 @@ export class LekgoloArbiter extends Arbiter {
       }
     }
     
-    // Request Lekgolo if needed (once per 10 ticks to avoid spam)
+    // Request Lekgolo if needed
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
     console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners (container: ${!!this.container})`);
     
-    // Request immediately if we have 0 but need some, otherwise every 10 ticks
-    if (currentMiners < desiredMiners && (currentMiners === 0 || Game.time % 10 === 0)) {
+    // Request spawn whenever we need more miners (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (currentMiners < desiredMiners) {
       this.requestMiner();
     }
   }

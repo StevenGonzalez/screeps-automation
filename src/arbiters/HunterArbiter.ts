@@ -38,8 +38,9 @@ export class HunterArbiter extends Arbiter {
     const desiredRepairers = this.calculateDesiredRepairers();
     const currentRepairers = this.repairers.length;
     
-    // Request immediately if we have 0 but need some, otherwise every 10 ticks
-    if (currentRepairers < desiredRepairers && (currentRepairers === 0 || Game.time % 10 === 0)) {
+    // Request spawn whenever we need more repairers (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (currentRepairers < desiredRepairers) {
       this.requestRepairer();
     }
   }

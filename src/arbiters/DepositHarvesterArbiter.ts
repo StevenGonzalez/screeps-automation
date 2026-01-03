@@ -116,10 +116,12 @@ export class DepositHarvesterArbiter extends Arbiter {
     const desiredHarvesters = 1; // One heavy harvester
     const desiredHaulers = 2; // Two haulers to shuttle resources
     
-    if (this.squad.harvesters.length < desiredHarvesters && Game.time % 10 === 0) {
+    // Request spawn whenever we need more squad members (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (this.squad.harvesters.length < desiredHarvesters) {
       this.requestDepositHarvester();
     }
-    if (this.squad.haulers.length < desiredHaulers && Game.time % 10 === 0) {
+    if (this.squad.haulers.length < desiredHaulers) {
       this.requestDepositHauler();
     }
   }

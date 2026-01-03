@@ -62,8 +62,9 @@ export class DevoteeArbiter extends Arbiter {
     
     console.log(`📚 ${this.print}: ${currentWorkers}/${desiredWorkers} workers (phase: ${this.highCharity.memory.phase})`);
     
-    // Request immediately if we have 0 but need some, otherwise every 10 ticks
-    if (currentWorkers < desiredWorkers && (currentWorkers === 0 || Game.time % 10 === 0)) {
+    // Request spawn whenever we need more workers (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (currentWorkers < desiredWorkers) {
       this.requestWorker();
     }
   }

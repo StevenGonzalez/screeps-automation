@@ -47,8 +47,9 @@ export class JackalArbiter extends Arbiter {
     }
     console.log(`🚚 ${this.print}: ${currentHaulers}/${desiredHaulers} haulers (source containers: ${sourceContainers})`);
     
-    // Request immediately if we have 0 but need some, otherwise every 10 ticks
-    if (currentHaulers < desiredHaulers && (currentHaulers === 0 || Game.time % 10 === 0)) {
+    // Request spawn whenever we need more haulers (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (currentHaulers < desiredHaulers) {
       this.requestHauler();
     }
   }

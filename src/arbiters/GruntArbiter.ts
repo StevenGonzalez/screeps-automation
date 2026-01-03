@@ -45,15 +45,13 @@ export class GruntArbiter extends Arbiter {
     
     console.log(`🙏 ${this.print}: ${current}/${desired} grunts (requesting: ${current < desired})`);
     
-    // If NO creeps exist, request immediately (don't wait for tick % 10)
-    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    if (totalCreeps === 0 && current < desired) {
-      console.log(`🙏 ${this.print}: EMERGENCY SPAWN REQUEST`);
-      this.requestgrunt();
-      return;
-    }
-    
-    if (Game.time % 10 === 0 && current < desired) {
+    // Request spawn whenever we need more grunts (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (current < desired) {
+      const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+      if (totalCreeps === 0) {
+        console.log(`🙏 ${this.print}: EMERGENCY SPAWN REQUEST`);
+      }
       this.requestgrunt();
     }
     

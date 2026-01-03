@@ -42,8 +42,9 @@ export class EngineerArbiter extends Arbiter {
     const desiredBuilders = this.calculateDesiredBuilders();
     const currentBuilders = this.builders.length;
     
-    // Request immediately if we have 0 but need some, otherwise every 10 ticks
-    if (currentBuilders < desiredBuilders && (currentBuilders === 0 || Game.time % 10 === 0)) {
+    // Request spawn whenever we need more builders (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (currentBuilders < desiredBuilders) {
       this.requestBuilder();
     }
   }

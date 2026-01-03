@@ -113,13 +113,15 @@ export class PowerHarvesterArbiter extends Arbiter {
     const desiredHealers = 2;
     const desiredHaulers = 2;
     
-    if (this.squad!.attackers.length < desiredAttackers && Game.time % 10 === 0) {
+    // Request spawn whenever we need more squad members (removed tick throttle)
+    // SpawnQueue handles deduplication, so it's safe to request every tick
+    if (this.squad!.attackers.length < desiredAttackers) {
       this.requestPowerAttacker();
     }
-    if (this.squad!.healers.length < desiredHealers && Game.time % 10 === 0) {
+    if (this.squad!.healers.length < desiredHealers) {
       this.requestPowerHealer();
     }
-    if (this.squad!.haulers.length < desiredHaulers && Game.time % 10 === 0) {
+    if (this.squad!.haulers.length < desiredHaulers) {
       this.requestPowerHauler();
     }
   }
