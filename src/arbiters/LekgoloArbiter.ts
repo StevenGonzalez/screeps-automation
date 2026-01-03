@@ -1,10 +1,10 @@
 /**
- * Drone Arbiter - Mining Operations Manager
+ * Lekgolo Arbiter - Mining Operations Manager
  * 
- * "Harvest resources for the Covenant"
+ * "The Lekgolo consume and extract resources from the earth"
  * 
- * Manages mining operations at energy sources. Spawns and coordinates
- * miner Elites to efficiently harvest energy.
+ * Manages mining operations at energy sources. Lekgolo worms sit on containers
+ * and continuously extract energy from sources.
  */
 
 /// <reference types="@types/screeps" />
@@ -16,15 +16,15 @@ import { Elite } from '../elites/Elite';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 
 /**
- * Drone Arbiter - Manages energy harvesting
+ * Lekgolo Arbiter - Manages energy harvesting
  */
-export class DroneArbiter extends Arbiter {
+export class LekgoloArbiter extends Arbiter {
   source: Source | null;
   container: StructureContainer | null;
   miners: Elite[];
   
   constructor(highCharity: HighCharity, source: Source) {
-    super(highCharity, `drone_${source.id}`, ArbiterPriority.economy.mining);
+    super(highCharity, `lekgolo_${source.id}`, ArbiterPriority.economy.mining);
     
     this.source = source;
     this.container = null;
@@ -55,7 +55,7 @@ export class DroneArbiter extends Arbiter {
       }
     }
     
-    // Request Drones if needed (once per 10 ticks to avoid spam)
+    // Request Lekgolo if needed (once per 10 ticks to avoid spam)
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
@@ -121,10 +121,10 @@ export class DroneArbiter extends Arbiter {
   }
   
   private calculateDesiredMiners(): number {
-    // Drones only spawn when there's a container AT THIS SOURCE
+    // Lekgolo only spawn when there's a container AT THIS SOURCE
     // Before container: GruntArbiter handles energy collection
     
-    // With container near this source, 1 dedicated Drone is optimal
+    // With container near this source, 1 dedicated Lekgolo is optimal
     if (this.container) {
       return 1;
     }
@@ -135,7 +135,7 @@ export class DroneArbiter extends Arbiter {
   
   private requestMiner(): void {
     const body = this.calculateMinerBody();
-    const name = `Drone_${this.source?.id}_${Game.time}`;
+    const name = `Lekgolo_${this.source?.id}_${Game.time}`;
     
     // Count total miners across all sources
     const allMiners = this.room.find(FIND_MY_CREEPS, {
@@ -153,7 +153,7 @@ export class DroneArbiter extends Arbiter {
     const important = allMiners.length === 0 || (this.highCharity.isBootstrapping && this.miners.length === 0);
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_DRONE, // Covenant themed role
+      role: ROLES.ELITE_LEKGOLO,
       sourceId: this.source?.id
     } as any, priority, important);
   }
@@ -163,12 +163,12 @@ export class DroneArbiter extends Arbiter {
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
     const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
     
-    // Emergency: Minimal Drone (200 energy) - use during very early bootstrap
+    // Emergency: Minimal Lekgolo (200 energy) - use during very early bootstrap
     if (energy <= 300) {
       return [WORK, MOVE, CARRY];
     }
     
-    // Early game: Small Drone (300 energy)
+    // Early game: Small Lekgolo (300 energy)
     if (energy < 550) {
       return [WORK, WORK, MOVE, CARRY];
     }

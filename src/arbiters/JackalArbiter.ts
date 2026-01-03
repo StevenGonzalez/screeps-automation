@@ -219,7 +219,7 @@ export class JackalArbiter extends Arbiter {
     const phase = this.highCharity.memory.phase;
     const hasStorage = !!this.highCharity.storage;
     
-    // Check if there are containers near sources (Drones active)
+    // Check if there are containers near sources (Lekgolo active)
     const sources = this.room.find(FIND_SOURCES);
     let sourceContainers = 0;
     for (const source of sources) {

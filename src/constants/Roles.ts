@@ -12,8 +12,8 @@ export const ROLES = {
   GRUNT: 'grunt',
   ELITE_GRUNT: 'elite_grunt',
   
-  DRONE: 'drone',
-  ELITE_DRONE: 'elite_drone',
+  LEKGOLO: 'lekgolo',
+  ELITE_LEKGOLO: 'elite_lekgolo',
   
   JACKAL: 'jackal',
   ELITE_JACKAL: 'elite_jackal',
@@ -90,7 +90,8 @@ export class RoleHelpers {
    * Check if role is a miner/harvester role
    */
   static isMiner(role: string): boolean {
-    return role.includes('drone') || 
+    return role.includes('lekgolo') || 
+           role.includes('drone') || 
            role.includes('miner') || 
            role.includes('extractor');
   }
