@@ -58,15 +58,6 @@ export class ExtractorArbiter extends Arbiter {
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
-    if (Game.time % 50 === 0) {
-      if (currentMiners > 0) {
-        const extractorNames = this.miners.map(m => `${m.name}(${m.memory.role})`).join(', ');
-        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} extractors: ${extractorNames}`);
-      } else {
-        console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} extractors - requesting spawn`);
-      }
-    }
-    
     if (currentMiners < desiredMiners && Game.time % 10 === 0) {
       this.requestMiner();
     }

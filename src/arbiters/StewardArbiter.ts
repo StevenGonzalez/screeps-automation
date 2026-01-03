@@ -10,6 +10,7 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
+import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
@@ -234,10 +235,17 @@ export class StewardArbiter extends Arbiter {
     const body = this.calculateHaulerBody();
     const name = `Steward_${Game.time}`;
     
+    // Stewards are CRITICAL during bootstrap (extractors need haulers to function)
+    const priority = this.highCharity.isBootstrapping && this.haulers.length === 0 ?
+      SpawnPriority.CRITICAL :
+      SpawnPriority.ECONOMY;
+    
+    const important = this.highCharity.isBootstrapping && this.haulers.length === 0;
+    
     this.requestSpawn(body, name, {
       role: 'elite_hauler', // Covenant themed role
       collecting: true
-    } as any);
+    } as any, priority, important);
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
