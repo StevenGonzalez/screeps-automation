@@ -63,6 +63,7 @@ export class SpawnQueue {
     this.queue = [];
     this.spawns = colony.spawns;
     this.initializeMemory();
+    this.loadQueue();
   }
 
   /**
@@ -134,8 +135,6 @@ export class SpawnQueue {
     // Refresh spawn references (colony.spawns updated during build phase)
     this.spawns = this.colony.spawns;
     
-    // Load queue from memory
-    this.loadQueue();
     
     // DEBUG: Log queue status
     if (this.queue.length > 0) {
@@ -254,11 +253,21 @@ export class SpawnQueue {
         (memory.statistics.averageWaitTime * (memory.totalSpawned - 1) + waitTime) / memory.totalSpawned;
       
       console.log(
-        `🔱 ${this.colony.name}: Spawned ${request.name} (Priority ${request.priority}, ` +
-        `waited ${waitTime} ticks, ${this.queue.length} in queue)`
+        `✅ ${this.colony.name}: Spawned ${request.name} (Priority ${request.priority}, ` +
+        `waited ${waitTime} ticks, ${this.queue.length} left in queue)`
       );
     } else if (result === ERR_NAME_EXISTS) {
       // Remove duplicate
+      this.queue = this.queue.filter(r => r.id !== request.id);
+      console.log(`⚠️ ${this.colony.name}: Removed duplicate spawn request ${request.name}`);
+    } else if (result === ERR_NOT_ENOUGH_ENERGY) {
+      // Keep in queue, will retry next tick
+      console.log(`⏳ ${this.colony.name}: Not enough energy for ${request.name} (need ${request.energyCost}, have ${this.colony.energyAvailable})`);
+    } else if (result === ERR_BUSY) {
+      // Spawn is busy, will retry next tick
+    } else {
+      // Unknown error - log it and remove from queue to avoid infinite retries
+      console.log(`❌ ${this.colony.name}: Failed to spawn ${request.name}, error: ${result}`);
       this.queue = this.queue.filter(r => r.id !== request.id);
     }
   }
