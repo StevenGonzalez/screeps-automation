@@ -13,15 +13,16 @@
 // Forward declaration to avoid circular dependency
 import type { Covenant } from './Covenant';
 import { Arbiter } from '../arbiters/Arbiter';
-import { ExtractorArbiter } from '../arbiters/ExtractorArbiter';
-import { AcolyteArbiter } from '../arbiters/AcolyteArbiter';
-import { StewardArbiter } from '../arbiters/StewardArbiter';
+import { DroneArbiter } from '../arbiters/DroneArbiter';
+import { GruntArbiter } from '../arbiters/GruntArbiter';
+import { JackalArbiter } from '../arbiters/JackalArbiter';
 import { DevoteeArbiter } from '../arbiters/DevoteeArbiter';
-import { ArtisanArbiter } from '../arbiters/ArtisanArbiter';
+import { EngineerArbiter } from '../arbiters/EngineerArbiter';
 import { ZealotArbiter } from '../arbiters/ZealotArbiter';
 import { SeekerArbiter } from '../arbiters/SeekerArbiter';
+import { RangerArbiter } from '../arbiters/RangerArbiter';
 import { RemoteDefenderArbiter } from '../arbiters/RemoteDefenderArbiter';
-import { GuardianArbiter } from '../arbiters/GuardianArbiter';
+import { HunterArbiter } from '../arbiters/HunterArbiter';
 import { ExcavatorArbiter } from '../arbiters/ExcavatorArbiter';
 import { TerminalArbiter } from '../arbiters/TerminalArbiter';
 import { HeraldArbiter } from '../arbiters/HeraldArbiter';
@@ -593,22 +594,22 @@ export class HighCharity {
    * Build Arbiters for this High Charity
    */
   protected buildArbiters(): void {
-    // Build Acolyte Arbiter FIRST (early game energy collection)
-    // This is critical for bootstrap - acolytes directly collect and deliver energy
-    new AcolyteArbiter(this);
+    // Build Grunt Arbiter FIRST (early game energy collection)
+    // This is critical for bootstrap - grunts directly collect and deliver energy
+    new GruntArbiter(this);
     
-    // Build Extractor Arbiters for each source (static miners on containers)
+    // Build Drone Arbiters for each source (static miners on containers)
     const sources = this.room.find(FIND_SOURCES);
     for (const source of sources) {
-      new ExtractorArbiter(this, source);
+      new DroneArbiter(this, source);
     }
     
     // Build core Arbiters
-    new StewardArbiter(this);  // Energy logistics (haulers)
+    new JackalArbiter(this);  // Energy logistics (haulers)
     new DevoteeArbiter(this);  // Controller upgrading
-    new ArtisanArbiter(this); // Construction and repair
+    new EngineerArbiter(this); // Construction and repair
     new ZealotArbiter(this); // Military defense
-    new GuardianArbiter(this); // Fortification maintenance (RCL 5+)
+    new HunterArbiter(this); // Fortification maintenance (RCL 5+)
     
     // Build Excavator Arbiter (RCL 6+)
     if (this.room.controller && this.room.controller.level >= 6) {
@@ -625,6 +626,9 @@ export class HighCharity {
     
     // Build Remote Mining Arbiters (mature+ colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
+      // Build Ranger Arbiter for room vision
+      new RangerArbiter(this);
+      
       this.buildSeekerArbiters();
       
       // Build Deposit Harvester Arbiters (powerhouse colonies)

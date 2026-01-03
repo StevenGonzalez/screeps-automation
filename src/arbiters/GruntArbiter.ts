@@ -1,11 +1,11 @@
 /**
- * ACOLYTE ARBITER - Sacred Initiates
+ * GRUNT ARBITER - Unggoy Laborers
  * 
- * "The youngest of the faithful gather energy for the Covenant"
+ * "The Unggoy serve the Covenant with unwavering loyalty"
  * 
- * Manages Acolyte initiates during bootstrap phase (RCL 1-3).
- * Acolytes directly harvest energy sources and deliver to spawns/extensions.
- * Transitions to miner+hauler system once containers are built.
+ * Manages Grunt laborers during bootstrap phase (RCL 1-3).
+ * Grunts directly harvest energy sources and deliver to spawns/extensions.
+ * Transitions to specialized miner+hauler system once containers are built.
  */
 
 /// <reference types="@types/screeps" />
@@ -16,48 +16,48 @@ import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 
 /**
- * Acolyte Arbiter - Manages early-game energy harvesting
+ * Grunt Arbiter - Manages early-game energy harvesting
  */
-export class AcolyteArbiter extends Arbiter {
-  acolytes: Elite[];
+export class GruntArbiter extends Arbiter {
+  grunts: Elite[];
   
   constructor(highCharity: HighCharity) {
-    super(highCharity, 'acolyte', ArbiterPriority.economy.mining - 1); // Higher priority than miners
-    this.acolytes = [];
+    super(highCharity, 'grunt', ArbiterPriority.economy.mining - 1); // Higher priority than miners
+    this.grunts = [];
   }
   
   init(): void {
     this.refresh();
-    this.acolytes = this.elites;
+    this.grunts = this.elites;
     
     // Only active during bootstrap phase (no containers yet)
     if (!this.shouldBeActive()) {
       return;
     }
     
-    // Calculate desired acolytes
-    const desired = this.calculateDesiredAcolytes();
-    const current = this.acolytes.length;
+    // Calculate desired grunts
+    const desired = this.calculateDesiredgrunts();
+    const current = this.grunts.length;
     
     if (Game.time % 10 === 0 && current < desired) {
-      this.requestAcolyte();
+      this.requestgrunt();
     }
     
     if (Game.time % 50 === 0) {
-      console.log(`🙏 ${this.print}: ${current}/${desired} acolytes`);
+      console.log(`🙏 ${this.print}: ${current}/${desired} grunts`);
     }
   }
   
   run(): void {
-    // Always run existing acolytes until they die naturally
+    // Always run existing grunts until they die naturally
     // (even after containers exist - let them finish their life)
-    for (const acolyte of this.acolytes) {
-      this.runAcolyte(acolyte);
+    for (const grunt of this.grunts) {
+      this.rungrunt(grunt);
     }
   }
   
   /**
-   * Check if acolyte arbiter should be active
+   * Check if grunt arbiter should be active
    */
   private shouldBeActive(): boolean {
     // Check if there are containers at sources (Extractors taking over)
@@ -72,61 +72,61 @@ export class AcolyteArbiter extends Arbiter {
       }
     }
     
-    // No source containers - Acolytes still needed
+    // No source containers - grunts still needed
     return true;
   }
   
   /**
-   * Run individual acolyte logic - simple state machine
+   * Run individual grunt logic - simple state machine
    */
-  private runAcolyte(acolyte: Elite): void {
+  private rungrunt(grunt: Elite): void {
     // State: HARVESTING or DELIVERING (based on carry capacity)
-    const isHarvesting = acolyte.store.getFreeCapacity() > 0;
+    const isHarvesting = grunt.store.getFreeCapacity() > 0;
     
     if (isHarvesting) {
       // HARVEST STATE: Go to assigned source and harvest
       let source: Source | null = null;
       
       // Check if we have an assigned source
-      if (acolyte.memory.sourceId) {
-        source = Game.getObjectById(acolyte.memory.sourceId as Id<Source>);
+      if (grunt.memory.sourceId) {
+        source = Game.getObjectById(grunt.memory.sourceId as Id<Source>);
       }
       
       // If no assigned source or source is invalid, find a new one
       if (!source) {
-        source = this.findBestSource(acolyte);
+        source = this.findBestSource(grunt);
       }
       
       if (source) {
-        const result = acolyte.harvestSource(source);
+        const result = grunt.harvestSource(source);
         if (result === OK) {
-          acolyte.say('⛏️');
+          grunt.say('⛏️');
         } else if (result === ERR_NOT_ENOUGH_RESOURCES) {
           // Source depleted, clear assignment to find a new one
-          acolyte.memory.sourceId = undefined;
+          grunt.memory.sourceId = undefined;
         }
       }
     } else {
       // DELIVER STATE: Take energy to spawn/extension
-      const target = this.findDeliveryTarget(acolyte);
+      const target = this.findDeliveryTarget(grunt);
       if (target) {
-        const result = acolyte.transferTo(target);
+        const result = grunt.transferTo(target);
         if (result === OK) {
-          acolyte.say('💰');
+          grunt.say('💰');
         } else if (result === ERR_FULL) {
           // Target full, find another
-          const nextTarget = this.findDeliveryTarget(acolyte, [target.id]);
+          const nextTarget = this.findDeliveryTarget(grunt, [target.id]);
           if (nextTarget) {
-            acolyte.transferTo(nextTarget);
+            grunt.transferTo(nextTarget);
           }
         }
       } else {
         // No targets need energy, park near spawn
         const spawn = this.highCharity.spawns[0];
-        if (spawn && !acolyte.pos.isNearTo(spawn)) {
-          acolyte.goTo(spawn.pos);
+        if (spawn && !grunt.pos.isNearTo(spawn)) {
+          grunt.goTo(spawn.pos);
         }
-        acolyte.say('⏸️');
+        grunt.say('⏸️');
       }
     }
   }
@@ -134,20 +134,20 @@ export class AcolyteArbiter extends Arbiter {
   /**
    * Find best source to harvest from (assigns permanently)
    */
-  private findBestSource(acolyte: Elite): Source | null {
+  private findBestSource(grunt: Elite): Source | null {
     const sources = this.room.find(FIND_SOURCES_ACTIVE);
     if (sources.length === 0) return null;
     
-    // Count acolytes per source
+    // Count grunts per source
     const counts: { [id: string]: number } = {};
-    for (const a of this.acolytes) {
+    for (const a of this.grunts) {
       const targetSource = a.memory.sourceId as string | undefined;
       if (targetSource) {
         counts[targetSource] = (counts[targetSource] || 0) + 1;
       }
     }
     
-    // Find source with least acolytes
+    // Find source with least grunts
     let bestSource = sources[0];
     let leastCount = counts[bestSource.id] || 0;
     
@@ -159,8 +159,8 @@ export class AcolyteArbiter extends Arbiter {
       }
     }
     
-    // Assign this acolyte to the source permanently
-    acolyte.memory.sourceId = bestSource.id;
+    // Assign this grunt to the source permanently
+    grunt.memory.sourceId = bestSource.id;
     
     return bestSource;
   }
@@ -169,7 +169,7 @@ export class AcolyteArbiter extends Arbiter {
    * Find best delivery target (spawn/extension)
    */
   private findDeliveryTarget(
-    acolyte: Elite, 
+    grunt: Elite, 
     excludeIds: Id<Structure>[] = []
   ): StructureSpawn | StructureExtension | null {
     // Priority: Spawns first, then extensions
@@ -179,7 +179,7 @@ export class AcolyteArbiter extends Arbiter {
     });
     
     if (spawns.length > 0) {
-      return acolyte.pos.findClosestByPath(spawns);
+      return grunt.pos.findClosestByPath(spawns);
     }
     
     const extensions = this.room.find(FIND_MY_STRUCTURES, {
@@ -190,16 +190,16 @@ export class AcolyteArbiter extends Arbiter {
     });
     
     if (extensions.length > 0) {
-      return acolyte.pos.findClosestByPath(extensions);
+      return grunt.pos.findClosestByPath(extensions);
     }
     
     return null;
   }
   
   /**
-   * Calculate desired number of acolytes
+   * Calculate desired number of grunts
    */
-  private calculateDesiredAcolytes(): number {
+  private calculateDesiredgrunts(): number {
     const sources = this.room.find(FIND_SOURCES);
     const spawns = this.highCharity.spawns.length;
     const extensions = this.room.find(FIND_MY_STRUCTURES, {
@@ -210,12 +210,12 @@ export class AcolyteArbiter extends Arbiter {
     // Formula: 2 per source at RCL 1, scale down as we get containers
     
     if (this.highCharity.level === 1) {
-      // RCL 1: 2 acolytes per source minimum
+      // RCL 1: 2 grunts per source minimum
       return Math.max(sources.length * 2, 2);
     }
     
     if (this.highCharity.level === 2) {
-      // RCL 2: Still need multiple acolytes
+      // RCL 2: Still need multiple grunts
       return Math.max(sources.length * 2, 3);
     }
     
@@ -225,7 +225,7 @@ export class AcolyteArbiter extends Arbiter {
     });
     
     if (containers.length > 0) {
-      // Containers exist, phase out acolytes
+      // Containers exist, phase out grunts
       return 0;
     }
     
@@ -234,30 +234,30 @@ export class AcolyteArbiter extends Arbiter {
   }
   
   /**
-   * Request an acolyte spawn
+   * Request an grunt spawn
    */
-  private requestAcolyte(): void {
-    const body = this.calculateAcolyteBody();
-    const name = `Acolyte_${Game.time}`;
+  private requestgrunt(): void {
+    const body = this.calculategruntBody();
+    const name = `grunt_${Game.time}`;
     
-    // Acolytes are CRITICAL during bootstrap (no energy = no spawning)
-    const priority = this.highCharity.isBootstrapping && this.acolytes.length < 2 ?
+    // grunts are CRITICAL during bootstrap (no energy = no spawning)
+    const priority = this.highCharity.isBootstrapping && this.grunts.length < 2 ?
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
     
-    const important = this.highCharity.isBootstrapping && this.acolytes.length < 2;
+    const important = this.highCharity.isBootstrapping && this.grunts.length < 2;
     
     this.requestSpawn(body, name, {
-      role: 'acolyte',
+      role: 'grunt',
       sourceId: undefined // Will be assigned dynamically
     } as any, priority, important);
   }
   
   /**
-   * Calculate acolyte body based on available energy
+   * Calculate grunt body based on available energy
    */
-  private calculateAcolyteBody(): BodyPartConstant[] {
-    // Acolytes need balanced WORK, CARRY, MOVE
+  private calculategruntBody(): BodyPartConstant[] {
+    // grunts need balanced WORK, CARRY, MOVE
     // Use capacity for body planning (not current available energy)
     const energy = this.highCharity.energyCapacity;
     
@@ -293,3 +293,4 @@ export class AcolyteArbiter extends Arbiter {
     });
   }
 }
+

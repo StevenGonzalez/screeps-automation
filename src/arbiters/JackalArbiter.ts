@@ -1,5 +1,5 @@
 /**
- * HAULER ARBITER - Energy Logistics Manager
+ * JACKAL ARBITER - Energy Logistics Manager
  * 
  * "The supply lines must remain unbroken"
  * 
@@ -16,9 +16,9 @@ import { Elite } from '../elites/Elite';
 import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
 
 /**
- * Hauler Arbiter - Manages energy distribution
+ * JACKAL ARBITER - Manages energy distribution
  */
-export class StewardArbiter extends Arbiter {
+export class JackalArbiter extends Arbiter {
   haulers: Elite[];
   
   constructor(highCharity: HighCharity) {
@@ -207,7 +207,7 @@ export class StewardArbiter extends Arbiter {
     const phase = this.highCharity.memory.phase;
     const hasStorage = !!this.highCharity.storage;
     
-    // Check if there are containers near sources (Extractors active)
+    // Check if there are containers near sources (Drones active)
     const sources = this.room.find(FIND_SOURCES);
     let sourceContainers = 0;
     for (const source of sources) {
@@ -243,9 +243,9 @@ export class StewardArbiter extends Arbiter {
   
   private requestHauler(): void {
     const body = this.calculateHaulerBody();
-    const name = `Steward_${Game.time}`;
+    const name = `Jackal_${Game.time}`;
     
-    // Stewards are CRITICAL during bootstrap (extractors need haulers to function)
+    // Jackals are CRITICAL during bootstrap (drones need haulers to function)
     const priority = this.highCharity.isBootstrapping && this.haulers.length === 0 ?
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
@@ -253,7 +253,7 @@ export class StewardArbiter extends Arbiter {
     const important = this.highCharity.isBootstrapping && this.haulers.length === 0;
     
     this.requestSpawn(body, name, {
-      role: 'elite_hauler', // Covenant themed role
+      role: 'elite_jackal', // Covenant themed role
       collecting: true
     } as any, priority, important);
   }
@@ -287,8 +287,11 @@ export class StewardArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
+        creep.memory.role === 'elite_jackal' ||
+        creep.memory.role === 'jackal' ||
         creep.memory.role === 'elite_hauler' ||
         creep.memory.role === 'hauler'
     });
   }
 }
+

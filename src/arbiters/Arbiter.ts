@@ -49,7 +49,8 @@ export const ArbiterPriority = {
   },
   expansion: {
     claimer: 500,
-    scout: 501
+    scout: 501,
+    ranger: 501
   }
 };
 

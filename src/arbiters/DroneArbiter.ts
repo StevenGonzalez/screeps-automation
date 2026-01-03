@@ -1,7 +1,7 @@
 /**
- * MINING ARBITER - Mining Operations Manager
+ * Drone Arbiter - Mining Operations Manager
  * 
- * "Extract resources for the Covenant"
+ * "Harvest resources for the Covenant"
  * 
  * Manages mining operations at energy sources. Spawns and coordinates
  * miner Elites to efficiently harvest energy.
@@ -15,15 +15,15 @@ import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 
 /**
- * Mining Arbiter - Manages energy harvesting
+ * Drone Arbiter - Manages energy harvesting
  */
-export class ExtractorArbiter extends Arbiter {
+export class DroneArbiter extends Arbiter {
   source: Source | null;
   container: StructureContainer | null;
   miners: Elite[];
   
   constructor(highCharity: HighCharity, source: Source) {
-    super(highCharity, `mining_${source.id}`, ArbiterPriority.economy.mining);
+    super(highCharity, `drone_${source.id}`, ArbiterPriority.economy.mining);
     
     this.source = source;
     this.container = null;
@@ -54,7 +54,7 @@ export class ExtractorArbiter extends Arbiter {
       }
     }
     
-    // Request extractors if needed (once per 10 ticks to avoid spam)
+    // Request Drones if needed (once per 10 ticks to avoid spam)
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
     
@@ -117,10 +117,10 @@ export class ExtractorArbiter extends Arbiter {
   }
   
   private calculateDesiredMiners(): number {
-    // Extractors only spawn when there's a container AT THIS SOURCE
-    // Before container: AcolyteArbiter handles energy collection
+    // Drones only spawn when there's a container AT THIS SOURCE
+    // Before container: GruntArbiter handles energy collection
     
-    // With container near this source, 1 dedicated extractor is optimal
+    // With container near this source, 1 dedicated Drone is optimal
     if (this.container) {
       return 1;
     }
@@ -131,9 +131,9 @@ export class ExtractorArbiter extends Arbiter {
   
   private requestMiner(): void {
     const body = this.calculateMinerBody();
-    const name = `Extractor_${this.source?.id}_${Game.time}`;
+    const name = `Drone_${this.source?.id}_${Game.time}`;
     
-    // First extractors are CRITICAL priority during bootstrap
+    // First Drones are CRITICAL priority during bootstrap
     const priority = this.highCharity.isBootstrapping && this.miners.length === 0 ?
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
@@ -141,7 +141,7 @@ export class ExtractorArbiter extends Arbiter {
     const important = this.highCharity.isBootstrapping && this.miners.length === 0;
     
     this.requestSpawn(body, name, {
-      role: 'elite_miner', // Covenant themed role
+      role: 'elite_drone', // Covenant themed role
       sourceId: this.source?.id
     } as any, priority, important);
   }
@@ -151,12 +151,12 @@ export class ExtractorArbiter extends Arbiter {
     // SpawnQueue will handle waiting for enough energy
     const energy = this.highCharity.energyCapacity;
     
-    // Emergency: Minimal extractor (200 energy) - use during very early bootstrap
+    // Emergency: Minimal Drone (200 energy) - use during very early bootstrap
     if (energy <= 300) {
       return [WORK, MOVE, CARRY];
     }
     
-    // Early game: Small extractor (300 energy)
+    // Early game: Small Drone (300 energy)
     if (energy < 550) {
       return [WORK, WORK, MOVE, CARRY];
     }
@@ -176,8 +176,11 @@ export class ExtractorArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
+        (creep.memory.role === 'elite_drone' && creep.memory.sourceId === this.source?.id) ||
+        (creep.memory.role === 'drone' && creep.memory.sourceId === this.source?.id) ||
         (creep.memory.role === 'elite_miner' && creep.memory.sourceId === this.source?.id) ||
         (creep.memory.role === 'miner' && creep.memory.sourceId === this.source?.id)
     });
   }
 }
+

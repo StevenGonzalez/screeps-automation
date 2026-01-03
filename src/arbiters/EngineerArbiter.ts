@@ -18,7 +18,7 @@ import { getSpawnName } from '../utils/SpawnNames';
 /**
  * Builder Arbiter - Manages construction and repair
  */
-export class ArtisanArbiter extends Arbiter {
+export class EngineerArbiter extends Arbiter {
   builders: Elite[];
   
   constructor(highCharity: HighCharity) {
@@ -245,7 +245,7 @@ export class ArtisanArbiter extends Arbiter {
   
   private requestBuilder(): void {
     const body = this.calculateBuilderBody();
-    const name = `Artisan_${Game.time}`;
+    const name = `Engineer_${Game.time}`;
     
     // Builders use SUPPORT priority (lower than miners/haulers)
     // Exception: During bootstrap with construction sites, use ECONOMY
@@ -260,7 +260,7 @@ export class ArtisanArbiter extends Arbiter {
       SpawnPriority.EXPANSION; // Use EXPANSION priority (5) for builders normally
     
     this.requestSpawn(body, name, {
-      role: 'elite_builder', // Covenant themed role
+      role: 'elite_engineer', // Covenant themed role
       building: false
     } as any, priority);
   }
@@ -294,6 +294,8 @@ export class ArtisanArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
+        creep.memory.role === 'elite_engineer' ||
+        creep.memory.role === 'engineer' ||
         creep.memory.role === 'elite_builder' ||
         creep.memory.role === 'builder'
     });
@@ -417,3 +419,4 @@ export class ArtisanArbiter extends Arbiter {
     return false;
   }
 }
+

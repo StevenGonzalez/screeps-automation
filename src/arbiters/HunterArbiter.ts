@@ -16,7 +16,7 @@ import { Elite } from '../elites/Elite';
 /**
  * Repairer Arbiter - Manages fortification maintenance
  */
-export class GuardianArbiter extends Arbiter {
+export class HunterArbiter extends Arbiter {
   repairers: Elite[];
   
   constructor(highCharity: HighCharity) {
@@ -183,7 +183,7 @@ export class GuardianArbiter extends Arbiter {
   
   private requestRepairer(): void {
     const body = this.calculateRepairerBody();
-    const name = `Guardian_${Game.time}`;
+    const name = `Hunter_${Game.time}`;
     
     this.requestSpawn(body, name, {
       role: 'elite_repairer', // Covenant themed role
@@ -217,3 +217,4 @@ export class GuardianArbiter extends Arbiter {
     });
   }
 }
+
