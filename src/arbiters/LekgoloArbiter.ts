@@ -159,9 +159,10 @@ export class LekgoloArbiter extends Arbiter {
   }
   
   private calculateMinerBody(): BodyPartConstant[] {
-    // Use available energy if bootstrapping, otherwise use capacity
-    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
+    // Use available energy during bootstrap, otherwise use capacity
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
     // Emergency: Minimal Lekgolo (200 energy) - use during very early bootstrap
     if (energy <= 300) {

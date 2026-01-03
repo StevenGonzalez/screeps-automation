@@ -38,7 +38,8 @@ export class HunterArbiter extends Arbiter {
     const desiredRepairers = this.calculateDesiredRepairers();
     const currentRepairers = this.repairers.length;
     
-    if (currentRepairers < desiredRepairers) {
+    // Request immediately if we have 0 but need some, otherwise every 10 ticks
+    if (currentRepairers < desiredRepairers && (currentRepairers === 0 || Game.time % 10 === 0)) {
       this.requestRepairer();
     }
   }
@@ -193,7 +194,9 @@ export class HunterArbiter extends Arbiter {
   }
   
   private calculateRepairerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
     // Repairer: WORK for repair speed, CARRY for energy capacity, MOVE for mobility
     

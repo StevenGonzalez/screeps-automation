@@ -37,7 +37,9 @@ export class RangerArbiter extends Arbiter {
     
     // Request rangers if needed (1 ranger can cover all adjacent rooms)
     const desiredrangers = this.calculateDesiredrangers();
-    if (this.rangers.length < desiredrangers && Game.time % 50 === 0) {
+    
+    // Request immediately if we have 0 but need some, otherwise every 50 ticks
+    if (this.rangers.length < desiredrangers && (this.rangers.length === 0 || Game.time % 50 === 0)) {
       this.requestranger();
     }
   }

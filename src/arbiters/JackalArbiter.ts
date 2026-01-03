@@ -277,9 +277,10 @@ export class JackalArbiter extends Arbiter {
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
-    // Use available energy if bootstrapping, otherwise use capacity
-    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
+    // Use available energy during bootstrap, otherwise use capacity
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
     // Emergency: Minimal hauler (150 energy)
     if (energy < 250) {

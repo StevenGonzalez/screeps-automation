@@ -282,9 +282,10 @@ export class GruntArbiter extends Arbiter {
    */
   private calculategruntBody(): BodyPartConstant[] {
     // grunts need balanced WORK, CARRY, MOVE
-    // Use available energy if no creeps exist (bootstrap), otherwise use capacity
-    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
+    // Use available energy during bootstrap, otherwise use capacity
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
     // Minimal harvester (200 energy): 1W 1C 1M
     if (energy <= 250) {

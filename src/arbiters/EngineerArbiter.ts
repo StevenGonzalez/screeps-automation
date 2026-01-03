@@ -42,7 +42,8 @@ export class EngineerArbiter extends Arbiter {
     const desiredBuilders = this.calculateDesiredBuilders();
     const currentBuilders = this.builders.length;
     
-    if (currentBuilders < desiredBuilders) {
+    // Request immediately if we have 0 but need some, otherwise every 10 ticks
+    if (currentBuilders < desiredBuilders && (currentBuilders === 0 || Game.time % 10 === 0)) {
       this.requestBuilder();
     }
   }
@@ -296,9 +297,10 @@ export class EngineerArbiter extends Arbiter {
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {
-    // Use available energy if bootstrapping, otherwise use capacity
-    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = totalCreeps === 0 ? this.highCharity.energyAvailable : this.highCharity.energyCapacity;
+    // Use available energy during bootstrap, otherwise use capacity
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
     // Emergency: Minimal builder (200 energy)
     if (energy < 300) {

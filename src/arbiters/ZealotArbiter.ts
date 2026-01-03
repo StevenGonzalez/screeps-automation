@@ -40,7 +40,8 @@ export class ZealotArbiter extends Arbiter {
     const desiredDefenders = this.calculateDesiredDefenders();
     const currentDefenders = this.defenders.length;
     
-    if (currentDefenders < desiredDefenders) {
+    // Request immediately if we have 0 but need some (or threats exist)
+    if (currentDefenders < desiredDefenders && (currentDefenders === 0 || this.hostiles.length > 0 || Game.time % 10 === 0)) {
       this.requestDefender();
     }
   }
@@ -273,7 +274,9 @@ export class ZealotArbiter extends Arbiter {
   }
   
   private calculateDefenderBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    const energy = this.highCharity.isBootstrapping ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
     
     // Early game: Small defender
     if (energy < 400) {
