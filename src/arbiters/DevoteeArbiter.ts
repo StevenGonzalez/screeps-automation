@@ -59,7 +59,7 @@ export class DevoteeArbiter extends Arbiter {
     const desiredWorkers = this.calculateDesiredWorkers();
     const currentWorkers = this.workers.length;
     
-    if (currentWorkers < desiredWorkers) {
+    if (currentWorkers < desiredWorkers && Game.time % 10 === 0) {
       this.requestWorker();
     }
   }
@@ -209,11 +209,11 @@ export class DevoteeArbiter extends Arbiter {
     }
     
     // Early game: Small worker (250 energy)
-    if (energy < 400) {
+    if (energy < 450) {
       return [WORK, CARRY, MOVE, MOVE];
     }
     
-    // Mid game: Balanced worker
+    // Mid game: Balanced worker (450 energy)
     if (energy < 800) {
       return [WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
     }
