@@ -291,17 +291,22 @@ export class EngineerArbiter extends Arbiter {
       SpawnPriority.CRITICAL : // Critical priority during bootstrap
       SpawnPriority.ECONOMY; // Normal economy priority otherwise
     
+    // First builder or urgent sites during bootstrap should be important
+    const important = this.builders.length === 0 || (this.highCharity.isBootstrapping && hasUrgentSites);
+    
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_ENGINEER, // Covenant themed role
       building: false
-    } as any, priority);
+    } as any, priority, important);
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap or emergency, otherwise use capacity
+    // ALWAYS use capacity for body calculation - we're planning what we WANT to spawn
+    // SpawnQueue will wait until we have enough energy
+    // Exception: If we have no creeps at all, use available energy for emergency minimal spawn
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
-      this.highCharity.energyAvailable : 
+    const energy = totalCreeps === 0 ? 
+      Math.max(this.highCharity.energyAvailable, 200) : // At least 200 for minimal body
       this.highCharity.energyCapacity;
     
     // Use BodyBuilder for flexible builder body

@@ -66,7 +66,10 @@ export class DevoteeArbiter extends Arbiter {
     // Request spawn whenever we need more workers (removed tick throttle)
     // SpawnQueue handles deduplication, so it's safe to request every tick
     if (currentWorkers < desiredWorkers) {
+      console.log(`📚 ${this.print}: Requesting Devotee worker (${currentWorkers} < ${desiredWorkers})`);
       this.requestWorker();
+    } else if (Game.time % 50 === 0) {
+      console.log(`📚 ${this.print}: Not requesting worker - have enough (${currentWorkers} >= ${desiredWorkers})`);
     }
   }
   
@@ -199,11 +202,23 @@ export class DevoteeArbiter extends Arbiter {
   
   private requestWorker(): void {
     const body = this.calculateWorkerBody();
+    
+    // Don't request if body is empty (not enough energy)
+    if (body.length === 0) {
+      console.log(`📚 Devotee spawn SKIPPED: Not enough energy for minimum body (need 200)`);
+      return;
+    }
+    
     const name = `Devotee_${Game.time}`;
     
+    console.log(`📚 Devotee spawn requested: body=${JSON.stringify(body)}, cost=${body.reduce((sum, part) => sum + BODYPART_COST[part], 0)}`);
+    
     // Workers are ECONOMY priority (can wait until energy is flowing)
+    // BUT: first worker should be important to spawn without waiting for 80% energy
     const priority = SpawnPriority.ECONOMY;
-    const important = false;
+    const important = this.workers.length === 0; // First worker is important
+    
+    console.log(`📚 Devotee spawn: priority=${priority}, important=${important}, workers.length=${this.workers.length}`);
     
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_DEVOTEE, // Covenant themed role
@@ -212,11 +227,15 @@ export class DevoteeArbiter extends Arbiter {
   }
   
   private calculateWorkerBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap or emergency, otherwise use capacity
+    // ALWAYS use capacity for body calculation - we're planning what we WANT to spawn
+    // SpawnQueue will wait until we have enough energy
+    // Exception: If we have no creeps at all, use available energy for emergency minimal spawn
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
-      this.highCharity.energyAvailable : 
+    const energy = totalCreeps === 0 ? 
+      Math.max(this.highCharity.energyAvailable, 200) : // At least 200 for minimal body
       this.highCharity.energyCapacity;
+    
+    console.log(`📚 calculateWorkerBody: energy=${energy}, available=${this.highCharity.energyAvailable}, capacity=${this.highCharity.energyCapacity}, isBootstrapping=${this.highCharity.isBootstrapping}, totalCreeps=${totalCreeps}`);
     
     // Use BodyBuilder for flexible upgrader body
     return BodyBuilder.upgrader(energy);
