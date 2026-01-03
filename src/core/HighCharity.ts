@@ -35,6 +35,7 @@ import { DefenseTemple } from '../temples/DefenseTemple';
 import { LabTemple } from '../temples/LabTemple';
 import { BoostTemple } from '../temples/BoostTemple';
 import { PowerTemple } from '../temples/PowerTemple';
+import { LinkTemple } from '../temples/LinkTemple';
 import { ProphetsWill } from '../logistics/ProphetsWill';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { AutoPlanner } from '../planning/AutoPlanner';
@@ -131,6 +132,7 @@ export class HighCharity {
   labTemple: LabTemple | null;
   boostTemple: BoostTemple | null;
   powerTemple: PowerTemple | null;
+  linkTemple: LinkTemple | null;
   
   // Logistics
   prophetsWill: ProphetsWill;
@@ -223,6 +225,13 @@ export class HighCharity {
     // Initialize power temple at RCL 8
     if (this.room.controller && this.room.controller.level >= 8) {
       this.powerTemple = new PowerTemple(this);
+    }
+    
+    // Initialize link temple at RCL 5+ (when links become available)
+    if (this.room.controller && this.room.controller.level >= 5 && this.links.length >= 2) {
+      this.linkTemple = new LinkTemple(this);
+    } else {
+      this.linkTemple = null;
     }
     
     // Initialize room planner
@@ -567,6 +576,11 @@ export class HighCharity {
     // Build Power Temple (power harvesting) if available
     if (this.powerTemple) {
       this.temples['power'] = this.powerTemple;
+    }
+    
+    // Build Link Temple (energy conduits) if available
+    if (this.linkTemple) {
+      this.temples['link'] = this.linkTemple;
     }
     
     // Scan for remote mining opportunities (mature colonies only)
