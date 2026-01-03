@@ -390,6 +390,48 @@ export class EngineerArbiter extends Arbiter {
       }
     }
     
+    // Place containers at sources (critical for Lekgolo miners!)
+    const sources = this.room.find(FIND_SOURCES);
+    for (const source of sources) {
+      // Check if container already exists near this source
+      const existingContainer = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: s => s.structureType === STRUCTURE_CONTAINER
+      })[0];
+      
+      const existingSite = source.pos.findInRange(FIND_CONSTRUCTION_SITES, 1, {
+        filter: s => s.structureType === STRUCTURE_CONTAINER
+      })[0];
+      
+      if (!existingContainer && !existingSite) {
+        // Find best position adjacent to source (not on source)
+        const adjacentPositions = [
+          new RoomPosition(source.pos.x - 1, source.pos.y - 1, this.room.name),
+          new RoomPosition(source.pos.x, source.pos.y - 1, this.room.name),
+          new RoomPosition(source.pos.x + 1, source.pos.y - 1, this.room.name),
+          new RoomPosition(source.pos.x - 1, source.pos.y, this.room.name),
+          new RoomPosition(source.pos.x + 1, source.pos.y, this.room.name),
+          new RoomPosition(source.pos.x - 1, source.pos.y + 1, this.room.name),
+          new RoomPosition(source.pos.x, source.pos.y + 1, this.room.name),
+          new RoomPosition(source.pos.x + 1, source.pos.y + 1, this.room.name)
+        ];
+        
+        // Find first valid position (not wall, not blocked)
+        for (const pos of adjacentPositions) {
+          const terrain = Game.map.getRoomTerrain(this.room.name);
+          if (terrain.get(pos.x, pos.y) !== TERRAIN_MASK_WALL) {
+            const structures = pos.lookFor(LOOK_STRUCTURES);
+            if (structures.length === 0) {
+              const result = this.room.createConstructionSite(pos, STRUCTURE_CONTAINER);
+              if (result === OK) {
+                console.log(`📦 Placing container at source ${source.id}`);
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+    
     // Place storage (RCL 4+)
     if (level >= 4 && plan.storage && !this.hasStructureOrSite(plan.storage, STRUCTURE_STORAGE)) {
       this.room.createConstructionSite(plan.storage, STRUCTURE_STORAGE);
