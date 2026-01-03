@@ -14,6 +14,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { ROLES } from '../constants/Roles';
 
 /**
  * Grunt Arbiter - Manages early-game energy harvesting
@@ -248,7 +249,7 @@ export class GruntArbiter extends Arbiter {
     const important = this.highCharity.isBootstrapping && this.grunts.length < 2;
     
     this.requestSpawn(body, name, {
-      role: 'grunt',
+      role: ROLES.GRUNT,
       sourceId: undefined // Will be assigned dynamically
     } as any, priority, important);
   }

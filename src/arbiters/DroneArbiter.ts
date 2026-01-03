@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { ROLES } from '../constants/Roles';
 
 /**
  * Drone Arbiter - Manages energy harvesting
@@ -141,7 +142,7 @@ export class DroneArbiter extends Arbiter {
     const important = this.highCharity.isBootstrapping && this.miners.length === 0;
     
     this.requestSpawn(body, name, {
-      role: 'elite_drone', // Covenant themed role
+      role: ROLES.ELITE_DRONE, // Covenant themed role
       sourceId: this.source?.id
     } as any, priority, important);
   }

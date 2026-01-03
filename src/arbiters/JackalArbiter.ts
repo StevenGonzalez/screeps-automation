@@ -14,6 +14,7 @@ import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
+import { ROLES } from '../constants/Roles';
 
 /**
  * JACKAL ARBITER - Manages energy distribution
@@ -253,7 +254,7 @@ export class JackalArbiter extends Arbiter {
     const important = this.highCharity.isBootstrapping && this.haulers.length === 0;
     
     this.requestSpawn(body, name, {
-      role: 'elite_jackal', // Covenant themed role
+      role: ROLES.ELITE_JACKAL, // Covenant themed role
       collecting: true
     } as any, priority, important);
   }

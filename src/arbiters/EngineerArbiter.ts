@@ -14,6 +14,7 @@ import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { getSpawnName } from '../utils/SpawnNames';
+import { ROLES } from '../constants/Roles';
 
 /**
  * Builder Arbiter - Manages construction and repair
@@ -289,7 +290,7 @@ export class EngineerArbiter extends Arbiter {
       SpawnPriority.EXPANSION; // Use EXPANSION priority (5) for builders normally
     
     this.requestSpawn(body, name, {
-      role: 'elite_engineer', // Covenant themed role
+      role: ROLES.ELITE_ENGINEER, // Covenant themed role
       building: false
     } as any, priority);
   }

@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { ROLES } from '../constants/Roles';
 
 /**
  * ranger Arbiter - Provides vision to adjacent rooms
@@ -168,7 +169,7 @@ export class RangerArbiter extends Arbiter {
     const name = `Seraph_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_ranger' // Covenant themed role
+      role: ROLES.ELITE_RANGER // Covenant themed role
     } as any, SpawnPriority.EXPANSION);
   }
   

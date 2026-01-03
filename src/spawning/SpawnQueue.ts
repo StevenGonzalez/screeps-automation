@@ -18,6 +18,7 @@
  */
 
 import { HighCharity } from '../core/HighCharity';
+import { RoleHelpers } from '../constants/Roles';
 
 export enum SpawnPriority {
   EMERGENCY = 1,
@@ -282,21 +283,21 @@ export class SpawnQueue {
     const role = request.memory.role || '';
     
     // Minimal bodies for different roles
-    if (role.includes('hauler') || role.includes('steward')) {
+    if (RoleHelpers.isHauler(role)) {
       // Minimal hauler: 1 carry, 1 move
       if (availableEnergy >= 100) {
         return [CARRY, MOVE];
       }
     }
     
-    if (role.includes('miner') || role.includes('extractor')) {
+    if (RoleHelpers.isMiner(role)) {
       // Minimal miner: 1 work, 1 move
       if (availableEnergy >= 150) {
         return [WORK, MOVE];
       }
     }
     
-    if (role.includes('defender') || role.includes('guardian')) {
+    if (RoleHelpers.isDefender(role)) {
       // Minimal defender: 1 attack, 1 move
       if (availableEnergy >= 130) {
         return [ATTACK, MOVE];
