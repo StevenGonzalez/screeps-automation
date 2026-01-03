@@ -266,10 +266,9 @@ export class ArtisanArbiter extends Arbiter {
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap to get started quickly
-    const energy = this.highCharity.isBootstrapping ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+    // Use capacity for body planning (not current available energy)
+    // SpawnQueue will handle waiting for enough energy
+    const energy = this.highCharity.energyCapacity;
     
     // Emergency: Minimal builder (200 energy)
     if (energy < 300) {

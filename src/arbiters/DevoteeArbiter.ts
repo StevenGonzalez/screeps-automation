@@ -10,6 +10,7 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
+import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 
@@ -184,17 +185,23 @@ export class DevoteeArbiter extends Arbiter {
     const body = this.calculateWorkerBody();
     const name = `Devotee_${Game.time}`;
     
+    // First devotee is CRITICAL during bootstrap (need to upgrade controller)
+    const priority = this.highCharity.isBootstrapping && this.workers.length === 0 ?
+      SpawnPriority.CRITICAL :
+      SpawnPriority.ECONOMY;
+    
+    const important = this.highCharity.isBootstrapping && this.workers.length === 0;
+    
     this.requestSpawn(body, name, {
       role: 'elite_worker', // Covenant themed role
       upgrading: false
-    } as any);
+    } as any, priority, important);
   }
   
   private calculateWorkerBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap to get started quickly
-    const energy = this.highCharity.isBootstrapping ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+    // Use capacity for body planning (not current available energy)
+    // SpawnQueue will handle waiting for enough energy
+    const energy = this.highCharity.energyCapacity;
     
     // Emergency: Minimal worker (200 energy)
     if (energy < 300) {

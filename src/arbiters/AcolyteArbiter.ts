@@ -258,9 +258,8 @@ export class AcolyteArbiter extends Arbiter {
    */
   private calculateAcolyteBody(): BodyPartConstant[] {
     // Acolytes need balanced WORK, CARRY, MOVE
-    const energy = this.highCharity.isBootstrapping ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+    // Use capacity for body planning (not current available energy)
+    const energy = this.highCharity.energyCapacity;
     
     // Minimal harvester (200 energy): 1W 1C 1M
     if (energy <= 250) {
