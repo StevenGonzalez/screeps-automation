@@ -54,10 +54,10 @@ export interface SpawnQueueMemory {
 }
 
 // Version string - increment on deploy to clear stale queue
-const CODE_VERSION = 'v2025.01.04';
+const CODE_VERSION = 'v2025.01.04.3';
 
 // Maximum queue size to prevent CPU death spiral
-const MAX_QUEUE_SIZE = 50;
+const MAX_QUEUE_SIZE = 20;
 
 export class SpawnQueue {
   private colony: HighCharity;
@@ -113,33 +113,31 @@ export class SpawnQueue {
       const lowestPriorityIndex = this.queue.reduce((maxIdx, r, idx, arr) => 
         r.priority > arr[maxIdx].priority ? idx : maxIdx, 0);
       const removed = this.queue.splice(lowestPriorityIndex, 1)[0];
-      this.requestMap.delete(removed.id);
-      this.requestMap.delete(removed.name);
+      this.requestMap.delete(removed.arbiter);
     }
     
-    // O(1) duplicate check using Map
-    const existingIndexById = this.requestMap.get(request.id);
-    const existingIndexByName = this.requestMap.get(request.name);
-    const existingIndex = existingIndexById ?? existingIndexByName;
+    // Deduplicate by ARBITER - each arbiter should only have one pending request
+    // This prevents queue bloat when arbiters request every tick with different names
+    const existingIndex = this.requestMap.get(request.arbiter);
     
     if (existingIndex !== undefined && existingIndex < this.queue.length) {
       const existing = this.queue[existingIndex];
       // Verify the map is still accurate (defensive check)
-      if (existing && (existing.id === request.id || existing.name === request.name)) {
-        // Update priority if higher (lower number = higher priority)
-        if (request.priority < existing.priority) {
-          this.queue[existingIndex] = request;
-          this.needsSort = true; // Mark for re-sorting
+      if (existing && existing.arbiter === request.arbiter) {
+        // Update with newer request (fresher name, possibly different priority)
+        // Always update to keep the request fresh and prevent stale cleanup
+        this.queue[existingIndex] = request;
+        if (request.priority !== existing.priority) {
+          this.needsSort = true; // Mark for re-sorting if priority changed
         }
         return;
       }
     }
     
-    // Add to queue and update map
+    // Add to queue and update map (keyed by arbiter)
     const newIndex = this.queue.length;
     this.queue.push(request);
-    this.requestMap.set(request.id, newIndex);
-    this.requestMap.set(request.name, newIndex);
+    this.requestMap.set(request.arbiter, newIndex);
     this.needsSort = true; // Defer sorting to run phase
   }
 
@@ -184,8 +182,9 @@ export class SpawnQueue {
     
     this.colony.memory.spawnQueue!.spawnedThisTick = 0;
     
-    // Refresh spawn references (colony.spawns updated during build phase)
-    this.spawns = this.colony.spawns;
+    // CRITICAL: Get FRESH spawn references directly from room.find()
+    // The cached colony.spawns has stale spawn.spawning data!
+    this.spawns = this.colony.room.find(FIND_MY_SPAWNS);
     
     // Sort queue if needed (deferred from enqueue calls)
     if (this.needsSort) {
@@ -201,10 +200,14 @@ export class SpawnQueue {
     
     // Process queue for each available spawn
     for (const spawn of this.spawns) {
-      if (spawn.spawning) continue;
+      if (spawn.spawning) {
+        continue;
+      }
       
+      // Spawn is available - try to spawn something
       const request = this.getNextSpawnableRequest(spawn);
       if (request) {
+        console.log(`🎯 SpawnQueue: Spawning ${request.name} (priority: ${request.priority}, cost: ${request.energyCost})`);
         this.executeSpawn(spawn, request);
       }
     }
@@ -328,8 +331,7 @@ export class SpawnQueue {
     const index = this.queue.findIndex(r => r.id === requestId);
     if (index !== -1) {
       const removed = this.queue.splice(index, 1)[0];
-      this.requestMap.delete(removed.id);
-      this.requestMap.delete(removed.name);
+      this.requestMap.delete(removed.arbiter);
       // Note: we don't rebuild the entire map here for performance
       // The map may have stale indices but we validate in enqueue()
     }
@@ -512,8 +514,7 @@ export class SpawnQueue {
     this.requestMap.clear();
     for (let i = 0; i < this.queue.length; i++) {
       const request = this.queue[i];
-      this.requestMap.set(request.id, i);
-      this.requestMap.set(request.name, i);
+      this.requestMap.set(request.arbiter, i);
     }
   }
 
