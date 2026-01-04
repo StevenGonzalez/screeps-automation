@@ -306,7 +306,13 @@ export class HeraldArbiter extends Arbiter {
   
   private calculatePioneerBody(): BodyPartConstant[] {
     // Pioneers are general workers for bootstrapping new rooms
-    return BodyBuilder.worker(this.highCharity.energyAvailable);
+    // Use capacity when not bootstrapping for full-size bodies
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
+    
+    return BodyBuilder.worker(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

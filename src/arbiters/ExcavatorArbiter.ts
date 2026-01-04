@@ -126,7 +126,13 @@ export class ExcavatorArbiter extends Arbiter {
   
   private calculateMinerBody(): BodyPartConstant[] {
     // Mineral miners need lots of WORK parts
-    return BodyBuilder.miner(this.highCharity.energyAvailable);
+    // Use capacity when not bootstrapping for full-size bodies
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
+    
+    return BodyBuilder.miner(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

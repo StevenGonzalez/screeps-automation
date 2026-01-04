@@ -304,12 +304,24 @@ export class SeekerArbiter extends Arbiter {
   
   private calculateMinerBody(): BodyPartConstant[] {
     // Remote miners need work parts for harvesting
-    return BodyBuilder.miner(this.highCharity.energyAvailable);
+    // Use capacity when not bootstrapping for full-size bodies
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
+    
+    return BodyBuilder.miner(energy);
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
     // Remote haulers need large carry capacity
-    return BodyBuilder.hauler(this.highCharity.energyAvailable);
+    // Use capacity when not bootstrapping for full-size bodies
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
+    
+    return BodyBuilder.hauler(energy);
   }
   
   protected getCreepsForRole(): Creep[] {

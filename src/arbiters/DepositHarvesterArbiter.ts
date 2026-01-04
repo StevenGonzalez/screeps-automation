@@ -324,7 +324,13 @@ export class DepositHarvesterArbiter extends Arbiter {
    */
   private calculateHaulerBody(): BodyPartConstant[] {
     // Deposit haulers are just big haulers
-    return BodyBuilder.hauler(this.highCharity.energyAvailable);
+    // Use capacity when not bootstrapping for full-size bodies
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+      this.highCharity.energyAvailable : 
+      this.highCharity.energyCapacity;
+    
+    return BodyBuilder.hauler(energy);
   }
   
   protected getCreepsForRole(): Creep[] {
