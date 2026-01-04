@@ -53,15 +53,25 @@ export interface SpawnQueueMemory {
   };
 }
 
+// Version string - increment on deploy to clear stale queue
+const CODE_VERSION = 'v2025.01.04';
+
+// Maximum queue size to prevent CPU death spiral
+const MAX_QUEUE_SIZE = 50;
+
 export class SpawnQueue {
   private colony: HighCharity;
   private queue: SpawnRequest[];
   private spawns: StructureSpawn[];
+  private requestMap: Map<string, number>; // Map of request ID/name to queue index for O(1) lookup
+  private needsSort: boolean; // Defer sorting to run phase
   
   constructor(colony: HighCharity) {
     this.colony = colony;
     this.queue = [];
     this.spawns = colony.spawns;
+    this.requestMap = new Map();
+    this.needsSort = false;
     this.initializeMemory();
     this.loadQueue();
   }
@@ -88,25 +98,49 @@ export class SpawnQueue {
    * Add spawn request to queue
    */
   public enqueue(request: SpawnRequest): void {
-    // Check for duplicate requests by unique ID or exact name match
-    // This allows multiple requests from same arbiter (for multiple creeps of same role)
-    const existingIndex = this.queue.findIndex(r => 
-      r.id === request.id || 
-      r.name === request.name ||
-      // Only deduplicate if both are replacing the SAME specific creep
-      (r.replacingCreep && r.replacingCreep === request.replacingCreep)
-    );
-    
-    if (existingIndex !== -1) {
-      // Update priority if higher (lower number = higher priority)
-      if (request.priority < this.queue[existingIndex].priority) {
-        this.queue[existingIndex] = request;
-      }
+    // CPU guard: skip if bucket is critically low
+    if (Game.cpu.bucket < 500) {
       return;
     }
     
+    // Limit queue size to prevent CPU death spiral
+    if (this.queue.length >= MAX_QUEUE_SIZE) {
+      // Only allow EMERGENCY priority when queue is full
+      if (request.priority !== SpawnPriority.EMERGENCY) {
+        return;
+      }
+      // Remove lowest priority item to make room for emergency
+      const lowestPriorityIndex = this.queue.reduce((maxIdx, r, idx, arr) => 
+        r.priority > arr[maxIdx].priority ? idx : maxIdx, 0);
+      const removed = this.queue.splice(lowestPriorityIndex, 1)[0];
+      this.requestMap.delete(removed.id);
+      this.requestMap.delete(removed.name);
+    }
+    
+    // O(1) duplicate check using Map
+    const existingIndexById = this.requestMap.get(request.id);
+    const existingIndexByName = this.requestMap.get(request.name);
+    const existingIndex = existingIndexById ?? existingIndexByName;
+    
+    if (existingIndex !== undefined && existingIndex < this.queue.length) {
+      const existing = this.queue[existingIndex];
+      // Verify the map is still accurate (defensive check)
+      if (existing && (existing.id === request.id || existing.name === request.name)) {
+        // Update priority if higher (lower number = higher priority)
+        if (request.priority < existing.priority) {
+          this.queue[existingIndex] = request;
+          this.needsSort = true; // Mark for re-sorting
+        }
+        return;
+      }
+    }
+    
+    // Add to queue and update map
+    const newIndex = this.queue.length;
     this.queue.push(request);
-    this.sortQueue();
+    this.requestMap.set(request.id, newIndex);
+    this.requestMap.set(request.name, newIndex);
+    this.needsSort = true; // Defer sorting to run phase
   }
 
   /**
@@ -133,13 +167,37 @@ export class SpawnQueue {
    * Process spawn queue
    */
   public run(): void {
+    // Always perform cleanup to prevent queue bloat
+    this.cleanupStaleRequests();
+    
+    // CPU guard: minimal operation if bucket is critically low
+    if (Game.cpu.bucket < 200) {
+      // Just try to spawn the first emergency request if possible
+      const spawn = this.spawns.find(s => !s.spawning);
+      const emergency = this.queue.find(r => r.priority === SpawnPriority.EMERGENCY);
+      if (spawn && emergency && emergency.energyCost <= this.colony.energyAvailable) {
+        this.executeSpawn(spawn, emergency);
+      }
+      this.saveQueue(); // Always save to persist removals
+      return;
+    }
+    
     this.colony.memory.spawnQueue!.spawnedThisTick = 0;
     
     // Refresh spawn references (colony.spawns updated during build phase)
     this.spawns = this.colony.spawns;
     
-    // Check for lifecycle spawns (creeps about to die)
-    this.checkLifecycle();
+    // Sort queue if needed (deferred from enqueue calls)
+    if (this.needsSort) {
+      this.sortQueue();
+      this.needsSort = false;
+      this.rebuildRequestMap(); // Rebuild map after sort changes indices
+    }
+    
+    // Check for lifecycle spawns (creeps about to die) - skip if CPU is low
+    if (Game.cpu.bucket > 1000) {
+      this.checkLifecycle();
+    }
     
     // Process queue for each available spawn
     for (const spawn of this.spawns) {
@@ -149,6 +207,12 @@ export class SpawnQueue {
       if (request) {
         this.executeSpawn(spawn, request);
       }
+    }
+    
+    // Periodic queue status log (every 50 ticks)
+    if (Game.time % 50 === 0 && this.queue.length > 0) {
+      const status = this.getStatus();
+      console.log(`📋 SpawnQueue [${this.colony.name}]: ${status.queueLength} items, oldest: ${status.oldestRequest} ticks, spawns available: ${status.availableSpawns}`);
     }
     
     // Save queue to memory
@@ -222,8 +286,9 @@ export class SpawnQueue {
     const result = spawn.spawnCreep(request.body, request.name, { memory: request.memory });
     
     if (result === OK) {
-      // Remove from queue
-      this.queue = this.queue.filter(r => r.id !== request.id);
+      // Remove from queue and map
+      this.removeFromQueue(request.id);
+      console.log(`✅ Spawned ${request.name} (queue: ${this.queue.length} remaining)`);
       
       // Update statistics
       const memory = this.colony.memory.spawnQueue!;
@@ -245,14 +310,61 @@ export class SpawnQueue {
         (memory.statistics.averageWaitTime * (memory.totalSpawned - 1) + waitTime) / memory.totalSpawned;
     } else if (result === ERR_NAME_EXISTS) {
       // Remove duplicate
-      this.queue = this.queue.filter(r => r.id !== request.id);
+      this.removeFromQueue(request.id);
     } else if (result === ERR_NOT_ENOUGH_ENERGY) {
       // Keep in queue, will retry next tick
     } else if (result === ERR_BUSY) {
       // Spawn is busy, will retry next tick
     } else {
       // Unknown error - remove from queue to avoid infinite retries
-      this.queue = this.queue.filter(r => r.id !== request.id);
+      this.removeFromQueue(request.id);
+    }
+  }
+  
+  /**
+   * Remove request from queue and update map
+   */
+  private removeFromQueue(requestId: string): void {
+    const index = this.queue.findIndex(r => r.id === requestId);
+    if (index !== -1) {
+      const removed = this.queue.splice(index, 1)[0];
+      this.requestMap.delete(removed.id);
+      this.requestMap.delete(removed.name);
+      // Note: we don't rebuild the entire map here for performance
+      // The map may have stale indices but we validate in enqueue()
+    }
+  }
+  
+  /**
+   * Clean up stale requests - runs every tick during run()
+   */
+  private cleanupStaleRequests(): void {
+    const initialLength = this.queue.length;
+    
+    this.queue = this.queue.filter(r => {
+      const age = Game.time - r.tickRequested;
+      
+      // Remove if older than 30 ticks
+      if (age > 30) return false;
+      
+      // Remove if creep with this name already exists (was spawned)
+      if (Game.creeps[r.name]) return false;
+      
+      // Remove if replacing a creep that no longer exists and we have other creeps of that role
+      // (the creep died but others exist, so not an emergency anymore)
+      
+      return true;
+    });
+    
+    const removed = initialLength - this.queue.length;
+    if (removed > 0) {
+      // Rebuild map after cleanup
+      this.rebuildRequestMap();
+      
+      // Log cleanup if significant
+      if (removed >= 3 || Game.time % 100 === 0) {
+        console.log(`🧹 SpawnQueue cleanup: removed ${removed} stale requests, ${this.queue.length} remaining`);
+      }
     }
   }
 
@@ -360,7 +472,18 @@ export class SpawnQueue {
    * Load queue from memory
    */
   private loadQueue(): void {
-    const saved = this.colony.memory.spawnQueue!.queue;
+    const memory = this.colony.memory.spawnQueue!;
+    
+    // Check for code version change - clear stale queue on redeploy
+    if ((memory as any).codeVersion !== CODE_VERSION) {
+      console.log(`🔄 SpawnQueue: Code version changed, clearing stale queue`);
+      this.queue = [];
+      (memory as any).codeVersion = CODE_VERSION;
+      memory.queue = [];
+      return;
+    }
+    
+    const saved = memory.queue;
     if (saved && saved.length > 0) {
       this.queue = saved;
       
@@ -368,14 +491,29 @@ export class SpawnQueue {
       this.queue = this.queue.filter(r => {
         const age = Game.time - r.tickRequested;
         
-        // Remove if older than 50 ticks (should have spawned by now)
-        if (age > 50) return false;
+        // Remove if older than 30 ticks (reduced from 50 for faster cleanup)
+        if (age > 30) return false;
         
         // Remove if creep with this name already exists
         if (Game.creeps[r.name]) return false;
         
         return true;
       });
+      
+      // Rebuild the request map from loaded queue
+      this.rebuildRequestMap();
+    }
+  }
+  
+  /**
+   * Rebuild request map from queue (after sorting or loading)
+   */
+  private rebuildRequestMap(): void {
+    this.requestMap.clear();
+    for (let i = 0; i < this.queue.length; i++) {
+      const request = this.queue[i];
+      this.requestMap.set(request.id, i);
+      this.requestMap.set(request.name, i);
     }
   }
 
@@ -411,6 +549,7 @@ export class SpawnQueue {
    */
   public clear(): void {
     this.queue = [];
+    this.requestMap.clear();
     this.saveQueue();
   }
 }
