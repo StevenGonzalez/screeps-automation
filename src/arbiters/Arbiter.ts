@@ -169,7 +169,7 @@ export abstract class Arbiter {
       body,
       name,
       memory: spawnMemory,
-      arbiter: this.name,
+      arbiter: this.ref,  // Use full ref for proper deduplication per arbiter instance
       important,
       energyCost,
       tickRequested: Game.time

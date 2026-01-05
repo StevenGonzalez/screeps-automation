@@ -54,7 +54,7 @@ export interface SpawnQueueMemory {
 }
 
 // Version string - increment on deploy to clear stale queue
-const CODE_VERSION = 'v2025.01.05.1';
+const CODE_VERSION = 'v2025.01.05.2';
 
 // Maximum queue size to prevent CPU death spiral
 const MAX_QUEUE_SIZE = 20;
