@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { BodyBuilder } from '../utils/BodyBuilder';
+import { ROLES } from '../constants/Roles';
 
 interface RemoteMiningMemory extends ArbiterMemory {
   targetRoom: string;
@@ -284,7 +285,7 @@ export class SeekerArbiter extends Arbiter {
     const name = `Seeker_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_remoteMiner', // Covenant themed role
+      role: ROLES.ELITE_REMOTE_MINER,
       targetRoom: this.targetRoom,
       sourceId: this.sourceId
     } as any);
@@ -295,7 +296,7 @@ export class SeekerArbiter extends Arbiter {
     const name = `Convoy_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_remoteHauler', // Covenant themed role
+      role: ROLES.ELITE_REMOTE_HAULER,
       targetRoom: this.targetRoom,
       sourceId: this.sourceId,
       collecting: true
@@ -328,7 +329,7 @@ export class SeekerArbiter extends Arbiter {
     const miners = this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        (creep.memory.role === 'remoteMiner' && 
+        (creep.memory.role === ROLES.ELITE_REMOTE_MINER && 
          (creep.memory as any).targetRoom === this.targetRoom &&
          (creep.memory as any).sourceId === this.sourceId)
     });
@@ -336,7 +337,7 @@ export class SeekerArbiter extends Arbiter {
     const haulers = this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        (creep.memory.role === 'remoteHauler' && 
+        (creep.memory.role === ROLES.ELITE_REMOTE_HAULER && 
          (creep.memory as any).targetRoom === this.targetRoom &&
          (creep.memory as any).sourceId === this.sourceId)
     });

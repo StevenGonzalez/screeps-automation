@@ -18,21 +18,17 @@ export class Elite {
   creep: Creep;
   arbiter: Arbiter | null;
   
-  // Cached properties
+  // Cached immutable properties (name and body don't change)
   private _body: BodyPartDefinition[];
   private _name: string;
-  private _pos: RoomPosition;
-  private _room: Room;
   
   constructor(creep: Creep, arbiter: Arbiter | null = null) {
     this.creep = creep;
     this.arbiter = arbiter;
     
-    // Cache frequently accessed properties
+    // Cache immutable properties only (name and body never change)
     this._body = creep.body;
     this._name = creep.name;
-    this._pos = creep.pos;
-    this._room = creep.room;
   }
   
   // === Wrapper Properties ===

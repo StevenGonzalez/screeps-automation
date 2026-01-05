@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
 import { BodyBuilder } from '../utils/BodyBuilder';
+import { ROLES } from '../constants/Roles';
 
 export interface ClaimerMemory {
   targetRoom: string;
@@ -275,7 +276,7 @@ export class HeraldArbiter extends Arbiter {
     const name = `Herald_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_claimer',
+      role: ROLES.ELITE_CLAIMER,
       targetRoom: this.targetRoom
     } as any);
   }
@@ -285,7 +286,7 @@ export class HeraldArbiter extends Arbiter {
     const name = `Vanguard_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_pioneer',
+      role: ROLES.ELITE_PIONEER,
       targetRoom: this.targetRoom,
       working: false
     } as any);
@@ -319,8 +320,8 @@ export class HeraldArbiter extends Arbiter {
     const claimerCreeps = this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         (creep.memory.arbiter === this.ref) ||
-        (creep.memory.role === 'elite_claimer' && (creep.memory as any).targetRoom === this.targetRoom) ||
-        (creep.memory.role === 'elite_pioneer' && (creep.memory as any).targetRoom === this.targetRoom)
+        (creep.memory.role === ROLES.ELITE_CLAIMER && (creep.memory as any).targetRoom === this.targetRoom) ||
+        (creep.memory.role === ROLES.ELITE_PIONEER && (creep.memory as any).targetRoom === this.targetRoom)
     });
     
     return claimerCreeps;
@@ -331,10 +332,10 @@ export class HeraldArbiter extends Arbiter {
     
     // Separate claimers and pioneers
     this.claimers = this.elites.filter(e => 
-      e.memory.role === 'elite_claimer'
+      e.memory.role === ROLES.ELITE_CLAIMER
     );
     this.pioneers = this.elites.filter(e => 
-      e.memory.role === 'elite_pioneer'
+      e.memory.role === ROLES.ELITE_PIONEER
     );
   }
 }

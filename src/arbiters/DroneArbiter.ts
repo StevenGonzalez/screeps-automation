@@ -62,9 +62,12 @@ export class DroneArbiter extends Arbiter {
     const spawningMiners = this.countSpawningMiners();
     const totalMiners = currentMiners + spawningMiners;
     
-    console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners (spawning: ${spawningMiners}, container: ${!!this.container})`);
+    // Debug logging (throttled)
+    if (Game.time % 50 === 0) {
+      console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners (spawning: ${spawningMiners}, container: ${!!this.container})`);
+    }
     
-    // Request spawn whenever we need more miners (removed tick throttle)
+    // Request spawn whenever we need more miners
     // SpawnQueue handles deduplication, so it's safe to request every tick
     if (totalMiners < desiredMiners) {
       this.requestMiner();

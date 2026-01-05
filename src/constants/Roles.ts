@@ -39,6 +39,12 @@ export const ROLES = {
   HERALD: 'herald',
   ELITE_HERALD: 'elite_herald',
   
+  CLAIMER: 'claimer',
+  ELITE_CLAIMER: 'elite_claimer',
+  
+  PIONEER: 'pioneer',
+  ELITE_PIONEER: 'elite_pioneer',
+  
   // Remote operations
   SEEKER: 'seeker',
   ELITE_SEEKER: 'elite_seeker',

@@ -128,6 +128,11 @@ export const loop = (): void => {
     if (Game.time % 100 === 0) {
       logPerformanceMetrics();
     }
+    
+    // PIXEL GENERATION (when bucket is high)
+    if (Game.time % 100 === 0) {
+      processPixelGeneration();
+    }
   } catch (error) {
     console.log(`💥 Critical error in main loop: ${error}`);
   }
