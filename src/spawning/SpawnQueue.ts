@@ -168,6 +168,14 @@ export class SpawnQueue {
    * Process spawn queue
    */
   public run(): void {
+    // Debug: Log spawn queue state periodically
+    if (Game.time % 10 === 0 && this.queue.length > 0) {
+      console.log(`🎯 SpawnQueue [${this.colony.name}]: ${this.queue.length} requests, energy: ${this.colony.energyAvailable}/${this.colony.energyCapacity}, spawns: ${this.spawns.length}`);
+      for (const req of this.queue.slice(0, 3)) {
+        console.log(`  - ${req.name} (priority: ${req.priority}, cost: ${req.energyCost}, arbiter: ${req.arbiter})`);
+      }
+    }
+    
     // Always perform cleanup to prevent queue bloat
     this.cleanupStaleRequests();
     
@@ -527,10 +535,11 @@ export class SpawnQueue {
     
     // Check for code version change - clear stale queue on redeploy
     if ((memory as any).codeVersion !== CODE_VERSION) {
-      console.log(`🔄 SpawnQueue: Code version changed, clearing stale queue`);
+      console.log(`🔄 SpawnQueue [${this.colony.name}]: Code version changed from ${(memory as any).codeVersion} to ${CODE_VERSION}, clearing stale queue`);
       this.queue = [];
       (memory as any).codeVersion = CODE_VERSION;
       memory.queue = [];
+      this.saveQueue();
       return;
     }
     

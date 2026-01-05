@@ -32,8 +32,18 @@ export class GruntArbiter extends Arbiter {
     this.refresh();
     this.grunts = this.elites;
     
+    const isActive = this.shouldBeActive();
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    
+    // Debug logging (more frequent when no creeps)
+    if (totalCreeps === 0 || Game.time % 10 === 0) {
+      const desired = this.calculateDesiredgrunts();
+      const current = this.grunts.length;
+      console.log(`🙏 ${this.print}: ${current}/${desired} grunts, active: ${isActive}, totalCreeps: ${totalCreeps}, energy: ${this.highCharity.energyAvailable}`);
+    }
+    
     // Only active during bootstrap phase (no containers yet) OR emergency (no creeps)
-    if (!this.shouldBeActive()) {
+    if (!isActive) {
       return;
     }
     
@@ -41,17 +51,11 @@ export class GruntArbiter extends Arbiter {
     const desired = this.calculateDesiredgrunts();
     const current = this.grunts.length;
     
-    // Debug logging (throttled to reduce spam)
-    if (Game.time % 50 === 0) {
-      console.log(`🙏 ${this.print}: ${current}/${desired} grunts (active: ${this.shouldBeActive()})`);
-    }
-    
     // Request spawn whenever we need more grunts
     // SpawnQueue handles deduplication, so it's safe to request every tick
     if (current < desired) {
-      const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-      if (totalCreeps === 0 && Game.time % 10 === 0) {
-        console.log(`🙏 ${this.print}: EMERGENCY SPAWN REQUEST`);
+      if (totalCreeps === 0 && Game.time % 5 === 0) {
+        console.log(`🙏 ${this.print}: EMERGENCY SPAWN REQUEST - No creeps exist!`);
       }
       this.requestgrunt();
     }

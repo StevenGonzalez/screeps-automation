@@ -43,9 +43,18 @@ export class EngineerArbiter extends Arbiter {
     const desiredBuilders = this.calculateDesiredBuilders();
     const currentBuilders = this.builders.length;
     
+    // Debug logging (more frequent to catch issues)
+    if (Game.time % 10 === 0 && (desiredBuilders > 0 || currentBuilders > 0)) {
+      const sites = this.room.find(FIND_MY_CONSTRUCTION_SITES).length;
+      console.log(`🔧 ${this.print}: ${currentBuilders}/${desiredBuilders} builders, ${sites} construction sites`);
+    }
+    
     // Request spawn whenever we need more builders (removed tick throttle)
     // SpawnQueue handles deduplication, so it's safe to request every tick
     if (currentBuilders < desiredBuilders) {
+      if (Game.time % 10 === 0) {
+        console.log(`🔧 ${this.print}: Requesting builder (current: ${currentBuilders}, desired: ${desiredBuilders})`)
+      }
       this.requestBuilder();
     }
   }
