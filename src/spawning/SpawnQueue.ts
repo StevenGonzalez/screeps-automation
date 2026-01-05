@@ -99,7 +99,10 @@ export class SpawnQueue {
    */
   public enqueue(request: SpawnRequest): void {
     // CPU guard: skip if bucket is critically low
-    if (Game.cpu.bucket < 500) {
+    // EXCEPT: Always allow EMERGENCY priority (colony survival)
+    // EXCEPT: Always allow when no creeps exist (bootstrap situation)
+    const totalCreeps = Object.keys(Game.creeps).length;
+    if (Game.cpu.bucket < 500 && request.priority !== SpawnPriority.EMERGENCY && totalCreeps > 0) {
       return;
     }
     
@@ -173,8 +176,22 @@ export class SpawnQueue {
       // Just try to spawn the first emergency request if possible
       const spawn = this.spawns.find(s => !s.spawning);
       const emergency = this.queue.find(r => r.priority === SpawnPriority.EMERGENCY);
-      if (spawn && emergency && emergency.energyCost <= this.colony.energyAvailable) {
-        this.executeSpawn(spawn, emergency);
+      if (spawn && emergency) {
+        // Try with current body cost
+        if (emergency.energyCost <= this.colony.energyAvailable) {
+          this.executeSpawn(spawn, emergency);
+        } else {
+          // Emergency fallback: try minimal body
+          const minimalBody = this.getMinimalBody(emergency);
+          if (minimalBody) {
+            const minimalCost = this.calculateBodyCost(minimalBody);
+            if (minimalCost <= this.colony.energyAvailable) {
+              emergency.body = minimalBody;
+              emergency.energyCost = minimalCost;
+              this.executeSpawn(spawn, emergency);
+            }
+          }
+        }
       }
       this.saveQueue(); // Always save to persist removals
       return;
@@ -185,6 +202,38 @@ export class SpawnQueue {
     // CRITICAL: Get FRESH spawn references directly from room.find()
     // The cached colony.spawns has stale spawn.spawning data!
     this.spawns = this.colony.room.find(FIND_MY_SPAWNS);
+    
+    // BOOTSTRAP EMERGENCY: If no creeps exist, always try to spawn regardless of bucket
+    const roomCreeps = this.colony.room.find(FIND_MY_CREEPS).length;
+    if (roomCreeps === 0 && this.queue.length > 0) {
+      const spawn = this.spawns.find(s => !s.spawning);
+      if (spawn) {
+        // Find any request with EMERGENCY priority, or fall back to first request
+        const request = this.queue.find(r => r.priority === SpawnPriority.EMERGENCY) || this.queue[0];
+        if (request) {
+          // Try current body or minimal body
+          if (request.energyCost <= this.colony.energyAvailable) {
+            console.log(`🆘 BOOTSTRAP: Spawning ${request.name} with ${request.energyCost} energy`);
+            this.executeSpawn(spawn, request);
+            this.saveQueue();
+            return;
+          } else {
+            const minimalBody = this.getMinimalBody(request);
+            if (minimalBody) {
+              const minimalCost = this.calculateBodyCost(minimalBody);
+              if (minimalCost <= this.colony.energyAvailable) {
+                console.log(`🆘 BOOTSTRAP: Spawning minimal ${request.name} with ${minimalCost} energy`);
+                request.body = minimalBody;
+                request.energyCost = minimalCost;
+                this.executeSpawn(spawn, request);
+                this.saveQueue();
+                return;
+              }
+            }
+          }
+        }
+      }
+    }
     
     // Sort queue if needed (deferred from enqueue calls)
     if (this.needsSort) {
