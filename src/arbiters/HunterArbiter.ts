@@ -33,7 +33,8 @@ export class HunterArbiter extends Arbiter {
     this.repairers = this.elites;
     
     // Only spawn repairers at RCL 5+ when fortifications become important
-    if (this.room.controller!.level < 5) return;
+    const controllerLevel = this.room.controller?.level || 0;
+    if (controllerLevel < 5) return;
     
     // Request repairers based on fortification count
     const desiredRepairers = this.calculateDesiredRepairers();
@@ -114,44 +115,17 @@ export class HunterArbiter extends Arbiter {
   }
   
   private getEnergy(repairer: Elite): void {
-    // Priority: Storage > Containers > Terminal
-    
-    if (this.highCharity.storage && 
-        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 5000) {
-      repairer.withdrawFrom(this.highCharity.storage);
-      repairer.say('🏦');
-      return;
-    }
-    
-    const container = repairer.pos.findClosestByPath(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
-                     s.store.getUsedCapacity(RESOURCE_ENERGY) > 100
-    }) as StructureContainer | null;
-    
-    if (container) {
-      repairer.withdrawFrom(container);
-      repairer.say('📦');
-      return;
-    }
-    
-    if (this.highCharity.terminal && 
-        this.highCharity.terminal.store.getUsedCapacity(RESOURCE_ENERGY) > 5000) {
-      repairer.withdrawFrom(this.highCharity.terminal);
-      repairer.say('💼');
-      return;
-    }
-    
-    // Last resort: harvest
-    const source = repairer.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
-    if (source) {
-      repairer.harvestSource(source);
-      repairer.say('⛏️');
-    }
+    // Use Elite's smart energy collection
+    // Hunters/Repairers prefer storage first, need larger reserves
+    repairer.collectEnergy({
+      useLinks: false, // Links are for upgraders
+      storageMinEnergy: 5000
+    });
   }
   
   private calculateDesiredRepairers(): number {
     const defenseTemple = this.highCharity.defenseTemple;
-    const level = this.room.controller!.level;
+    const level = this.room.controller?.level || 0;
     const phase = this.highCharity.memory.phase;
     
     // Count fortifications needing repair

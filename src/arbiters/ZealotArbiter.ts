@@ -213,7 +213,7 @@ export class ZealotArbiter extends Arbiter {
    * Get target HP for walls based on RCL
    */
   private getWallTarget(): number {
-    const level = this.room.controller!.level;
+    const level = this.room.controller?.level || 0;
     if (level < 6) return 10000;
     if (level < 8) return 100000;
     return 500000;
@@ -223,7 +223,7 @@ export class ZealotArbiter extends Arbiter {
    * Get target HP for ramparts based on RCL
    */
   private getRampartTarget(): number {
-    const level = this.room.controller!.level;
+    const level = this.room.controller?.level || 0;
     if (level < 4) return 10000;
     if (level < 6) return 50000;
     if (level < 8) return 300000;

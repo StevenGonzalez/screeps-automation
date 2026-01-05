@@ -35,7 +35,8 @@ export class ExcavatorArbiter extends Arbiter {
     this.refresh();
     
     // Only operate at RCL 6+
-    if (this.room.controller!.level < 6) return;
+    const controllerLevel = this.room.controller?.level || 0;
+    if (controllerLevel < 6) return;
     
     // Check if mineral is depleted
     if (this.mineral.mineralAmount === 0) return;

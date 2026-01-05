@@ -11,6 +11,7 @@
 
 import { Temple } from './Temple';
 import { HighCharity } from '../core/HighCharity';
+import { ROLES } from '../constants/Roles';
 
 export interface BoostRequest {
   creepName: string;
@@ -29,22 +30,28 @@ export interface BoostTempleMemory {
  */
 export const BOOST_CONFIGS: { [role: string]: ResourceConstant[] } = {
   // Combat boosts
-  'elite_attacker': [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_ZYNTHIUM_OXIDE],  // UH2O, GO, ZO
+  [ROLES.ELITE_ZEALOT]: [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_ZYNTHIUM_OXIDE],  // UH2O, GO, ZO
+  'elite_attacker': [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_ZYNTHIUM_OXIDE],  // Alias
   'elite_defender': [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_LEMERGIUM_OXIDE], // UH2O, GO, LO
   'elite_healer': [RESOURCE_LEMERGIUM_OXIDE, RESOURCE_LEMERGIUM_ALKALIDE, RESOURCE_GHODIUM_OXIDE], // LO, LHO2, GO
   
   // Economic boosts
-  'elite_miner': [RESOURCE_UTRIUM_OXIDE], // UO - +50% harvest
-  'elite_upgrader': [RESOURCE_GHODIUM_HYDRIDE], // GH - +50% upgrade
-  'elite_builder': [RESOURCE_LEMERGIUM_HYDRIDE, RESOURCE_ZYNTHIUM_HYDRIDE], // LH, ZH - build/repair speed + move
-  'elite_hauler': [RESOURCE_KEANIUM_OXIDE], // KO - +50% carry
+  [ROLES.ELITE_DRONE]: [RESOURCE_UTRIUM_OXIDE], // UO - +50% harvest
+  'elite_miner': [RESOURCE_UTRIUM_OXIDE], // Alias
+  [ROLES.ELITE_DEVOTEE]: [RESOURCE_GHODIUM_HYDRIDE], // GH - +50% upgrade
+  'elite_upgrader': [RESOURCE_GHODIUM_HYDRIDE], // Alias
+  [ROLES.ELITE_ENGINEER]: [RESOURCE_LEMERGIUM_HYDRIDE, RESOURCE_ZYNTHIUM_HYDRIDE], // LH, ZH - build/repair speed + move
+  'elite_builder': [RESOURCE_LEMERGIUM_HYDRIDE, RESOURCE_ZYNTHIUM_HYDRIDE], // Alias
+  [ROLES.ELITE_JACKAL]: [RESOURCE_KEANIUM_OXIDE], // KO - +50% carry
+  'elite_hauler': [RESOURCE_KEANIUM_OXIDE], // Alias
   
   // Remote operations
-  'elite_remoteMiner': [RESOURCE_UTRIUM_OXIDE, RESOURCE_KEANIUM_OXIDE], // UO, KO
-  'elite_claimer': [RESOURCE_GHODIUM_HYDRIDE], // GH - faster claiming
+  [ROLES.ELITE_REMOTE_MINER]: [RESOURCE_UTRIUM_OXIDE, RESOURCE_KEANIUM_OXIDE], // UO, KO
+  [ROLES.ELITE_CLAIMER]: [RESOURCE_GHODIUM_HYDRIDE], // GH - faster claiming
   
   // Mineral operations
-  'elite_mineralMiner': [RESOURCE_UTRIUM_OXIDE], // UO
+  [ROLES.ELITE_EXCAVATOR]: [RESOURCE_UTRIUM_OXIDE], // UO
+  'elite_mineralMiner': [RESOURCE_UTRIUM_OXIDE], // Alias
 };
 
 /**

@@ -59,6 +59,11 @@ export class RemoteOperations {
       this.memory.lastScan = Game.time;
     }
     
+    // Cleanup stale remote room data every 10000 ticks
+    if (Game.time % 10000 === 0) {
+      this.cleanupStaleRemoteRooms();
+    }
+    
     // Manage active remote rooms
     this.manageRemoteRooms();
     
@@ -237,6 +242,44 @@ export class RemoteOperations {
           room.disabled = false;
           console.log(`✅ Re-enabled remote room ${roomName} (threat dropped to ${room.threat})`);
         }
+      }
+    }
+  }
+  
+  /**
+   * Clean up stale remote room data to prevent memory bloat
+   * Removes rooms that have been disabled for too long or are no longer viable
+   */
+  private cleanupStaleRemoteRooms(): void {
+    const DISABLED_CLEANUP_THRESHOLD = 50000; // Remove if disabled for ~14 hours
+    
+    for (const roomName in this.memory.rooms) {
+      const room = this.memory.rooms[roomName];
+      
+      // Remove rooms that have been disabled for a very long time
+      if (room.disabled && room.threat >= 10) {
+        // Check if intel says room is now safe
+        const intel = Memory.intel?.[roomName];
+        if (intel && intel.threat >= 5) {
+          // Still dangerous - keep disabled but mark for potential removal
+          continue;
+        }
+        
+        // If no intel or threat is low, we might remove it
+        if (!intel || intel.threat < 3) {
+          // Give it another chance - re-enable instead of deleting
+          room.disabled = false;
+          room.threat = 0;
+          console.log(`🔄 Reset remote room ${roomName} for re-evaluation`);
+        }
+      }
+      
+      // Remove rooms that are now owned by hostile players
+      const intel = Memory.intel?.[roomName];
+      if (intel?.controller?.owner && 
+          intel.controller.owner !== this.highCharity.room.controller?.owner?.username) {
+        delete this.memory.rooms[roomName];
+        console.log(`🧹 Cleaned up hostile-owned remote room: ${roomName}`);
       }
     }
   }

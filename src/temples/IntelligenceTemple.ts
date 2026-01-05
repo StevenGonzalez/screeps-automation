@@ -54,6 +54,11 @@ export class IntelligenceTemple {
     // Scan every 100 ticks
     if (Game.time % 100 !== 0) return;
     
+    // Cleanup stale intel data every 5000 ticks
+    if (Game.time % 5000 === 0) {
+      this.cleanupStaleIntel();
+    }
+    
     const homeRoom = this.highCharity.name;
     const exits = Game.map.describeExits(homeRoom);
     
@@ -172,6 +177,41 @@ export class IntelligenceTemple {
     if (intel.distance > 2) return false;
     
     return true;
+  }
+  
+  /**
+   * Clean up stale intel data to prevent memory bloat
+   * Removes intel for rooms that haven't been scanned in 50,000 ticks
+   * and are no longer relevant (too far or owned by others)
+   */
+  private cleanupStaleIntel(): void {
+    const STALE_THRESHOLD = 50000; // ~14 hours of game time
+    const now = Game.time;
+    
+    for (const roomName in this.memory) {
+      const intel = this.memory[roomName];
+      const age = now - intel.lastScanned;
+      
+      // Remove very stale data
+      if (age > STALE_THRESHOLD) {
+        // Keep intel for rooms we're actively using
+        if (intel.distance <= 2 && !intel.controller?.owner) {
+          continue; // Keep nearby unowned rooms
+        }
+        
+        delete this.memory[roomName];
+        console.log(`🧹 Cleaned stale intel for ${roomName} (age: ${age} ticks)`);
+      }
+      
+      // Remove intel for rooms that are now owned by hostile players
+      if (intel.controller?.owner && 
+          intel.controller.owner !== this.highCharity.room.controller?.owner?.username) {
+        if (age > 10000) { // Give some time before cleanup
+          delete this.memory[roomName];
+          console.log(`🧹 Cleaned intel for hostile-owned room: ${roomName}`);
+        }
+      }
+    }
   }
   
   /**

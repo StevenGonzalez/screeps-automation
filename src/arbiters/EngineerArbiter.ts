@@ -185,46 +185,12 @@ export class EngineerArbiter extends Arbiter {
   }
   
   private getEnergy(builder: Elite): void {
-    // Priority: Containers > Storage > Dropped resources
-    
-    const container = builder.pos.findClosestByPath(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
-                     s.store.getUsedCapacity(RESOURCE_ENERGY) > 50
-    }) as StructureContainer | null;
-    
-    if (container) {
-      builder.withdrawFrom(container);
-      builder.say('🔋');
-      return;
-    }
-    
-    if (this.highCharity.storage && 
-        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 2000) {
-      builder.withdrawFrom(this.highCharity.storage);
-      builder.say('🏦');
-      return;
-    }
-    
-    const dropped = builder.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
-      filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+    // Use Elite's smart energy collection
+    // Engineers prefer containers and storage, lower minimum for storage
+    builder.collectEnergy({
+      useLinks: false, // Links are for upgraders
+      storageMinEnergy: 2000
     });
-    
-    if (dropped) {
-      if (builder.pos.isNearTo(dropped)) {
-        builder.pickup(dropped);
-      } else {
-        builder.goTo(dropped);
-      }
-      builder.say('💎');
-      return;
-    }
-    
-    // Last resort: harvest
-    const source = builder.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
-    if (source) {
-      builder.harvestSource(source);
-      builder.say('⛏️');
-    }
   }
   
   private calculateDesiredBuilders(): number {
@@ -328,7 +294,8 @@ export class EngineerArbiter extends Arbiter {
     const plan = this.highCharity.planner.getPlan();
     if (!plan) return;
     
-    const level = this.room.controller!.level;
+    const level = this.room.controller?.level || 0;
+    if (level === 0) return;
     
     // Get max structures for current RCL
     const maxSpawns = CONTROLLER_STRUCTURES[STRUCTURE_SPAWN][level];
