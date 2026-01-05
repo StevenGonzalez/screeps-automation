@@ -6,7 +6,7 @@
 
 export { Arbiter, ArbiterPriority } from './Arbiter';
 export { GruntArbiter } from './GruntArbiter';
-export { LekgoloArbiter } from './LekgoloArbiter';
+export { DroneArbiter } from './DroneArbiter';
 export { JackalArbiter } from './JackalArbiter';
 export { DevoteeArbiter } from './DevoteeArbiter';
 export { EngineerArbiter } from './EngineerArbiter';

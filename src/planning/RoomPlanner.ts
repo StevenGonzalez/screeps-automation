@@ -28,6 +28,9 @@ export interface RoomPlan {
   walls: RoomPosition[];
 }
 
+// Plan version - increment to force regeneration of all room plans
+const PLAN_VERSION = 2;
+
 export interface RoomPlannerMemory {
   plan: any;
   lastPlanned: number;
@@ -65,13 +68,55 @@ export class RoomPlanner {
    * Get or generate the room plan
    */
   getPlan(): RoomPlan | null {
-    // Return cached plan if available
+    // Check if plan version is outdated - force regeneration
+    if (this.memory.version !== PLAN_VERSION) {
+      console.log(`🔄 RoomPlanner ${this.room.name}: Plan version outdated (${this.memory.version} -> ${PLAN_VERSION}), regenerating...`);
+      this.memory.plan = null;
+    }
+    
+    // Return cached plan if available and not too old
     if (this.memory.plan && Game.time - this.memory.lastPlanned < 10000) {
-      return this.memory.plan;
+      // CRITICAL: Reconstruct RoomPosition objects from memory
+      // Memory serialization loses the RoomPosition prototype
+      return this.reconstructPlan(this.memory.plan);
     }
     
     // Generate new plan
     return this.generatePlan();
+  }
+  
+  /**
+   * Reconstruct RoomPosition objects from plain memory objects
+   * Memory serialization loses prototypes, so we need to recreate them
+   */
+  private reconstructPlan(storedPlan: any): RoomPlan {
+    const reconstruct = (pos: any): RoomPosition => {
+      if (!pos) return pos;
+      return new RoomPosition(pos.x, pos.y, pos.roomName);
+    };
+    
+    const reconstructArray = (arr: any[]): RoomPosition[] => {
+      if (!arr) return [];
+      return arr.map(pos => reconstruct(pos));
+    };
+    
+    return {
+      anchor: reconstruct(storedPlan.anchor),
+      spawns: reconstructArray(storedPlan.spawns),
+      extensions: reconstructArray(storedPlan.extensions),
+      towers: reconstructArray(storedPlan.towers),
+      storage: storedPlan.storage ? reconstruct(storedPlan.storage) : null,
+      terminal: storedPlan.terminal ? reconstruct(storedPlan.terminal) : null,
+      labs: reconstructArray(storedPlan.labs),
+      factory: storedPlan.factory ? reconstruct(storedPlan.factory) : null,
+      powerSpawn: storedPlan.powerSpawn ? reconstruct(storedPlan.powerSpawn) : null,
+      nuker: storedPlan.nuker ? reconstruct(storedPlan.nuker) : null,
+      observer: storedPlan.observer ? reconstruct(storedPlan.observer) : null,
+      links: reconstructArray(storedPlan.links),
+      roads: reconstructArray(storedPlan.roads),
+      ramparts: reconstructArray(storedPlan.ramparts),
+      walls: reconstructArray(storedPlan.walls)
+    };
   }
   
   /**
@@ -129,8 +174,9 @@ export class RoomPlanner {
     // Save plan to memory
     this.memory.plan = plan;
     this.memory.lastPlanned = Game.time;
+    this.memory.version = PLAN_VERSION;
     
-    console.log(`📐 Room ${this.room.name}: Generated new base plan`);
+    console.log(`📐 Room ${this.room.name}: Generated new base plan (v${PLAN_VERSION})`);
     return plan;
   }
   

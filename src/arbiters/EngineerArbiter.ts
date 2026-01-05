@@ -381,7 +381,7 @@ export class EngineerArbiter extends Arbiter {
       }
     }
     
-    // Place containers at sources (critical for Lekgolo miners!)
+    // Place containers at sources (critical for Drone miners!)
     const sources = this.room.find(FIND_SOURCES);
     for (const source of sources) {
       // Check if container already exists near this source

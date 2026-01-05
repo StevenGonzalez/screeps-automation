@@ -1,9 +1,9 @@
 /**
- * Lekgolo Arbiter - Mining Operations Manager
+ * Drone Arbiter - Mining Operations Manager
  * 
- * "The Lekgolo consume and extract resources from the earth"
+ * "The Drones tirelessly extract resources from the earth"
  * 
- * Manages mining operations at energy sources. Lekgolo worms sit on containers
+ * Manages mining operations at energy sources. Drones sit on containers
  * and continuously extract energy from sources.
  */
 
@@ -17,15 +17,15 @@ import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
- * Lekgolo Arbiter - Manages energy harvesting
+ * Drone Arbiter - Manages energy harvesting
  */
-export class LekgoloArbiter extends Arbiter {
+export class DroneArbiter extends Arbiter {
   source: Source | null;
   container: StructureContainer | null;
   miners: Elite[];
   
   constructor(highCharity: HighCharity, source: Source) {
-    super(highCharity, `lekgolo_${source.id}`, ArbiterPriority.economy.mining);
+    super(highCharity, `drone_${source.id}`, ArbiterPriority.economy.mining);
     
     this.source = source;
     this.container = null;
@@ -56,15 +56,17 @@ export class LekgoloArbiter extends Arbiter {
       }
     }
     
-    // Request Lekgolo if needed
+    // Request Drone if needed
     const desiredMiners = this.calculateDesiredMiners();
     const currentMiners = this.miners.length;
+    const spawningMiners = this.countSpawningMiners();
+    const totalMiners = currentMiners + spawningMiners;
     
-    console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners (container: ${!!this.container})`);
+    console.log(`⛏️ ${this.print}: ${currentMiners}/${desiredMiners} miners (spawning: ${spawningMiners}, container: ${!!this.container})`);
     
     // Request spawn whenever we need more miners (removed tick throttle)
     // SpawnQueue handles deduplication, so it's safe to request every tick
-    if (currentMiners < desiredMiners) {
+    if (totalMiners < desiredMiners) {
       this.requestMiner();
     }
   }
@@ -123,10 +125,10 @@ export class LekgoloArbiter extends Arbiter {
   }
   
   private calculateDesiredMiners(): number {
-    // Lekgolo only spawn when there's a container AT THIS SOURCE
+    // Drones only spawn when there's a container AT THIS SOURCE
     // Before container: GruntArbiter handles energy collection
     
-    // With container near this source, 1 dedicated Lekgolo is optimal
+    // With container near this source, 1 dedicated Drone is optimal
     if (this.container) {
       return 1;
     }
@@ -135,9 +137,27 @@ export class LekgoloArbiter extends Arbiter {
     return 0;
   }
   
+  /**
+   * Count creeps that are currently spawning for this source
+   */
+  private countSpawningMiners(): number {
+    let count = 0;
+    for (const spawn of this.highCharity.spawns) {
+      if (spawn.spawning) {
+        const spawningCreep = Game.creeps[spawn.spawning.name];
+        // Check memory of the creep being spawned
+        const memory = spawningCreep?.memory || Memory.creeps[spawn.spawning.name];
+        if (memory && memory.sourceId === this.source?.id && RoleHelpers.isMiner(memory.role || '')) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+  
   private requestMiner(): void {
     const body = this.calculateMinerBody();
-    const name = `Lekgolo_${this.source?.id}_${Game.time}`;
+    const name = `Drone_${this.source?.id}_${Game.time}`;
     
     // Count total miners across all sources
     const allMiners = this.room.find(FIND_MY_CREEPS, {
@@ -155,7 +175,7 @@ export class LekgoloArbiter extends Arbiter {
     const important = allMiners.length === 0 || (this.highCharity.isBootstrapping && this.miners.length === 0);
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_LEKGOLO,
+      role: ROLES.ELITE_DRONE,
       sourceId: this.source?.id
     } as any, priority, important);
   }

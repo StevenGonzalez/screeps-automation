@@ -13,7 +13,7 @@
 // Forward declaration to avoid circular dependency
 import type { Covenant } from './Covenant';
 import { Arbiter } from '../arbiters/Arbiter';
-import { LekgoloArbiter } from '../arbiters/LekgoloArbiter';
+import { DroneArbiter } from '../arbiters/DroneArbiter';
 import { GruntArbiter } from '../arbiters/GruntArbiter';
 import { JackalArbiter } from '../arbiters/JackalArbiter';
 import { DevoteeArbiter } from '../arbiters/DevoteeArbiter';
@@ -598,10 +598,10 @@ export class HighCharity {
     // This is critical for bootstrap - grunts directly collect and deliver energy
     new GruntArbiter(this);
     
-    // Build Lekgolo Arbiters for each source (static miners on containers)
+    // Build Drone Arbiters for each source (static miners on containers)
     const sources = this.room.find(FIND_SOURCES);
     for (const source of sources) {
-      new LekgoloArbiter(this, source);
+      new DroneArbiter(this, source);
     }
     
     // Build core Arbiters
