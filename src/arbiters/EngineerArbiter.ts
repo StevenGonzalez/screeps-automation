@@ -267,11 +267,10 @@ export class EngineerArbiter extends Arbiter {
   }
   
   private calculateBuilderBody(): BodyPartConstant[] {
-    // ALWAYS use capacity for body calculation - we're planning what we WANT to spawn
-    // SpawnQueue will wait until we have enough energy
-    // Exception: If we have no creeps at all, use available energy for emergency minimal spawn
-    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = totalCreeps === 0 ? 
+    // Use available energy if no builders exist (emergency spawn)
+    // Otherwise use capacity for optimal bodies
+    const noBuilders = this.builders.length === 0;
+    const energy = noBuilders ? 
       Math.max(this.highCharity.energyAvailable, 200) : // At least 200 for minimal body
       this.highCharity.energyCapacity;
     

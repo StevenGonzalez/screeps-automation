@@ -87,14 +87,21 @@ export const loop = (): void => {
     Profiler.end('Covenant_init');
     CPUMonitor.endSystem('Covenant_init');
     
-    // Throttle expensive operations if CPU critical
-    if (throttleLevel < 3) {
+    // CRITICAL: Check if we're in bootstrap emergency (no creeps at all)
+    // If so, we MUST run spawn logic even during CPU emergency throttling
+    const totalCreeps = Object.keys(Game.creeps).length;
+    const isBootstrapEmergency = totalCreeps === 0;
+    
+    // Throttle expensive operations if CPU critical, UNLESS bootstrap emergency
+    if (throttleLevel < 3 || isBootstrapEmergency) {
       CPUMonitor.startSystem('Covenant_run');
       Profiler.start('Covenant_run');
       // Phase 3: Run - Execute all operations
       Cov.run();
       Profiler.end('Covenant_run');
       CPUMonitor.endSystem('Covenant_run');
+    } else if (throttleLevel >= 3) {
+      console.log(`⚠️ CPU THROTTLE LEVEL ${throttleLevel} - Bucket: ${Game.cpu.bucket}`);
     }
     
     // Skip end of tick cleanup if emergency throttling

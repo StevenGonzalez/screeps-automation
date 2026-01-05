@@ -267,13 +267,15 @@ export class JackalArbiter extends Arbiter {
       filter: c => RoleHelpers.isMiner(c.memory.role || '')
     }).length > 0;
     
-    // Jackals are CRITICAL only if miners exist and we're bootstrapping
-    // Otherwise ECONOMY (don't spawn haulers before miners!)
-    const priority = hasMiners && this.highCharity.isBootstrapping && this.haulers.length === 0 ?
+    // Jackals are CRITICAL if no haulers exist at all (colony is stuck!)
+    // Otherwise ECONOMY priority
+    const noHaulers = this.haulers.length === 0;
+    const priority = (hasMiners && noHaulers) ?
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
     
-    const important = hasMiners && this.highCharity.isBootstrapping && this.haulers.length === 0;
+    // Important if no haulers - we need at least one to move energy!
+    const important = noHaulers;
     
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_JACKAL, // Covenant themed role
@@ -282,9 +284,10 @@ export class JackalArbiter extends Arbiter {
   }
   
   private calculateHaulerBody(): BodyPartConstant[] {
-    // Use available energy during bootstrap or emergency, otherwise use capacity
-    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+    // Use available energy if no haulers exist (emergency) or during bootstrap
+    // Otherwise use capacity for optimal bodies
+    const noHaulers = this.haulers.length === 0;
+    const energy = (this.highCharity.isBootstrapping || noHaulers) ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
