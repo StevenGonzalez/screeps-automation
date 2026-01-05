@@ -159,6 +159,9 @@ function processPixelGeneration(): void {
     if (result === OK) {
       console.log(`💎 Generated 1 pixel! Bucket: ${Game.cpu.bucket}/10000`);
 
+      // Mark pixel generation to prevent false throttling from bucket drop
+      CPUMonitor.markPixelGeneration();
+
       // Track pixel generation in memory for stats
       if (!(Memory as any).stats) (Memory as any).stats = {};
       if (!(Memory as any).stats.pixels)

@@ -30,7 +30,8 @@ export class CPUMonitor {
       (Memory as any).cpuStats = {
         systems: {},
         tickHistory: [],
-        bucket: Game.cpu.bucket
+        bucket: Game.cpu.bucket,
+        lastPixelGeneration: 0
       };
     }
     return (Memory as any).cpuStats;
@@ -211,16 +212,27 @@ export class CPUMonitor {
     
     const utilization = avgUsage / Game.cpu.limit;
     
-    // Emergency: Bucket critically low
-    if (bucket < 500) return 3;
+    // Check if we just generated a pixel (within last 10 ticks)
+    // If so, be more lenient with throttling as the bucket drop is intentional
+    const recentPixelGeneration = (Game.time - this.memory.lastPixelGeneration) < 10;
     
-    // Heavy: Bucket low + high CPU
-    if (bucket < 2000 && utilization >= 0.9) return 2;
+    // Emergency: Bucket critically low (but not from pixel generation)
+    if (bucket < 500 && !recentPixelGeneration) return 3;
+    
+    // Heavy: Bucket low + high CPU (but not from pixel generation)
+    if (bucket < 2000 && utilization >= 0.9 && !recentPixelGeneration) return 2;
     
     // Light: Approaching limits
-    if (bucket < 5000 && utilization >= 0.85) return 1;
+    if (bucket < 5000 && utilization >= 0.85 && !recentPixelGeneration) return 1;
     
     return 0;
+  }
+  
+  /**
+   * Mark that a pixel was just generated (to avoid false throttling)
+   */
+  static markPixelGeneration(): void {
+    this.memory.lastPixelGeneration = Game.time;
   }
   
   /**
