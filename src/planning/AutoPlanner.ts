@@ -81,6 +81,41 @@ export class AutoPlanner {
     if (currentRCL >= 3 && !this.memory.defensePlanned) {
       this.planDefensePerimeter();
     }
+    
+    // Cleanup roads under structures every 1000 ticks
+    if (Game.time % 1000 === 0) {
+      this.cleanupRoadsUnderStructures();
+    }
+  }
+  
+  /**
+   * Remove roads that have structures built on top of them
+   * Roads under structures (except ramparts/containers) are unusable and waste road limits
+   */
+  private cleanupRoadsUnderStructures(): void {
+    const roads = this.room.find(FIND_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_ROAD
+    }) as StructureRoad[];
+    
+    let removedCount = 0;
+    for (const road of roads) {
+      const structures = road.pos.lookFor(LOOK_STRUCTURES);
+      // Check if there's a blocking structure on top of the road
+      const hasBlockingStructure = structures.some(s => 
+        s.structureType !== STRUCTURE_ROAD && 
+        s.structureType !== STRUCTURE_RAMPART &&
+        s.structureType !== STRUCTURE_CONTAINER
+      );
+      
+      if (hasBlockingStructure) {
+        road.destroy();
+        removedCount++;
+      }
+    }
+    
+    if (removedCount > 0) {
+      console.log(`🧹 ${this.room.name}: Removed ${removedCount} roads under structures`);
+    }
   }
   
   /**
