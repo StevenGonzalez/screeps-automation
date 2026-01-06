@@ -311,7 +311,7 @@ export class DepositHarvesterArbiter extends Arbiter {
    * Calculate harvester body (heavy WORK focus, minimal CARRY)
    */
   private calculateHarvesterBody(): BodyPartConstant[] {
-    const energy = this.highCharity.room.energyCapacityAvailable;
+    const energy = this.highCharity.energyCapacity;
     // Deposit harvesters need lots of WORK parts
     // Min base: 300 energy (3W, 3M)
     const base: BodyPartConstant[] = [WORK, WORK, WORK, MOVE, MOVE, MOVE];

@@ -100,7 +100,7 @@ export class RemoteHarvesterArbiter extends Arbiter {
     if (current >= required) return null;
     
     // Remote harvester: flexible miner body capped at 800 energy to minimize losses
-    const energy = Math.min(this.highCharity.room.energyCapacityAvailable, 800);
+    const energy = Math.min(this.highCharity.energyCapacity, 800);
     const body = BodyBuilder.miner(energy);
     
     return {

@@ -772,16 +772,34 @@ export class HighCharity {
    * Get available energy for spawning
    */
   get energyAvailable(): number {
-    // Note: room.energyAvailable should include all spawns + extensions
-    // If this doesn't match reality, there may be a Screeps game engine bug
-    return this.room.energyAvailable;
+    // CRITICAL FIX: room.energyAvailable is unreliable and often reports incorrect values
+    // Manually calculate actual energy in spawns + extensions
+    const spawns = this.room.find(FIND_MY_SPAWNS);
+    const extensions = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_EXTENSION
+    }) as StructureExtension[];
+    
+    const spawnEnergy = spawns.reduce((sum, s) => sum + s.store[RESOURCE_ENERGY], 0);
+    const extensionEnergy = extensions.reduce((sum, e) => sum + e.store[RESOURCE_ENERGY], 0);
+    
+    return spawnEnergy + extensionEnergy;
   }
   
   /**
    * Get total energy capacity
    */
   get energyCapacity(): number {
-    return this.room.energyCapacityAvailable;
+    // CRITICAL FIX: room.energyCapacityAvailable may be unreliable
+    // Manually calculate actual capacity in spawns + extensions
+    const spawns = this.room.find(FIND_MY_SPAWNS);
+    const extensions = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_EXTENSION
+    }) as StructureExtension[];
+    
+    const spawnCapacity = spawns.reduce((sum, s) => sum + s.store.getCapacity(RESOURCE_ENERGY), 0);
+    const extensionCapacity = extensions.reduce((sum, e) => sum + e.store.getCapacity(RESOURCE_ENERGY), 0);
+    
+    return spawnCapacity + extensionCapacity;
   }
   
   /**

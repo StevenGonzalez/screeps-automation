@@ -305,7 +305,7 @@ export class PioneerArbiter extends Arbiter {
       if (current >= 3) return null; // Max 3 pioneers during bootstrap
       
       // Builder body: WORK, CARRY, MOVE
-      const energy = this.highCharity.room.energyCapacityAvailable;
+      const energy = this.highCharity.energyCapacity;
       const body: BodyPartConstant[] = [];
       
       let remainingEnergy = Math.min(energy, 1000);
