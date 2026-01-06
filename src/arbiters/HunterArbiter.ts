@@ -171,7 +171,10 @@ export class HunterArbiter extends Arbiter {
   
   private calculateRepairerBody(): BodyPartConstant[] {
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    
+    const energy = useAvailable ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     

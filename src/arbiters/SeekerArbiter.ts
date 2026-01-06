@@ -307,7 +307,10 @@ export class SeekerArbiter extends Arbiter {
     // Remote miners need work parts for harvesting
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    
+    const energy = useAvailable ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     
@@ -318,7 +321,10 @@ export class SeekerArbiter extends Arbiter {
     // Remote haulers need large carry capacity
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
+    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    
+    const energy = useAvailable ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     

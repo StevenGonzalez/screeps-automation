@@ -277,9 +277,12 @@ export class EngineerArbiter extends Arbiter {
   
   private calculateBuilderBody(): BodyPartConstant[] {
     // Use available energy if no builders exist (emergency spawn)
-    // Otherwise use capacity for optimal bodies
+    // OR if room doesn't have at least 90% energy capacity (still accumulating)
     const noBuilders = this.builders.length === 0;
-    const energy = noBuilders ? 
+    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const useAvailable = noBuilders || energyRatio < 0.9;
+    
+    const energy = useAvailable ? 
       Math.max(this.highCharity.energyAvailable, 200) : // At least 200 for minimal body
       this.highCharity.energyCapacity;
     

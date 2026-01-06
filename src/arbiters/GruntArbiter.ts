@@ -39,7 +39,20 @@ export class GruntArbiter extends Arbiter {
     if (totalCreeps === 0 || Game.time % 10 === 0) {
       const desired = this.calculateDesiredgrunts();
       const current = this.grunts.length;
-      console.log(`🙏 ${this.print}: ${current}/${desired} grunts, active: ${isActive}, totalCreeps: ${totalCreeps}, energy: ${this.highCharity.energyAvailable}`);
+      
+      // Detailed energy breakdown
+      const spawns = this.room.find(FIND_MY_SPAWNS);
+      const extensions = this.room.find(FIND_MY_STRUCTURES, {
+        filter: s => s.structureType === STRUCTURE_EXTENSION
+      }) as StructureExtension[];
+      
+      const spawnEnergy = spawns.reduce((sum, s) => sum + s.store[RESOURCE_ENERGY], 0);
+      const extensionEnergy = extensions.reduce((sum, e) => sum + e.store[RESOURCE_ENERGY], 0);
+      
+      console.log(`🙏 ${this.print}: ${current}/${desired} grunts, active: ${isActive}, totalCreeps: ${totalCreeps}`);
+      console.log(`   Room energy: ${this.room.energyAvailable}/${this.room.energyCapacityAvailable}`);
+      console.log(`   Manual count - Spawns: ${spawns.length} with ${spawnEnergy} energy, Extensions: ${extensions.length} with ${extensionEnergy} energy`);
+      console.log(`   Total manual: ${spawnEnergy + extensionEnergy}`);
     }
     
     // Only active during bootstrap phase (no containers yet) OR emergency (no creeps)

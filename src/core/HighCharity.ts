@@ -367,6 +367,21 @@ export class HighCharity {
   run(): void {
     Profiler.start(`HighCharity_${this.name}_run`);
     
+    // DEBUG: Energy investigation
+    const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
+    if (totalCreeps === 0 || Game.time % 10 === 0) {
+      const spawns = this.room.find(FIND_MY_SPAWNS);
+      const extensions = this.room.find(FIND_MY_STRUCTURES, {
+        filter: s => s.structureType === STRUCTURE_EXTENSION
+      }) as StructureExtension[];
+      const spawnEnergy = spawns.reduce((sum, s) => sum + s.store[RESOURCE_ENERGY], 0);
+      const extensionEnergy = extensions.reduce((sum, e) => sum + e.store[RESOURCE_ENERGY], 0);
+      console.log(`🔍 [${this.name}] Energy Debug - Creeps: ${totalCreeps}`);
+      console.log(`   room.energyAvailable: ${this.room.energyAvailable}, room.energyCapacityAvailable: ${this.room.energyCapacityAvailable}`);
+      console.log(`   Spawns: ${spawns.length} (${spawnEnergy} energy), Extensions: ${extensions.length} (${extensionEnergy} energy)`);
+      console.log(`   Total actual: ${spawnEnergy + extensionEnergy}`);
+    }
+    
     // Process spawn queue first (critical for colony function)
     Profiler.wrap('SpawnQueue_run', () => {
       this.spawnQueue.run();
@@ -757,6 +772,8 @@ export class HighCharity {
    * Get available energy for spawning
    */
   get energyAvailable(): number {
+    // Note: room.energyAvailable should include all spawns + extensions
+    // If this doesn't match reality, there may be a Screeps game engine bug
     return this.room.energyAvailable;
   }
   

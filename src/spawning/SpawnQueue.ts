@@ -345,6 +345,18 @@ export class SpawnQueue {
   private executeSpawn(spawn: StructureSpawn, request: SpawnRequest): void {
     const result = spawn.spawnCreep(request.body, request.name, { memory: request.memory });
     
+    // Log result for debugging
+    const errorNames: { [key: number]: string } = {
+      [OK]: 'OK',
+      [ERR_NOT_OWNER]: 'ERR_NOT_OWNER',
+      [ERR_NAME_EXISTS]: 'ERR_NAME_EXISTS',
+      [ERR_BUSY]: 'ERR_BUSY',
+      [ERR_NOT_ENOUGH_ENERGY]: 'ERR_NOT_ENOUGH_ENERGY',
+      [ERR_INVALID_ARGS]: 'ERR_INVALID_ARGS',
+      [ERR_RCL_NOT_ENOUGH]: 'ERR_RCL_NOT_ENOUGH'
+    };
+    console.log(`🎯 spawn.spawnCreep() returned ${errorNames[result] || result} for ${request.name} (${request.body.length} parts, ${request.energyCost} energy)`);
+    
     if (result === OK) {
       // Remove from queue and map
       this.removeFromQueue(request.id);

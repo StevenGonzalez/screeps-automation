@@ -285,9 +285,12 @@ export class JackalArbiter extends Arbiter {
   
   private calculateHaulerBody(): BodyPartConstant[] {
     // Use available energy if no haulers exist (emergency) or during bootstrap
-    // Otherwise use capacity for optimal bodies
+    // OR if room doesn't have at least 90% energy capacity (still accumulating)
     const noHaulers = this.haulers.length === 0;
-    const energy = (this.highCharity.isBootstrapping || noHaulers) ? 
+    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const useAvailable = this.highCharity.isBootstrapping || noHaulers || energyRatio < 0.9;
+    
+    const energy = useAvailable ? 
       this.highCharity.energyAvailable : 
       this.highCharity.energyCapacity;
     

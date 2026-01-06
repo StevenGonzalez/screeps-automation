@@ -223,9 +223,12 @@ export class DevoteeArbiter extends Arbiter {
   
   private calculateWorkerBody(): BodyPartConstant[] {
     // Use available energy if no workers exist (emergency spawn)
-    // Otherwise use capacity for optimal bodies
+    // OR if room doesn't have at least 90% energy capacity (still accumulating)
     const noWorkers = this.workers.length === 0;
-    const energy = noWorkers ? 
+    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const useAvailable = noWorkers || energyRatio < 0.9;
+    
+    const energy = useAvailable ? 
       Math.max(this.highCharity.energyAvailable, 200) : // At least 200 for minimal body
       this.highCharity.energyCapacity;
     
