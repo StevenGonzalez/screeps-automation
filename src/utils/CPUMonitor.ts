@@ -217,10 +217,10 @@ export class CPUMonitor {
     const recentPixelGeneration = (Game.time - this.memory.lastPixelGeneration) < 10;
     
     // Emergency: Bucket critically low (but not from pixel generation)
-    if (bucket < 500 && !recentPixelGeneration) return 3;
+    if (bucket < 100 && !recentPixelGeneration) return 3;
     
     // Heavy: Bucket low + high CPU (but not from pixel generation)
-    if (bucket < 2000 && utilization >= 0.9 && !recentPixelGeneration) return 2;
+    if (bucket < 1000 && utilization >= 0.9 && !recentPixelGeneration) return 2;
     
     // Light: Approaching limits
     if (bucket < 5000 && utilization >= 0.85 && !recentPixelGeneration) return 1;

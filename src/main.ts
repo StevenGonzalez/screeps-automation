@@ -87,21 +87,53 @@ export const loop = (): void => {
     Profiler.end('Covenant_init');
     CPUMonitor.endSystem('Covenant_init');
     
-    // CRITICAL: Check if we're in bootstrap emergency (no creeps at all)
+    // CRITICAL: Check if we're in bootstrap emergency (low creeps)
     // If so, we MUST run spawn logic even during CPU emergency throttling
     const totalCreeps = Object.keys(Game.creeps).length;
-    const isBootstrapEmergency = totalCreeps === 0;
+    const isBootstrapEmergency = totalCreeps < 3;
     
-    // Throttle expensive operations if CPU critical, UNLESS bootstrap emergency
-    if (throttleLevel < 3 || isBootstrapEmergency) {
+    // Phase 3: Run - Execute operations (throttled based on CPU)
+    if (throttleLevel < 3) {
+      // Normal operation - run everything
       CPUMonitor.startSystem('Covenant_run');
       Profiler.start('Covenant_run');
-      // Phase 3: Run - Execute all operations
       Cov.run();
       Profiler.end('Covenant_run');
       CPUMonitor.endSystem('Covenant_run');
-    } else if (throttleLevel >= 3) {
-      console.log(`⚠️ CPU THROTTLE LEVEL ${throttleLevel} - Bucket: ${Game.cpu.bucket}`);
+    } else {
+      // Emergency throttle - only spawn critical creeps
+      console.log(`⚠️ CPU THROTTLE LEVEL ${throttleLevel} - Bucket: ${Game.cpu.bucket} - Emergency mode: spawning only`);
+      
+      // Run ONLY spawning logic for each room
+      for (const roomName in Cov.highCharities) {
+        const hc = Cov.highCharities[roomName];
+        if (hc.spawnQueue) {
+          hc.spawnQueue.run(); // Critical spawning only
+        }
+      }
+      
+      // Bootstrap emergency: also run minimal creep logic for existing creeps
+      if (isBootstrapEmergency) {
+        for (const name in Game.creeps) {
+          const creep = Game.creeps[name];
+          // Very basic harvest/transfer logic
+          if (creep.store.getFreeCapacity() > 0) {
+            const source = creep.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
+            if (source && creep.pos.isNearTo(source)) {
+              creep.harvest(source);
+            } else if (source) {
+              creep.moveTo(source);
+            }
+          } else {
+            const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS);
+            if (spawn && creep.pos.isNearTo(spawn)) {
+              creep.transfer(spawn, RESOURCE_ENERGY);
+            } else if (spawn) {
+              creep.moveTo(spawn);
+            }
+          }
+        }
+      }
     }
     
     // Skip end of tick cleanup if emergency throttling
@@ -125,11 +157,6 @@ export const loop = (): void => {
     // CPU MONITORING
     const tickCpu = Game.cpu.getUsed() - startCpu;
     CPUMonitor.recordTick(tickCpu);
-    
-    // Alert if CPU critical
-    if (throttleLevel >= 2) {
-      console.log(`⚠️ CPU THROTTLE LEVEL ${throttleLevel} - Bucket: ${Game.cpu.bucket}`);
-    }
     
     // PERFORMANCE MONITORING
     if (Game.time % 100 === 0) {

@@ -35,7 +35,8 @@ export class EngineerArbiter extends Arbiter {
     this.builders = this.elites;
     
     // Place construction sites based on room plan
-    if (Game.time % 50 === 0) {
+    // More frequent for critical structures like containers
+    if (Game.time % 10 === 0) {
       this.placeConstructionSites();
     }
     
@@ -387,15 +388,31 @@ export class EngineerArbiter extends Arbiter {
         // Find first valid position (not wall, not blocked)
         for (const pos of adjacentPositions) {
           const terrain = Game.map.getRoomTerrain(this.room.name);
-          if (terrain.get(pos.x, pos.y) !== TERRAIN_MASK_WALL) {
-            const structures = pos.lookFor(LOOK_STRUCTURES);
-            if (structures.length === 0) {
-              const result = this.room.createConstructionSite(pos, STRUCTURE_CONTAINER);
-              if (result === OK) {
-                console.log(`📦 Placing container at source ${source.id}`);
-                break;
-              }
+          if (terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) {
+            continue;
+          }
+          
+          const structures = pos.lookFor(LOOK_STRUCTURES);
+          if (structures.length > 0) {
+            // Allow placement on roads (containers and roads can coexist)
+            const blockingStructures = structures.filter(s => s.structureType !== STRUCTURE_ROAD);
+            if (blockingStructures.length > 0) {
+              continue;
             }
+          }
+          
+          // Check for construction sites that would block (roads are OK!)
+          const sites = pos.lookFor(LOOK_CONSTRUCTION_SITES);
+          if (sites.length > 0) {
+            const blockingSites = sites.filter(s => s.structureType !== STRUCTURE_ROAD);
+            if (blockingSites.length > 0) {
+              continue;
+            }
+          }
+          
+          const result = this.room.createConstructionSite(pos, STRUCTURE_CONTAINER);
+          if (result === OK) {
+            break;
           }
         }
       }
