@@ -183,8 +183,24 @@ export class RoadBuilder {
     for (const step of path) {
       const pos = new RoomPosition(step.x, step.y, this.room.name);
       
+      // Don't place roads on sources, minerals, or controllers
+      const hasSource = pos.lookFor(LOOK_SOURCES).length > 0;
+      const hasMineral = pos.lookFor(LOOK_MINERALS).length > 0;
+      const hasController = pos.lookFor(LOOK_STRUCTURES).some(s => s.structureType === STRUCTURE_CONTROLLER);
+      
+      if (hasSource || hasMineral || hasController) continue;
+      
+      // Skip tiles with structures (roads and containers can coexist with roads, so they're ok)
+      const structures = pos.lookFor(LOOK_STRUCTURES);
+      const hasBlockingStructure = structures.some(s => 
+        s.structureType !== STRUCTURE_ROAD && 
+        s.structureType !== STRUCTURE_CONTAINER
+      );
+      
+      if (hasBlockingStructure) continue;
+      
       // Check if road already exists
-      const hasRoad = pos.lookFor(LOOK_STRUCTURES).some(s => s.structureType === STRUCTURE_ROAD);
+      const hasRoad = structures.some(s => s.structureType === STRUCTURE_ROAD);
       const hasRoadSite = pos.lookFor(LOOK_CONSTRUCTION_SITES).some(s => s.structureType === STRUCTURE_ROAD);
       
       if (!hasRoad && !hasRoadSite) {
