@@ -314,7 +314,12 @@ export class SpawnQueue {
     }
     
     // Critical/Economy spawns wait for 80% capacity (unless important)
-    const economyThreshold = this.colony.energyCapacity * 0.8;
+    // BUT: If we're low on creeps (< 5), use 50% threshold to bootstrap faster
+    const totalCreeps = Object.keys(Game.creeps).length;
+    const economyThreshold = totalCreeps < 5 ? 
+      this.colony.energyCapacity * 0.5 : 
+      this.colony.energyCapacity * 0.8;
+    
     for (const request of this.queue) {
       if (request.priority === SpawnPriority.CRITICAL || request.priority === SpawnPriority.ECONOMY) {
         if (request.important || availableEnergy >= economyThreshold) {
