@@ -18,6 +18,8 @@ export class BodyBuilder {
     energy: number,
     maxRepeats: number = 10
   ): BodyPartConstant[] {
+    if (pattern.length === 0) return [];
+    
     const patternCost = pattern.reduce((sum, part) => sum + BODYPART_COST[part], 0);
     const repeats = Math.min(maxRepeats, Math.floor(energy / patternCost));
     
@@ -52,7 +54,12 @@ export class BodyBuilder {
     const remainingEnergy = energy - baseCost;
     const repeated = this.repeat(pattern, remainingEnergy, maxRepeats);
     
-    return [...base, ...repeated];
+    const body = [...base, ...repeated];
+    
+    // Validate: must have at least base parts
+    if (body.length < base.length) return [];
+    
+    return body;
   }
 
   /**
@@ -106,21 +113,28 @@ export class BodyBuilder {
    * Build a miner body (WORK + MOVE)
    */
   static miner(energy: number): BodyPartConstant[] {
-    // Minimum: 1W 1M (150 energy)
-    const base: BodyPartConstant[] = [WORK, MOVE];
+    // Absolute minimum: 1W 1M (150 energy)
+    if (energy < 150) return [];
     
     // Scale up work parts (5-6 WORK is optimal for sources)
-    const maxWork = Math.min(6, Math.floor((energy - 50) / 100));
+    const maxWork = Math.min(6, Math.floor(energy / 100));
+    
+    if (maxWork < 1) return [WORK, MOVE]; // Fallback to minimum
+    
     const body: BodyPartConstant[] = [];
     
+    // Add work parts
     for (let i = 0; i < maxWork; i++) {
       body.push(WORK);
     }
     
-    // Add minimal move for container sitting
-    body.push(MOVE);
+    // Add move parts (1 per 2 work parts, minimum 1)
+    const moveCount = Math.max(1, Math.ceil(maxWork / 2));
+    for (let i = 0; i < moveCount; i++) {
+      body.push(MOVE);
+    }
     
-    return body.length > 0 ? body : base;
+    return body;
   }
 
   /**
