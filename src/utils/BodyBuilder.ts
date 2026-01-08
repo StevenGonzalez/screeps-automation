@@ -116,8 +116,20 @@ export class BodyBuilder {
     // Absolute minimum: 1W 1M (150 energy)
     if (energy < 150) return [];
     
-    // Scale up work parts (5-6 WORK is optimal for sources)
-    const maxWork = Math.min(6, Math.floor(energy / 100));
+    // Calculate max work parts accounting for move parts
+    // Formula: workParts * 100 + Math.ceil(workParts / 2) * 50 <= energy
+    // With ratio 2:1 (WORK:MOVE), unit cost is 100 + 100 + 50 = 250 per 2 WORK parts
+    // Or 150 for 1 WORK part (odd case)
+    let maxWork = 0;
+    for (let w = 1; w <= 6; w++) {
+      const moveCount = Math.max(1, Math.ceil(w / 2));
+      const cost = w * 100 + moveCount * 50;
+      if (cost <= energy) {
+        maxWork = w;
+      } else {
+        break;
+      }
+    }
     
     if (maxWork < 1) return [WORK, MOVE]; // Fallback to minimum
     
