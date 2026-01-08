@@ -49,11 +49,10 @@ export class ZealotArbiter extends Arbiter {
   }
   
   run(): void {
-    // No threats, defenders can help with other tasks
+    // No threats, defenders stand ready at defensive positions
     if (this.hostiles.length === 0) {
       for (const defender of this.defenders) {
-        defender.say('🛡️');
-        // Could have them help upgrade or build
+        this.positionDefender(defender);
       }
       return;
     }
@@ -65,6 +64,50 @@ export class ZealotArbiter extends Arbiter {
     
     // Coordinate towers
     this.coordinateTowers();
+  }
+  
+  /**
+   * Position defender at strategic defensive location when no threats present
+   */
+  private positionDefender(defender: Elite): void {
+    // Find a rampart to stand on, preferably near room entrances
+    const ramparts = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_RAMPART
+    }) as StructureRampart[];
+    
+    if (ramparts.length > 0) {
+      // Find the closest rampart that doesn't have a defender already
+      const occupiedPositions = new Set(
+        this.defenders.map(d => `${d.pos.x},${d.pos.y}`)
+      );
+      
+      const availableRamparts = ramparts.filter(r => 
+        !occupiedPositions.has(`${r.pos.x},${r.pos.y}`) || 
+        r.pos.isEqualTo(defender.pos)
+      );
+      
+      if (availableRamparts.length > 0) {
+        const targetRampart = defender.pos.findClosestByRange(availableRamparts);
+        if (targetRampart && !defender.pos.isEqualTo(targetRampart.pos)) {
+          defender.goTo(targetRampart.pos, { range: 0 });
+          defender.say('🛡️');
+          return;
+        }
+      }
+    }
+    
+    // No ramparts or all occupied - position near controller for backup
+    if (this.room.controller) {
+      const range = defender.pos.getRangeTo(this.room.controller);
+      if (range > 5) {
+        defender.goTo(this.room.controller.pos, { range: 3 });
+        defender.say('🛡️');
+      } else {
+        defender.say('🛡️⏸️'); // Standing ready
+      }
+    } else {
+      defender.say('🛡️⏸️');
+    }
   }
   
   private runDefender(defender: Elite): void {
