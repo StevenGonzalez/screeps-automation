@@ -116,7 +116,8 @@ export class DevoteeArbiter extends Arbiter {
   }
   
   private getEnergy(worker: Elite): void {
-    // Priority: Upgrader Link > Containers > Storage > Harvest directly
+    // Priority: Upgrader Link > Storage > Harvest directly
+    // NOTE: Skip containers - those are reserved for Jackals to fill spawns/extensions
     
     // Check for upgrader/controller link first
     if (this.highCharity.linkTemple?.isActive()) {
@@ -128,21 +129,9 @@ export class DevoteeArbiter extends Arbiter {
       }
     }
     
-    // Find nearby container with energy
-    const container = worker.pos.findClosestByPath(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
-                     s.store.getUsedCapacity(RESOURCE_ENERGY) > 50
-    }) as StructureContainer | null;
-    
-    if (container) {
-      worker.withdrawFrom(container);
-      worker.say('🔋');
-      return;
-    }
-    
-    // Use storage if available and we're high RCL
+    // Use storage if available (lower threshold than before)
     if (this.highCharity.storage && 
-        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 5000) {
+        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 1000) {
       worker.withdrawFrom(this.highCharity.storage);
       worker.say('🏦');
       return;
