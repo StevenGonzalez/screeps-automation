@@ -145,6 +145,15 @@ Game.cov.recall();
 - Focuses on dismantling buildings
 - Body: MOVE + WORK parts
 
+### Prophet (➕)
+- Defensive healer specialist
+- Supports Zealots and friendlies during home defense
+- Heals adjacent units and uses rangedHeal at range 3
+- Prioritizes lowest health percentage targets
+- Auto-spawns during high-threat scenarios (>200 threat)
+- Body: HEAL + MOVE parts (max 25 pairs)
+- **Best For**: Power bank defense, SK lair ops, sustained defensive actions
+
 ## Target Priority System
 
 ### Creeps
@@ -217,9 +226,22 @@ Game.cov.recall();
 - Prioritizes targets for VanguardArbiter
 - Currently auto-launches attacks every 1000 ticks (can be disabled)
 
+### ZealotArbiter
+- Manages defensive melee combat in home room
+- Spawns Zealots on-demand when threats detected
+- Works with towers for coordinated defense
+- Spawns 1-5 defenders based on threat level (cap at 5)
+
+### ProphetArbiter
+- Manages defensive healing support
+- Spawns 1-2 healers during high-threat scenarios (>200 threat)
+- Automatically supports Zealots and injured friendlies
+- Uses both heal() and rangedHeal() for maximum coverage
+- Integrates with BoostManager for enhanced healing
+
 ### VanguardArbiter
 - Manages all offensive combat operations
-- Spawns and tracks combat creeps
+- Spawns and tracks combat creeps (4 attackers + 2 healers)
 - Integrates with SquadCoordinator for tactical control
 - Fallback to simple coordination if squad not initialized
 

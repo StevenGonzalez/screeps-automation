@@ -32,11 +32,14 @@ Colony manager for a single owned room. Each High Charity:
 
 #### **Arbiter** (`arbiters/Arbiter.ts`)
 Specialized creep controllers that manage teams of Elites. Types include:
-- **MiningArbiter** - Harvesting operations at sources
-- **WorkerArbiter** - Building, repairing, upgrading
-- **HaulerArbiter** - Energy and resource logistics
-- **DefenseArbiter** - Military operations and protection
-- **UpgraderArbiter** - Controller upgrading optimization
+- **DroneArbiter** - Harvesting operations at sources
+- **JackalArbiter** - Energy and resource logistics
+- **EngineerArbiter** - Building and repairing
+- **DevoteeArbiter** - Controller upgrading optimization
+- **ZealotArbiter** - Defensive melee combat
+- **ProphetArbiter** - Defensive healing support
+- **VanguardArbiter** - Offensive combat operations
+- **HunterArbiter** - Remote room defense and clearing
 
 #### **Elite** (`elites/Elite.ts`)
 Enhanced creep wrapper providing:
@@ -160,8 +163,9 @@ Our automatic structure placement uses **distinctive Covenant religious architec
 
 - **War Council**: Scans nearby rooms for attack targets, evaluates threat levels
 - **VanguardArbiter**: Coordinates attack/healer squads for offensive operations
+- **ZealotArbiter**: Defensive melee combat operations
+- **ProphetArbiter**: Defensive healing support (pairs with Zealots during high-threat scenarios)
 - **PowerHarvesterArbiter**: Manages PowerBank assault and collection operations
-- **ZealotArbiter**: Defensive combat operations
 
 ## � File Structure Overview
 

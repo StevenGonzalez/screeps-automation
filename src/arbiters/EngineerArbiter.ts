@@ -196,11 +196,11 @@ export class EngineerArbiter extends Arbiter {
   
   private getEnergy(builder: Elite): void {
     // Use Elite's smart energy collection
-    // Engineers should NOT use containers - those are for Jackals
+    // Containers are now allowed - workers shouldn't sit idle if energy is available
     builder.collectEnergy({
       useLinks: false, // Links are for upgraders
-      useContainers: false, // Don't compete with Jackals!
-      storageMinEnergy: 1000 // Lower threshold since we can't use containers
+      useContainers: true, // Use containers if available
+      storageMinEnergy: 1000 // Lower threshold for storage
     });
   }
   

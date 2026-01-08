@@ -116,10 +116,7 @@ export class DevoteeArbiter extends Arbiter {
   }
   
   private getEnergy(worker: Elite): void {
-    // Priority: Upgrader Link > Storage > Harvest directly
-    // NOTE: Skip containers - those are reserved for Jackals to fill spawns/extensions
-    
-    // Check for upgrader/controller link first
+    // Check for upgrader/controller link first (highest priority for workers)
     if (this.highCharity.linkTemple?.isActive()) {
       const upgraderLink = this.highCharity.linkTemple.getUpgraderLink();
       if (upgraderLink && upgraderLink.store.getUsedCapacity(RESOURCE_ENERGY) > 50) {
@@ -129,35 +126,17 @@ export class DevoteeArbiter extends Arbiter {
       }
     }
     
-    // Use storage if available (lower threshold than before)
-    if (this.highCharity.storage && 
-        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 1000) {
-      worker.withdrawFrom(this.highCharity.storage);
-      worker.say('🏦');
-      return;
-    }
-    
-    // Find dropped resources
-    const dropped = worker.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
-      filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
+    // Use Elite's smart energy collection for everything else
+    // Priority: Containers > Storage > Dropped > Harvest
+    // Workers can now use containers - they shouldn't sit idle if energy is available
+    worker.collectEnergy({
+      useLinks: false, // Already checked upgrader link above
+      useContainers: true, // Use containers if available
+      useStorage: true,
+      useDropped: true,
+      harvestIfNeeded: true,
+      storageMinEnergy: 1000
     });
-    
-    if (dropped) {
-      if (worker.pos.isNearTo(dropped)) {
-        worker.pickup(dropped);
-      } else {
-        worker.goTo(dropped);
-      }
-      worker.say('💎');
-      return;
-    }
-    
-    // Last resort: Harvest directly (early game)
-    const source = worker.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
-    if (source) {
-      worker.harvestSource(source);
-      worker.say('⛏️');
-    }
   }
   
   private calculateDesiredWorkers(): number {

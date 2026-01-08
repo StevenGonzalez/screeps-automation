@@ -29,6 +29,9 @@ export const ROLES = {
   ZEALOT: 'zealot',
   ELITE_ZEALOT: 'elite_zealot',
   
+  PROPHET: 'prophet',
+  ELITE_PROPHET: 'elite_prophet',
+  
   HUNTER: 'hunter',
   ELITE_HUNTER: 'elite_hunter',
   
@@ -108,6 +111,14 @@ export class RoleHelpers {
     return role.includes('engineer') || 
            role.includes('builder') || 
            role.includes('artisan');
+  }
+  
+  /**
+   * Check if role is a healer role
+   */
+  static isHealer(role: string): boolean {
+    return role.includes('prophet') || 
+           role.includes('healer');
   }
   
   /**

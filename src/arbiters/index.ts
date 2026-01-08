@@ -11,6 +11,7 @@ export { JackalArbiter } from './JackalArbiter';
 export { DevoteeArbiter } from './DevoteeArbiter';
 export { EngineerArbiter } from './EngineerArbiter';
 export { ZealotArbiter } from './ZealotArbiter';
+export { ProphetArbiter } from './ProphetArbiter';
 export { SeekerArbiter } from './SeekerArbiter';
 export { RangerArbiter } from './RangerArbiter';
 export { HunterArbiter } from './HunterArbiter';
