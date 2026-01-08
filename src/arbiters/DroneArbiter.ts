@@ -204,9 +204,24 @@ export class DroneArbiter extends Arbiter {
     if (!this.source) return [];
     
     return this.room.find(FIND_MY_CREEPS, {
-      filter: (creep) => 
-        creep.memory.arbiter === this.ref ||
-        (RoleHelpers.isMiner(creep.memory.role || '') && creep.memory.sourceId === this.source?.id)
+      filter: (creep) => {
+        // Prioritize arbiter reference (proper assignment)
+        if (creep.memory.arbiter === this.ref) {
+          return true;
+        }
+        
+        // Fallback: claim creeps with matching sourceId BUT ONLY if they have no arbiter assigned
+        // This handles legacy creeps or edge cases where arbiter wasn't set
+        if (!creep.memory.arbiter && 
+            RoleHelpers.isMiner(creep.memory.role || '') && 
+            creep.memory.sourceId === this.source?.id) {
+          // Fix the arbiter reference
+          creep.memory.arbiter = this.ref;
+          return true;
+        }
+        
+        return false;
+      }
     });
   }
 }
