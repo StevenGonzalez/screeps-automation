@@ -136,17 +136,23 @@ export class EngineerArbiter extends Arbiter {
       }
     }
     
-    // Priority 2: Walls needing repair
-    const walls = defenseTemple.getWallsNeedingRepair();
-    if (walls.length > 0) {
-      const target = walls[0];
+    // Priority 2: Prefer repairing roads/containers (prevent decay)
+    const roadsAndContainers = this.room.find(FIND_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_ROAD
+    }) as (StructureContainer | StructureRoad)[];
+
+    const needyRoads = roadsAndContainers.filter(s => s.hits < s.hitsMax * 0.95);
+    if (needyRoads.length > 0) {
+      // Repair the weakest road/container first
+      needyRoads.sort((a, b) => a.hits - b.hits);
+      const target = needyRoads[0];
       const result = builder.repairStructure(target);
       if (result === OK || result === ERR_NOT_IN_RANGE) {
-        builder.say('🧱');
+        builder.say('🛣️');
         return true;
       }
     }
-    
+
     // Priority 3: Other damaged structures
     const damaged = this.room.find(FIND_STRUCTURES, {
       filter: (s) => {
@@ -163,7 +169,7 @@ export class EngineerArbiter extends Arbiter {
         // Containers and roads decay - repair at 90% to prevent loss
         if (s.structureType === STRUCTURE_CONTAINER || 
             s.structureType === STRUCTURE_ROAD) {
-          return s.hits < s.hitsMax * 0.9;
+          return s.hits < s.hitsMax * 0.95;
         }
         // Other structures at 75% HP
         return s.hits < s.hitsMax * 0.75;
@@ -190,7 +196,24 @@ export class EngineerArbiter extends Arbiter {
       builder.say('🔧');
       return true;
     }
-    
+
+    // Priority 4: Walls (low-frequency or threat-driven)
+    const walls = defenseTemple.getWallsNeedingRepair();
+    if (walls.length > 0) {
+      // Only perform bulk wall repairs if under threat or on a low-frequency maintenance tick
+      const threatLevel = (defenseTemple.memory as any)?.threatLevel || 0;
+      const maintenanceTick = (Game.time % 1000) === 0; // once every 1000 ticks
+
+      if (threatLevel > 0 || maintenanceTick) {
+        const targetWall = walls[0];
+        const r = builder.repairStructure(targetWall);
+        if (r === OK || r === ERR_NOT_IN_RANGE) {
+          builder.say('🧱');
+          return true;
+        }
+      }
+    }
+
     return false;
   }
   

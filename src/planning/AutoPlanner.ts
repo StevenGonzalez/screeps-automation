@@ -57,6 +57,17 @@ export class AutoPlanner {
   run(): void {
     const controller = this.room.controller;
     if (!controller || !controller.my) return;
+
+    // Honor manual replan requests from console: Memory._cov_replanRequests[roomName] = tick
+    if ((Memory as any)._cov_replanRequests && (Memory as any)._cov_replanRequests[this.room.name]) {
+      const plan = this.planner.getPlan();
+      if (plan) {
+        console.log(`🛤️ ${this.room.name}: Manual road replan requested via console`);
+        this.planCoreRoads(plan);
+        this.memory.roadPlannedAt = Game.time;
+        delete (Memory as any)._cov_replanRequests[this.room.name];
+      }
+    }
     
     const currentRCL = controller.level;
     
@@ -75,6 +86,16 @@ export class AutoPlanner {
     // Plan roads based on traffic every 500 ticks
     if (Game.time % 500 === 0 && Game.time - this.memory.roadPlannedAt > 5000) {
       this.planTrafficRoads();
+    }
+
+    // Replan core roads periodically in case roads were destroyed (handles max RCL)
+    // Run a light check every 200 ticks to detect mass road loss and re-place core roads
+    if (Game.time % 200 === 0) {
+      try {
+        this.ensureCoreRoads();
+      } catch (e) {
+        console.log(`⚠️ ${this.room.name}: ensureCoreRoads failed: ${e}`);
+      }
     }
     
     // Plan defense perimeter at RCL 3+
@@ -460,6 +481,39 @@ export class AutoPlanner {
     }
     
     console.log(`🛤️ ${this.room.name}: Placed core road network`);
+  }
+
+  /**
+   * Ensure core roads exist; if too few roads are present, re-run `planCoreRoads`.
+   * This helps recover from mass destruction even when RCL hasn't changed.
+   */
+  private ensureCoreRoads(): void {
+    const plan = this.planner.getPlan();
+    if (!plan || !plan.storage) return;
+
+    // Count existing roads in room
+    const roads = this.room.find(FIND_STRUCTURES, { filter: s => s.structureType === STRUCTURE_ROAD }) as StructureRoad[];
+
+    // Estimate expected core road tiles: path from storage to controller + to each source
+    const controller = this.room.controller;
+    if (!controller) return;
+
+    const storagePos = plan.storage;
+    const pathToController = storagePos.findPathTo(controller, { ignoreCreeps: true, range: 3 });
+    let expected = pathToController.length;
+
+    const sources = this.room.find(FIND_SOURCES);
+    for (const source of sources) {
+      const path = storagePos.findPathTo(source, { ignoreCreeps: true, range: 1 });
+      expected += path.length;
+    }
+
+    // If there are significantly fewer roads than expected (e.g. <50%), replan core roads
+    if (expected > 0 && roads.length < Math.max(5, Math.floor(expected * 0.5))) {
+      console.log(`🛤️ ${this.room.name}: Road deficit detected (${roads.length}/${expected}). Replanning core roads.`);
+      this.planCoreRoads(plan);
+      this.memory.roadPlannedAt = Game.time;
+    }
   }
   
   /**

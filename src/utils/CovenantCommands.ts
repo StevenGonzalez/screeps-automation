@@ -604,6 +604,7 @@ export class CovenantCommands {
     console.log('Game.cov.war(room?) - Show war targets and squads');
     console.log('Game.cov.power(room?) - Show power harvesting status');
     console.log('Game.cov.showPlan(room?) - Visualize base layout (toggle)');
+    console.log('Game.cov.replanRoads(room?) - Re-run core road planning for a room (or all)');
     console.log('Game.cov.defense(room?) - Show defense and threat status');
     console.log('Game.cov.safeMode(room, enable?) - Control auto safe mode');
     console.log('Game.cov.market(room?) - Show trading statistics');
@@ -631,6 +632,22 @@ export class CovenantCommands {
     console.log('');
     console.log('Game.cov.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
+  }
+
+  /**
+   * Force replan roads for a specific room or all colonies
+   * Usage: Game.cov.replanRoads() or Game.cov.replanRoads('W1N1')
+   */
+  replanRoads(roomName?: string): void {
+    const charities = roomName ? [this.covenant.highCharities[roomName]] : Object.values(this.covenant.highCharities);
+    for (const charity of charities) {
+      if (!charity) continue;
+      // Request a replan via Memory flag; AutoPlanner will pick this up on next tick
+      const mem: any = Memory as any;
+      if (!mem._cov_replanRequests) mem._cov_replanRequests = {};
+      mem._cov_replanRequests[charity.name] = Game.time;
+      console.log(`🛤️ Requested road replanning for ${charity.name}`);
+    }
   }
   
   /**
