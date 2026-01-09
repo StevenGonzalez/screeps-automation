@@ -93,23 +93,41 @@ export class JackalArbiter extends Arbiter {
       }
     }
     
-    // Find containers with energy
+    // Find containers with energy - prioritize by energy amount, then range
     const containers = this.room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
                      s.store.getUsedCapacity(RESOURCE_ENERGY) > 100
     }) as StructureContainer[];
     
     if (containers.length > 0) {
-      const closest = hauler.pos.findClosestByPath(containers);
-      if (closest) {
-        hauler.withdrawFrom(closest);
+      // Sort by energy amount (most first), then by range (closest first)
+      const sorted = containers.sort((a, b) => {
+        const aEnergy = a.store.getUsedCapacity(RESOURCE_ENERGY);
+        const bEnergy = b.store.getUsedCapacity(RESOURCE_ENERGY);
+        
+        // Prioritize containers with >500 energy significantly
+        if (aEnergy > 500 && bEnergy <= 500) return -1;
+        if (bEnergy > 500 && aEnergy <= 500) return 1;
+        
+        // Otherwise prefer more energy
+        if (Math.abs(aEnergy - bEnergy) > 200) {
+          return bEnergy - aEnergy;
+        }
+        
+        // If similar amounts, prefer closer
+        return hauler.pos.getRangeTo(a) - hauler.pos.getRangeTo(b);
+      });
+      
+      const target = sorted[0];
+      if (target) {
+        hauler.withdrawFrom(target);
         hauler.say('🔋');
         return;
       }
     }
     
     // Find dropped energy
-    const dropped = hauler.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+    const dropped = hauler.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
       filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
     });
     

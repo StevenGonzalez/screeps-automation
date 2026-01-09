@@ -52,6 +52,13 @@ export class ZealotArbiter extends Arbiter {
     // No threats, defenders stand ready at defensive positions
     if (this.hostiles.length === 0) {
       for (const defender of this.defenders) {
+        // Clear ALL task-related memory to prevent energy collection
+        delete defender.memory.task;
+        delete defender.memory.working;
+        delete defender.memory.sourceId;
+        delete defender.memory.targetId;
+        delete defender.memory._move;
+        
         this.positionDefender(defender);
       }
       return;
@@ -70,43 +77,64 @@ export class ZealotArbiter extends Arbiter {
    * Position defender at strategic defensive location when no threats present
    */
   private positionDefender(defender: Elite): void {
-    // Find a rampart to stand on, preferably near room entrances
+    // If already on a rampart or near controller, hold position
+    const structureHere = defender.pos.lookFor(LOOK_STRUCTURES)
+      .find(s => s.structureType === STRUCTURE_RAMPART);
+    
+    if (structureHere) {
+      defender.say('🛡️⏸️'); // Standing guard on rampart
+      return;
+    }
+    
+    // If near controller (good defensive position), hold
+    if (this.room.controller && defender.pos.getRangeTo(this.room.controller) <= 4) {
+      defender.say('🛡️⏸️'); // Standing guard
+      return;
+    }
+    
+    // Need to find a position - prefer ramparts away from sources
+    const sources = this.room.find(FIND_SOURCES);
     const ramparts = this.room.find(FIND_MY_STRUCTURES, {
       filter: s => s.structureType === STRUCTURE_RAMPART
     }) as StructureRampart[];
     
     if (ramparts.length > 0) {
-      // Find the closest rampart that doesn't have a defender already
+      // Filter ramparts far from sources (>5 tiles away)
+      const defensiveRamparts = ramparts.filter(r => {
+        const minSourceDistance = Math.min(...sources.map(s => r.pos.getRangeTo(s)));
+        return minSourceDistance > 5;
+      });
+      
+      // Use defensive ramparts if available, otherwise any rampart
+      const targetRamparts = defensiveRamparts.length > 0 ? defensiveRamparts : ramparts;
+      
+      // Find closest unoccupied rampart
       const occupiedPositions = new Set(
-        this.defenders.map(d => `${d.pos.x},${d.pos.y}`)
+        this.defenders.filter(d => d.name !== defender.name).map(d => `${d.pos.x},${d.pos.y}`)
       );
       
-      const availableRamparts = ramparts.filter(r => 
-        !occupiedPositions.has(`${r.pos.x},${r.pos.y}`) || 
-        r.pos.isEqualTo(defender.pos)
+      const availableRamparts = targetRamparts.filter(r => 
+        !occupiedPositions.has(`${r.pos.x},${r.pos.y}`)
       );
       
-      if (availableRamparts.length > 0) {
-        const targetRampart = defender.pos.findClosestByRange(availableRamparts);
+      const targetList = availableRamparts.length > 0 ? availableRamparts : targetRamparts;
+      
+      if (targetList.length > 0) {
+        const targetRampart = defender.pos.findClosestByRange(targetList);
         if (targetRampart && !defender.pos.isEqualTo(targetRampart.pos)) {
           defender.goTo(targetRampart.pos, { range: 0 });
-          defender.say('🛡️');
+          defender.say('🛡️➡️');
           return;
         }
       }
     }
     
-    // No ramparts or all occupied - position near controller for backup
-    if (this.room.controller) {
-      const range = defender.pos.getRangeTo(this.room.controller);
-      if (range > 5) {
-        defender.goTo(this.room.controller.pos, { range: 3 });
-        defender.say('🛡️');
-      } else {
-        defender.say('🛡️⏸️'); // Standing ready
-      }
+    // Fallback: position near controller
+    if (this.room.controller && defender.pos.getRangeTo(this.room.controller) > 4) {
+      defender.goTo(this.room.controller.pos, { range: 3 });
+      defender.say('🛡️➡️');
     } else {
-      defender.say('🛡️⏸️');
+      defender.say('🛡️⏸️'); // Standing ready
     }
   }
   
@@ -314,7 +342,7 @@ export class ZealotArbiter extends Arbiter {
     const name = `Zealot_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_defender' // Covenant themed role
+      role: 'elite_zealot'
     } as any);
   }
   
