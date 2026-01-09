@@ -154,23 +154,16 @@ export class JackalArbiter extends Arbiter {
   }
   
   private deliverEnergy(hauler: Elite): void {
-    // Priority: Spawns/Extensions > Towers > Storage
+    const storage = this.highCharity.storage;
     
-    // Find structures needing energy
-    const targets = this.room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => {
-        if (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION) {
-          return s.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
-        }
-        if (s.structureType === STRUCTURE_TOWER) {
-          return s.store.getFreeCapacity(RESOURCE_ENERGY) > 200;
-        }
-        return false;
-      }
+    // Priority 1: Fill spawns and extensions first (always)
+    const spawnExtensions = this.room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION) &&
+                     s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
     });
     
-    if (targets.length > 0) {
-      const closest = hauler.pos.findClosestByPath(targets);
+    if (spawnExtensions.length > 0) {
+      const closest = hauler.pos.findClosestByRange(spawnExtensions);
       if (closest) {
         hauler.transferTo(closest);
         hauler.say('⚡');
@@ -178,9 +171,24 @@ export class JackalArbiter extends Arbiter {
       }
     }
     
-    // No priority targets, store in storage
-    if (this.highCharity.storage) {
-      hauler.transferTo(this.highCharity.storage);
+    // Priority 2: Fill towers if low
+    const towers = this.room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_TOWER &&
+                     s.store.getFreeCapacity(RESOURCE_ENERGY) > 200
+    }) as StructureTower[];
+    
+    if (towers.length > 0) {
+      const closest = hauler.pos.findClosestByRange(towers);
+      if (closest) {
+        hauler.transferTo(closest);
+        hauler.say('🗼');
+        return;
+      }
+    }
+    
+    // Priority 3: Fill storage with surplus
+    if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+      hauler.transferTo(storage);
       hauler.say('📦');
       return;
     }
