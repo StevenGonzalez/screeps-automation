@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { EnergyCollector } from '../utils/EnergyCollector';
 import { getSpawnName } from '../utils/SpawnNames';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
@@ -218,9 +219,8 @@ export class EngineerArbiter extends Arbiter {
   }
   
   private getEnergy(builder: Elite): void {
-    // Use Elite's smart energy collection
-    // Containers are now allowed - workers shouldn't sit idle if energy is available
-    builder.collectEnergy({
+    // Use centralized EnergyCollector for worker energy collection
+    EnergyCollector.collect(builder, {
       useLinks: false, // Links are for upgraders
       useContainers: true, // Use containers if available
       storageMinEnergy: 1000 // Lower threshold for storage

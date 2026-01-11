@@ -8,7 +8,7 @@
  */
 
 /// <reference types="@types/screeps" />
-
+import './utils/ConsoleFallback';
 import { Covenant } from "./core/Covenant";
 import { Profiler } from "./utils/Profiler";
 import { CacheSystem, PathCache } from "./utils/CacheSystem";
@@ -63,6 +63,20 @@ const Cov = Covenant.getInstance();
 (Game as any).cov.militaryBoosts = (enabled: boolean) => Cov.commands.militaryBoosts(enabled);
 (Game as any).cov.help = () => Cov.commands.help();
 
+// Expose all CovenantCommands methods directly on Game.cov for console convenience
+try {
+  const proto = Object.getPrototypeOf(Cov.commands as any);
+  const methodNames = Object.getOwnPropertyNames(proto).filter(n => n !== 'constructor');
+  for (const name of methodNames) {
+    // Only map functions that aren't already present
+    if (!(Game as any).cov[name]) {
+      (Game as any).cov[name] = (...args: any[]) => (Cov.commands as any)[name](...args);
+    }
+  }
+} catch (e) {
+  // Fail silently in restricted runtimes
+}
+
 /**
  * Main game loop - executed every tick
  */
@@ -109,6 +123,17 @@ export const loop = (): void => {
         const hc = Cov.highCharities[roomName];
         if (hc.spawnQueue) {
           hc.spawnQueue.run(); // Critical spawning only
+        }
+      }
+
+      // Still allow essential planning tasks (roads, defense planning)
+      // so we can recover from mass road loss even under CPU throttle.
+      for (const roomName in Cov.highCharities) {
+        const hc = Cov.highCharities[roomName];
+        try {
+          hc.autoPlanner.run();
+        } catch (e) {
+          // Ignore planner errors during emergency to avoid breaking spawn logic
         }
       }
       

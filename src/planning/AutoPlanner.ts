@@ -84,7 +84,8 @@ export class AutoPlanner {
     }
     
     // Plan roads based on traffic every 500 ticks
-    if (Game.time % 500 === 0 && Game.time - this.memory.roadPlannedAt > 5000) {
+    // Allow replanning sooner after requests — reduce cooldown from 5000 to 500 ticks
+    if (Game.time % 500 === 0 && Game.time - this.memory.roadPlannedAt > 500) {
       this.planTrafficRoads();
     }
 

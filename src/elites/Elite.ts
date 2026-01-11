@@ -10,6 +10,7 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter } from '../arbiters/Arbiter';
+import { EnergyCollector } from '../utils/EnergyCollector';
 
 /**
  * Elite - Enhanced creep wrapper
@@ -296,91 +297,10 @@ export class Elite {
     harvestIfNeeded?: boolean;
     storageMinEnergy?: number;
   }): boolean {
-    const opts = {
-      useLinks: true,
-      useStorage: true,
-      useContainers: true,
-      useDropped: true,
-      harvestIfNeeded: true,
-      storageMinEnergy: 1000,
-      ...options
-    };
-    
-    // Try storage link first (if link temple is active)
-    if (opts.useLinks) {
-      const links = this.room.find(FIND_MY_STRUCTURES, {
-        filter: s => s.structureType === STRUCTURE_LINK && 
-                     s.store.getUsedCapacity(RESOURCE_ENERGY) > 100
-      }) as StructureLink[];
-      
-      if (links.length > 0) {
-        const nearest = this.pos.findClosestByPath(links);
-        if (nearest) {
-          this.withdrawFrom(nearest);
-          this.say('⚡');
-          return true;
-        }
-      }
-    }
-    
-    // Try containers
-    if (opts.useContainers) {
-      const container = this.pos.findClosestByPath(FIND_STRUCTURES, {
-        filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
-                       s.store.getUsedCapacity(RESOURCE_ENERGY) > 50
-      }) as StructureContainer | null;
-      
-      if (container) {
-        this.withdrawFrom(container);
-        this.say('🔋');
-        return true;
-      }
-    }
-    
-    // Try storage
-    if (opts.useStorage && this.room.storage && 
-        this.room.storage.store.getUsedCapacity(RESOURCE_ENERGY) > opts.storageMinEnergy) {
-      this.withdrawFrom(this.room.storage);
-      this.say('🏦');
-      return true;
-    }
-    
-    // Try terminal
-    if (opts.useStorage && this.room.terminal && 
-        this.room.terminal.store.getUsedCapacity(RESOURCE_ENERGY) > opts.storageMinEnergy) {
-      this.withdrawFrom(this.room.terminal);
-      this.say('💼');
-      return true;
-    }
-    
-    // Try dropped resources
-    if (opts.useDropped) {
-      const dropped = this.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
-        filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount > 50
-      });
-      
-      if (dropped) {
-        if (this.pos.isNearTo(dropped)) {
-          this.pickup(dropped);
-        } else {
-          this.goTo(dropped);
-        }
-        this.say('💎');
-        return true;
-      }
-    }
-    
-    // Last resort: harvest directly
-    if (opts.harvestIfNeeded) {
-      const source = this.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
-      if (source) {
-        this.harvestSource(source);
-        this.say('⛏️');
-        return true;
-      }
-    }
-    
-    return false;
+    // Forward to centralized EnergyCollector for consistent behavior.
+    // Keep this shim for backward compatibility with older call sites.
+    // The EnergyCollector enforces the CARRY check and collection priorities.
+    return EnergyCollector.collect(this, options);
   }
   
   /**

@@ -13,6 +13,7 @@ import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { EnergyCollector } from '../utils/EnergyCollector';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
@@ -126,10 +127,8 @@ export class DevoteeArbiter extends Arbiter {
       }
     }
     
-    // Use Elite's smart energy collection for everything else
-    // Priority: Containers > Storage > Dropped > Harvest
-    // Workers can now use containers - they shouldn't sit idle if energy is available
-    worker.collectEnergy({
+    // Use centralized EnergyCollector for everything else
+    EnergyCollector.collect(worker, {
       useLinks: false, // Already checked upgrader link above
       useContainers: true, // Use containers if available
       useStorage: true,

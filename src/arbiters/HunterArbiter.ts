@@ -12,6 +12,7 @@
 import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
 import { HighCharity } from '../core/HighCharity';
 import { Elite } from '../elites/Elite';
+import { EnergyCollector } from '../utils/EnergyCollector';
 import { RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
@@ -115,9 +116,8 @@ export class HunterArbiter extends Arbiter {
   }
   
   private getEnergy(repairer: Elite): void {
-    // Use Elite's smart energy collection
-    // Hunters/Repairers prefer storage first, need larger reserves
-    repairer.collectEnergy({
+    // Use centralized EnergyCollector - prefer storage first
+    EnergyCollector.collect(repairer, {
       useLinks: false, // Links are for upgraders
       storageMinEnergy: 5000
     });
