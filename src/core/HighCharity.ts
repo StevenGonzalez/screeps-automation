@@ -228,12 +228,8 @@ export class HighCharity {
       this.powerTemple = new PowerTemple(this);
     }
     
-    // Initialize link temple at RCL 5+ (when links become available)
-    if (this.room.controller && this.room.controller.level >= 5 && this.links.length >= 2) {
-      this.linkTemple = new LinkTemple(this);
-    } else {
-      this.linkTemple = null;
-    }
+    // Defer LinkTemple initialization until build() where structures are refreshed
+    this.linkTemple = null;
     
     // Initialize room planner
     this.planner = new RoomPlanner(room);
@@ -595,7 +591,11 @@ export class HighCharity {
     }
     
     // Build Link Temple (energy conduits) if available
-    if (this.linkTemple) {
+    // Initialize LinkTemple now that structures have been refreshed (RCL 5+ and at least 2 links)
+    if (this.room.controller && this.room.controller.level >= 5 && this.links.length >= 2) {
+      if (!this.linkTemple) {
+        this.linkTemple = new LinkTemple(this);
+      }
       this.temples['link'] = this.linkTemple;
     }
     
