@@ -36,6 +36,8 @@ Specialized creep controllers that manage teams of Elites. Types include:
 - **JackalArbiter** - Energy and resource logistics
 - **EngineerArbiter** - Building and repairing
 - **DevoteeArbiter** - Controller upgrading optimization
+- **ExcavatorArbiter** - Mineral mining operations (RCL 6+)
+- **TerminalArbiter** - Terminal management and market trading (RCL 6+)
 - **ZealotArbiter** - Defensive melee combat
 - **ProphetArbiter** - Defensive healing support
 - **VanguardArbiter** - Offensive combat operations
@@ -119,8 +121,9 @@ Inspired by Halo's Covenant faction:
 | **MiningTemple** | Energy harvesting operations | 1 |
 | **CommandTemple** | Spawn queue and colony commands | 1 |
 | **IntelligenceTemple** | Remote room scanning | 3+ |
+| **LinkTemple** | Instant energy transfer network | 5+ |
 | **DefenseTemple** | Fortification management | 1 |
-| **LabTemple** | Chemical reactions | 6+ |
+| **LabTemple** | Automated compound production | 6+ |
 | **BoostTemple** | Creep enhancement | 6+ |
 | **PowerTemple** | PowerBank harvesting & processing | 8 |
 
@@ -158,6 +161,23 @@ Our automatic structure placement uses **distinctive Covenant religious architec
 - Magenta triangle connecting Hierarchs' Thrones
 - Red hexagon connecting Guardian Sentinels
 - Tier-colored extensions showing city layers
+
+### 🏗️ Automated Planning Systems
+
+#### **RoomPlanner** (`planning/RoomPlanner.ts`)
+Generates optimal base layouts using sacred geometry patterns and stores them in Memory with version control.
+
+#### **AutoPlanner** (`planning/AutoPlanner.ts`)
+Automatically places construction sites on RCL upgrades:
+- **RCL 6 Automation**: Links (storage/controller/source), Labs (3-cluster), Terminal (next to storage), Extractor + Container
+- Validates terrain and prevents duplicate structures
+- Integrates with EngineerArbiter for automatic construction
+
+#### **RoadBuilder** (`planning/RoadBuilder.ts`)
+Traffic-based intelligent road network:
+- Records creep movement patterns
+- Three-tier system: core roads, high-traffic paths, critical connections
+- Activates at RCL 3+ with CPU budget awareness
 
 ### ⚔️ Military Systems
 

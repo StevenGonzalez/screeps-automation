@@ -29,7 +29,7 @@ export interface RoomPlan {
 }
 
 // Plan version - increment to force regeneration of all room plans
-const PLAN_VERSION = 2;
+const PLAN_VERSION = 3;
 
 export interface RoomPlannerMemory {
   plan: any;
@@ -156,14 +156,14 @@ export class RoomPlanner {
     // Plan core structures around anchor
     this.planCoreStructures(plan);
     
+    // Plan labs in a compact cluster (BEFORE extensions to reserve space)
+    this.planLabs(plan);
+    
     // Plan extensions in clusters
     this.planExtensions(plan);
     
     // Plan towers for defense coverage
     this.planTowers(plan);
-    
-    // Plan labs in a compact cluster
-    this.planLabs(plan);
     
     // Plan links at key locations
     this.planLinks(plan);
@@ -410,21 +410,22 @@ export class RoomPlanner {
     const maxLabs = CONTROLLER_STRUCTURES[STRUCTURE_LAB][this.room.controller!.level];
     
     // RESEARCH SANCTUM: Labs form a tight ceremonial cluster
-    // Arranged in a 'flower' pattern for optimal reaction efficiency
+    // Positioned at distance 10+ from anchor to avoid extension rings (which go up to radius 9)
+    // Arranged in a compact 'flower' pattern for optimal reaction efficiency
     const labPositions: RoomPosition[] = [
-      // Central labs (reagent sources)
-      new RoomPosition(anchor.x + 4, anchor.y, this.room.name),
-      new RoomPosition(anchor.x + 5, anchor.y, this.room.name),
+      // Central labs (reagent sources) - placed to the right of base
+      new RoomPosition(anchor.x + 10, anchor.y, this.room.name),
+      new RoomPosition(anchor.x + 11, anchor.y, this.room.name),
       
-      // Surrounding reaction labs (hexagonal pattern)
-      new RoomPosition(anchor.x + 4, anchor.y - 1, this.room.name),
-      new RoomPosition(anchor.x + 5, anchor.y - 1, this.room.name),
-      new RoomPosition(anchor.x + 4, anchor.y + 1, this.room.name),
-      new RoomPosition(anchor.x + 5, anchor.y + 1, this.room.name),
-      new RoomPosition(anchor.x + 3, anchor.y, this.room.name),
-      new RoomPosition(anchor.x + 6, anchor.y, this.room.name),
-      new RoomPosition(anchor.x + 3, anchor.y - 1, this.room.name),
-      new RoomPosition(anchor.x + 6, anchor.y + 1, this.room.name)
+      // Surrounding reaction labs (compact pattern)
+      new RoomPosition(anchor.x + 10, anchor.y - 1, this.room.name),
+      new RoomPosition(anchor.x + 11, anchor.y - 1, this.room.name),
+      new RoomPosition(anchor.x + 10, anchor.y + 1, this.room.name),
+      new RoomPosition(anchor.x + 11, anchor.y + 1, this.room.name),
+      new RoomPosition(anchor.x + 9, anchor.y, this.room.name),
+      new RoomPosition(anchor.x + 12, anchor.y, this.room.name),
+      new RoomPosition(anchor.x + 9, anchor.y - 1, this.room.name),
+      new RoomPosition(anchor.x + 12, anchor.y + 1, this.room.name)
     ];
     
     plan.labs = labPositions.slice(0, maxLabs);
@@ -432,27 +433,74 @@ export class RoomPlanner {
   
   /**
    * Plan links at strategic locations
+   * RCL 5: 2 links (storage + controller)
+   * RCL 6: 3 links (storage + controller + 1 source)
+   * RCL 7: 4 links (storage + controller + 2 sources)
+   * RCL 8: 6 links (all sources + extras)
    */
   private planLinks(plan: RoomPlan): void {
     const controller = this.room.controller!;
     const sources = this.room.find(FIND_SOURCES);
+    const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK][controller.level];
     
-    // Storage link (at storage)
-    if (plan.storage) {
-      plan.links.push(new RoomPosition(plan.storage.x - 1, plan.storage.y, this.room.name));
+    // Priority 1: Storage link (next to storage for easy hauler access)
+    if (plan.storage && plan.links.length < maxLinks) {
+      // Find valid position adjacent to storage
+      const candidates = this.findAdjacentPositions(plan.storage, 1);
+      if (candidates.length > 0) {
+        plan.links.push(candidates[0]);
+      }
     }
     
-    // Controller link (near controller)
-    const controllerLink = controller.pos.findClosestByRange(
-      controller.pos.findInRange(FIND_EXIT, 3)
-        .map(exit => new RoomPosition(exit.x, exit.y, this.room.name))
-        .filter(pos => this.terrain.get(pos.x, pos.y) !== TERRAIN_MASK_WALL)
-    );
-    if (controllerLink) {
-      plan.links.push(controllerLink);
+    // Priority 2: Controller link (range 2-3 from controller for upgraders)
+    if (plan.links.length < maxLinks) {
+      const candidates = this.findAdjacentPositions(controller.pos, 3)
+        .filter(pos => pos.getRangeTo(controller.pos) >= 2); // Min range 2 to leave space
+      if (candidates.length > 0) {
+        plan.links.push(candidates[0]);
+      }
     }
     
-    // Source links (near each source) - handled by MiningTemple
+    // Priority 3: Source links (one per source, range 2)
+    for (const source of sources) {
+      if (plan.links.length >= maxLinks) break;
+      
+      const candidates = this.findAdjacentPositions(source.pos, 2)
+        .filter(pos => !this.isPositionReserved(pos, plan));
+      
+      if (candidates.length > 0) {
+        plan.links.push(candidates[0]);
+      }
+    }
+  }
+  
+  /**
+   * Find valid adjacent positions within range
+   */
+  private findAdjacentPositions(center: RoomPosition, maxRange: number): RoomPosition[] {
+    const positions: RoomPosition[] = [];
+    
+    for (let dx = -maxRange; dx <= maxRange; dx++) {
+      for (let dy = -maxRange; dy <= maxRange; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        
+        const x = center.x + dx;
+        const y = center.y + dy;
+        
+        // Check bounds
+        if (x < 2 || x > 47 || y < 2 || y > 47) continue;
+        
+        const pos = new RoomPosition(x, y, this.room.name);
+        
+        // Check terrain
+        if (this.terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+        
+        // Valid position
+        positions.push(pos);
+      }
+    }
+    
+    return positions;
   }
   
   /**

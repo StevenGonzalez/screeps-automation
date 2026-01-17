@@ -54,6 +54,16 @@ export class ExcavatorArbiter extends Arbiter {
     // Stop mining if we have more than 100k of this mineral
     if (storedAmount > 100000) return;
     
+    // DEFENSIVE PROTOCOL: Don't spawn mineral miners during combat (threat >= 4)
+    // Mineral mining is luxury economy, not essential during defense
+    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    if (threatLevel >= 4) {
+      if (Game.time % 100 === 0) {
+        console.log(`⚔️ ${this.print}: Suspending excavator spawns (threat: ${threatLevel}/10)`);
+      }
+      return; // Skip spawning during combat
+    }
+    
     // Request miner if needed
     const desiredMiners = this.extractor.cooldown === 0 ? 1 : 0;
     if (this.miners.length < desiredMiners) {

@@ -105,12 +105,13 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Queue statistics and monitoring with `Game.cov.spawns()`
 - **Auto-Planner**: Automated construction and layout system
   - Automatic construction site placement on RCL upgrades
+  - **RCL 6 Full Automation**: Links, Labs, Terminal, Extractor + Container all placed automatically
   - Traffic-based road planning (builds roads where creeps frequently travel)
   - Defense perimeter planning with automatic ramparts on critical structures
   - Sacred geometry layouts with hexagonal symmetry
   - Integration with RoomPlanner for optimal structure placement
   - Visualization tools for layout and traffic heatmaps
-  - Console monitoring with `Game.cov.layout()`
+  - Console monitoring with `Game.cov.layout()`, `Game.cov.plan()`, `Game.cov.build()`
 - **Power Creep Automation**: Immortal units with divine abilities
   - Automatic power creep creation at GPL 1+ and RCL 8
   - Spawning and renewal management at Power Spawns

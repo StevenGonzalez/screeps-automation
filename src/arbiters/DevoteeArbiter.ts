@@ -67,6 +67,16 @@ export class DevoteeArbiter extends Arbiter {
       console.log(`📚 ${this.print}: ${currentWorkers}/${desiredWorkers} workers (phase: ${this.highCharity.memory.phase})`);
     }
     
+    // DEFENSIVE PROTOCOL: Don't spawn upgraders during combat (threat >= 4)
+    // Energy should go to defenders, not economic development
+    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    if (threatLevel >= 4) {
+      if (Game.time % 100 === 0) {
+        console.log(`⚔️ ${this.print}: Suspending upgrader spawns (threat: ${threatLevel}/10)`);
+      }
+      return; // Skip spawning during combat
+    }
+    
     // Request spawn whenever we need more workers
     // SpawnQueue handles deduplication, so it's safe to request every tick
     if (currentWorkers < desiredWorkers) {

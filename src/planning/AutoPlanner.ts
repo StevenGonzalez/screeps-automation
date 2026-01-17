@@ -162,7 +162,9 @@ export class AutoPlanner {
     if (newRCL >= 6) {
       this.placeTerminal(plan);
       this.placeLabs(plan, newRCL);
+      this.placeLinks(plan, newRCL);
       this.placeExtractor();
+      this.placeMineralContainer();
     }
     
     if (newRCL >= 7) {
@@ -299,6 +301,150 @@ export class AutoPlanner {
   }
   
   /**
+   * Place links based on RCL
+   * Priority order: Storage link → Controller link → Source links
+   */
+  private placeLinks(plan: RoomPlan, rcl: number): void {
+    const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK][rcl];
+    const existingLinks = this.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_LINK
+    });
+    const existingSites = this.room.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: s => s.structureType === STRUCTURE_LINK
+    });
+    
+    const totalExisting = existingLinks.length + existingSites.length;
+    
+    if (totalExisting >= maxLinks) return;
+    
+    let placed = 0;
+    
+    // Priority 1: Storage link (next to storage for haulers)
+    if (totalExisting + placed < maxLinks && plan.storage) {
+      const storageLink = this.findOptimalLinkPosition(plan.storage, 2, [plan.storage]);
+      if (storageLink && this.canPlaceConstructionSite(storageLink, STRUCTURE_LINK)) {
+        const result = this.room.createConstructionSite(storageLink, STRUCTURE_LINK);
+        if (result === OK) {
+          placed++;
+          console.log(`🔗 ${this.room.name}: Placed storage link at ${storageLink}`);
+        }
+      }
+    }
+    
+    // Priority 2: Controller link (range 3 from controller for upgraders)
+    if (totalExisting + placed < maxLinks && this.room.controller) {
+      const existingControllerLinks = existingLinks.filter(link => 
+        link.pos.inRangeTo(this.room.controller!, 3)
+      );
+      const siteControllerLinks = existingSites.filter(site => 
+        site.pos.inRangeTo(this.room.controller!, 3)
+      );
+      
+      if (existingControllerLinks.length === 0 && siteControllerLinks.length === 0) {
+        const controllerLink = this.findOptimalLinkPosition(
+          this.room.controller.pos, 
+          3, 
+          [this.room.controller.pos],
+          2 // Min range of 2 to leave space for upgraders
+        );
+        if (controllerLink && this.canPlaceConstructionSite(controllerLink, STRUCTURE_LINK)) {
+          const result = this.room.createConstructionSite(controllerLink, STRUCTURE_LINK);
+          if (result === OK) {
+            placed++;
+            console.log(`🔗 ${this.room.name}: Placed controller link at ${controllerLink}`);
+          }
+        }
+      }
+    }
+    
+    // Priority 3: Source links (range 2 from each source)
+    const sources = this.room.find(FIND_SOURCES);
+    for (const source of sources) {
+      if (totalExisting + placed >= maxLinks) break;
+      
+      // Check if this source already has a link or site
+      const existingSourceLinks = existingLinks.filter(link => 
+        link.pos.inRangeTo(source, 2)
+      );
+      const siteSourceLinks = existingSites.filter(site => 
+        site.pos.inRangeTo(source, 2)
+      );
+      
+      if (existingSourceLinks.length === 0 && siteSourceLinks.length === 0) {
+        const sourceLink = this.findOptimalLinkPosition(source.pos, 2, [source.pos]);
+        if (sourceLink && this.canPlaceConstructionSite(sourceLink, STRUCTURE_LINK)) {
+          const result = this.room.createConstructionSite(sourceLink, STRUCTURE_LINK);
+          if (result === OK) {
+            placed++;
+            console.log(`🔗 ${this.room.name}: Placed source link at ${sourceLink} near ${source.pos}`);
+          }
+        }
+      }
+    }
+    
+    if (placed > 0) {
+      console.log(`✅ ${this.room.name}: Placed ${placed} link construction sites (total: ${totalExisting + placed}/${maxLinks})`);
+    }
+  }
+  
+  /**
+   * Find optimal position for a link near a target
+   */
+  private findOptimalLinkPosition(
+    target: RoomPosition, 
+    maxRange: number, 
+    reserved: RoomPosition[],
+    minRange: number = 1
+  ): RoomPosition | null {
+    const terrain = new Room.Terrain(this.room.name);
+    const candidates: RoomPosition[] = [];
+    
+    // Search positions in range
+    for (let dx = -maxRange; dx <= maxRange; dx++) {
+      for (let dy = -maxRange; dy <= maxRange; dy++) {
+        const x = target.x + dx;
+        const y = target.y + dy;
+        
+        // Check bounds
+        if (x < 2 || x > 47 || y < 2 || y > 47) continue;
+        
+        const pos = new RoomPosition(x, y, this.room.name);
+        const range = pos.getRangeTo(target);
+        
+        // Check range constraints
+        if (range < minRange || range > maxRange) continue;
+        
+        // Check terrain
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+        
+        // Check if position is reserved by another structure
+        const isReserved = reserved.some(r => r.x === x && r.y === y);
+        if (isReserved) continue;
+        
+        // Check if there's already a structure (except roads/ramparts)
+        const structures = pos.lookFor(LOOK_STRUCTURES);
+        const hasBlockingStructure = structures.some(s => 
+          s.structureType !== STRUCTURE_ROAD && 
+          s.structureType !== STRUCTURE_RAMPART &&
+          s.structureType !== STRUCTURE_CONTAINER
+        );
+        if (hasBlockingStructure) continue;
+        
+        candidates.push(pos);
+      }
+    }
+    
+    if (candidates.length === 0) return null;
+    
+    // Return position closest to target but within range constraints
+    return candidates.reduce((best, pos) => {
+      const bestRange = best.getRangeTo(target);
+      const posRange = pos.getRangeTo(target);
+      return posRange < bestRange ? pos : best;
+    });
+  }
+  
+  /**
    * Place extractor on mineral
    */
   private placeExtractor(): void {
@@ -310,9 +456,91 @@ export class AutoPlanner {
       filter: s => s.structureType === STRUCTURE_EXTRACTOR
     }).length;
     
-    if (existing === 0) {
-      this.room.createConstructionSite(mineral.pos, STRUCTURE_EXTRACTOR);
-      console.log(`⛏️ ${this.room.name}: Placed extractor on ${mineral.mineralType}`);
+    const existingSites = this.room.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: s => s.structureType === STRUCTURE_EXTRACTOR
+    }).length;
+    
+    if (existing === 0 && existingSites === 0) {
+      const result = this.room.createConstructionSite(mineral.pos, STRUCTURE_EXTRACTOR);
+      if (result === OK) {
+        console.log(`⛏️ ${this.room.name}: Placed extractor on ${mineral.mineralType}`);
+      }
+    }
+  }
+  
+  /**
+   * Place container adjacent to mineral for ExcavatorArbiter
+   * Critical for mineral mining to function!
+   */
+  private placeMineralContainer(): void {
+    const minerals = this.room.find(FIND_MINERALS);
+    if (minerals.length === 0) return;
+    
+    const mineral = minerals[0];
+    
+    // Check if container already exists near mineral
+    const existingContainers = mineral.pos.findInRange(FIND_STRUCTURES, 2, {
+      filter: s => s.structureType === STRUCTURE_CONTAINER
+    });
+    
+    const existingSites = mineral.pos.findInRange(FIND_CONSTRUCTION_SITES, 2, {
+      filter: s => s.structureType === STRUCTURE_CONTAINER
+    });
+    
+    if (existingContainers.length > 0 || existingSites.length > 0) {
+      return; // Container already exists or is being built
+    }
+    
+    // Find optimal position adjacent to mineral
+    const terrain = new Room.Terrain(this.room.name);
+    const positions: RoomPosition[] = [];
+    
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue; // Skip mineral position
+        
+        const x = mineral.pos.x + dx;
+        const y = mineral.pos.y + dy;
+        
+        // Check bounds
+        if (x < 2 || x > 47 || y < 2 || y > 47) continue;
+        
+        // Check terrain
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+        
+        const pos = new RoomPosition(x, y, this.room.name);
+        
+        // Check if position is free
+        const structures = pos.lookFor(LOOK_STRUCTURES);
+        const hasBlockingStructure = structures.some(s => 
+          s.structureType !== STRUCTURE_ROAD && 
+          s.structureType !== STRUCTURE_RAMPART
+        );
+        
+        if (hasBlockingStructure) continue;
+        
+        positions.push(pos);
+      }
+    }
+    
+    if (positions.length === 0) {
+      console.log(`⚠️ ${this.room.name}: No valid position found for mineral container!`);
+      return;
+    }
+    
+    // Choose position closest to storage (or spawn if no storage)
+    const storage = this.room.storage;
+    const spawn = this.room.find(FIND_MY_SPAWNS)[0];
+    const reference = storage || spawn;
+    
+    let bestPos = positions[0];
+    if (reference) {
+      bestPos = reference.pos.findClosestByPath(positions) || positions[0];
+    }
+    
+    const result = this.room.createConstructionSite(bestPos, STRUCTURE_CONTAINER);
+    if (result === OK) {
+      console.log(`📦 ${this.room.name}: Placed mineral container at ${bestPos} (for ${mineral.mineralType} harvesting)`);
     }
   }
   

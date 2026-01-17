@@ -51,6 +51,25 @@ export class EngineerArbiter extends Arbiter {
       console.log(`🔧 ${this.print}: ${currentBuilders}/${desiredBuilders} builders, ${sites} construction sites`);
     }
     
+    // DEFENSIVE PROTOCOL: During high threat (>= 6), only spawn builders if we have damaged structures
+    // Prioritize defense over new construction
+    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    if (threatLevel >= 6 && currentBuilders < desiredBuilders) {
+      const damagedStructures = this.room.find(FIND_STRUCTURES, {
+        filter: s => s.hits < s.hitsMax && 
+                    (s.structureType === STRUCTURE_SPAWN ||
+                     s.structureType === STRUCTURE_TOWER ||
+                     s.structureType === STRUCTURE_RAMPART)
+      });
+      
+      if (damagedStructures.length === 0) {
+        if (Game.time % 100 === 0) {
+          console.log(`⚔️ ${this.print}: Suspending builder spawns during combat (threat: ${threatLevel}/10)`);
+        }
+        return; // Skip spawning builders for new construction during heavy combat
+      }
+    }
+    
     // Request spawn whenever we need more builders (removed tick throttle)
     // SpawnQueue handles deduplication, so it's safe to request every tick
     if (currentBuilders < desiredBuilders) {

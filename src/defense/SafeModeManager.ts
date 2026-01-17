@@ -82,6 +82,34 @@ export class SafeModeManager {
   }
   
   /**
+   * Get current threat level (0-10)
+   * Used by arbiters to adjust behavior during combat
+   */
+  getThreatLevel(): number {
+    // Return most recent assessment if available and recent
+    if (this.memory.threatHistory.length > 0 && 
+        Game.time - this.memory.lastThreatAssessment < 10) {
+      return this.memory.threatHistory[this.memory.threatHistory.length - 1];
+    }
+    
+    // Otherwise do a quick check
+    const hostiles = this.room.find(FIND_HOSTILE_CREEPS);
+    if (hostiles.length === 0) return 0;
+    
+    // Quick threat calculation
+    let threat = Math.min(hostiles.length * 0.5, 3);
+    
+    // Check if near critical structures
+    const spawns = this.room.find(FIND_MY_SPAWNS);
+    if (spawns.length > 0) {
+      const nearSpawn = hostiles.some(h => h.pos.getRangeTo(spawns[0]) <= 5);
+      if (nearSpawn) threat += 2;
+    }
+    
+    return Math.min(Math.round(threat), 10);
+  }
+  
+  /**
    * Evaluate current threat level
    */
   private evaluateThreat(): ThreatAssessment {

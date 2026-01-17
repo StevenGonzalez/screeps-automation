@@ -71,30 +71,57 @@ Every 100 ticks, you'll see a status report:
 ## 🎯 Current Features
 
 ### ✅ Fully Implemented
+
+**Core Systems:**
 - **Covenant**: Main AI coordinator with 3-phase execution (Build → Init → Run)
 - **High Charity**: Colony management with adaptive phase detection
-- **MiningArbiter**: Automated energy harvesting with container support
-- **HaulerArbiter**: Energy logistics and distribution system
-- **WorkerArbiter**: Controller upgrading with smart energy collection
-- **BuilderArbiter**: Construction and repair management
-- **DefenseArbiter**: Military defense with tower coordination
 - **Elite**: Enhanced creep wrapper with smart movement
-- **Crusade Base**: Flag-based directive framework
+- **AutoPlanner**: Automatic structure placement with sacred geometry patterns
+- **RoadBuilder**: Traffic-based intelligent road network construction
+
+**Economy & Logistics:**
+- **DroneArbiter**: Energy harvesting at sources with container support
+- **JackalArbiter**: Energy logistics and distribution (haulers)
+- **DevoteeArbiter**: Controller upgrading optimization
+- **EngineerArbiter**: Construction and repair management
+- **ExcavatorArbiter**: Mineral mining (RCL 6+)
+
+**RCL 6+ Advanced Systems:**
+- **LinkTemple**: Instant energy transfer network (3 links at RCL 6)
+- **LabTemple**: Automatic compound production with reaction chains
+- **TerminalArbiter**: Per-colony market operations and trading
+- **TerminalNetwork**: Empire-wide resource distribution and balancing
+
+**Military & Defense:**
+- **ZealotArbiter**: Defensive melee combat
+- **ProphetArbiter**: Defensive healing support
+- **DefenseTemple**: Tower coordination and fortification management
+- **WarCouncil**: Combat target scanning and threat assessment
+- **SafeModeManager**: Automatic safe mode activation
+
+**Intelligence & Operations:**
+- **ObserverNetwork**: Automatic room scanning and intel gathering
+- **ReclaimationCouncil**: Autonomous colony expansion system
+- **RemoteOperations**: Remote mining management
+- **DepositOperations**: Deposit harvesting (powerhouse colonies)
 
 ### 🎮 Core Gameplay Loop
-1. **MiningArbiters** harvest energy from sources
-2. **HaulerArbiters** transport energy to spawns and extensions
-3. **WorkerArbiters** upgrade the controller for RCL progression
-4. **BuilderArbiters** construct buildings and repair damage
-5. **DefenseArbiters** spawn defenders when hostiles are detected
+1. **DroneArbiters** harvest energy from sources → containers/links
+2. **LinkTemple** transfers energy instantly (source → storage → controller)
+3. **JackalArbiters** distribute energy to spawns, extensions, labs, towers
+4. **DevoteeArbiters** upgrade the controller for RCL progression
+5. **EngineerArbiters** construct buildings and repair damage
+6. **ExcavatorArbiters** mine minerals → containers → storage (RCL 6+)
+7. **LabTemple** produces boost compounds automatically (RCL 6+)
+8. **TerminalNetwork** shares resources between colonies (RCL 6+)
 
-### 🚧 Coming Soon
-- **Temples**: Structure cluster management (HiveClusters)
-- **Prophets Will**: Global logistics network
-- **Bootstrap Crusade**: Emergency recovery from catastrophic failure
-- **Colonize Crusade**: Expansion to new rooms
-- **Scout Crusade**: Room exploration and intel gathering
-- **Advanced Combat**: Ranged defenders, healers, and squads
+### 🚀 Advanced Features
+- **Automatic Expansion**: Finds and claims new rooms autonomously
+- **Lab Auto-Production**: Plans and executes multi-tier compound chains
+- **Resource Balancing**: Distributes minerals and boosts across empire
+- **Power Processing**: Harvests PowerBanks and processes power (RCL 8)
+- **Factory Production**: Commodity manufacturing (RCL 7+)
+- **Military Squads**: Formation-based combat with tactics system
 
 ## 🔧 Extending the System
 
@@ -165,6 +192,11 @@ export class DefenseCrusade extends Crusade {
 ## 📚 Further Reading
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed system architecture
+- [RCL6_QUICK_REFERENCE.md](RCL6_QUICK_REFERENCE.md) - RCL 6 structures and systems
+- [RCL6_SYSTEMS_VERIFICATION.md](RCL6_SYSTEMS_VERIFICATION.md) - Complete system verification
+- [LAB_SYSTEM.md](LAB_SYSTEM.md) - Lab automation and compound production
+- [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md) - Resource sharing and trading
+- [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md) - Autonomous expansion
 - [Screeps API Docs](https://docs.screeps.com/) - Game mechanics
 
 ## 🤝 Contributing

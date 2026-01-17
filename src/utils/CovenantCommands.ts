@@ -604,6 +604,8 @@ export class CovenantCommands {
     console.log('Game.cov.war(room?) - Show war targets and squads');
     console.log('Game.cov.power(room?) - Show power harvesting status');
     console.log('Game.cov.showPlan(room?) - Visualize base layout (toggle)');
+    console.log('Game.cov.plan(room) - Show room plan details');
+    console.log('Game.cov.build(room) - Manually trigger structure placement');
     console.log('Game.cov.replanRoads(room?) - Re-run core road planning for a room (or all)');
     console.log('Game.cov.defense(room?) - Show defense and threat status');
     console.log('Game.cov.safeMode(room, enable?) - Control auto safe mode');
@@ -634,6 +636,104 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
   }
 
+  /**
+   * Show room plan details
+   * Usage: Game.cov.plan('W1N1')
+   */
+  plan(roomName: string): void {
+    const charity = this.covenant.highCharities[roomName];
+    if (!charity) {
+      console.log(`❌ No colony found in ${roomName}`);
+      return;
+    }
+    
+    const plan = charity.planner.getPlan();
+    if (!plan) {
+      console.log(`❌ No room plan available for ${roomName}`);
+      return;
+    }
+    
+    const level = charity.level;
+    const maxLinks = CONTROLLER_STRUCTURES[STRUCTURE_LINK][level];
+    const maxLabs = CONTROLLER_STRUCTURES[STRUCTURE_LAB][level];
+    const maxExtensions = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][level];
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(`📐 BASE PLAN - ${roomName}`);
+    console.log('═══════════════════════════════════════════════════════');
+    console.log(`RCL: ${level}`);
+    console.log(`\nPlanned Structures:`);
+    console.log(`  Anchor: ${plan.anchor}`);
+    console.log(`  Spawns: ${plan.spawns.length}/3 planned`);
+    console.log(`  Extensions: ${plan.extensions.length}/${maxExtensions} planned`);
+    console.log(`  Towers: ${plan.towers.length}/6 planned`);
+    console.log(`  Links: ${plan.links.length}/${maxLinks} planned`);
+    console.log(`  Labs: ${plan.labs.length}/${maxLabs} planned`);
+    console.log(`  Storage: ${plan.storage ? 'Yes' : 'No'}`);
+    console.log(`  Terminal: ${plan.terminal ? 'Yes' : 'No'}`);
+    console.log(`  Factory: ${plan.factory ? 'Yes' : 'No'}`);
+    console.log(`  Power Spawn: ${plan.powerSpawn ? 'Yes' : 'No'}`);
+    console.log(`  Observer: ${plan.observer ? 'Yes' : 'No'}`);
+    console.log(`  Nuker: ${plan.nuker ? 'Yes' : 'No'}`);
+    
+    // Show existing structures
+    console.log(`\nExisting Structures:`);
+    console.log(`  Spawns: ${charity.spawns.length}`);
+    console.log(`  Extensions: ${charity.extensions.length}/${maxExtensions}`);
+    console.log(`  Towers: ${charity.towers.length}`);
+    console.log(`  Links: ${charity.links.length}/${maxLinks}`);
+    
+    const labs = charity.room.find(FIND_MY_STRUCTURES, {
+      filter: s => s.structureType === STRUCTURE_LAB
+    }).length;
+    console.log(`  Labs: ${labs}/${maxLabs}`);
+    
+    const terminal = charity.terminal ? 'Yes' : 'No';
+    const storage = charity.storage ? 'Yes' : 'No';
+    console.log(`  Storage: ${storage}`);
+    console.log(`  Terminal: ${terminal}`);
+    
+    // Show construction sites
+    const sites = charity.room.find(FIND_MY_CONSTRUCTION_SITES);
+    console.log(`\nConstruction Sites: ${sites.length}`);
+    if (sites.length > 0) {
+      const siteCounts: { [key: string]: number } = {};
+      for (const site of sites) {
+        siteCounts[site.structureType] = (siteCounts[site.structureType] || 0) + 1;
+      }
+      for (const type in siteCounts) {
+        console.log(`  ${type}: ${siteCounts[type]}`);
+      }
+    }
+    
+    console.log('\n💡 Use Game.cov.showPlan(\'' + roomName + '\') to visualize');
+    console.log('💡 Use Game.cov.build(\'' + roomName + '\') to place construction sites');
+    console.log('═══════════════════════════════════════════════════════');
+  }
+  
+  /**
+   * Manually trigger structure placement for a room
+   * Usage: Game.cov.build('W1N1')
+   */
+  build(roomName: string): void {
+    const charity = this.covenant.highCharities[roomName];
+    if (!charity) {
+      console.log(`❌ No colony found in ${roomName}`);
+      return;
+    }
+    
+    const level = charity.level;
+    console.log(`🏗️ Placing construction sites for ${roomName} (RCL ${level})...`);
+    
+    // Trigger onRCLUpgrade to place all structures
+    if (charity.autoPlanner) {
+      (charity.autoPlanner as any).onRCLUpgrade(level);
+      console.log(`✅ Construction sites placed. Check with Game.cov.plan('${roomName}')`);
+    } else {
+      console.log(`❌ AutoPlanner not available for ${roomName}`);
+    }
+  }
+  
   /**
    * Force replan roads for a specific room or all colonies
    * Usage: Game.cov.replanRoads() or Game.cov.replanRoads('W1N1')
