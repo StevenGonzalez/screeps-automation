@@ -320,14 +320,6 @@ export class SafeModeManager {
   }
   
   /**
-   * Get current threat level
-   */
-  getThreatLevel(): number {
-    if (this.memory.threatHistory.length === 0) return 0;
-    return this.memory.threatHistory[this.memory.threatHistory.length - 1];
-  }
-  
-  /**
    * Check if safe mode is available
    */
   canUseSafeMode(): boolean {
