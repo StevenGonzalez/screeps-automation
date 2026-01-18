@@ -236,7 +236,12 @@ export class ZealotArbiter extends Arbiter {
             s.structureType === STRUCTURE_STORAGE) {
           return s.hits < s.hitsMax;
         }
-        // Other structures
+        // Roads and containers decay - repair at 90% to prevent loss
+        if (s.structureType === STRUCTURE_ROAD ||
+            s.structureType === STRUCTURE_CONTAINER) {
+          return s.hits < s.hitsMax * 0.9;
+        }
+        // Other structures at 75%
         return s.hits < s.hitsMax * 0.75;
       }
     });

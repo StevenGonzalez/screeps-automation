@@ -157,11 +157,12 @@ export class EngineerArbiter extends Arbiter {
     }
     
     // Priority 2: Prefer repairing roads/containers (prevent decay)
+    // Roads and containers decay over time and must be maintained
     const roadsAndContainers = this.room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_CONTAINER || s.structureType === STRUCTURE_ROAD
     }) as (StructureContainer | StructureRoad)[];
 
-    const needyRoads = roadsAndContainers.filter(s => s.hits < s.hitsMax * 0.95);
+    const needyRoads = roadsAndContainers.filter(s => s.hits < s.hitsMax * 0.9);
     if (needyRoads.length > 0) {
       // Repair the weakest road/container first
       needyRoads.sort((a, b) => a.hits - b.hits);
@@ -189,7 +190,7 @@ export class EngineerArbiter extends Arbiter {
         // Containers and roads decay - repair at 90% to prevent loss
         if (s.structureType === STRUCTURE_CONTAINER || 
             s.structureType === STRUCTURE_ROAD) {
-          return s.hits < s.hitsMax * 0.95;
+          return s.hits < s.hitsMax * 0.9;
         }
         // Other structures at 75% HP
         return s.hits < s.hitsMax * 0.75;
