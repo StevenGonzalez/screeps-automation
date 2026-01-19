@@ -171,14 +171,17 @@ export class DroneArbiter extends Arbiter {
     });
     
     // First miner is EMERGENCY (no energy production without it!)
-    // Additional miners during bootstrap are CRITICAL
+    // Additional miners during bootstrap or when critically low are CRITICAL
     const priority = allMiners.length === 0 ? 
       SpawnPriority.EMERGENCY :
       (this.highCharity.isBootstrapping && this.miners.length === 0 ?
         SpawnPriority.CRITICAL :
         SpawnPriority.ECONOMY);
     
-    const important = allMiners.length === 0 || (this.highCharity.isBootstrapping && this.miners.length === 0);
+    // IMPORTANT: Mark as important if we're low on miners (< 2 total)
+    // This ensures spawning even when energy is below 80% capacity
+    // Prevents colony death spiral from energy shortage
+    const important = allMiners.length < 2 || (this.highCharity.isBootstrapping && this.miners.length === 0);
     
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_DRONE,

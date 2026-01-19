@@ -300,8 +300,10 @@ export class JackalArbiter extends Arbiter {
       SpawnPriority.CRITICAL :
       SpawnPriority.ECONOMY;
     
-    // Important if no haulers - we need at least one to move energy!
-    const important = noHaulers;
+    // IMPORTANT: Mark as important if we have fewer than 2 haulers
+    // Ensures spawning even at low energy to prevent distribution deadlock
+    // Need at least 2 for reliable energy distribution
+    const important = this.haulers.length < 2;
     
     this.requestSpawn(body, name, {
       role: ROLES.ELITE_JACKAL, // Covenant themed role
