@@ -10,20 +10,20 @@ export class BodyBuilder {
   public static buildBody(role: string, energy: number): BodyPartConstant[] {
     switch (role) {
       case 'peasant':
-        return this.buildHarvesterBody(energy);
+        return this.buildPeasantBody(energy);
       case 'mason':
-        return this.buildBuilderBody(energy);
+        return this.buildMasonBody(energy);
       case 'alchemist':
-        return this.buildUpgraderBody(energy);
+        return this.buildAlchemistBody(energy);
       case 'merchant':
-        return this.buildHaulerBody(energy);
+        return this.buildMerchantBody(energy);
       default:
         return [WORK, CARRY, MOVE];
     }
   }
 
-  private static buildHarvesterBody(energy: number): BodyPartConstant[] {
-    // Harvester focuses on WORK and CARRY
+  private static buildPeasantBody(energy: number): BodyPartConstant[] {
+    // Peasant focuses on WORK and CARRY
     if (energy >= 550) {
       return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE];
     } else if (energy >= 400) {
@@ -35,8 +35,8 @@ export class BodyBuilder {
     }
   }
 
-  private static buildBuilderBody(energy: number): BodyPartConstant[] {
-    // Builder balances WORK, CARRY, and MOVE
+  private static buildMasonBody(energy: number): BodyPartConstant[] {
+    // Mason balances WORK, CARRY, and MOVE
     if (energy >= 550) {
       return [WORK, WORK, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE];
     } else if (energy >= 400) {
@@ -48,8 +48,8 @@ export class BodyBuilder {
     }
   }
 
-  private static buildUpgraderBody(energy: number): BodyPartConstant[] {
-    // Upgrader focuses on WORK for faster upgrading
+  private static buildAlchemistBody(energy: number): BodyPartConstant[] {
+    // Alchemist focuses on WORK for faster upgrading
     if (energy >= 550) {
       return [WORK, WORK, WORK, CARRY, MOVE, MOVE];
     } else if (energy >= 400) {
@@ -61,8 +61,8 @@ export class BodyBuilder {
     }
   }
 
-  private static buildHaulerBody(energy: number): BodyPartConstant[] {
-    // Hauler focuses on CARRY and MOVE
+  private static buildMerchantBody(energy: number): BodyPartConstant[] {
+    // Merchant focuses on CARRY and MOVE
     if (energy >= 550) {
       return [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE];
     } else if (energy >= 400) {
