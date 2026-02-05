@@ -2,4 +2,4 @@
  * Visuals Exports
  */
 
-export { CovenantVisuals } from './CovenantVisuals';
+export { ProtossVisuals } from './ProtossVisuals';

@@ -10,15 +10,15 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 export interface PowerSquad {
   targetRoom: string;
-  attackers: Elite[];
-  healers: Elite[];
-  haulers: Elite[];
+  attackers: Warrior[];
+  healers: Warrior[];
+  haulers: Warrior[];
   status: 'forming' | 'moving' | 'attacking' | 'collecting' | 'returning' | 'complete';
   powerBankDestroyed: boolean;
 }
@@ -26,12 +26,12 @@ export interface PowerSquad {
 /**
  * Power Harvester Arbiter - Manages PowerBank operations
  */
-export class PowerHarvesterArbiter extends Arbiter {
+export class ImmortalArbiter extends Arbiter {
   squad: PowerSquad | null;
   targetRoom: string | null;
   
-  constructor(highCharity: HighCharity, targetRoom?: string) {
-    super(highCharity, 'powerHarvester', ArbiterPriority.expansion.scout);
+  constructor(Nexus: Nexus, targetRoom?: string) {
+    super(Nexus, 'powerHarvester', ArbiterPriority.expansion.scout);
     
     this.squad = null;
     this.targetRoom = targetRoom || null;
@@ -96,14 +96,14 @@ export class PowerHarvesterArbiter extends Arbiter {
   }
   
   /**
-   * Update squad members from elites
+   * Update squad members from Warriors
    */
   private updateSquad(): void {
     if (!this.squad) return;
     
-    this.squad.attackers = this.elites.filter(e => e.memory.role === 'power_attacker');
-    this.squad.healers = this.elites.filter(e => e.memory.role === 'power_healer');
-    this.squad.haulers = this.elites.filter(e => e.memory.role === 'power_hauler');
+    this.squad.attackers = this.warriors.filter(e => e.memory.role === 'power_attacker');
+    this.squad.healers = this.warriors.filter(e => e.memory.role === 'power_healer');
+    this.squad.haulers = this.warriors.filter(e => e.memory.role === 'power_hauler');
   }
   
   /**
@@ -271,7 +271,7 @@ export class PowerHarvesterArbiter extends Arbiter {
   private returnHome(): void {
     if (!this.squad) return;
     
-    const homeRoom = this.highCharity.name;
+    const homeRoom = this.Nexus.name;
     let allHome = true;
     
     for (const unit of [...this.squad.attackers, ...this.squad.healers, ...this.squad.haulers]) {
@@ -282,7 +282,7 @@ export class PowerHarvesterArbiter extends Arbiter {
       } else {
         // Haulers deliver power to storage
         if (unit.memory.role === 'power_hauler' && !unit.needsEnergy) {
-          const storage = this.highCharity.storage;
+          const storage = this.Nexus.storage;
           if (storage) {
             unit.transferTo(storage);
           }
@@ -339,7 +339,7 @@ export class PowerHarvesterArbiter extends Arbiter {
    * Calculate power attacker body (heavy attack focus)
    */
   private calculatePowerAttackerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyAvailable;
+    const energy = this.Nexus.energyAvailable;
     // PowerBanks need heavy attackers - use available energy flexibly
     // Min: 260 energy (1T, 1A, 2M)
     const base: BodyPartConstant[] = [TOUGH, ATTACK, MOVE, MOVE];
@@ -351,7 +351,7 @@ export class PowerHarvesterArbiter extends Arbiter {
    * Calculate power healer body (heavy heal focus)
    */
   private calculatePowerHealerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyAvailable;
+    const energy = this.Nexus.energyAvailable;
     // Power healers need heal + move - min 300 energy (1H, 1M)
     const pattern: BodyPartConstant[] = [HEAL, MOVE];
     return BodyBuilder.repeat(pattern, energy, 25);
@@ -364,12 +364,12 @@ export class PowerHarvesterArbiter extends Arbiter {
     // Power haulers are just large haulers
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     return BodyBuilder.hauler(energy);
   }

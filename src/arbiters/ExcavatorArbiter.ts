@@ -10,8 +10,8 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
@@ -21,10 +21,10 @@ export class ExcavatorArbiter extends Arbiter {
   mineral: Mineral;
   extractor: StructureExtractor | null;
   container: StructureContainer | null;
-  miners: Elite[];
+  miners: Warrior[];
   
-  constructor(highCharity: HighCharity, mineral: Mineral) {
-    super(highCharity, `mineralMining_${mineral.id}`, ArbiterPriority.economy.mining);
+  constructor(Nexus: Nexus, mineral: Mineral) {
+    super(Nexus, `mineralMining_${mineral.id}`, ArbiterPriority.economy.mining);
     this.mineral = mineral;
     this.extractor = null;
     this.container = null;
@@ -45,18 +45,18 @@ export class ExcavatorArbiter extends Arbiter {
     if (!this.extractor) return;
     
     // Check if we have storage space
-    if (!this.highCharity.storage && !this.highCharity.terminal) return;
+    if (!this.Nexus.storage && !this.Nexus.terminal) return;
     
     // Check if storage is full of this mineral type
-    const storedAmount = (this.highCharity.storage?.store.getUsedCapacity(this.mineral.mineralType) || 0) +
-                         (this.highCharity.terminal?.store.getUsedCapacity(this.mineral.mineralType) || 0);
+    const storedAmount = (this.Nexus.storage?.store.getUsedCapacity(this.mineral.mineralType) || 0) +
+                         (this.Nexus.terminal?.store.getUsedCapacity(this.mineral.mineralType) || 0);
     
     // Stop mining if we have more than 100k of this mineral
     if (storedAmount > 100000) return;
     
     // DEFENSIVE PROTOCOL: Don't spawn mineral miners during combat (threat >= 4)
     // Mineral mining is luxury economy, not essential during defense
-    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    const threatLevel = this.Nexus.safeModeManager.getThreatLevel();
     if (threatLevel >= 4) {
       if (Game.time % 100 === 0) {
         console.log(`⚔️ ${this.print}: Suspending excavator spawns (threat: ${threatLevel}/10)`);
@@ -77,7 +77,7 @@ export class ExcavatorArbiter extends Arbiter {
     }
   }
   
-  private runMiner(miner: Elite): void {
+  private runMiner(miner: Warrior): void {
     // State machine: mining → depositing
     if (miner.isFull) {
       this.deposit(miner);
@@ -86,7 +86,7 @@ export class ExcavatorArbiter extends Arbiter {
     }
   }
   
-  private mine(miner: Elite): void {
+  private mine(miner: Warrior): void {
     const result = miner.harvestMineral(this.mineral);
     
     if (result === OK) {
@@ -100,18 +100,18 @@ export class ExcavatorArbiter extends Arbiter {
     }
   }
   
-  private deposit(miner: Elite): void {
+  private deposit(miner: Warrior): void {
     let target: StructureStorage | StructureTerminal | StructureContainer | null = null;
     
     // Priority: Container > Storage > Terminal
     if (this.container && this.container.store.getFreeCapacity() > 0) {
       target = this.container;
-    } else if (this.highCharity.storage && 
-               this.highCharity.storage.store.getFreeCapacity() > 0) {
-      target = this.highCharity.storage;
-    } else if (this.highCharity.terminal && 
-               this.highCharity.terminal.store.getFreeCapacity() > 0) {
-      target = this.highCharity.terminal;
+    } else if (this.Nexus.storage && 
+               this.Nexus.storage.store.getFreeCapacity() > 0) {
+      target = this.Nexus.storage;
+    } else if (this.Nexus.terminal && 
+               this.Nexus.terminal.store.getFreeCapacity() > 0) {
+      target = this.Nexus.terminal;
     }
     
     if (!target) {
@@ -131,7 +131,7 @@ export class ExcavatorArbiter extends Arbiter {
     const name = `Excavator_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_mineralMiner' // Covenant themed role
+      role: 'Warrior_mineralMiner' // KHALA themed role
     } as any);
   }
   
@@ -139,12 +139,12 @@ export class ExcavatorArbiter extends Arbiter {
     // Mineral miners need lots of WORK parts
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     return BodyBuilder.miner(energy);
   }
@@ -174,6 +174,6 @@ export class ExcavatorArbiter extends Arbiter {
     this.container = containers[0] || null;
     
     // Update miners
-    this.miners = this.getCreepsForRole().map(c => new Elite(c));
+    this.miners = this.getCreepsForRole().map(c => new Warrior(c));
   }
 }

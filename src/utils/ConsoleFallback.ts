@@ -1,8 +1,8 @@
 /**
  * Console Fallback
  *
- * Ensure `Game.cov` exists early so console commands can be used
- * even if Covenant initialization fails during module load.
+ * Ensure `Game.kha` exists early so console commands can be used
+ * even if KHALA initialization fails during module load.
  */
 
 /// <reference types="@types/screeps" />

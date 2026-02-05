@@ -4,36 +4,36 @@
  * "From humble beginnings, great civilizations rise"
  * 
  * Manages pioneer creeps that claim new rooms and establish
- * initial infrastructure for new High Charities.
+ * initial infrastructure for new Nexuses.
  */
 
 /// <reference types="@types/screeps" />
 
 import { Arbiter } from '../arbiters/Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 
 export class PioneerArbiter extends Arbiter {
   targetRoom: string;
   
-  constructor(highCharity: HighCharity, targetRoom: string) {
+  constructor(Nexus: Nexus, targetRoom: string) {
     const ref = `pioneer_${targetRoom}`;
-    super(highCharity, ref, 100); // Highest priority - critical for expansion
+    super(Nexus, ref, 100); // Highest priority - critical for expansion
     
     this.targetRoom = targetRoom;
   }
   
   init(): void {
-    // Elites are gathered automatically by Arbiter base class
+    // Warriors are gathered automatically by Arbiter base class
   }
   
   run(): void {
-    for (const pioneer of this.elites) {
+    for (const pioneer of this.warriors) {
       this.runPioneer(pioneer);
     }
   }
   
-  private runPioneer(pioneer: Elite): void {
+  private runPioneer(pioneer: Warrior): void {
     const targetRoom = Game.rooms[this.targetRoom];
     
     // Phase 1: Claim the room
@@ -49,7 +49,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Phase 1: Move to room and claim controller
    */
-  private claimPhase(pioneer: Elite): void {
+  private claimPhase(pioneer: Warrior): void {
     // Move to target room
     if (pioneer.creep.room.name !== this.targetRoom) {
       const exitDir = pioneer.creep.room.findExitTo(this.targetRoom);
@@ -82,7 +82,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Phase 2: Build initial infrastructure
    */
-  private bootstrapPhase(pioneer: Elite, room: Room): void {
+  private bootstrapPhase(pioneer: Warrior, room: Room): void {
     // If carrying energy, build
     if (pioneer.creep.store[RESOURCE_ENERGY] > 0) {
       this.buildInfrastructure(pioneer, room);
@@ -94,7 +94,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Gather energy from sources
    */
-  private gatherEnergy(pioneer: Elite, room: Room): void {
+  private gatherEnergy(pioneer: Warrior, room: Room): void {
     // Find nearest source
     const sources = room.find(FIND_SOURCES_ACTIVE);
     if (sources.length === 0) return;
@@ -113,7 +113,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Build critical infrastructure
    */
-  private buildInfrastructure(pioneer: Elite, room: Room): void {
+  private buildInfrastructure(pioneer: Warrior, room: Room): void {
     // Priority 1: Build spawn (critical!)
     const spawns = room.find(FIND_MY_SPAWNS);
     if (spawns.length === 0) {
@@ -184,7 +184,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Build a specific target
    */
-  private buildTarget(pioneer: Elite, target: ConstructionSite): void {
+  private buildTarget(pioneer: Warrior, target: ConstructionSite): void {
     const result = pioneer.creep.build(target);
     if (result === ERR_NOT_IN_RANGE) {
       pioneer.creep.moveTo(target, {
@@ -196,7 +196,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Place spawn near controller
    */
-  private placeSpawn(pioneer: Elite, room: Room): void {
+  private placeSpawn(pioneer: Warrior, room: Room): void {
     const controller = room.controller!;
     
     // Find position near controller
@@ -226,7 +226,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Place container near source
    */
-  private placeContainer(pioneer: Elite, room: Room): void {
+  private placeContainer(pioneer: Warrior, room: Room): void {
     const sources = room.find(FIND_SOURCES);
     if (sources.length === 0) return;
     
@@ -261,7 +261,7 @@ export class PioneerArbiter extends Arbiter {
   /**
    * Place extension near spawn
    */
-  private placeExtension(pioneer: Elite, room: Room): void {
+  private placeExtension(pioneer: Warrior, room: Room): void {
     const spawns = room.find(FIND_MY_SPAWNS);
     if (spawns.length === 0) return;
     
@@ -294,18 +294,18 @@ export class PioneerArbiter extends Arbiter {
   }
   
   getSpawnRequest(): any {
-    const target = this.highCharity.covenant.reclaimationCouncil.getStatus();
+    const target = this.Nexus.KHALA.reclaimationCouncil.getStatus();
     if (!target || target.roomName !== this.targetRoom) return null;
     
     // Check if room is already claimed
     const room = Game.rooms[this.targetRoom];
     if (room && room.controller && room.controller.my) {
       // Room is claimed - need builders
-      const current = this.elites.length;
+      const current = this.warriors.length;
       if (current >= 3) return null; // Max 3 pioneers during bootstrap
       
       // Builder body: WORK, CARRY, MOVE
-      const energy = this.highCharity.energyCapacity;
+      const energy = this.Nexus.energyCapacity;
       const body: BodyPartConstant[] = [];
       
       let remainingEnergy = Math.min(energy, 1000);
@@ -330,7 +330,7 @@ export class PioneerArbiter extends Arbiter {
       };
     } else {
       // Room not claimed yet - need claimer
-      const current = this.elites.length;
+      const current = this.warriors.length;
       if (current >= 1) return null; // Only 1 claimer needed
       
       return {

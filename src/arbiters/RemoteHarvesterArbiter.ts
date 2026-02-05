@@ -9,34 +9,34 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 export class RemoteHarvesterArbiter extends Arbiter {
   sourceId: Id<Source>;
   remoteRoom: string;
   
-  constructor(highCharity: HighCharity, sourceId: Id<Source>, remoteRoom: string) {
+  constructor(Nexus: Nexus, sourceId: Id<Source>, remoteRoom: string) {
     const source = Game.getObjectById(sourceId);
     const ref = `remote_harvester_${remoteRoom}_${sourceId}`;
-    super(highCharity, ref, 305); // Priority between hauler and upgrader
+    super(Nexus, ref, 305); // Priority between hauler and upgrader
     
     this.sourceId = sourceId;
     this.remoteRoom = remoteRoom;
   }
   
   init(): void {
-    this.gatherElites();
+    this.gatherWarriors();
   }
   
   run(): void {
-    for (const harvester of this.elites) {
+    for (const harvester of this.warriors) {
       this.runHarvester(harvester);
     }
   }
   
-  private runHarvester(harvester: Elite): void {
+  private runHarvester(harvester: Warrior): void {
     const source = Game.getObjectById(this.sourceId);
     if (!source) return;
     
@@ -44,7 +44,7 @@ export class RemoteHarvesterArbiter extends Arbiter {
     const hostiles = harvester.creep.room.find(FIND_HOSTILE_CREEPS);
     if (hostiles.length > 0) {
       // Flee to home room
-      if (harvester.creep.room.name !== this.highCharity.name) {
+      if (harvester.creep.room.name !== this.Nexus.name) {
         const exit = harvester.creep.pos.findClosestByPath(FIND_EXIT);
         if (exit) {
           harvester.creep.moveTo(exit, { 
@@ -93,14 +93,14 @@ export class RemoteHarvesterArbiter extends Arbiter {
   }
   
   getSpawnRequest(): any {
-    const remoteOps = this.highCharity.remoteOperations;
+    const remoteOps = this.Nexus.remoteOperations;
     const required = remoteOps.getRequiredHarvesters(this.sourceId);
-    const current = this.elites.length;
+    const current = this.warriors.length;
     
     if (current >= required) return null;
     
     // Remote harvester: flexible miner body capped at 800 energy to minimize losses
-    const energy = Math.min(this.highCharity.energyCapacity, 800);
+    const energy = Math.min(this.Nexus.energyCapacity, 800);
     const body = BodyBuilder.miner(energy);
     
     return {
@@ -116,8 +116,8 @@ export class RemoteHarvesterArbiter extends Arbiter {
     };
   }
   
-  protected gatherElites(): void {
-    this.elites = [];
+  protected gatherWarriors(): void {
+    this.warriors = [];
     
     for (const name in Game.creeps) {
       const creep = Game.creeps[name];
@@ -126,7 +126,7 @@ export class RemoteHarvesterArbiter extends Arbiter {
         (creep.memory.role === 'remote_harvester' && 
          creep.memory.sourceId === this.sourceId)
       ) {
-        this.elites.push(new Elite(creep, this));
+        this.warriors.push(new Warrior(creep, this));
       }
     }
   }

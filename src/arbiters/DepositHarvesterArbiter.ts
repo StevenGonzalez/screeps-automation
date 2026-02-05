@@ -10,8 +10,8 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
@@ -25,8 +25,8 @@ export interface DepositSquad {
   depositId: string;
   targetRoom: string;
   depositType: DepositConstant;
-  harvesters: Elite[];
-  haulers: Elite[];
+  harvesters: Warrior[];
+  haulers: Warrior[];
   status: 'forming' | 'moving' | 'harvesting' | 'complete';
 }
 
@@ -39,8 +39,8 @@ export class DepositHarvesterArbiter extends Arbiter {
   depositType: DepositConstant;
   squad: DepositSquad;
   
-  constructor(highCharity: HighCharity, depositId: string, targetRoom: string, depositType: DepositConstant) {
-    super(highCharity, `depositHarvester_${depositId}`, ArbiterPriority.economy.mining);
+  constructor(Nexus: Nexus, depositId: string, targetRoom: string, depositType: DepositConstant) {
+    super(Nexus, `depositHarvester_${depositId}`, ArbiterPriority.economy.mining);
     this.depositId = depositId;
     this.targetRoom = targetRoom;
     this.depositType = depositType;
@@ -103,11 +103,11 @@ export class DepositHarvesterArbiter extends Arbiter {
   }
   
   /**
-   * Update squad members from elites
+   * Update squad members from Warriors
    */
   private updateSquad(): void {
-    this.squad.harvesters = this.elites.filter(e => e.memory.role === 'pilgrim');
-    this.squad.haulers = this.elites.filter(e => e.memory.role === 'caravan');
+    this.squad.harvesters = this.warriors.filter(e => e.memory.role === 'pilgrim');
+    this.squad.haulers = this.warriors.filter(e => e.memory.role === 'caravan');
   }
   
   /**
@@ -224,11 +224,11 @@ export class DepositHarvesterArbiter extends Arbiter {
   /**
    * Run hauler logic
    */
-  private runHauler(hauler: Elite, deposit: Deposit): void {
+  private runHauler(hauler: Warrior, deposit: Deposit): void {
     // If full, return home
     if (hauler.isFull) {
-      if (hauler.room.name !== this.highCharity.name) {
-        const exitDir = hauler.room.findExitTo(this.highCharity.name);
+      if (hauler.room.name !== this.Nexus.name) {
+        const exitDir = hauler.room.findExitTo(this.Nexus.name);
         if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
           const exit = hauler.pos.findClosestByPath(exitDir);
           if (exit) {
@@ -238,7 +238,7 @@ export class DepositHarvesterArbiter extends Arbiter {
         }
       } else {
         // Deliver to storage/terminal
-        const target = this.highCharity.storage || this.highCharity.terminal;
+        const target = this.Nexus.storage || this.Nexus.terminal;
         if (target) {
           const result = hauler.transferTo(target);
           if (result === OK) {
@@ -311,7 +311,7 @@ export class DepositHarvesterArbiter extends Arbiter {
    * Calculate harvester body (heavy WORK focus, minimal CARRY)
    */
   private calculateHarvesterBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    const energy = this.Nexus.energyCapacity;
     // Deposit harvesters need lots of WORK parts
     // Min base: 300 energy (3W, 3M)
     const base: BodyPartConstant[] = [WORK, WORK, WORK, MOVE, MOVE, MOVE];
@@ -326,9 +326,9 @@ export class DepositHarvesterArbiter extends Arbiter {
     // Deposit haulers are just big haulers
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+    const energy = (this.Nexus.isBootstrapping || totalCreeps === 0) ? 
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     return BodyBuilder.hauler(energy);
   }

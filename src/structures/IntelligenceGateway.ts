@@ -1,5 +1,5 @@
 /**
- * INTELLIGENCE TEMPLE - Room Reconnaissance
+ * INTELLIGENCE Gateway - Room Reconnaissance
  * 
  * "Know thy enemy, know thy terrain"
  * 
@@ -8,7 +8,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface RoomIntel {
   roomName: string;
@@ -30,17 +30,17 @@ export interface RoomIntel {
 }
 
 /**
- * Intelligence Temple - Scouts and analyzes nearby rooms
+ * Intelligence Gateway - Scouts and analyzes nearby rooms
  */
-export class IntelligenceTemple {
-  highCharity: HighCharity;
+export class IntelligenceGateway {
+  Nexus: Nexus;
   memory: { [roomName: string]: RoomIntel };
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
     
     // Initialize memory
-    const hcMemory = highCharity.memory as any;
+    const hcMemory = Nexus.memory as any;
     if (!hcMemory.intel) {
       hcMemory.intel = {};
     }
@@ -59,7 +59,7 @@ export class IntelligenceTemple {
       this.cleanupStaleIntel();
     }
     
-    const homeRoom = this.highCharity.name;
+    const homeRoom = this.Nexus.name;
     const exits = Game.map.describeExits(homeRoom);
     
     if (!exits) return;
@@ -163,13 +163,13 @@ export class IntelligenceTemple {
     if (!intel.isSafe) return false;
     
     // Don't mine from rooms with hostile controllers
-    if (intel.controller?.owner && intel.controller.owner !== this.highCharity.room.controller?.owner?.username) {
+    if (intel.controller?.owner && intel.controller.owner !== this.Nexus.room.controller?.owner?.username) {
       return false;
     }
     
     // Don't mine from reserved rooms (unless we reserved it)
     if (intel.controller?.reservation && 
-        intel.controller.reservation.username !== this.highCharity.room.controller?.owner?.username) {
+        intel.controller.reservation.username !== this.Nexus.room.controller?.owner?.username) {
       return false;
     }
     
@@ -205,7 +205,7 @@ export class IntelligenceTemple {
       
       // Remove intel for rooms that are now owned by hostile players
       if (intel.controller?.owner && 
-          intel.controller.owner !== this.highCharity.room.controller?.owner?.username) {
+          intel.controller.owner !== this.Nexus.room.controller?.owner?.username) {
         if (age > 10000) { // Give some time before cleanup
           delete this.memory[roomName];
           console.log(`🧹 Cleaned intel for hostile-owned room: ${roomName}`);
@@ -218,7 +218,7 @@ export class IntelligenceTemple {
    * Calculate distance to room
    */
   private calculateDistance(roomName: string): number {
-    const route = Game.map.findRoute(this.highCharity.name, roomName);
+    const route = Game.map.findRoute(this.Nexus.name, roomName);
     if (route === ERR_NO_PATH) return 999;
     return Array.isArray(route) ? route.length : 1;
   }

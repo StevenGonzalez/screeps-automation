@@ -3,7 +3,7 @@
  * 
  * "We shall build monuments to the Great Journey"
  * 
- * Manages builder Elites that construct buildings and repair structures.
+ * Manages builder Warriors that construct buildings and repair structures.
  * Adapts to construction needs dynamically.
  */
 
@@ -11,8 +11,8 @@
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { EnergyCollector } from '../utils/EnergyCollector';
 import { getSpawnName } from '../utils/SpawnNames';
 import { ROLES, RoleHelpers } from '../constants/Roles';
@@ -22,18 +22,18 @@ import { BodyBuilder } from '../utils/BodyBuilder';
  * Builder Arbiter - Manages construction and repair
  */
 export class EngineerArbiter extends Arbiter {
-  builders: Elite[];
+  builders: Warrior[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'builder', ArbiterPriority.support.builder);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'builder', ArbiterPriority.support.builder);
     this.builders = [];
   }
   
   init(): void {
     this.refresh();
     
-    // Update builders list from elites
-    this.builders = this.elites;
+    // Update builders list from Warriors
+    this.builders = this.warriors;
     
     // Place construction sites based on room plan
     // More frequent for critical structures like containers
@@ -53,7 +53,7 @@ export class EngineerArbiter extends Arbiter {
     
     // DEFENSIVE PROTOCOL: During high threat (>= 6), only spawn builders if we have damaged structures
     // Prioritize defense over new construction
-    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    const threatLevel = this.Nexus.safeModeManager.getThreatLevel();
     if (threatLevel >= 6 && currentBuilders < desiredBuilders) {
       const damagedStructures = this.room.find(FIND_STRUCTURES, {
         filter: s => s.hits < s.hitsMax && 
@@ -86,7 +86,7 @@ export class EngineerArbiter extends Arbiter {
     }
   }
   
-  private runBuilder(builder: Elite): void {
+  private runBuilder(builder: Warrior): void {
     // State machine: harvesting → building/repairing
     if (builder.memory.building && builder.needsEnergy) {
       builder.memory.building = false;
@@ -106,7 +106,7 @@ export class EngineerArbiter extends Arbiter {
     }
   }
   
-  private buildSomething(builder: Elite): boolean {
+  private buildSomething(builder: Warrior): boolean {
     // Find construction sites
     const sites = this.room.find(FIND_MY_CONSTRUCTION_SITES);
     
@@ -141,12 +141,12 @@ export class EngineerArbiter extends Arbiter {
     return false;
   }
   
-  private repairSomething(builder: Elite): boolean {
-    // Check DefenseTemple for fortification repair needs first
-    const defenseTemple = this.highCharity.defenseTemple;
+  private repairSomething(builder: Warrior): boolean {
+    // Check DefenseGateway for fortification repair needs first
+    const DefenseGateway = this.Nexus.DefenseGateway;
     
     // Priority 1: Ramparts needing repair
-    const ramparts = defenseTemple.getRampartsNeedingRepair();
+    const ramparts = DefenseGateway.getRampartsNeedingRepair();
     if (ramparts.length > 0) {
       const target = ramparts[0];
       const result = builder.repairStructure(target);
@@ -219,10 +219,10 @@ export class EngineerArbiter extends Arbiter {
     }
 
     // Priority 4: Walls (low-frequency or threat-driven)
-    const walls = defenseTemple.getWallsNeedingRepair();
+    const walls = DefenseGateway.getWallsNeedingRepair();
     if (walls.length > 0) {
       // Only perform bulk wall repairs if under threat or on a low-frequency maintenance tick
-      const threatLevel = (defenseTemple.memory as any)?.threatLevel || 0;
+      const threatLevel = (DefenseGateway.memory as any)?.threatLevel || 0;
       const maintenanceTick = (Game.time % 1000) === 0; // once every 1000 ticks
 
       if (threatLevel > 0 || maintenanceTick) {
@@ -238,7 +238,7 @@ export class EngineerArbiter extends Arbiter {
     return false;
   }
   
-  private getEnergy(builder: Elite): void {
+  private getEnergy(builder: Warrior): void {
     // Use centralized EnergyCollector for worker energy collection
     EnergyCollector.collect(builder, {
       useLinks: false, // Links are for upgraders
@@ -249,7 +249,7 @@ export class EngineerArbiter extends Arbiter {
   
   private calculateDesiredBuilders(): number {
     const sites = this.room.find(FIND_MY_CONSTRUCTION_SITES);
-    const phase = this.highCharity.memory.phase;
+    const phase = this.Nexus.memory.phase;
     
     // Check if there are structures needing repair
     const needsRepair = this.room.find(FIND_STRUCTURES, {
@@ -307,15 +307,15 @@ export class EngineerArbiter extends Arbiter {
                    s.structureType === STRUCTURE_CONTAINER
     }).length > 0;
     
-    const priority = (this.highCharity.isBootstrapping && hasUrgentSites) ?
+    const priority = (this.Nexus.isBootstrapping && hasUrgentSites) ?
       SpawnPriority.CRITICAL : // Critical priority during bootstrap
       SpawnPriority.ECONOMY; // Normal economy priority otherwise
     
     // First builder or urgent sites during bootstrap should be important
-    const important = this.builders.length === 0 || (this.highCharity.isBootstrapping && hasUrgentSites);
+    const important = this.builders.length === 0 || (this.Nexus.isBootstrapping && hasUrgentSites);
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_ENGINEER, // Covenant themed role
+      role: ROLES.Warrior_ENGINEER, // KHALA themed role
       building: false
     } as any, priority, important);
   }
@@ -324,12 +324,12 @@ export class EngineerArbiter extends Arbiter {
     // Use available energy if no builders exist (emergency spawn)
     // OR if room doesn't have at least 90% energy capacity (still accumulating)
     const noBuilders = this.builders.length === 0;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
     const useAvailable = noBuilders || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      Math.max(this.highCharity.energyAvailable, 200) : // At least 200 for minimal body
-      this.highCharity.energyCapacity;
+      Math.max(this.Nexus.energyAvailable, 200) : // At least 200 for minimal body
+      this.Nexus.energyCapacity;
     
     // Use BodyBuilder for flexible builder body
     return BodyBuilder.builder(energy);
@@ -347,7 +347,7 @@ export class EngineerArbiter extends Arbiter {
    * Place construction sites based on room plan
    */
   private placeConstructionSites(): void {
-    const plan = this.highCharity.planner.getPlan();
+    const plan = this.Nexus.planner.getPlan();
     if (!plan) return;
     
     const level = this.room.controller?.level || 0;

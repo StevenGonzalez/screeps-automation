@@ -3,7 +3,7 @@
  * 
  * "For the glory of the Prophets"
  * 
- * Manages worker Elites that upgrade the room controller.
+ * Manages worker Warriors that upgrade the room controller.
  * Critical for RCL progression and maintaining downgrade timer.
  */
 
@@ -11,49 +11,49 @@
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { EnergyCollector } from '../utils/EnergyCollector';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
-// Covenant-themed controller signs
-const COVENANT_SIGNS = [
-  "🔱 The Covenant's will is absolute",
+// KHALA-themed controller signs
+const KHALA_SIGNS = [
+  "🔱 The KHALA's will is absolute",
   "⚡ By the Prophets' grace, this world ascends",
-  "🌟 The Great Journey begins here",
+  "🌟 For Aiur! here",
   "🔥 Heretics shall be purged",
   "✨ The Forerunners smile upon this place",
-  "⚔️ Sacred ground of the Covenant",
+  "⚔️ Sacred ground of the KHALA",
   "🛡️ Protected by the Hierarchs' decree",
   "💫 The Path is clear, the Journey ordained",
-  "🔱 Glory to the Covenant Empire",
+  "🔱 Glory to the KHALA Empire",
   "⚡ This realm serves the Prophets"
 ];
 
 /**
  * Worker Arbiter - Manages controller upgrading
  */
-export class DevoteeArbiter extends Arbiter {
-  workers: Elite[];
+export class SentryArbiter extends Arbiter {
+  workers: Warrior[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'worker', ArbiterPriority.economy.upgrading);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'worker', ArbiterPriority.economy.upgrading);
     this.workers = [];
   }
   
   init(): void {
     this.refresh();
     
-    // Update workers list from elites
-    this.workers = this.elites;
+    // Update workers list from Warriors
+    this.workers = this.warriors;
     
     // Request boosts for workers at mature colonies
-    if (this.highCharity.memory.phase === 'powerhouse' && this.highCharity.boostTemple?.isReady()) {
+    if (this.Nexus.memory.phase === 'powerhouse' && this.Nexus.BoostGateway?.isReady()) {
       for (const worker of this.workers) {
         // Only boost workers that aren't already boosted
-        if (!this.highCharity.boostTemple.isCreepBoosted(worker.name)) {
-          this.highCharity.boostTemple.requestBoost(worker.name, 'elite_upgrader', ArbiterPriority.economy.upgrading);
+        if (!this.Nexus.BoostGateway.isCreepBoosted(worker.name)) {
+          this.Nexus.BoostGateway.requestBoost(worker.name, 'Warrior_upgrader', ArbiterPriority.economy.upgrading);
         }
       }
     }
@@ -64,12 +64,12 @@ export class DevoteeArbiter extends Arbiter {
     
     // Debug logging (throttled)
     if (Game.time % 50 === 0) {
-      console.log(`📚 ${this.print}: ${currentWorkers}/${desiredWorkers} workers (phase: ${this.highCharity.memory.phase})`);
+      console.log(`📚 ${this.print}: ${currentWorkers}/${desiredWorkers} workers (phase: ${this.Nexus.memory.phase})`);
     }
     
     // DEFENSIVE PROTOCOL: Don't spawn upgraders during combat (threat >= 4)
     // Energy should go to defenders, not economic development
-    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    const threatLevel = this.Nexus.safeModeManager.getThreatLevel();
     if (threatLevel >= 4) {
       if (Game.time % 100 === 0) {
         console.log(`⚔️ ${this.print}: Suspending upgrader spawns (threat: ${threatLevel}/10)`);
@@ -90,7 +90,7 @@ export class DevoteeArbiter extends Arbiter {
     }
   }
   
-  private runWorker(worker: Elite): void {
+  private runWorker(worker: Warrior): void {
     const controller = this.room.controller;
     if (!controller) return;
     
@@ -101,7 +101,7 @@ export class DevoteeArbiter extends Arbiter {
                           Game.time - controller.sign.time > 100000; // Re-sign every 100k ticks
       
       if (needsSigning && worker.pos.isNearTo(controller)) {
-        const randomSign = COVENANT_SIGNS[Math.floor(Math.random() * COVENANT_SIGNS.length)];
+        const randomSign = KHALA_SIGNS[Math.floor(Math.random() * KHALA_SIGNS.length)];
         worker.creep.signController(controller, randomSign);
       }
     }
@@ -126,10 +126,10 @@ export class DevoteeArbiter extends Arbiter {
     }
   }
   
-  private getEnergy(worker: Elite): void {
+  private getEnergy(worker: Warrior): void {
     // Check for upgrader/controller link first (highest priority for workers)
-    if (this.highCharity.linkTemple?.isActive()) {
-      const upgraderLink = this.highCharity.linkTemple.getUpgraderLink();
+    if (this.Nexus.LinkGateway?.isActive()) {
+      const upgraderLink = this.Nexus.LinkGateway.getUpgraderLink();
       if (upgraderLink && upgraderLink.store.getUsedCapacity(RESOURCE_ENERGY) > 50) {
         worker.withdrawFrom(upgraderLink);
         worker.say('⚡');
@@ -149,7 +149,7 @@ export class DevoteeArbiter extends Arbiter {
   }
   
   private calculateDesiredWorkers(): number {
-    const phase = this.highCharity.memory.phase;
+    const phase = this.Nexus.memory.phase;
     const controller = this.room.controller;
     
     if (!controller) return 0;
@@ -193,7 +193,7 @@ export class DevoteeArbiter extends Arbiter {
     const important = this.workers.length === 0; // First worker is important
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_DEVOTEE, // Covenant themed role
+      role: ROLES.Warrior_DEVOTEE, // KHALA themed role
       upgrading: false
     } as any, priority, important);
   }
@@ -202,12 +202,12 @@ export class DevoteeArbiter extends Arbiter {
     // Use available energy if no workers exist (emergency spawn)
     // OR if room doesn't have at least 90% energy capacity (still accumulating)
     const noWorkers = this.workers.length === 0;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
     const useAvailable = noWorkers || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      Math.max(this.highCharity.energyAvailable, 200) : // At least 200 for minimal body
-      this.highCharity.energyCapacity;
+      Math.max(this.Nexus.energyAvailable, 200) : // At least 200 for minimal body
+      this.Nexus.energyCapacity;
     
     // Use BodyBuilder for flexible upgrader body
     return BodyBuilder.upgrader(energy);

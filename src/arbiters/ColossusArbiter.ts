@@ -1,7 +1,7 @@
 /**
  * VANGUARD ARBITER - Offensive Combat Operations
  * 
- * "The blade of the Covenant strikes true"
+ * "The blade of the KHALA strikes true"
  * 
  * Manages offensive combat units for attacking enemy positions.
  * Coordinates attackers and healers in assault squads with advanced tactics.
@@ -10,8 +10,8 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { SquadCoordinator, CombatRole, TacticMode, SquadFormation } from '../military/SquadCoordinator';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
@@ -27,16 +27,16 @@ export interface VanguardMemory {
 /**
  * Vanguard Arbiter - Manages offensive combat units with advanced squad tactics
  */
-export class VanguardArbiter extends Arbiter {
-  attackers: Elite[];
-  healers: Elite[];
+export class ColossusArbiter extends Arbiter {
+  attackers: Warrior[];
+  healers: Warrior[];
   targetRoom: string | null;
   private squad: SquadCoordinator | null;
   private formation: SquadFormation;
   private tactic: TacticMode;
   
-  constructor(highCharity: HighCharity, targetRoom?: string, formation: SquadFormation = 'box', tactic: TacticMode = 'assault') {
-    super(highCharity, 'vanguard', ArbiterPriority.defense.melee);
+  constructor(Nexus: Nexus, targetRoom?: string, formation: SquadFormation = 'box', tactic: TacticMode = 'assault') {
+    super(Nexus, 'vanguard', ArbiterPriority.defense.melee);
     
     this.attackers = [];
     this.healers = [];
@@ -57,7 +57,7 @@ export class VanguardArbiter extends Arbiter {
   private initializeSquad(): void {
     if (!this.targetRoom) return;
     
-    const rallyPoint = new RoomPosition(25, 25, this.highCharity.name);
+    const rallyPoint = new RoomPosition(25, 25, this.Nexus.name);
     
     this.squad = new SquadCoordinator({
       formation: this.formation,
@@ -73,15 +73,15 @@ export class VanguardArbiter extends Arbiter {
     this.refresh();
     
     // Separate attackers and healers
-    this.attackers = this.elites.filter(e => e.memory.role === 'attacker');
-    this.healers = this.elites.filter(e => e.memory.role === 'healer');
+    this.attackers = this.warriors.filter(e => e.memory.role === 'attacker');
+    this.healers = this.warriors.filter(e => e.memory.role === 'healer');
     
     // Request boosts for newly spawned combat creeps
     for (const attacker of this.attackers) {
       if (!attacker.creep.ticksToLive || attacker.creep.ticksToLive >= 1450) {
         // Newly spawned, request boosts
-        if (this.highCharity.boostManager) {
-          this.highCharity.boostManager.requestBoosts(attacker.creep, 'attacker');
+        if (this.Nexus.boostManager) {
+          this.Nexus.boostManager.requestBoosts(attacker.creep, 'attacker');
         }
       }
     }
@@ -89,8 +89,8 @@ export class VanguardArbiter extends Arbiter {
     for (const healer of this.healers) {
       if (!healer.creep.ticksToLive || healer.creep.ticksToLive >= 1450) {
         // Newly spawned, request boosts
-        if (this.highCharity.boostManager) {
-          this.highCharity.boostManager.requestBoosts(healer.creep, 'healer');
+        if (this.Nexus.boostManager) {
+          this.Nexus.boostManager.requestBoosts(healer.creep, 'healer');
         }
       }
     }
@@ -138,11 +138,11 @@ export class VanguardArbiter extends Arbiter {
   /**
    * Run attacker logic
    */
-  private runAttacker(attacker: Elite): void {
+  private runAttacker(attacker: Warrior): void {
     if (!this.targetRoom) {
       // No target, return to home
-      if (attacker.room.name !== this.highCharity.name) {
-        attacker.goToRoom(this.highCharity.name);
+      if (attacker.room.name !== this.Nexus.name) {
+        attacker.goToRoom(this.Nexus.name);
       }
       return;
     }
@@ -206,11 +206,11 @@ export class VanguardArbiter extends Arbiter {
   /**
    * Run healer logic
    */
-  private runHealer(healer: Elite): void {
+  private runHealer(healer: Warrior): void {
     if (!this.targetRoom) {
       // No target, return home
-      if (healer.room.name !== this.highCharity.name) {
-        healer.goToRoom(this.highCharity.name);
+      if (healer.room.name !== this.Nexus.name) {
+        healer.goToRoom(this.Nexus.name);
       }
       return;
     }
@@ -290,14 +290,14 @@ export class VanguardArbiter extends Arbiter {
    */
   private calculateAttackerBody(): BodyPartConstant[] {
     // Melee attackers with TOUGH for armor
-    return BodyBuilder.defender(this.highCharity.energyAvailable, false);
+    return BodyBuilder.defender(this.Nexus.energyAvailable, false);
   }
   
   /**
    * Calculate healer body
    */
   private calculateHealerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyAvailable;
+    const energy = this.Nexus.energyAvailable;
     // Healers: HEAL + MOVE pattern, min 300 energy (1H, 1M)
     const pattern: BodyPartConstant[] = [HEAL, MOVE];
     return BodyBuilder.repeat(pattern, energy, 25);
@@ -320,10 +320,10 @@ export class VanguardArbiter extends Arbiter {
     this.initializeSquad();
     
     // Update all unit memories
-    for (const elite of this.elites) {
-      elite.memory.targetRoom = roomName;
-      if (formation) elite.memory.formation = formation;
-      if (tactic) elite.memory.tactic = tactic;
+    for (const Warrior of this.warriors) {
+      Warrior.memory.targetRoom = roomName;
+      if (formation) Warrior.memory.formation = formation;
+      if (tactic) Warrior.memory.tactic = tactic;
     }
   }
   
@@ -354,10 +354,10 @@ export class VanguardArbiter extends Arbiter {
     this.targetRoom = null;
     this.squad = null;
     
-    for (const elite of this.elites) {
-      elite.memory.targetRoom = undefined;
-      elite.memory.formation = undefined;
-      elite.memory.tactic = undefined;
+    for (const Warrior of this.warriors) {
+      Warrior.memory.targetRoom = undefined;
+      Warrior.memory.formation = undefined;
+      Warrior.memory.tactic = undefined;
     }
   }
   
@@ -367,7 +367,7 @@ export class VanguardArbiter extends Arbiter {
   getSquadStatus(): any {
     if (!this.squad) {
       return {
-        size: this.elites.length,
+        size: this.warriors.length,
         status: 'no active squad'
       };
     }

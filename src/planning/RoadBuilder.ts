@@ -1,7 +1,7 @@
 /**
  * ROAD BUILDER - Automatic Road Network Construction
  * 
- * "The sacred pathways shall be paved for the Covenant's might"
+ * "The sacred pathways shall be paved for the KHALA's might"
  * 
  * Analyzes creep traffic patterns and automatically builds roads
  * where they are most beneficial for efficiency.
@@ -48,7 +48,7 @@ export class RoadBuilder {
     
     for (const creep of creeps) {
       // Only track creeps that move frequently (miners don't need roads)
-      if (creep.memory.role === 'elite_miner' || creep.memory.role === 'miner') {
+      if (creep.memory.role === 'Warrior_miner' || creep.memory.role === 'miner') {
         continue;
       }
       

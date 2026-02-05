@@ -1,32 +1,32 @@
-# 🔱 COVENANT Quick Start Guide
+# 🔱 KHALA Quick Start Guide
 
-Welcome to **COVENANT** - A Halo-inspired Screeps AI system!
+Welcome to **KHALA** - A Halo-inspired Screeps AI system!
 
-## 🎮 What is COVENANT?
+## 🎮 What is KHALA?
 
-COVENANT is a powerful automation system for Screeps with unique Halo theming and strategic implementation. It manages your colonies through a hierarchical command structure with autonomous agents.
+KHALA is a powerful automation system for Screeps with unique Halo theming and strategic implementation. It manages your colonies through a hierarchical command structure with autonomous agents.
 
 ## 🏗️ Architecture Overview
 
 ```
-COVENANT (Main AI)
-    ├── High Charity (Colony 1)
+KHALA (Main AI)
+    ├── Nexus (Colony 1)
     │   ├── Arbiter: Mining
-    │   │   └── Elite (Miner 1)
-    │   │   └── Elite (Miner 2)
+    │   │   └── Warrior (Miner 1)
+    │   │   └── Warrior (Miner 2)
     │   ├── Arbiter: Worker
     │   └── Arbiter: Defense
-    └── High Charity (Colony 2)
+    └── Nexus (Colony 2)
         └── ...
 ```
 
 ### Core Components
 
-- **🔱 Covenant**: Central AI that coordinates everything
-- **🏛️ High Charity**: Manages a single room/colony
+- **🔱 KHALA**: Central AI that coordinates everything
+- **🏛️ Nexus**: Manages a single room/colony
 - **⚔️ Arbiter**: Controls groups of creeps for specific tasks
-- **👾 Elite**: Enhanced creep wrapper with smart abilities
-- **🚩 Crusade**: Flag-based strategic directives
+- **👾 Warrior**: Enhanced creep wrapper with smart abilities
+- **🚩 Campaign**: Flag-based strategic directives
 
 ## 🚀 Getting Started
 
@@ -43,12 +43,12 @@ yarn deploy        # Deploy to MMO
 yarn deploy:sim    # Deploy to simulation
 ```
 
-### 3. Watch Your COVENANT Awaken
+### 3. Watch Your KHALA Awaken
 
 The system will automatically:
-- Create High Charities for each owned room
+- Create Nexuses for each owned room
 - Spawn MiningArbiters for each energy source
-- Direct Elites to harvest efficiently
+- Direct Warriors to harvest efficiently
 - Report status every 100 ticks
 
 ## 📊 Status Reports
@@ -57,12 +57,12 @@ Every 100 ticks, you'll see a status report:
 
 ```
 ╔════════════════════════════════════════════════════════╗
-║           🔱 COVENANT STATUS REPORT 🔱                 ║
+║           🔱 KHALA STATUS REPORT 🔱                 ║
 ╠════════════════════════════════════════════════════════╣
 ║ GCL: 2 (45.3%)
-║ High Charities: 2
+║ Nexuses: 2
 ║ Arbiters: 4
-║ Active Crusades: 0
+║ Active Campaigns: 0
 ║ CPU: 15.2/50 (Bucket: 9500)
 ║ Credits: 1,234
 ╚════════════════════════════════════════════════════════╝
@@ -73,29 +73,29 @@ Every 100 ticks, you'll see a status report:
 ### ✅ Fully Implemented
 
 **Core Systems:**
-- **Covenant**: Main AI coordinator with 3-phase execution (Build → Init → Run)
-- **High Charity**: Colony management with adaptive phase detection
-- **Elite**: Enhanced creep wrapper with smart movement
-- **AutoPlanner**: Automatic structure placement with sacred geometry patterns
+- **KHALA**: Main AI coordinator with 3-phase execution (Build → Init → Run)
+- **Nexus**: Colony management with adaptive phase detection
+- **Warrior**: Enhanced creep wrapper with smart movement
+- **AutoPlanner**: Automatic structure placement with Protoss Architecture patterns
 - **RoadBuilder**: Traffic-based intelligent road network construction
 
 **Economy & Logistics:**
-- **DroneArbiter**: Energy harvesting at sources with container support
-- **JackalArbiter**: Energy logistics and distribution (haulers)
-- **DevoteeArbiter**: Controller upgrading optimization
+- **ProbeArbiter**: Energy harvesting at sources with container support
+- **AdeptArbiter**: Energy logistics and distribution (haulers)
+- **SentryArbiter**: Controller upgrading optimization
 - **EngineerArbiter**: Construction and repair management
 - **ExcavatorArbiter**: Mineral mining (RCL 6+)
 
 **RCL 6+ Advanced Systems:**
-- **LinkTemple**: Instant energy transfer network (3 links at RCL 6)
-- **LabTemple**: Automatic compound production with reaction chains
+- **LinkGateway**: Instant energy transfer network (3 links at RCL 6)
+- **LabGateway**: Automatic compound production with reaction chains
 - **TerminalArbiter**: Per-colony market operations and trading
 - **TerminalNetwork**: Empire-wide resource distribution and balancing
 
 **Military & Defense:**
 - **ZealotArbiter**: Defensive melee combat
-- **ProphetArbiter**: Defensive healing support
-- **DefenseTemple**: Tower coordination and fortification management
+- **High TemplarArbiter**: Defensive healing support
+- **DefenseGateway**: Tower coordination and fortification management
 - **WarCouncil**: Combat target scanning and threat assessment
 - **SafeModeManager**: Automatic safe mode activation
 
@@ -106,13 +106,13 @@ Every 100 ticks, you'll see a status report:
 - **DepositOperations**: Deposit harvesting (powerhouse colonies)
 
 ### 🎮 Core Gameplay Loop
-1. **DroneArbiters** harvest energy from sources → containers/links
-2. **LinkTemple** transfers energy instantly (source → storage → controller)
-3. **JackalArbiters** distribute energy to spawns, extensions, labs, towers
-4. **DevoteeArbiters** upgrade the controller for RCL progression
+1. **ProbeArbiters** harvest energy from sources → containers/links
+2. **LinkGateway** transfers energy instantly (source → storage → controller)
+3. **AdeptArbiters** distribute energy to spawns, extensions, labs, towers
+4. **SentryArbiters** upgrade the controller for RCL progression
 5. **EngineerArbiters** construct buildings and repair damage
 6. **ExcavatorArbiters** mine minerals → containers → storage (RCL 6+)
-7. **LabTemple** produces boost compounds automatically (RCL 6+)
+7. **LabGateway** produces boost compounds automatically (RCL 6+)
 8. **TerminalNetwork** shares resources between colonies (RCL 6+)
 
 ### 🚀 Advanced Features
@@ -129,13 +129,13 @@ Every 100 ticks, you'll see a status report:
 
 ```typescript
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export class WorkerArbiter extends Arbiter {
-  workers: Elite[];
+  workers: Warrior[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'worker', ArbiterPriority.economy.upgrading);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'worker', ArbiterPriority.economy.upgrading);
     this.workers = [];
   }
   
@@ -152,14 +152,14 @@ export class WorkerArbiter extends Arbiter {
 }
 ```
 
-### Creating a New Crusade
+### Creating a New Campaign
 
 ```typescript
-import { Crusade } from './Crusade';
-import { HighCharity } from '../core/HighCharity';
+import { Campaign } from './Campaign';
+import { Nexus } from '../core/Nexus';
 
-export class DefenseCrusade extends Crusade {
-  static crusadeName = 'defense';
+export class DefenseCampaign extends Campaign {
+  static CampaignName = 'defense';
   static color = COLOR_RED;
   static secondaryColor = COLOR_RED;
   
@@ -181,13 +181,13 @@ export class DefenseCrusade extends Crusade {
 
 | Component | Halo Reference |
 |-----------|----------------|
-| **Covenant** | The alien alliance |
-| **High Charity** | Holy city of the Prophets |
-| **Arbiter** | Elite military commanders |
-| **Elite** | Sangheili warriors |
-| **Crusade** | Holy missions |
-| **Temple** | Religious structures |
-| **Prophets Will** | Divine mandate |
+| **KHALA** | The alien alliance |
+| **Nexus** | Holy city of the High Templars |
+| **Arbiter** | Warrior military commanders |
+| **Warrior** | Sangheili warriors |
+| **Campaign** | Holy missions |
+| **Gateway** | Religious structures |
+| **High Templars Will** | Divine mandate |
 
 ## 📚 Further Reading
 
@@ -203,13 +203,13 @@ export class DefenseCrusade extends Crusade {
 
 This is your personal AI! Extend it with:
 - New Arbiter types for specialized tasks
-- Crusades for strategic operations
-- Temples for structure management
+- Campaigns for strategic operations
+- Gateways for structure management
 - Advanced combat algorithms
 - Economic optimizations
 
-## 🔱 May the Prophets guide your journey!
+## 🔱 May the High Templars guide your journey!
 
 ---
 
-*"The Great Journey awaits, and none shall deny us our rightful place in the divine beyond."*
+*"For Aiur awaits, and none shall deny us our rightful place in the divine beyond."*

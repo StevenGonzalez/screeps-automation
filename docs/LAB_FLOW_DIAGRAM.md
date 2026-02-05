@@ -10,7 +10,7 @@
 │  EVERY 100 TICKS - AUTO PRODUCTION PLANNING                         │
 └─────────────────────────────────────────────────────────────────────┘
 
-    LabTemple.run()
+    LabGateway.run()
          │
          ├─ autoProduction enabled? ──────┐
          │                                 │
@@ -80,7 +80,7 @@
 │  EVERY TICK - EXECUTION                                             │
 └─────────────────────────────────────────────────────────────────────┘
 
-    LabTemple.run()
+    LabGateway.run()
          │
          └─> currentReaction?
               │
@@ -175,7 +175,7 @@
 │  CONSOLE COMMANDS                                                   │
 └─────────────────────────────────────────────────────────────────────┘
 
-    Game.cov.labs()
+    Game.kha.labs()
          │
          └──> ⚗️ LAB STATUS
               ═══════════════════════════════════════
@@ -193,14 +193,14 @@
                   OH: 8,500
               ═══════════════════════════════════════
 
-    Game.cov.produce('XUH2O', 3000, 'W1N1')
+    Game.kha.produce('XUH2O', 3000, 'W1N1')
          │
          └──> ⚗️ Queued reaction: 3000x OH
               ⚗️ Queued reaction: 3000x UH
               ⚗️ Queued reaction: 3000x UH2O
               ⚗️ Queued reaction: 3000x XUH2O
 
-    Game.cov.autoLabs('W1N1', true)
+    Game.kha.autoLabs('W1N1', true)
          │
          └──> ✅ Enabled auto-production in W1N1
 ```

@@ -1,7 +1,7 @@
 /**
  * WAR COUNCIL - Combat Operations Manager
  * 
- * "Let none stand against the Covenant"
+ * "Let none stand against the KHALA"
  * 
  * Manages offensive military operations including room scanning,
  * target selection, attack squad composition, and coordinated assaults.
@@ -9,7 +9,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface WarTarget {
   roomName: string;
@@ -33,15 +33,15 @@ export interface AttackSquad {
 }
 
 /**
- * War Council - Manages all combat operations for a High Charity
+ * War Council - Manages all combat operations for a Nexus
  */
 export class WarCouncil {
-  private highCharity: HighCharity;
+  private Nexus: Nexus;
   private targets: Map<string, WarTarget>;
   private squads: Map<string, AttackSquad>;
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
     this.targets = new Map();
     this.squads = new Map();
     
@@ -80,7 +80,7 @@ export class WarCouncil {
    * Scan nearby rooms for potential targets
    */
   private scanNearbyRooms(): void {
-    const room = this.highCharity.room;
+    const room = this.Nexus.room;
     const range = 3; // Scan 3 rooms away
     
     // Get all rooms within range
@@ -173,7 +173,7 @@ export class WarCouncil {
     let priority = 100;
     
     // Prefer closer rooms
-    const distance = Game.map.getRoomLinearDistance(this.highCharity.name, room.name);
+    const distance = Game.map.getRoomLinearDistance(this.Nexus.name, room.name);
     priority += distance * 10;
     
     // Prefer weaker rooms
@@ -198,13 +198,13 @@ export class WarCouncil {
    */
   private shouldLaunchAttack(): boolean {
     // Only at powerhouse phase
-    if (this.highCharity.memory.phase !== 'powerhouse') {
+    if (this.Nexus.memory.phase !== 'powerhouse') {
       return false;
     }
     
     // Need sufficient resources
-    if (!this.highCharity.storage || 
-        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) < 50000) {
+    if (!this.Nexus.storage || 
+        this.Nexus.storage.store.getUsedCapacity(RESOURCE_ENERGY) < 50000) {
       return false;
     }
     
@@ -344,7 +344,7 @@ export class WarCouncil {
    * Load war data from memory
    */
   private loadFromMemory(): void {
-    const mem: any = Memory.rooms[this.highCharity.name];
+    const mem: any = Memory.rooms[this.Nexus.name];
     if (!mem.warCouncil) {
       mem.warCouncil = { targets: {}, squads: {} };
     }
@@ -364,7 +364,7 @@ export class WarCouncil {
    * Save war data to memory
    */
   private saveToMemory(): void {
-    const mem: any = Memory.rooms[this.highCharity.name];
+    const mem: any = Memory.rooms[this.Nexus.name];
     if (!mem.warCouncil) {
       mem.warCouncil = {};
     }

@@ -14,7 +14,7 @@
  * - Monitors power reserves across colonies
  */
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface PowerStats {
   totalOpsGenerated: number;
@@ -24,10 +24,10 @@ export interface PowerStats {
 }
 
 export class PowerManager {
-  private colony: HighCharity;
+  private colony: Nexus;
   private powerSpawn: StructurePowerSpawn | null;
 
-  constructor(colony: HighCharity) {
+  constructor(colony: Nexus) {
     this.colony = colony;
     this.powerSpawn = this.findPowerSpawn();
     this.initializeMemory();
@@ -223,7 +223,7 @@ export class PowerManager {
   /**
    * Check if colony is ready for power processing
    */
-  public static isColonyReady(colony: HighCharity): boolean {
+  public static isColonyReady(colony: Nexus): boolean {
     // Needs RCL 8 for power spawn
     if (colony.room.controller && colony.room.controller.level < 8) {
       return false;

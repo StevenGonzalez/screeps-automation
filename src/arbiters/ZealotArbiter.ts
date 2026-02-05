@@ -3,15 +3,15 @@
  * 
  * "None shall breach our sanctum"
  * 
- * Manages defender Elites that protect the High Charity from hostile creeps.
+ * Manages defender Warriors that protect the Nexus from hostile creeps.
  * Spawns defenders on-demand when threats are detected.
  */
 
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
@@ -19,11 +19,11 @@ import { BodyBuilder } from '../utils/BodyBuilder';
  * Defense Arbiter - Manages room defense
  */
 export class ZealotArbiter extends Arbiter {
-  defenders: Elite[];
+  defenders: Warrior[];
   hostiles: Creep[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'defense', ArbiterPriority.defense.melee);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'defense', ArbiterPriority.defense.melee);
     this.defenders = [];
     this.hostiles = [];
   }
@@ -31,8 +31,8 @@ export class ZealotArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
-    // Update defenders list from elites
-    this.defenders = this.elites;
+    // Update defenders list from Warriors
+    this.defenders = this.warriors;
     
     // Detect hostiles
     this.hostiles = this.room.find(FIND_HOSTILE_CREEPS);
@@ -76,7 +76,7 @@ export class ZealotArbiter extends Arbiter {
   /**
    * Position defender at strategic defensive location when no threats present
    */
-  private positionDefender(defender: Elite): void {
+  private positionDefender(defender: Warrior): void {
     // If already on a rampart or near controller, hold position
     const structureHere = defender.pos.lookFor(LOOK_STRUCTURES)
       .find(s => s.structureType === STRUCTURE_RAMPART);
@@ -138,7 +138,7 @@ export class ZealotArbiter extends Arbiter {
     }
   }
   
-  private runDefender(defender: Elite): void {
+  private runDefender(defender: Warrior): void {
     if (this.hostiles.length === 0) return;
     
     // Find closest hostile
@@ -162,7 +162,7 @@ export class ZealotArbiter extends Arbiter {
       return;
     }
     
-    const towers = this.highCharity.towers;
+    const towers = this.Nexus.towers;
     if (towers.length === 0) return;
     
     // Prioritize targets
@@ -179,7 +179,7 @@ export class ZealotArbiter extends Arbiter {
       const result = tower.attack(target);
       
       if (result === OK && Game.time % 10 === 0) {
-        console.log(`🏹 ${this.highCharity.name}: Tower attacking ${target.owner.username}'s ${target.body[0]?.type || 'creep'}`);
+        console.log(`🏹 ${this.Nexus.name}: Tower attacking ${target.owner.username}'s ${target.body[0]?.type || 'creep'}`);
       }
     }
   }
@@ -200,7 +200,7 @@ export class ZealotArbiter extends Arbiter {
       if (aThreat !== bThreat) return bThreat - aThreat;
       
       // Priority 3: Proximity to critical structures
-      const spawns = this.highCharity.spawns;
+      const spawns = this.Nexus.spawns;
       if (spawns.length > 0) {
         const aDist = a.pos.getRangeTo(spawns[0]);
         const bDist = b.pos.getRangeTo(spawns[0]);
@@ -215,7 +215,7 @@ export class ZealotArbiter extends Arbiter {
    * Auto-repair structures when no threats present
    */
   private towersAutoRepair(): void {
-    const towers = this.highCharity.towers.filter(t => 
+    const towers = this.Nexus.towers.filter(t => 
       t.store.getUsedCapacity(RESOURCE_ENERGY) > 400
     );
     
@@ -347,18 +347,18 @@ export class ZealotArbiter extends Arbiter {
     const name = `Zealot_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_zealot'
+      role: 'Warrior_zealot'
     } as any);
   }
   
   private calculateDefenderBody(): BodyPartConstant[] {
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     // Use BodyBuilder for flexible defender body
     return BodyBuilder.defender(energy, false);

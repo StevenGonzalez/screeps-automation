@@ -15,7 +15,7 @@ The Advanced Military System provides squad-based combat with formation movement
 
 ### Launch Attack
 ```javascript
-Game.cov.attack('W2N1', 'box', 'assault');
+Game.kha.attack('W2N1', 'box', 'assault');
 // Parameters:
 //   targetRoom: Room name to attack
 //   formation: 'line', 'box', 'wedge', or 'scatter'
@@ -24,7 +24,7 @@ Game.cov.attack('W2N1', 'box', 'assault');
 
 ### Check Squad Status
 ```javascript
-Game.cov.squads();
+Game.kha.squads();
 // Shows:
 //   - Squad size and composition
 //   - Current formation and tactic
@@ -34,19 +34,19 @@ Game.cov.squads();
 
 ### Change Formation (Mid-Battle)
 ```javascript
-Game.cov.formation('wedge');
+Game.kha.formation('wedge');
 // Available: line, box, wedge, scatter
 ```
 
 ### Change Tactic (Mid-Battle)
 ```javascript
-Game.cov.tactic('siege');
+Game.kha.tactic('siege');
 // Available: assault, siege, raid, defend, retreat
 ```
 
 ### Recall All Units
 ```javascript
-Game.cov.recall();
+Game.kha.recall();
 // Returns all combat units to home
 ```
 
@@ -145,7 +145,7 @@ Game.cov.recall();
 - Focuses on dismantling buildings
 - Body: MOVE + WORK parts
 
-### Prophet (➕)
+### High Templar (➕)
 - Defensive healer specialist
 - Supports Zealots and friendlies during home defense
 - Heals adjacent units and uses rangedHeal at range 3
@@ -179,38 +179,38 @@ Game.cov.recall();
 ### Basic Attack
 ```javascript
 // Launch a basic assault on an enemy room
-Game.cov.attack('W2N1');
+Game.kha.attack('W2N1');
 ```
 
 ### Siege Operation
 ```javascript
 // Launch a siege to dismantle structures
-Game.cov.attack('W2N1', 'box', 'siege');
+Game.kha.attack('W2N1', 'box', 'siege');
 ```
 
 ### Hit and Run
 ```javascript
 // Quick raid on enemy spawn
-Game.cov.attack('W2N1', 'scatter', 'raid');
+Game.kha.attack('W2N1', 'scatter', 'raid');
 ```
 
 ### Monitor and Adjust
 ```javascript
 // Check status
-Game.cov.squads();
+Game.kha.squads();
 
 // If taking too much damage, change tactic
-Game.cov.tactic('retreat');
+Game.kha.tactic('retreat');
 
 // Once healed, change formation and resume
-Game.cov.formation('wedge');
-Game.cov.tactic('assault');
+Game.kha.formation('wedge');
+Game.kha.tactic('assault');
 ```
 
 ### Emergency Recall
 ```javascript
 // Abort mission and return home
-Game.cov.recall();
+Game.kha.recall();
 ```
 
 ## Integration with Existing Systems
@@ -223,7 +223,7 @@ Game.cov.recall();
 ### WarCouncil
 - Scans nearby rooms for threats
 - Evaluates room threat levels (0-10 scale)
-- Prioritizes targets for VanguardArbiter
+- Prioritizes targets for ColossusArbiter
 - Currently auto-launches attacks every 1000 ticks (can be disabled)
 
 ### ZealotArbiter
@@ -232,14 +232,14 @@ Game.cov.recall();
 - Works with towers for coordinated defense
 - Spawns 1-5 defenders based on threat level (cap at 5)
 
-### ProphetArbiter
+### High TemplarArbiter
 - Manages defensive healing support
 - Spawns 1-2 healers during high-threat scenarios (>200 threat)
 - Automatically supports Zealots and injured friendlies
 - Uses both heal() and rangedHeal() for maximum coverage
 - Integrates with BoostManager for enhanced healing
 
-### VanguardArbiter
+### ColossusArbiter
 - Manages all offensive combat operations
 - Spawns and tracks combat creeps (4 attackers + 2 healers)
 - Integrates with SquadCoordinator for tactical control

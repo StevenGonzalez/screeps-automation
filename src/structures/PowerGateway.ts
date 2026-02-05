@@ -1,5 +1,5 @@
 /**
- * POWER TEMPLE - Power Processing Facility
+ * POWER Gateway - Power Processing Facility
  * 
  * "Harness the ancient power"
  * 
@@ -9,8 +9,8 @@
 
 /// <reference types="@types/screeps" />
 
-import { Temple } from './Temple';
-import { HighCharity } from '../core/HighCharity';
+import { Gateway } from './Gateway';
+import { Nexus } from '../core/Nexus';
 
 export interface PowerBankTarget {
   roomName: string;
@@ -25,16 +25,16 @@ export interface PowerBankTarget {
 }
 
 /**
- * Power Temple - Manages power harvesting and processing
+ * Power Gateway - Manages power harvesting and processing
  */
-export class PowerTemple extends Temple {
+export class PowerGateway extends Gateway {
   powerSpawn: StructurePowerSpawn | null;
   powerBanks: Map<string, PowerBankTarget>;
   
-  constructor(highCharity: HighCharity) {
-    const powerSpawnPos = highCharity.storage?.pos || highCharity.primarySpawn?.pos || 
-                          new RoomPosition(25, 25, highCharity.name);
-    super(highCharity, powerSpawnPos);
+  constructor(Nexus: Nexus) {
+    const powerSpawnPos = Nexus.storage?.pos || Nexus.primarySpawn?.pos || 
+                          new RoomPosition(25, 25, Nexus.name);
+    super(Nexus, powerSpawnPos);
     
     this.powerSpawn = null;
     this.powerBanks = new Map();
@@ -76,7 +76,7 @@ export class PowerTemple extends Temple {
   private processPower(): void {
     if (!this.powerSpawn) return;
     
-    const storage = this.highCharity.storage;
+    const storage = this.Nexus.storage;
     if (!storage) return;
     
     // Check if we have both power and energy
@@ -98,7 +98,7 @@ export class PowerTemple extends Temple {
     // Process power
     const result = this.powerSpawn.processPower();
     if (result === OK && Game.time % 100 === 0) {
-      console.log(`⚡ PowerTemple: Processing power`);
+      console.log(`⚡ powerGateway: Processing power`);
     }
   }
   
@@ -110,7 +110,7 @@ export class PowerTemple extends Temple {
     
     for (let x = -range; x <= range; x++) {
       for (let y = -range; y <= range; y++) {
-        const roomName = this.getRoomNameAtOffset(this.highCharity.name, x, y);
+        const roomName = this.getRoomNameAtOffset(this.Nexus.name, x, y);
         if (!roomName) continue;
         
         const room = Game.rooms[roomName];
@@ -133,7 +133,7 @@ export class PowerTemple extends Temple {
    */
   private registerPowerBank(bank: StructurePowerBank): void {
     const id = `${bank.room.name}_${bank.pos.x}_${bank.pos.y}`;
-    const distance = Game.map.getRoomLinearDistance(this.highCharity.name, bank.room.name);
+    const distance = Game.map.getRoomLinearDistance(this.Nexus.name, bank.room.name);
     
     if (!this.powerBanks.has(id)) {
       const target: PowerBankTarget = {
@@ -150,7 +150,7 @@ export class PowerTemple extends Temple {
       
       this.powerBanks.set(id, target);
       
-      console.log(`⚡ PowerTemple: Discovered PowerBank in ${bank.room.name} - ${bank.power} power, ${bank.ticksToDecay} ticks`);
+      console.log(`⚡ powerGateway: Discovered PowerBank in ${bank.room.name} - ${bank.power} power, ${bank.ticksToDecay} ticks`);
     }
   }
   
@@ -165,8 +165,8 @@ export class PowerTemple extends Temple {
     
     // Sort by power amount and distance
     targets.sort((a, b) => {
-      const distA = Game.map.getRoomLinearDistance(this.highCharity.name, a.roomName);
-      const distB = Game.map.getRoomLinearDistance(this.highCharity.name, b.roomName);
+      const distA = Game.map.getRoomLinearDistance(this.Nexus.name, a.roomName);
+      const distB = Game.map.getRoomLinearDistance(this.Nexus.name, b.roomName);
       
       // Prefer closer and higher power
       const scoreA = a.power - (distA * 200);
@@ -229,12 +229,12 @@ export class PowerTemple extends Temple {
    * Load power banks from memory
    */
   private loadFromMemory(): void {
-    const mem: any = Memory.rooms[this.highCharity.name];
-    if (!mem.powerTemple) {
-      mem.powerTemple = { powerBanks: {} };
+    const mem: any = Memory.rooms[this.Nexus.name];
+    if (!mem.PowerGateway) {
+      mem.PowerGateway = { powerBanks: {} };
     }
     
-    for (const [id, target] of Object.entries(mem.powerTemple.powerBanks || {})) {
+    for (const [id, target] of Object.entries(mem.PowerGateway.powerBanks || {})) {
       this.powerBanks.set(id, target as PowerBankTarget);
     }
   }
@@ -243,14 +243,14 @@ export class PowerTemple extends Temple {
    * Save power banks to memory
    */
   private saveToMemory(): void {
-    const mem: any = Memory.rooms[this.highCharity.name];
-    if (!mem.powerTemple) {
-      mem.powerTemple = {};
+    const mem: any = Memory.rooms[this.Nexus.name];
+    if (!mem.PowerGateway) {
+      mem.PowerGateway = {};
     }
     
-    mem.powerTemple.powerBanks = {};
+    mem.PowerGateway.powerBanks = {};
     for (const [id, target] of this.powerBanks) {
-      mem.powerTemple.powerBanks[id] = target;
+      mem.PowerGateway.powerBanks[id] = target;
     }
   }
   
@@ -275,12 +275,12 @@ export class PowerTemple extends Temple {
    */
   get isReady(): boolean {
     // Need RCL 8 and storage with resources
-    if (!this.highCharity.storage || this.highCharity.level < 8) {
+    if (!this.Nexus.storage || this.Nexus.level < 8) {
       return false;
     }
     
     // Need sufficient resources for squad
-    const energy = this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY);
+    const energy = this.Nexus.storage.store.getUsedCapacity(RESOURCE_ENERGY);
     return energy > 100000;
   }
 }

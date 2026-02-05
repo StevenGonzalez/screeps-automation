@@ -10,8 +10,8 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { BodyBuilder } from '../utils/BodyBuilder';
 import { ROLES } from '../constants/Roles';
 
@@ -25,14 +25,14 @@ interface RemoteMiningMemory extends ArbiterMemory {
 /**
  * Remote Mining Arbiter - Manages one remote source
  */
-export class SeekerArbiter extends Arbiter {
+export class ObserverArbiter extends Arbiter {
   targetRoom: string;
   sourceId: Id<Source>;
-  miners: Elite[];
-  haulers: Elite[];
+  miners: Warrior[];
+  haulers: Warrior[];
   
-  constructor(highCharity: HighCharity, targetRoom: string, sourceId: Id<Source>) {
-    super(highCharity, `remoteMining_${targetRoom}_${sourceId}`, ArbiterPriority.economy.mining);
+  constructor(Nexus: Nexus, targetRoom: string, sourceId: Id<Source>) {
+    super(Nexus, `remoteMining_${targetRoom}_${sourceId}`, ArbiterPriority.economy.mining);
     this.targetRoom = targetRoom;
     this.sourceId = sourceId;
     this.miners = [];
@@ -90,7 +90,7 @@ export class SeekerArbiter extends Arbiter {
     }
   }
   
-  private runRemoteMiner(miner: Elite): void {
+  private runRemoteMiner(miner: Warrior): void {
     const creep = miner.creep;
     
     // Move to target room if not there
@@ -149,7 +149,7 @@ export class SeekerArbiter extends Arbiter {
     }
   }
   
-  private runRemoteHauler(hauler: Elite): void {
+  private runRemoteHauler(hauler: Warrior): void {
     const creep = hauler.creep;
     
     // State: collecting or delivering
@@ -202,8 +202,8 @@ export class SeekerArbiter extends Arbiter {
       }
     } else {
       // Return to home room and deliver
-      if (creep.room.name !== this.highCharity.name) {
-        const exitDir = creep.room.findExitTo(this.highCharity.name);
+      if (creep.room.name !== this.Nexus.name) {
+        const exitDir = creep.room.findExitTo(this.Nexus.name);
         if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
           const exit = creep.pos.findClosestByPath(exitDir);
           if (exit) {
@@ -215,8 +215,8 @@ export class SeekerArbiter extends Arbiter {
       }
       
       // In home room - deliver to storage or spawn/extensions
-      if (this.highCharity.storage) {
-        hauler.transferTo(this.highCharity.storage);
+      if (this.Nexus.storage) {
+        hauler.transferTo(this.Nexus.storage);
         hauler.say('📦');
       } else {
         // Deliver to spawns/extensions
@@ -269,7 +269,7 @@ export class SeekerArbiter extends Arbiter {
   
   private calculateHaulerCount(): number {
     // Calculate based on distance
-    const route = Game.map.findRoute(this.highCharity.name, this.targetRoom);
+    const route = Game.map.findRoute(this.Nexus.name, this.targetRoom);
     if (route === ERR_NO_PATH) return 0;
     
     const distance = Array.isArray(route) ? route.length : 1;
@@ -285,7 +285,7 @@ export class SeekerArbiter extends Arbiter {
     const name = `Seeker_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_REMOTE_MINER,
+      role: ROLES.Warrior_REMOTE_MINER,
       targetRoom: this.targetRoom,
       sourceId: this.sourceId
     } as any);
@@ -296,7 +296,7 @@ export class SeekerArbiter extends Arbiter {
     const name = `Convoy_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_REMOTE_HAULER,
+      role: ROLES.Warrior_REMOTE_HAULER,
       targetRoom: this.targetRoom,
       sourceId: this.sourceId,
       collecting: true
@@ -307,12 +307,12 @@ export class SeekerArbiter extends Arbiter {
     // Remote miners need work parts for harvesting
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     return BodyBuilder.miner(energy);
   }
@@ -321,12 +321,12 @@ export class SeekerArbiter extends Arbiter {
     // Remote haulers need large carry capacity
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     return BodyBuilder.hauler(energy);
   }
@@ -335,7 +335,7 @@ export class SeekerArbiter extends Arbiter {
     const miners = this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        (creep.memory.role === ROLES.ELITE_REMOTE_MINER && 
+        (creep.memory.role === ROLES.Warrior_REMOTE_MINER && 
          (creep.memory as any).targetRoom === this.targetRoom &&
          (creep.memory as any).sourceId === this.sourceId)
     });
@@ -343,13 +343,13 @@ export class SeekerArbiter extends Arbiter {
     const haulers = this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        (creep.memory.role === ROLES.ELITE_REMOTE_HAULER && 
+        (creep.memory.role === ROLES.Warrior_REMOTE_HAULER && 
          (creep.memory as any).targetRoom === this.targetRoom &&
          (creep.memory as any).sourceId === this.sourceId)
     });
     
-    this.miners = miners.map(c => new Elite(c, this));
-    this.haulers = haulers.map(c => new Elite(c, this));
+    this.miners = miners.map(c => new Warrior(c, this));
+    this.haulers = haulers.map(c => new Warrior(c, this));
     
     return [...miners, ...haulers];
   }

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Lab Temple system provides **fully automatic compound production** using intelligent reaction planning and multi-tier compound chains.
+The Lab Gateway system provides **fully automatic compound production** using intelligent reaction planning and multi-tier compound chains.
 
 ## Features
 
@@ -50,8 +50,8 @@ Compounds are prioritized by their boost effectiveness:
 
 ### View Lab Status
 ```javascript
-Game.cov.labs()           // Show all colonies
-Game.cov.labs('W1N1')     // Show specific colony
+Game.kha.labs()           // Show all colonies
+Game.kha.labs('W1N1')     // Show specific colony
 ```
 
 **Output:**
@@ -63,8 +63,8 @@ Game.cov.labs('W1N1')     // Show specific colony
 
 ### Queue Production
 ```javascript
-Game.cov.produce('XUH2O', 3000)          // All colonies
-Game.cov.produce('XUHO2', 5000, 'W1N1')  // Specific colony
+Game.kha.produce('XUH2O', 3000)          // All colonies
+Game.kha.produce('XUHO2', 5000, 'W1N1')  // Specific colony
 ```
 
 Automatically queues the full reaction chain:
@@ -72,9 +72,9 @@ Automatically queues the full reaction chain:
 
 ### Control Auto-Production
 ```javascript
-Game.cov.autoLabs('W1N1', true)   // Enable
-Game.cov.autoLabs('W1N1', false)  // Disable
-Game.cov.autoLabs('W1N1')         // Toggle
+Game.kha.autoLabs('W1N1', true)   // Enable
+Game.kha.autoLabs('W1N1', false)  // Disable
+Game.kha.autoLabs('W1N1')         // Toggle
 ```
 
 When enabled (default), automatically plans production based on stock levels.
@@ -115,7 +115,7 @@ Tier 4: XUH2O (UH2O + X)
 
 ### 4. Execution
 ```typescript
-// LabTemple.executeReaction()
+// LabGateway.executeReaction()
 1. Verify input labs have correct resources (>100 units)
 2. Run outputLab.runReaction(inputLab1, inputLab2) on all output labs
 3. Check if target amount reached
@@ -140,7 +140,7 @@ Tier 4: XUH2O (UH2O + X)
 ## Memory Structure
 
 ```typescript
-interface LabTempleMemory {
+interface LabGatewayMemory {
   reactionQueue: ReactionTask[];        // Queued reactions
   currentReaction: ReactionTask | null; // Current production
   autoProduction: boolean;              // Auto-planning enabled
@@ -184,7 +184,7 @@ Complete database of 28 compounds across 4 tiers:
 2. **Place labs near storage** to minimize hauler travel time
 3. **Keep auto-production enabled** for hands-off operation
 4. **Stock base minerals** (H, O, U, K, L, Z, X) via mining or market
-5. **Monitor with `Game.cov.labs()`** to verify production
+5. **Monitor with `Game.kha.labs()`** to verify production
 
 ## Future Enhancements
 

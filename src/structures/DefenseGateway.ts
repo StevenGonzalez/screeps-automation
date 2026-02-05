@@ -1,18 +1,18 @@
 /**
- * DEFENSE TEMPLE - Fortification Management
+ * DEFENSE Gateway - Fortification Management
  * 
  * "Barriers are the will of the Gods made manifest"
  * 
- * Manages ramparts, walls, and defensive structures to protect High Charity.
+ * Manages ramparts, walls, and defensive structures to protect Nexus.
  * Coordinates fortification placement and maintenance.
  */
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
-import { Temple } from './Temple';
+import { Nexus } from '../core/Nexus';
+import { Gateway } from './Gateway';
 
-export interface DefenseTempleMemory {
+export interface DefenseGatewayMemory {
   rampartPlan: string[];
   wallPlan: string[];
   lastPlanned: number;
@@ -20,16 +20,16 @@ export interface DefenseTempleMemory {
 }
 
 /**
- * Defense Temple - Manages room fortifications
+ * Defense Gateway - Manages room fortifications
  */
-export class DefenseTemple extends Temple {
+export class DefenseGateway extends Gateway {
   ramparts: StructureRampart[];
   walls: StructureWall[];
   
-  constructor(highCharity: HighCharity) {
-    // Use controller position as the defense temple anchor
-    const pos = highCharity.controller?.pos || new RoomPosition(25, 25, highCharity.room.name);
-    super(highCharity, pos);
+  constructor(Nexus: Nexus) {
+    // Use controller position as the defense Gateway anchor
+    const pos = Nexus.controller?.pos || new RoomPosition(25, 25, Nexus.room.name);
+    super(Nexus, pos);
     this.ramparts = [];
     this.walls = [];
   }
@@ -57,10 +57,10 @@ export class DefenseTemple extends Temple {
   
   run(): void {
     // Get threat level from safe mode manager
-    const threatLevel = this.highCharity.safeModeManager.getThreatLevel();
+    const threatLevel = this.Nexus.safeModeManager.getThreatLevel();
     
     // Update memory threat level
-    const memory = this.memory as any as DefenseTempleMemory;
+    const memory = this.memory as any as DefenseGatewayMemory;
     memory.threatLevel = threatLevel;
     
     // Set rampart HP targets based on threat
@@ -81,9 +81,9 @@ export class DefenseTemple extends Temple {
     // Only start fortifying at RCL 3+
     if (level < 3) return;
     
-    const memory = this.memory as any as DefenseTempleMemory;
+    const memory = this.memory as any as DefenseGatewayMemory;
     
-    // COVENANT DEFENSIVE DOCTRINE:
+    // KHALA DEFENSIVE DOCTRINE:
     // 1. Ramparts protect all critical structures
     // 2. Walls form a perimeter barrier at chokepoints
     // 3. Layered defense with overlapping fields of fire
@@ -108,7 +108,7 @@ export class DefenseTemple extends Temple {
     }
     
     // Add ramparts for spawns' adjacent tiles (for safe spawning)
-    const spawns = this.highCharity.spawns;
+    const spawns = this.Nexus.spawns;
     for (const spawn of spawns) {
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
@@ -133,7 +133,7 @@ export class DefenseTemple extends Temple {
     
     memory.lastPlanned = Game.time;
     
-    console.log(`🛡️ ${this.highCharity.name}: Planned ${rampartPositions.length} ramparts, ${memory.wallPlan.length} walls`);
+    console.log(`🛡️ ${this.Nexus.name}: Planned ${rampartPositions.length} ramparts, ${memory.wallPlan.length} walls`);
   }
   
   /**
@@ -165,7 +165,7 @@ export class DefenseTemple extends Temple {
         const posStr = `${wallX},${wallY}`;
         
         // Don't place walls where ramparts are planned
-        const memory = this.memory as any as DefenseTempleMemory;
+        const memory = this.memory as any as DefenseGatewayMemory;
         if (memory.rampartPlan && memory.rampartPlan.includes(posStr)) continue;
         
         // Don't place walls on critical structures
@@ -190,7 +190,7 @@ export class DefenseTemple extends Temple {
    * Build planned fortifications
    */
   private buildPlannedFortifications(): void {
-    const memory = this.memory as any as DefenseTempleMemory;
+    const memory = this.memory as any as DefenseGatewayMemory;
     if (!memory.rampartPlan) return;
     
     const level = this.room.controller!.level;
@@ -246,7 +246,7 @@ export class DefenseTemple extends Temple {
    * Emergency rampart reinforcement during attacks
    */
   private emergencyReinforce(): void {
-    const memory = this.memory as any as DefenseTempleMemory;
+    const memory = this.memory as any as DefenseGatewayMemory;
     
     // Find weakest ramparts near hostiles
     const hostiles = this.room.find(FIND_HOSTILE_CREEPS);
@@ -265,7 +265,7 @@ export class DefenseTemple extends Temple {
       });
     
     // Towers should focus on reinforcing these
-    const towers = this.highCharity.towers.filter(t => 
+    const towers = this.Nexus.towers.filter(t => 
       t.store.getUsedCapacity(RESOURCE_ENERGY) > 100
     );
     
@@ -307,7 +307,7 @@ export class DefenseTemple extends Temple {
    */
   private getRampartTargetHP(): number {
     const level = this.room.controller!.level;
-    const threatLevel = (this.memory as any as DefenseTempleMemory).threatLevel || 0;
+    const threatLevel = (this.memory as any as DefenseGatewayMemory).threatLevel || 0;
     
     // Base HP by RCL
     let baseHP = 10000;
@@ -326,7 +326,7 @@ export class DefenseTemple extends Temple {
    */
   private getWallTargetHP(): number {
     const level = this.room.controller!.level;
-    const threatLevel = (this.memory as any as DefenseTempleMemory).threatLevel || 0;
+    const threatLevel = (this.memory as any as DefenseGatewayMemory).threatLevel || 0;
     
     // Base HP by RCL (walls generally lower than ramparts)
     let baseHP = 5000;

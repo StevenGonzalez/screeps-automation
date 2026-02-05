@@ -1,7 +1,7 @@
 /**
  * TERMINAL ARBITER - Market Operations & Resource Trading
  * 
- * "Through commerce, the Covenant expands its reach"
+ * "Through commerce, the KHALA expands its reach"
  * 
  * Manages terminal operations including market trading, inter-colony
  * resource transfers, and automated buy/sell orders.
@@ -10,7 +10,7 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
 
 export interface TerminalMemory {
@@ -32,14 +32,14 @@ export interface TerminalMemory {
 export class TerminalArbiter extends Arbiter {
   terminal: StructureTerminal;
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'terminal', ArbiterPriority.economy.hauling);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'terminal', ArbiterPriority.economy.hauling);
     
-    if (!highCharity.terminal) {
+    if (!Nexus.terminal) {
       throw new Error('TerminalArbiter requires a terminal');
     }
     
-    this.terminal = highCharity.terminal;
+    this.terminal = Nexus.terminal;
     
     // Initialize memory
     if (!this.memory.lastMarketCheck) {
@@ -119,18 +119,18 @@ export class TerminalArbiter extends Arbiter {
   }
   
   /**
-   * Balance resources with other High Charities
+   * Balance resources with other Nexuses
    */
   private balanceResources(): void {
-    const covenant = (Game as any).cov;
-    if (!covenant) return;
+    const KHALA = (Game as any).cov;
+    if (!KHALA) return;
     
-    // Get all High Charities with terminals
-    const highCharities = Object.values(covenant.highCharities).filter((hc: any) => 
-      hc.terminal && hc.name !== this.highCharity.name
-    ) as HighCharity[];
+    // Get all Nexuses with terminals
+    const nexuses = Object.values(KHALA.nexuses).filter((hc: any) => 
+      hc.terminal && hc.name !== this.Nexus.name
+    ) as Nexus[];
     
-    if (highCharities.length === 0) return;
+    if (nexuses.length === 0) return;
     
     // Check for resources we have excess of
     for (const resourceType in this.terminal.store) {
@@ -140,8 +140,8 @@ export class TerminalArbiter extends Arbiter {
       
       // We have significant excess
       if (amount > target * 1.5 && amount > 5000) {
-        // Find a High Charity that needs this resource
-        for (const targetHC of highCharities) {
+        // Find a Nexus that needs this resource
+        for (const targetHC of nexuses) {
           if (!targetHC.terminal) continue;
           
           const targetAmount = targetHC.terminal.store.getUsedCapacity(resource);
@@ -169,7 +169,7 @@ export class TerminalArbiter extends Arbiter {
    * Check market for trading opportunities
    */
   private checkMarket(): void {
-    const phase = this.highCharity.memory.phase;
+    const phase = this.Nexus.memory.phase;
     
     // Only trade at mature/powerhouse phase
     if (phase !== 'mature' && phase !== 'powerhouse') return;
@@ -343,7 +343,7 @@ export class TerminalArbiter extends Arbiter {
    */
   private distributeExcessResources(): void {
     // Move excess resources to storage if available
-    if (!this.highCharity.storage) return;
+    if (!this.Nexus.storage) return;
     
     for (const resourceType in this.terminal.store) {
       const resource = resourceType as ResourceConstant;
@@ -361,10 +361,10 @@ export class TerminalArbiter extends Arbiter {
           amount: transferAmount,
           priority: RequestPriority.LOW,
           type: RequestType.DEPOSIT,
-          target: this.highCharity.storage
+          target: this.Nexus.storage
         });
         
-        this.highCharity.prophetsWill.registerRequest(request);
+        this.Nexus.PylonNetwork.registerRequest(request);
       }
     }
   }

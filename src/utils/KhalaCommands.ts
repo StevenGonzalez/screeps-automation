@@ -4,7 +4,7 @@
  * "The Hierarchs speak, and all shall listen"
  * 
  * Provides console commands for monitoring, debugging, and
- * controlling the Covenant system from the in-game console.
+ * controlling the KHALA system from the in-game console.
  */
 
 /// <reference types="@types/screeps" />
@@ -12,21 +12,21 @@
 import { Profiler } from './Profiler';
 import { CacheSystem } from './CacheSystem';
 import { CPUMonitor } from './CPUMonitor';
-import { Covenant } from '../core/Covenant';
+import { KHALA } from '../core/KHALA';
 
 /**
- * Global console commands accessible via Game.cov
+ * Global console commands accessible via Game.kha
  */
-export class CovenantCommands {
-  private covenant: Covenant;
+export class KhalaCommands {
+  private khala: Khala;
   
-  constructor(covenant: Covenant) {
-    this.covenant = covenant;
+  constructor(khala: Khala) {
+    this.khala = KHALA;
   }
   
   /**
    * Show CPU profile report
-   * Usage: Game.cov.profile()
+   * Usage: Game.kha.profile()
    */
   profile(minCpu: number = 0.1): void {
     Profiler.report(minCpu);
@@ -34,7 +34,7 @@ export class CovenantCommands {
   
   /**
    * Reset all profiling data
-   * Usage: Game.cov.resetProfile()
+   * Usage: Game.kha.resetProfile()
    */
   resetProfile(): void {
     Profiler.resetAll();
@@ -43,7 +43,7 @@ export class CovenantCommands {
   
   /**
    * Show cache statistics
-   * Usage: Game.cov.cacheStats()
+   * Usage: Game.kha.cacheStats()
    */
   cacheStats(): void {
     const stats = CacheSystem.getStats();
@@ -57,7 +57,7 @@ export class CovenantCommands {
   
   /**
    * Clear all caches
-   * Usage: Game.cov.clearCache()
+   * Usage: Game.kha.clearCache()
    */
   clearCache(): void {
     CacheSystem.clear();
@@ -66,7 +66,7 @@ export class CovenantCommands {
   
   /**
    * Show current CPU budget status
-   * Usage: Game.cov.cpuStatus()
+   * Usage: Game.kha.cpuStatus()
    */
   cpuStatus(): void {
     console.log(CPUMonitor.getStatus());
@@ -74,7 +74,7 @@ export class CovenantCommands {
   
   /**
    * Show top CPU consumers
-   * Usage: Game.cov.topCpu(10)
+   * Usage: Game.kha.topCpu(10)
    */
   topCpu(count: number = 10): void {
     const consumers = Profiler.getTopConsumers(count);
@@ -93,10 +93,10 @@ export class CovenantCommands {
   
   /**
    * Show colony status for a room
-   * Usage: Game.cov.colony('W1N1')
+   * Usage: Game.kha.colony('W1N1')
    */
   colony(roomName: string): void {
-    const charity = this.covenant.highCharities[roomName];
+    const charity = this.khala.nexuses[roomName];
     if (!charity) {
       console.log(`❌ No colony found in ${roomName}`);
       return;
@@ -107,9 +107,9 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     console.log(`RCL: ${charity.level}`);
     console.log(`Phase: ${charity.memory.phase}`);
-    console.log(`Creeps: ${charity.elites.length}`);
+    console.log(`Creeps: ${charity.Warriors.length}`);
     console.log(`Arbiters: ${Object.keys(charity.arbiters).length}`);
-    console.log(`Temples: ${Object.keys(charity.temples).length}`);
+    console.log(`gateways: ${Object.keys(charity.gateways).length}`);
     console.log(`Energy: ${charity.energyAvailable} / ${charity.energyCapacity}`);
     console.log(`Spawns: ${charity.spawns.length}`);
     console.log(`Extensions: ${charity.extensions.length}`);
@@ -118,20 +118,20 @@ export class CovenantCommands {
   }
   
   /**
-   * List all High Charities
-   * Usage: Game.cov.colonies()
+   * List all Nexuses
+   * Usage: Game.kha.colonies()
    */
   colonies(): void {
-    const charities = Object.values(this.covenant.highCharities);
+    const charities = Object.values(this.khala.nexuses);
     
     console.log('═══════════════════════════════════════════════════════');
-    console.log('🏛️ HIGH CHARITIES');
+    console.log('🏛️ Nexuses');
     console.log('═══════════════════════════════════════════════════════');
     
     for (const charity of charities) {
       console.log(
         `${charity.print} - RCL${charity.level} ${charity.memory.phase} - ` +
-        `${charity.elites.length} creeps - ` +
+        `${charity.Warriors.length} creeps - ` +
         `Energy: ${charity.energyAvailable}/${charity.energyCapacity}`
       );
     }
@@ -141,7 +141,7 @@ export class CovenantCommands {
   
   /**
    * Show war status and targets
-   * Usage: Game.cov.war()
+   * Usage: Game.kha.war()
    */
   war(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -149,8 +149,8 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
       if (!charity || charity.memory.phase !== 'powerhouse') continue;
@@ -166,7 +166,7 @@ export class CovenantCommands {
   
   /**
    * Show power harvesting status
-   * Usage: Game.cov.power()
+   * Usage: Game.kha.power()
    */
   power(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -174,19 +174,19 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
-      if (!charity || !charity.powerTemple) continue;
+      if (!charity || !charity.PowerGateway) continue;
       
-      const temple = charity.powerTemple;
-      const targets = temple.getAvailableTargets();
-      const best = temple.getBestTarget();
+      const Gateway = charity.PowerGateway;
+      const targets = Gateway.getAvailableTargets();
+      const best = Gateway.getBestTarget();
       
       console.log(`\n🏛️ ${charity.name}:`);
       console.log(`   RCL: ${charity.level}`);
-      console.log(`   Ready: ${temple.isReady ? '✅' : '❌'}`);
+      console.log(`   Ready: ${Gateway.isReady ? '✅' : '❌'}`);
       console.log(`   Power Banks found: ${targets.length}`);
       
       if (best) {
@@ -213,7 +213,7 @@ export class CovenantCommands {
   
   /**
    * Show market and trading status
-   * Usage: Game.cov.market() or Game.cov.market('W1N1')
+   * Usage: Game.kha.market() or Game.kha.market('W1N1')
    */
   market(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -221,8 +221,8 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
       if (!charity || !charity.terminal) continue;
@@ -235,11 +235,11 @@ export class CovenantCommands {
   
   /**
    * Get price report for a resource
-   * Usage: Game.cov.price('energy') or Game.cov.price('power', 'W1N1')
+   * Usage: Game.kha.price('energy') or Game.kha.price('power', 'W1N1')
    */
   price(resource: ResourceConstant, roomName?: string): void {
-    const targetRoom = roomName || Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[targetRoom];
+    const targetRoom = roomName || Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[targetRoom];
     
     if (!charity || !charity.terminal) {
       console.log(`❌ No terminal in ${targetRoom}`);
@@ -253,11 +253,11 @@ export class CovenantCommands {
   
   /**
    * Control market auto-trading
-   * Usage: Game.cov.trade('W1N1', true) - Enable
-   *        Game.cov.trade('W1N1', false) - Disable
+   * Usage: Game.kha.trade('W1N1', true) - Enable
+   *        Game.kha.trade('W1N1', false) - Disable
    */
   trade(roomName: string, enable?: boolean): void {
-    const charity = this.covenant.highCharities[roomName];
+    const charity = this.khala.nexuses[roomName];
     if (!charity || !charity.terminal) {
       console.log(`❌ No terminal in ${roomName}`);
       return;
@@ -274,7 +274,7 @@ export class CovenantCommands {
   
   /**
    * Show lab production status
-   * Usage: Game.cov.labs() or Game.cov.labs('W1N1')
+   * Usage: Game.kha.labs() or Game.kha.labs('W1N1')
    */
   labs(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -282,17 +282,17 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
-      if (!charity || !charity.labTemple) continue;
+      if (!charity || !charity.ForgeGateway) continue;
       
-      const temple = charity.labTemple;
-      const memory = temple.memory as any;
+      const Gateway = charity.ForgeGateway;
+      const memory = Gateway.memory as any;
       
       console.log(`\n📍 ${charity.name}`);
-      console.log(`  Labs: ${temple.labs.length} (${temple.inputLabs.length} input, ${temple.outputLabs.length} output)`);
+      console.log(`  Labs: ${Gateway.labs.length} (${Gateway.inputLabs.length} input, ${Gateway.outputLabs.length} output)`);
       console.log(`  Auto-production: ${memory.autoProduction !== false ? '✅ Enabled' : '❌ Disabled'}`);
       
       if (memory.currentReaction) {
@@ -332,35 +332,35 @@ export class CovenantCommands {
   
   /**
    * Queue a compound for production
-   * Usage: Game.cov.produce('XUH2O', 3000) or Game.cov.produce('XUH2O', 3000, 'W1N1')
+   * Usage: Game.kha.produce('XUH2O', 3000) or Game.kha.produce('XUH2O', 3000, 'W1N1')
    */
   produce(compound: MineralCompoundConstant, amount: number, roomName?: string): void {
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
-      if (!charity || !charity.labTemple) continue;
+      if (!charity || !charity.ForgeGateway) continue;
       
-      charity.labTemple.queueReaction(compound, amount);
+      charity.ForgeGateway.queueReaction(compound, amount);
       console.log(`✅ Queued ${amount}x ${compound} in ${charity.name}`);
     }
   }
   
   /**
    * Control automatic lab production
-   * Usage: Game.cov.autoLabs('W1N1', true) - Enable
-   *        Game.cov.autoLabs('W1N1', false) - Disable
-   *        Game.cov.autoLabs('W1N1') - Toggle
+   * Usage: Game.kha.autoLabs('W1N1', true) - Enable
+   *        Game.kha.autoLabs('W1N1', false) - Disable
+   *        Game.kha.autoLabs('W1N1') - Toggle
    */
   autoLabs(roomName: string, enable?: boolean): void {
-    const charity = this.covenant.highCharities[roomName];
-    if (!charity || !charity.labTemple) {
-      console.log(`❌ No lab temple found in ${roomName}`);
+    const charity = this.khala.nexuses[roomName];
+    if (!charity || !charity.ForgeGateway) {
+      console.log(`❌ No lab Gateway found in ${roomName}`);
       return;
     }
     
-    const memory = charity.labTemple.memory as any;
+    const memory = charity.ForgeGateway.memory as any;
     if (enable === undefined) {
       // Toggle
       const current = memory.autoProduction !== false;
@@ -374,7 +374,7 @@ export class CovenantCommands {
   
   /**
    * Show intel on a specific room or all scanned rooms
-   * Usage: Game.cov.intel('W1N1') or Game.cov.intel()
+   * Usage: Game.kha.intel('W1N1') or Game.kha.intel()
    */
   intel(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -383,7 +383,7 @@ export class CovenantCommands {
     
     if (roomName) {
       // Show specific room intel
-      const intel = this.covenant.observerNetwork.getIntel(roomName);
+      const intel = this.khala.observerNetwork.getIntel(roomName);
       if (!intel) {
         console.log(`❌ No intel available for ${roomName}`);
         return;
@@ -418,7 +418,7 @@ export class CovenantCommands {
       console.log(`  Threat: ${intel.threat}/10`);
     } else {
       // Show top 10 rooms by score
-      const allIntel = this.covenant.observerNetwork.getAllIntel().slice(0, 10);
+      const allIntel = this.khala.observerNetwork.getAllIntel().slice(0, 10);
       
       if (allIntel.length === 0) {
         console.log('No intel data available. Build observers to scan rooms.');
@@ -439,14 +439,14 @@ export class CovenantCommands {
   
   /**
    * Show rooms suitable for expansion
-   * Usage: Game.cov.expand()
+   * Usage: Game.kha.expand()
    */
   expand(): void {
     console.log('═══════════════════════════════════════════════════════');
     console.log('🏗️ EXPANSION CANDIDATES');
     console.log('═══════════════════════════════════════════════════════');
     
-    const candidates = this.covenant.observerNetwork.getExpansionCandidates().slice(0, 10);
+    const candidates = this.khala.observerNetwork.getExpansionCandidates().slice(0, 10);
     
     if (candidates.length === 0) {
       console.log('No expansion candidates found. Scan more rooms.');
@@ -468,14 +468,14 @@ export class CovenantCommands {
   
   /**
    * Show detected threats
-   * Usage: Game.cov.threats()
+   * Usage: Game.kha.threats()
    */
   threats(): void {
     console.log('═══════════════════════════════════════════════════════');
     console.log('⚔️ DETECTED THREATS');
     console.log('═══════════════════════════════════════════════════════');
     
-    const threats = this.covenant.observerNetwork.getThreats(5);
+    const threats = this.khala.observerNetwork.getThreats(5);
     
     if (threats.length === 0) {
       console.log('✅ No significant threats detected.');
@@ -496,7 +496,7 @@ export class CovenantCommands {
   
   /**
    * Show remote mining operations
-   * Usage: Game.cov.remote() or Game.cov.remote('W1N1')
+   * Usage: Game.kha.remote() or Game.kha.remote('W1N1')
    */
   remote(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -504,8 +504,8 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
       if (!charity) continue;
@@ -518,10 +518,10 @@ export class CovenantCommands {
   
   /**
    * Control remote mining for a specific room
-   * Usage: Game.cov.remoteToggle('W1N1', 'W2N1', true)
+   * Usage: Game.kha.remoteToggle('W1N1', 'W2N1', true)
    */
   remoteToggle(homeRoom: string, remoteRoom: string, enable: boolean): void {
-    const charity = this.covenant.highCharities[homeRoom];
+    const charity = this.khala.nexuses[homeRoom];
     if (!charity) {
       console.log(`❌ No colony found in ${homeRoom}`);
       return;
@@ -532,7 +532,7 @@ export class CovenantCommands {
   
   /**
    * Show deposit harvesting status
-   * Usage: Game.cov.deposits() or Game.cov.deposits('W1N1')
+   * Usage: Game.kha.deposits() or Game.kha.deposits('W1N1')
    */
   deposits(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -540,8 +540,8 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
       if (!charity) continue;
@@ -573,10 +573,10 @@ export class CovenantCommands {
   
   /**
    * Toggle deposit harvesting
-   * Usage: Game.cov.depositToggle('W1N1', 'depositId', true)
+   * Usage: Game.kha.depositToggle('W1N1', 'depositId', true)
    */
   depositToggle(homeRoom: string, depositId: string, enable: boolean): void {
-    const charity = this.covenant.highCharities[homeRoom];
+    const charity = this.khala.nexuses[homeRoom];
     if (!charity) {
       console.log(`❌ No colony found in ${homeRoom}`);
       return;
@@ -587,61 +587,61 @@ export class CovenantCommands {
   
   /**
    * Show help for all commands
-   * Usage: Game.cov.help()
+   * Usage: Game.kha.help()
    */
   help(): void {
     console.log('═══════════════════════════════════════════════════════');
-    console.log('📚 COVENANT CONSOLE COMMANDS');
+    console.log('📚 KHALA CONSOLE COMMANDS');
     console.log('═══════════════════════════════════════════════════════');
-    console.log('Game.cov.profile(minCpu) - Show CPU profile report');
-    console.log('Game.cov.resetProfile() - Reset profiling data');
-    console.log('Game.cov.cacheStats() - Show cache statistics');
-    console.log('Game.cov.clearCache() - Clear all caches');
-    console.log('Game.cov.cpuStatus() - Show CPU budget status');
-    console.log('Game.cov.topCpu(count) - Show top CPU consumers');
-    console.log('Game.cov.colony(room) - Show colony status');
-    console.log('Game.cov.colonies() - List all colonies');
-    console.log('Game.cov.war(room?) - Show war targets and squads');
-    console.log('Game.cov.power(room?) - Show power harvesting status');
-    console.log('Game.cov.showPlan(room?) - Visualize base layout (toggle)');
-    console.log('Game.cov.plan(room) - Show room plan details');
-    console.log('Game.cov.build(room) - Manually trigger structure placement');
-    console.log('Game.cov.replanRoads(room?) - Re-run core road planning for a room (or all)');
-    console.log('Game.cov.defense(room?) - Show defense and threat status');
-    console.log('Game.cov.safeMode(room, enable?) - Control auto safe mode');
-    console.log('Game.cov.market(room?) - Show trading statistics');
-    console.log('Game.cov.price(resource, room?) - Show price report');
-    console.log('Game.cov.trade(room, enable?) - Control auto-trading');
-    console.log('Game.cov.labs(room?) - Show lab production status');
-    console.log('Game.cov.produce(compound, amount, room?) - Queue compound');
-    console.log('Game.cov.autoLabs(room, enable?) - Control auto-production');
-    console.log('Game.cov.intel(room?) - Show room intelligence');
-    console.log('Game.cov.expand() - Show expansion candidates');
-    console.log('Game.cov.threats() - Show detected threats');
-    console.log('Game.cov.remote(room?) - Show remote mining ops');
-    console.log('Game.cov.remoteToggle(home, remote, enable) - Control remote mining');
-    console.log('Game.cov.deposits(room?) - Show deposit harvesting');
-    console.log('Game.cov.depositToggle(home, depositId, enable) - Control deposits');
+    console.log('Game.kha.profile(minCpu) - Show CPU profile report');
+    console.log('Game.kha.resetProfile() - Reset profiling data');
+    console.log('Game.kha.cacheStats() - Show cache statistics');
+    console.log('Game.kha.clearCache() - Clear all caches');
+    console.log('Game.kha.cpuStatus() - Show CPU budget status');
+    console.log('Game.kha.topCpu(count) - Show top CPU consumers');
+    console.log('Game.kha.colony(room) - Show colony status');
+    console.log('Game.kha.colonies() - List all colonies');
+    console.log('Game.kha.war(room?) - Show war targets and squads');
+    console.log('Game.kha.power(room?) - Show power harvesting status');
+    console.log('Game.kha.showPlan(room?) - Visualize base layout (toggle)');
+    console.log('Game.kha.plan(room) - Show room plan details');
+    console.log('Game.kha.build(room) - Manually trigger structure placement');
+    console.log('Game.kha.replanRoads(room?) - Re-run core road planning for a room (or all)');
+    console.log('Game.kha.defense(room?) - Show defense and threat status');
+    console.log('Game.kha.safeMode(room, enable?) - Control auto safe mode');
+    console.log('Game.kha.market(room?) - Show trading statistics');
+    console.log('Game.kha.price(resource, room?) - Show price report');
+    console.log('Game.kha.trade(room, enable?) - Control auto-trading');
+    console.log('Game.kha.labs(room?) - Show lab production status');
+    console.log('Game.kha.produce(compound, amount, room?) - Queue compound');
+    console.log('Game.kha.autoLabs(room, enable?) - Control auto-production');
+    console.log('Game.kha.intel(room?) - Show room intelligence');
+    console.log('Game.kha.expand() - Show expansion candidates');
+    console.log('Game.kha.threats() - Show detected threats');
+    console.log('Game.kha.remote(room?) - Show remote mining ops');
+    console.log('Game.kha.remoteToggle(home, remote, enable) - Control remote mining');
+    console.log('Game.kha.deposits(room?) - Show deposit harvesting');
+    console.log('Game.kha.depositToggle(home, depositId, enable) - Control deposits');
     console.log('');
     console.log('⚔️ MILITARY COMMANDS:');
-    console.log('Game.cov.squads(room?) - Show squad status and formations');
-    console.log('Game.cov.attack(target, formation?, tactic?) - Launch attack');
-    console.log('Game.cov.recall() - Recall all military units');
-    console.log('Game.cov.formation(type) - Change squad formation');
-    console.log('Game.cov.tactic(type) - Change squad tactic');
-    console.log('Game.cov.boosts(room?) - Show boost production status');
-    console.log('Game.cov.militaryBoosts(enabled) - Toggle military boost mode');
+    console.log('Game.kha.squads(room?) - Show squad status and formations');
+    console.log('Game.kha.attack(target, formation?, tactic?) - Launch attack');
+    console.log('Game.kha.recall() - Recall all military units');
+    console.log('Game.kha.formation(type) - Change squad formation');
+    console.log('Game.kha.tactic(type) - Change squad tactic');
+    console.log('Game.kha.boosts(room?) - Show boost production status');
+    console.log('Game.kha.militaryBoosts(enabled) - Toggle military boost mode');
     console.log('');
-    console.log('Game.cov.help() - Show this help');
+    console.log('Game.kha.help() - Show this help');
     console.log('═══════════════════════════════════════════════════════');
   }
 
   /**
    * Show room plan details
-   * Usage: Game.cov.plan('W1N1')
+   * Usage: Game.kha.plan('W1N1')
    */
   plan(roomName: string): void {
-    const charity = this.covenant.highCharities[roomName];
+    const charity = this.khala.nexuses[roomName];
     if (!charity) {
       console.log(`❌ No colony found in ${roomName}`);
       return;
@@ -706,17 +706,17 @@ export class CovenantCommands {
       }
     }
     
-    console.log('\n💡 Use Game.cov.showPlan(\'' + roomName + '\') to visualize');
-    console.log('💡 Use Game.cov.build(\'' + roomName + '\') to place construction sites');
+    console.log('\n💡 Use Game.kha.showPlan(\'' + roomName + '\') to visualize');
+    console.log('💡 Use Game.kha.build(\'' + roomName + '\') to place construction sites');
     console.log('═══════════════════════════════════════════════════════');
   }
   
   /**
    * Manually trigger structure placement for a room
-   * Usage: Game.cov.build('W1N1')
+   * Usage: Game.kha.build('W1N1')
    */
   build(roomName: string): void {
-    const charity = this.covenant.highCharities[roomName];
+    const charity = this.khala.nexuses[roomName];
     if (!charity) {
       console.log(`❌ No colony found in ${roomName}`);
       return;
@@ -728,7 +728,7 @@ export class CovenantCommands {
     // Trigger onRCLUpgrade to place all structures
     if (charity.autoPlanner) {
       (charity.autoPlanner as any).onRCLUpgrade(level);
-      console.log(`✅ Construction sites placed. Check with Game.cov.plan('${roomName}')`);
+      console.log(`✅ Construction sites placed. Check with Game.kha.plan('${roomName}')`);
     } else {
       console.log(`❌ AutoPlanner not available for ${roomName}`);
     }
@@ -736,10 +736,10 @@ export class CovenantCommands {
   
   /**
    * Force replan roads for a specific room or all colonies
-   * Usage: Game.cov.replanRoads() or Game.cov.replanRoads('W1N1')
+   * Usage: Game.kha.replanRoads() or Game.kha.replanRoads('W1N1')
    */
   replanRoads(roomName?: string): void {
-    const charities = roomName ? [this.covenant.highCharities[roomName]] : Object.values(this.covenant.highCharities);
+    const charities = roomName ? [this.khala.nexuses[roomName]] : Object.values(this.khala.nexuses);
     for (const charity of charities) {
       if (!charity) continue;
       // Request a replan via Memory flag; AutoPlanner will pick this up on next tick
@@ -752,7 +752,7 @@ export class CovenantCommands {
   
   /**
    * Show defense and threat status
-   * Usage: Game.cov.defense() or Game.cov.defense('W1N1')
+   * Usage: Game.kha.defense() or Game.kha.defense('W1N1')
    */
   defense(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -760,8 +760,8 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] : 
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] : 
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
       if (!charity) continue;
@@ -769,8 +769,8 @@ export class CovenantCommands {
       console.log(`\n${charity.safeModeManager.getStatus()}`);
       
       // Show rampart status
-      const ramparts = charity.defenseTemple.getRampartsNeedingRepair();
-      const walls = charity.defenseTemple.getWallsNeedingRepair();
+      const ramparts = charity.DefenseGateway.getRampartsNeedingRepair();
+      const walls = charity.DefenseGateway.getWallsNeedingRepair();
       
       console.log(`  Ramparts needing repair: ${ramparts.length}`);
       console.log(`  Walls needing repair: ${walls.length}`);
@@ -786,12 +786,12 @@ export class CovenantCommands {
   
   /**
    * Control automatic safe mode activation
-   * Usage: Game.cov.safeMode('W1N1', true) - Enable
-   *        Game.cov.safeMode('W1N1', false) - Disable
-   *        Game.cov.safeMode('W1N1') - Toggle
+   * Usage: Game.kha.safeMode('W1N1', true) - Enable
+   *        Game.kha.safeMode('W1N1', false) - Disable
+   *        Game.kha.safeMode('W1N1') - Toggle
    */
   safeMode(roomName: string, enable?: boolean): void {
-    const charity = this.covenant.highCharities[roomName];
+    const charity = this.khala.nexuses[roomName];
     if (!charity) {
       console.log(`❌ No colony found in ${roomName}`);
       return;
@@ -808,24 +808,24 @@ export class CovenantCommands {
   
   /**
    * Toggle base plan visualization
-   * Usage: Game.cov.showPlan() or Game.cov.showPlan('W1N1')
+   * Usage: Game.kha.showPlan() or Game.kha.showPlan('W1N1')
    */
   showPlan(roomName?: string): void {
-    if (!Memory.covenant) Memory.covenant = {};
-    if (!Memory.covenant.visualize) Memory.covenant.visualize = {};
+    if (!Memory.KHALA) Memory.KHALA = {};
+    if (!Memory.KHALA.visualize) Memory.KHALA.visualize = {};
     
     if (roomName) {
       // Toggle for specific room
-      const current = Memory.covenant.visualize![roomName] || false;
-      Memory.covenant.visualize![roomName] = !current;
+      const current = Memory.KHALA.visualize![roomName] || false;
+      Memory.KHALA.visualize![roomName] = !current;
       console.log(`${!current ? '✅ Enabled' : '❌ Disabled'} base plan visualization for ${roomName}`);
     } else {
       // Toggle for all rooms
-      const charities = Object.values(this.covenant.highCharities);
-      const anyEnabled = charities.some(c => Memory.covenant?.visualize?.[c.name]);
+      const charities = Object.values(this.khala.nexuses);
+      const anyEnabled = charities.some(c => Memory.KHALA?.visualize?.[c.name]);
       
       for (const charity of charities) {
-        Memory.covenant.visualize![charity.name] = !anyEnabled;
+        Memory.KHALA.visualize![charity.name] = !anyEnabled;
       }
       console.log(`${!anyEnabled ? '✅ Enabled' : '❌ Disabled'} base plan visualization for all rooms`);
     }
@@ -833,14 +833,14 @@ export class CovenantCommands {
   
   /**
    * Show expansion status
-   * Usage: Game.cov.expansion()
+   * Usage: Game.kha.expansion()
    */
   expansion(): void {
     console.log('═══════════════════════════════════════════════════════');
     console.log('🚀 EXPANSION STATUS');
     console.log('═══════════════════════════════════════════════════════');
     
-    const currentTarget = this.covenant.reclaimationCouncil.getStatus();
+    const currentTarget = this.khala.reclaimationCouncil.getStatus();
     
     if (currentTarget) {
       console.log(`\n📍 Current Target: ${currentTarget.roomName}`);
@@ -855,7 +855,7 @@ export class CovenantCommands {
       console.log('\nNo active expansion');
       
       // Show top expansion candidates
-      const candidates = this.covenant.observerNetwork.getExpansionCandidates().slice(0, 5);
+      const candidates = this.khala.observerNetwork.getExpansionCandidates().slice(0, 5);
       if (candidates.length > 0) {
         console.log('\n🎯 Top Expansion Candidates:');
         for (let i = 0; i < candidates.length; i++) {
@@ -866,7 +866,7 @@ export class CovenantCommands {
     }
     
     // Show history
-    const history = this.covenant.reclaimationCouncil.getHistory();
+    const history = this.khala.reclaimationCouncil.getHistory();
     if (history.length > 0) {
       console.log('\n📜 Expansion History:');
       for (const entry of history.slice(-5)) {
@@ -880,10 +880,10 @@ export class CovenantCommands {
   
   /**
    * Cancel current expansion
-   * Usage: Game.cov.cancelExpansion()
+   * Usage: Game.kha.cancelExpansion()
    */
   cancelExpansion(): void {
-    this.covenant.reclaimationCouncil.cancelExpansion();
+    this.khala.reclaimationCouncil.cancelExpansion();
   }
   
   /**
@@ -903,16 +903,16 @@ export class CovenantCommands {
   
   /**
    * Force emergency energy transfer
-   * Usage: Game.cov.sendEnergy('W1N1', 20000)
+   * Usage: Game.kha.sendEnergy('W1N1', 20000)
    */
   sendEnergy(targetRoom: string, amount: number = 20000): void {
-    this.covenant.terminalNetwork.forceEnergyTransfer(targetRoom, amount);
+    this.khala.terminalNetwork.forceEnergyTransfer(targetRoom, amount);
     console.log(`✅ Scheduled emergency energy transfer to ${targetRoom}`);
   }
   
   /**
    * Show power processing status
-   * Usage: Game.cov.powerProcessing()
+   * Usage: Game.kha.powerProcessing()
    */
   powerProcessing(): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -923,8 +923,8 @@ export class CovenantCommands {
     let totalPowerConsumed = 0;
     let activeProcessors = 0;
     
-    for (const roomName in this.covenant.highCharities) {
-      const charity = this.covenant.highCharities[roomName];
+    for (const roomName in this.khala.nexuses) {
+      const charity = this.khala.nexuses[roomName];
       if (charity.level !== 8) continue; // Only RCL 8 can have power spawns
       
       const status = charity.powerManager.getStatus();
@@ -958,7 +958,7 @@ export class CovenantCommands {
   
   /**
    * Show factory production status
-   * Usage: Game.cov.factories()
+   * Usage: Game.kha.factories()
    */
   factories(): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -969,8 +969,8 @@ export class CovenantCommands {
     let activeFactories = 0;
     const productionsByType: { [commodity: string]: number } = {};
     
-    for (const roomName in this.covenant.highCharities) {
-      const charity = this.covenant.highCharities[roomName];
+    for (const roomName in this.khala.nexuses) {
+      const charity = this.khala.nexuses[roomName];
       if (charity.level < 7) continue; // Only RCL 7+ can have factories
       
       const status = charity.factoryManager.getStatus();
@@ -1022,7 +1022,7 @@ export class CovenantCommands {
   
   /**
    * Show spawn queue status
-   * Usage: Game.cov.spawns(room)
+   * Usage: Game.kha.spawns(room)
    */
   spawns(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -1030,8 +1030,8 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] :
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] :
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
       if (!charity) continue;
@@ -1083,7 +1083,7 @@ export class CovenantCommands {
   
   /**
    * Show power creep status
-   * Usage: Game.cov.powerCreeps(room)
+   * Usage: Game.kha.powerCreeps(room)
    */
   powerCreeps(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -1094,8 +1094,8 @@ export class CovenantCommands {
     console.log(`   Power Creeps: ${Object.keys(Game.powerCreeps).length} / ${Game.gpl.level}`);
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] :
-      Object.values(this.covenant.highCharities).filter(c => c.level === 8);
+      [this.khala.nexuses[roomName]] :
+      Object.values(this.khala.nexuses).filter(c => c.level === 8);
     
     for (const charity of charities) {
       if (!charity) continue;
@@ -1163,7 +1163,7 @@ export class CovenantCommands {
   
   /**
    * Show room layout and auto-planner status
-   * Usage: Game.cov.layout(roomName)
+   * Usage: Game.kha.layout(roomName)
    */
   layout(roomName?: string): void {
     console.log('═══════════════════════════════════════════════════════');
@@ -1171,8 +1171,8 @@ export class CovenantCommands {
     console.log('═══════════════════════════════════════════════════════');
     
     const charities = roomName ? 
-      [this.covenant.highCharities[roomName]] :
-      Object.values(this.covenant.highCharities);
+      [this.khala.nexuses[roomName]] :
+      Object.values(this.khala.nexuses);
     
     for (const charity of charities) {
       if (!charity) continue;
@@ -1211,11 +1211,11 @@ export class CovenantCommands {
   
   /**
    * Show military squad status
-   * Usage: Game.cov.squads('W1N1')
+   * Usage: Game.kha.squads('W1N1')
    */
   squads(roomName?: string): void {
-    const targetRoom = roomName || Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[targetRoom];
+    const targetRoom = roomName || Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[targetRoom];
     
     if (!charity) {
       console.log(`❌ No colony found in ${targetRoom}`);
@@ -1238,7 +1238,7 @@ export class CovenantCommands {
     
     if (status.status === 'no active squad') {
       console.log('  No active squads');
-      console.log('  💡 Use: Game.cov.attack(targetRoom, formation, tactic) to launch an attack');
+      console.log('  💡 Use: Game.kha.attack(targetRoom, formation, tactic) to launch an attack');
     } else {
       console.log(`  Squad Size: ${status.size} creeps`);
       console.log(`  Formation: ${status.formation}`);
@@ -1266,11 +1266,11 @@ export class CovenantCommands {
   
   /**
    * Launch an attack on a room
-   * Usage: Game.cov.attack('W2N1', 'box', 'assault')
+   * Usage: Game.kha.attack('W2N1', 'box', 'assault')
    */
   attack(targetRoom: string, formation: string = 'box', tactic: string = 'assault'): void {
-    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[sourceRoom];
+    const sourceRoom = Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[sourceRoom];
     
     if (!charity) {
       console.log('❌ No colony found');
@@ -1296,18 +1296,18 @@ export class CovenantCommands {
     console.log(`Tactic: ${tactic}`);
     console.log('');
     console.log('Squad will begin spawning combat units...');
-    console.log('💡 Use: Game.cov.squads() to monitor squad status');
-    console.log('💡 Use: Game.cov.recall() to abort and recall units');
+    console.log('💡 Use: Game.kha.squads() to monitor squad status');
+    console.log('💡 Use: Game.kha.recall() to abort and recall units');
     console.log('═══════════════════════════════════════════════════════');
   }
   
   /**
    * Recall all military units
-   * Usage: Game.cov.recall()
+   * Usage: Game.kha.recall()
    */
   recall(): void {
-    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[sourceRoom];
+    const sourceRoom = Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[sourceRoom];
     
     if (!charity) {
       console.log('❌ No colony found');
@@ -1332,11 +1332,11 @@ export class CovenantCommands {
   
   /**
    * Change squad formation
-   * Usage: Game.cov.formation('wedge')
+   * Usage: Game.kha.formation('wedge')
    */
   formation(formation: string): void {
-    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[sourceRoom];
+    const sourceRoom = Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[sourceRoom];
     
     if (!charity) {
       console.log('❌ No colony found');
@@ -1357,11 +1357,11 @@ export class CovenantCommands {
   
   /**
    * Change squad tactic
-   * Usage: Game.cov.tactic('siege')
+   * Usage: Game.kha.tactic('siege')
    */
   tactic(tactic: string): void {
-    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[sourceRoom];
+    const sourceRoom = Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[sourceRoom];
     
     if (!charity) {
       console.log('❌ No colony found');
@@ -1382,11 +1382,11 @@ export class CovenantCommands {
   
   /**
    * Show boost production status
-   * Usage: Game.cov.boosts('W1N1')
+   * Usage: Game.kha.boosts('W1N1')
    */
   boosts(roomName?: string): void {
-    const targetRoom = roomName || Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[targetRoom];
+    const targetRoom = roomName || Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[targetRoom];
     
     if (!charity) {
       console.log(`❌ No colony found in ${targetRoom}`);
@@ -1453,19 +1453,19 @@ export class CovenantCommands {
     
     console.log('');
     console.log('💡 Commands:');
-    console.log('  Game.cov.militaryBoosts(true) - Enable aggressive production');
-    console.log('  Game.cov.militaryBoosts(false) - Disable aggressive production');
+    console.log('  Game.kha.militaryBoosts(true) - Enable aggressive production');
+    console.log('  Game.kha.militaryBoosts(false) - Disable aggressive production');
     
     console.log('═══════════════════════════════════════════════════════');
   }
   
   /**
    * Toggle military boost mode
-   * Usage: Game.cov.militaryBoosts(true)
+   * Usage: Game.kha.militaryBoosts(true)
    */
   militaryBoosts(enabled: boolean): void {
-    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[sourceRoom];
+    const sourceRoom = Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[sourceRoom];
     
     if (!charity || !charity.boostManager) {
       console.log('❌ Boost Manager not available');
@@ -1477,11 +1477,11 @@ export class CovenantCommands {
   
   /**
    * Show terminal network status
-   * Usage: Game.cov.network()
+   * Usage: Game.kha.network()
    */
   network(): void {
-    const sourceRoom = Object.keys(this.covenant.highCharities)[0];
-    const charity = this.covenant.highCharities[sourceRoom];
+    const sourceRoom = Object.keys(this.khala.nexuses)[0];
+    const charity = this.khala.nexuses[sourceRoom];
     
     if (!charity || !charity.terminalNetwork) {
       console.log('❌ Terminal Network not available');
@@ -1495,10 +1495,10 @@ export class CovenantCommands {
   
   /**
    * Send resources between rooms
-   * Usage: Game.cov.send('W1N1', 'W2N2', RESOURCE_ENERGY, 50000)
+   * Usage: Game.kha.send('W1N1', 'W2N2', RESOURCE_ENERGY, 50000)
    */
   send(from: string, to: string, resource: ResourceConstant, amount: number): void {
-    const charity = this.covenant.highCharities[from];
+    const charity = this.khala.nexuses[from];
     
     if (!charity || !charity.terminalNetwork) {
       console.log('❌ Terminal Network not available');
@@ -1511,10 +1511,10 @@ export class CovenantCommands {
   
   /**
    * Emergency resource transfer (high priority)
-   * Usage: Game.cov.emergency('W1N1', 'W2N2', RESOURCE_ENERGY, 50000)
+   * Usage: Game.kha.emergency('W1N1', 'W2N2', RESOURCE_ENERGY, 50000)
    */
   emergency(from: string, to: string, resource: ResourceConstant, amount: number): void {
-    const charity = this.covenant.highCharities[from];
+    const charity = this.khala.nexuses[from];
     
     if (!charity || !charity.terminalNetwork) {
       console.log('❌ Terminal Network not available');

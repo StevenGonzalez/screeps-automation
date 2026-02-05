@@ -3,7 +3,7 @@
  * 
  * "Eyes of the Prophets see all"
  * 
- * Manages ranger Elites that provide vision to adjacent rooms
+ * Manages ranger Warriors that provide vision to adjacent rooms
  * for remote mining opportunities and threat assessment.
  */
 
@@ -11,27 +11,27 @@
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * ranger Arbiter - Provides vision to adjacent rooms
  */
-export class RangerArbiter extends Arbiter {
-  rangers: Elite[];
+export class DragoonArbiter extends Arbiter {
+  rangers: Warrior[];
   targetRooms: string[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'ranger', ArbiterPriority.expansion.ranger);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'ranger', ArbiterPriority.expansion.ranger);
     this.rangers = [];
     this.targetRooms = [];
   }
   
   init(): void {
     this.refresh();
-    this.rangers = this.elites;
+    this.rangers = this.warriors;
     
     // Get adjacent rooms to ranger
     this.targetRooms = this.getAdjacentRooms();
@@ -52,7 +52,7 @@ export class RangerArbiter extends Arbiter {
     }
   }
   
-  private runranger(ranger: Elite): void {
+  private runranger(ranger: Warrior): void {
     const creep = ranger.creep;
     
     // Get next target room
@@ -63,8 +63,8 @@ export class RangerArbiter extends Arbiter {
     
     if (!creep.memory.targetRoom) {
       // No rooms to ranger, idle in home room
-      if (creep.room.name !== this.highCharity.name) {
-        const exitDir = creep.room.findExitTo(this.highCharity.name);
+      if (creep.room.name !== this.Nexus.name) {
+        const exitDir = creep.room.findExitTo(this.Nexus.name);
         if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
           const exit = creep.pos.findClosestByPath(exitDir);
           if (exit) {
@@ -140,7 +140,7 @@ export class RangerArbiter extends Arbiter {
    * Get adjacent room names for rangering
    */
   private getAdjacentRooms(): string[] {
-    const exits = Game.map.describeExits(this.highCharity.name);
+    const exits = Game.map.describeExits(this.Nexus.name);
     if (!exits) return [];
     
     const rooms: string[] = [];
@@ -159,7 +159,7 @@ export class RangerArbiter extends Arbiter {
    */
   private calculateDesiredrangers(): number {
     // Only ranger at RCL 4+ when we're ready for remote mining
-    if ((this.highCharity.controller?.level || 0) < 4) return 0;
+    if ((this.Nexus.controller?.level || 0) < 4) return 0;
     
     // 1 ranger is enough to rotate through adjacent rooms
     return 1;
@@ -173,7 +173,7 @@ export class RangerArbiter extends Arbiter {
     const name = `Seraph_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_RANGER // Covenant themed role
+      role: ROLES.Warrior_RANGER // KHALA themed role
     } as any, SpawnPriority.EXPANSION);
   }
   
@@ -182,7 +182,7 @@ export class RangerArbiter extends Arbiter {
    */
   private calculaterangerBody(): BodyPartConstant[] {
     // Scout just needs MOVE parts for speed and vision
-    return BodyBuilder.scout(this.highCharity.energyAvailable);
+    return BodyBuilder.scout(this.Nexus.energyAvailable);
   }
   
   protected getCreepsForRole(): Creep[] {

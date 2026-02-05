@@ -1,76 +1,76 @@
 /**
- * Main Entry Point - COVENANT System
+ * Main Entry Point - KHALA System
  *
- * "The Great Journey begins with a single step"
+ * "En Taro Adun! For Aiur!"
  * 
- * The COVENANT system manages all High Charities, Arbiters, and Crusades
+ * The KHALA system manages all Nexuses, Arbiters, and Campaigns
  * to dominate the Screeps world with superior strategy and coordination.
  */
 
 /// <reference types="@types/screeps" />
 import './utils/ConsoleFallback';
-import { Covenant } from "./core/Covenant";
+import { Khala } from "./core/Khala";
 import { Profiler } from "./utils/Profiler";
 import { CacheSystem, PathCache } from "./utils/CacheSystem";
 import { CPUMonitor } from "./utils/CPUMonitor";
 
-// Initialize global Covenant instance
-const Cov = Covenant.getInstance();
+// Initialize global Khala instance
+const Kha = Khala.getInstance();
 
 // Store in Game object for global access with console commands
-(Game as any).cov = Cov;
+(Game as any).kha = Kha;
 
 // Add console command shortcuts as properties
-(Game as any).cov.profile = (minCpu?: number) => Cov.commands.profile(minCpu);
-(Game as any).cov.resetProfile = () => Cov.commands.resetProfile();
-(Game as any).cov.cacheStats = () => Cov.commands.cacheStats();
-(Game as any).cov.clearCache = () => Cov.commands.clearCache();
-(Game as any).cov.cpuStatus = () => Cov.commands.cpuStatus();
-(Game as any).cov.topCpu = (count?: number) => Cov.commands.topCpu(count);
-(Game as any).cov.colony = (room: string) => Cov.commands.colony(room);
-(Game as any).cov.colonies = () => Cov.commands.colonies();
-(Game as any).cov.war = (room?: string) => Cov.commands.war(room);
-(Game as any).cov.power = (room?: string) => Cov.commands.power(room);
-(Game as any).cov.showPlan = (room?: string) => Cov.commands.showPlan(room);
-(Game as any).cov.defense = (room?: string) => Cov.commands.defense(room);
-(Game as any).cov.safeMode = (room: string, enable?: boolean) => Cov.commands.safeMode(room, enable);
-(Game as any).cov.market = (room?: string) => Cov.commands.market(room);
-(Game as any).cov.price = (resource: ResourceConstant, room?: string) => Cov.commands.price(resource, room);
-(Game as any).cov.trade = (room: string, enable?: boolean) => Cov.commands.trade(room, enable);
-(Game as any).cov.labs = (room?: string) => Cov.commands.labs(room);
-(Game as any).cov.produce = (compound: MineralCompoundConstant, amount: number, room?: string) => Cov.commands.produce(compound, amount, room);
-(Game as any).cov.autoLabs = (room: string, enable?: boolean) => Cov.commands.autoLabs(room, enable);
-(Game as any).cov.intel = (room?: string) => Cov.commands.intel(room);
-(Game as any).cov.expand = () => Cov.commands.expand();
-(Game as any).cov.threats = () => Cov.commands.threats();
-(Game as any).cov.remote = (room?: string) => Cov.commands.remote(room);
-(Game as any).cov.remoteToggle = (home: string, remote: string, enable: boolean) => Cov.commands.remoteToggle(home, remote, enable);
-(Game as any).cov.deposits = (room?: string) => Cov.commands.deposits(room);
-(Game as any).cov.depositToggle = (home: string, depositId: string, enable: boolean) => Cov.commands.depositToggle(home, depositId, enable);
-(Game as any).cov.network = () => Cov.commands.network();
-(Game as any).cov.sendEnergy = (targetRoom: string, amount?: number) => Cov.commands.sendEnergy(targetRoom, amount);
-(Game as any).cov.powerProcessing = () => Cov.commands.powerProcessing();
-(Game as any).cov.factories = () => Cov.commands.factories();
-(Game as any).cov.spawns = (room?: string) => Cov.commands.spawns(room);
-(Game as any).cov.powerCreeps = (room?: string) => Cov.commands.powerCreeps(room);
-(Game as any).cov.layout = (room?: string) => Cov.commands.layout(room);
-(Game as any).cov.squads = (room?: string) => Cov.commands.squads(room);
-(Game as any).cov.attack = (targetRoom: string, formation?: string, tactic?: string) => Cov.commands.attack(targetRoom, formation, tactic);
-(Game as any).cov.recall = () => Cov.commands.recall();
-(Game as any).cov.formation = (formation: string) => Cov.commands.formation(formation);
-(Game as any).cov.tactic = (tactic: string) => Cov.commands.tactic(tactic);
-(Game as any).cov.boosts = (room?: string) => Cov.commands.boosts(room);
-(Game as any).cov.militaryBoosts = (enabled: boolean) => Cov.commands.militaryBoosts(enabled);
-(Game as any).cov.help = () => Cov.commands.help();
+(Game as any).kha.profile = (minCpu?: number) => Kha.commands.profile(minCpu);
+(Game as any).kha.resetProfile = () => Kha.commands.resetProfile();
+(Game as any).kha.cacheStats = () => Kha.commands.cacheStats();
+(Game as any).kha.clearCache = () => Kha.commands.clearCache();
+(Game as any).kha.cpuStatus = () => Kha.commands.cpuStatus();
+(Game as any).kha.topCpu = (count?: number) => Kha.commands.topCpu(count);
+(Game as any).kha.colony = (room: string) => Kha.commands.colony(room);
+(Game as any).kha.colonies = () => Kha.commands.colonies();
+(Game as any).kha.war = (room?: string) => Kha.commands.war(room);
+(Game as any).kha.power = (room?: string) => Kha.commands.power(room);
+(Game as any).kha.showPlan = (room?: string) => Kha.commands.showPlan(room);
+(Game as any).kha.defense = (room?: string) => Kha.commands.defense(room);
+(Game as any).kha.safeMode = (room: string, enable?: boolean) => Kha.commands.safeMode(room, enable);
+(Game as any).kha.market = (room?: string) => Kha.commands.market(room);
+(Game as any).kha.price = (resource: ResourceConstant, room?: string) => Kha.commands.price(resource, room);
+(Game as any).kha.trade = (room: string, enable?: boolean) => Kha.commands.trade(room, enable);
+(Game as any).kha.labs = (room?: string) => Kha.commands.labs(room);
+(Game as any).kha.produce = (compound: MineralCompoundConstant, amount: number, room?: string) => Kha.commands.produce(compound, amount, room);
+(Game as any).kha.autoLabs = (room: string, enable?: boolean) => Kha.commands.autoLabs(room, enable);
+(Game as any).kha.intel = (room?: string) => Kha.commands.intel(room);
+(Game as any).kha.expand = () => Kha.commands.expand();
+(Game as any).kha.threats = () => Kha.commands.threats();
+(Game as any).kha.remote = (room?: string) => Kha.commands.remote(room);
+(Game as any).kha.remoteToggle = (home: string, remote: string, enable: boolean) => Kha.commands.remoteToggle(home, remote, enable);
+(Game as any).kha.deposits = (room?: string) => Kha.commands.deposits(room);
+(Game as any).kha.depositToggle = (home: string, depositId: string, enable: boolean) => Kha.commands.depositToggle(home, depositId, enable);
+(Game as any).kha.network = () => Kha.commands.network();
+(Game as any).kha.sendEnergy = (targetRoom: string, amount?: number) => Kha.commands.sendEnergy(targetRoom, amount);
+(Game as any).kha.powerProcessing = () => Kha.commands.powerProcessing();
+(Game as any).kha.factories = () => Kha.commands.factories();
+(Game as any).kha.spawns = (room?: string) => Kha.commands.spawns(room);
+(Game as any).kha.powerCreeps = (room?: string) => Kha.commands.powerCreeps(room);
+(Game as any).kha.layout = (room?: string) => Kha.commands.layout(room);
+(Game as any).kha.squads = (room?: string) => Kha.commands.squads(room);
+(Game as any).kha.attack = (targetRoom: string, formation?: string, tactic?: string) => Kha.commands.attack(targetRoom, formation, tactic);
+(Game as any).kha.recall = () => Kha.commands.recall();
+(Game as any).kha.formation = (formation: string) => Kha.commands.formation(formation);
+(Game as any).kha.tactic = (tactic: string) => Kha.commands.tactic(tactic);
+(Game as any).kha.boosts = (room?: string) => Kha.commands.boosts(room);
+(Game as any).kha.militaryBoosts = (enabled: boolean) => Kha.commands.militaryBoosts(enabled);
+(Game as any).kha.help = () => Kha.commands.help();
 
-// Expose all CovenantCommands methods directly on Game.cov for console convenience
+// Expose all KhalaCommands methods directly on Game.kha for console convenience
 try {
-  const proto = Object.getPrototypeOf(Cov.commands as any);
+  const proto = Object.getPrototypeOf(Kha.commands as any);
   const methodNames = Object.getOwnPropertyNames(proto).filter(n => n !== 'constructor');
   for (const name of methodNames) {
     // Only map functions that aren't already present
-    if (!(Game as any).cov[name]) {
-      (Game as any).cov[name] = (...args: any[]) => (Cov.commands as any)[name](...args);
+    if (!(Game as any).kha[name]) {
+      (Game as any).kha[name] = (...args: any[]) => (Kha.commands as any)[name](...args);
     }
   }
 } catch (e) {
@@ -86,20 +86,20 @@ export const loop = (): void => {
   const throttleLevel = CPUMonitor.getThrottleLevel();
 
   try {
-    // COVENANT ARCHITECTURE
-    CPUMonitor.startSystem('Covenant_build');
-    Profiler.start('Covenant_build');
-    // Phase 1: Build - Construct all High Charities, Arbiters, and Crusades
-    Cov.build();
-    Profiler.end('Covenant_build');
-    CPUMonitor.endSystem('Covenant_build');
+    // KHALA ARCHITECTURE
+    CPUMonitor.startSystem('KHALA_build');
+    Profiler.start('KHALA_build');
+    // Phase 1: Build - Construct all Nexuses, Arbiters, and Campaigns
+    Kha.build();
+    Profiler.end('KHALA_build');
+    CPUMonitor.endSystem('KHALA_build');
     
-    CPUMonitor.startSystem('Covenant_init');
-    Profiler.start('Covenant_init');
+    CPUMonitor.startSystem('KHALA_init');
+    Profiler.start('KHALA_init');
     // Phase 2: Init - Initialize all systems
-    Cov.init();
-    Profiler.end('Covenant_init');
-    CPUMonitor.endSystem('Covenant_init');
+    Kha.init();
+    Profiler.end('KHALA_init');
+    CPUMonitor.endSystem('KHALA_init');
     
     // CRITICAL: Check if we're in bootstrap emergency (low creeps)
     // If so, we MUST run spawn logic even during CPU emergency throttling
@@ -109,18 +109,18 @@ export const loop = (): void => {
     // Phase 3: Run - Execute operations (throttled based on CPU)
     if (throttleLevel < 3) {
       // Normal operation - run everything
-      CPUMonitor.startSystem('Covenant_run');
-      Profiler.start('Covenant_run');
-      Cov.run();
-      Profiler.end('Covenant_run');
-      CPUMonitor.endSystem('Covenant_run');
+      CPUMonitor.startSystem('KHALA_run');
+      Profiler.start('KHALA_run');
+      Kha.run();
+      Profiler.end('KHALA_run');
+      CPUMonitor.endSystem('KHALA_run');
     } else {
       // Emergency throttle - only spawn critical creeps
       console.log(`⚠️ CPU THROTTLE LEVEL ${throttleLevel} - Bucket: ${Game.cpu.bucket} - Emergency mode: spawning only`);
       
       // Run ONLY spawning logic for each room
-      for (const roomName in Cov.highCharities) {
-        const hc = Cov.highCharities[roomName];
+      for (const roomName in Kha.nexuses) {
+        const hc = Kha.nexuses[roomName];
         if (hc.spawnQueue) {
           hc.spawnQueue.run(); // Critical spawning only
         }
@@ -128,8 +128,8 @@ export const loop = (): void => {
 
       // Still allow essential planning tasks (roads, defense planning)
       // so we can recover from mass road loss even under CPU throttle.
-      for (const roomName in Cov.highCharities) {
-        const hc = Cov.highCharities[roomName];
+      for (const roomName in Kha.nexuses) {
+        const hc = Kha.nexuses[roomName];
         try {
           hc.autoPlanner.run();
         } catch (e) {
@@ -163,12 +163,12 @@ export const loop = (): void => {
     
     // Skip end of tick cleanup if emergency throttling
     if (throttleLevel < 3) {
-      CPUMonitor.startSystem('Covenant_endOfTick');
-      Profiler.start('Covenant_endOfTick');
+      CPUMonitor.startSystem('KHALA_endOfTick');
+      Profiler.start('KHALA_endOfTick');
       // Phase 4: End of tick - Stats and cleanup
-      Cov.endOfTick();
-      Profiler.end('Covenant_endOfTick');
-      CPUMonitor.endSystem('Covenant_endOfTick');
+      Kha.endOfTick();
+      Profiler.end('KHALA_endOfTick');
+      CPUMonitor.endSystem('KHALA_endOfTick');
     }
     
     // CACHE CLEANUP

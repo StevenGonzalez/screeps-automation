@@ -3,13 +3,13 @@
  * 
  * "When the sanctum is breached, the Gods themselves intervene"
  * 
- * Monitors threats and automatically activates safe mode when the High Charity
+ * Monitors threats and automatically activates safe mode when the Nexus
  * is in critical danger. Prevents loss of vital structures and creeps.
  */
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface ThreatAssessment {
   level: number; // 0-10 scale
@@ -34,13 +34,13 @@ export interface SafeModeManagerMemory {
  * Safe Mode Manager - Monitors threats and manages safe mode activation
  */
 export class SafeModeManager {
-  highCharity: HighCharity;
+  Nexus: Nexus;
   room: Room;
   memory: SafeModeManagerMemory;
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
-    this.room = highCharity.room;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
+    this.room = Nexus.room;
     
     // Initialize memory
     const roomMem: any = Memory.rooms[this.room.name];
@@ -292,7 +292,7 @@ export class SafeModeManager {
     );
     
     // Boost defender spawn priority
-    const zealotArbiter = this.highCharity.arbiters['defense'];
+    const zealotArbiter = this.Nexus.arbiters['defense'];
     if (zealotArbiter) {
       // Emergency defenders get highest priority
       (zealotArbiter as any).emergencyMode = true;

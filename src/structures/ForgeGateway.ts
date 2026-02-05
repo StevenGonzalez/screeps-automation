@@ -1,19 +1,19 @@
 /**
- * LAB TEMPLE - Chemical Reaction Management
+ * LAB Gateway - Chemical Reaction Management
  * 
  * "Through knowledge and alchemy, power is achieved"
  * 
  * Manages lab structures and chemical reactions to produce
- * valuable compounds and boosts for the Covenant's forces.
+ * valuable compounds and boosts for the KHALA's forces.
  */
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
-import { Temple } from './Temple';
+import { Nexus } from '../core/Nexus';
+import { Gateway } from './Gateway';
 import { ReactionPlanner } from '../labs/ReactionPlanner';
 
-export interface LabTempleMemory {
+export interface ForgeGatewayMemory {
   reactionQueue: ReactionTask[];
   currentReaction: ReactionTask | null;
   autoProduction: boolean; // Auto-produce based on stock levels
@@ -77,19 +77,19 @@ const REACTIONS: { [key: string]: [ResourceConstant, ResourceConstant] } = {
 };
 
 /**
- * Lab Temple - Manages chemical reactions
+ * Lab Gateway - Manages chemical reactions
  */
-export class LabTemple extends Temple {
+export class ForgeGateway extends Gateway {
   labs: StructureLab[];
   inputLabs: StructureLab[];
   outputLabs: StructureLab[];
   
-  constructor(highCharity: HighCharity) {
+  constructor(Nexus: Nexus) {
     // Use storage or controller position as anchor
-    const pos = highCharity.storage?.pos || 
-                highCharity.controller?.pos || 
-                new RoomPosition(25, 25, highCharity.room.name);
-    super(highCharity, pos);
+    const pos = Nexus.storage?.pos || 
+                Nexus.controller?.pos || 
+                new RoomPosition(25, 25, Nexus.room.name);
+    super(Nexus, pos);
     
     this.labs = [];
     this.inputLabs = [];
@@ -112,8 +112,8 @@ export class LabTemple extends Temple {
     // Assign input and output labs
     // Input labs should be close to storage for easy refilling
     const sortedLabs = this.labs.sort((a, b) => {
-      if (!this.highCharity.storage) return 0;
-      return a.pos.getRangeTo(this.highCharity.storage) - b.pos.getRangeTo(this.highCharity.storage);
+      if (!this.Nexus.storage) return 0;
+      return a.pos.getRangeTo(this.Nexus.storage) - b.pos.getRangeTo(this.Nexus.storage);
     });
     
     this.inputLabs = sortedLabs.slice(0, 2);
@@ -124,7 +124,7 @@ export class LabTemple extends Temple {
     if (this.labs.length < 3) return;
     
     // Auto-production: Check what we should produce every 100 ticks
-    const memory = this.memory as LabTempleMemory;
+    const memory = this.memory as ForgeGatewayMemory;
     if (memory.autoProduction !== false) { // Default to true
       if (!memory.lastProductionCheck || Game.time - memory.lastProductionCheck >= 100) {
         this.planAutoProduction();
@@ -151,7 +151,7 @@ export class LabTemple extends Temple {
     
     if (!ingredients) {
       console.log(`⚠️ Unknown reaction: ${task.product}`);
-      (this.memory as LabTempleMemory).currentReaction = null;
+      (this.memory as ForgeGatewayMemory).currentReaction = null;
       return;
     }
     
@@ -169,7 +169,7 @@ export class LabTemple extends Temple {
     // Check if labs need refilling
     const lab1Amount = lab1.store?.getUsedCapacity(input1 as ResourceConstant) || 0;
     if (lab1Resource !== input1 || lab1Amount < 100) {
-      // Need to refill lab1 - HaulerArbiter will handle this via ProphetsWill
+      // Need to refill lab1 - HaulerArbiter will handle this via PylonNetwork
       return;
     }
     
@@ -197,7 +197,7 @@ export class LabTemple extends Temple {
     
     if (produced >= task.amount) {
       console.log(`✅ Completed reaction: ${task.product} (${produced}/${task.amount})`);
-      (this.memory as LabTempleMemory).currentReaction = null;
+      (this.memory as ForgeGatewayMemory).currentReaction = null;
     }
   }
   
@@ -207,8 +207,8 @@ export class LabTemple extends Temple {
   private planAutoProduction(): void {
     // Get top priority compounds to produce
     const priorities = ReactionPlanner.planProduction(
-      this.highCharity.storage || null,
-      this.highCharity.terminal || null
+      this.Nexus.storage || null,
+      this.Nexus.terminal || null
     );
     
     if (priorities.length === 0) return;
@@ -222,7 +222,7 @@ export class LabTemple extends Temple {
       for (const product of chain) {
         // Check if we can produce it
         const amount = 3000; // Produce 3000 units
-        if (ReactionPlanner.canProduce(product, amount, this.highCharity.storage || null, this.highCharity.terminal || null)) {
+        if (ReactionPlanner.canProduce(product, amount, this.Nexus.storage || null, this.Nexus.terminal || null)) {
           const ingredients = ReactionPlanner.getIngredients(product);
           if (ingredients) {
             this.queueReaction(product, amount);
@@ -249,7 +249,7 @@ export class LabTemple extends Temple {
       ingredient2: ingredients[1]
     };
     
-    const memory = this.memory as LabTempleMemory;
+    const memory = this.memory as ForgeGatewayMemory;
     if (!memory.reactionQueue) {
       memory.reactionQueue = [];
     }
@@ -271,8 +271,8 @@ export class LabTemple extends Temple {
    * Check if labs are busy with reactions
    */
   isBusy(): boolean {
-    return !!(this.memory as LabTempleMemory).currentReaction ||
-           ((this.memory as LabTempleMemory).reactionQueue || []).length > 0;
+    return !!(this.memory as ForgeGatewayMemory).currentReaction ||
+           ((this.memory as ForgeGatewayMemory).reactionQueue || []).length > 0;
   }
   
   /**
@@ -281,8 +281,8 @@ export class LabTemple extends Temple {
   getNeededResources(): { [resource: string]: number } {
     const needed: { [resource: string]: number } = {};
     
-    const current = (this.memory as LabTempleMemory).currentReaction;
-    const queue = (this.memory as LabTempleMemory).reactionQueue || [];
+    const current = (this.memory as ForgeGatewayMemory).currentReaction;
+    const queue = (this.memory as ForgeGatewayMemory).reactionQueue || [];
     const allTasks = current ? [current, ...queue] : queue;
     
     for (const task of allTasks) {

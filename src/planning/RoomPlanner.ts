@@ -245,12 +245,12 @@ export class RoomPlanner {
   
   /**
    * Plan core structures (storage, terminal, factory, power spawn)
-   * COVENANT THEME: Central sacred anchor with symmetrical holy structures
+   * KHALA THEME: Central sacred anchor with symmetrical holy structures
    */
   private planCoreStructures(plan: RoomPlan): void {
     const anchor = plan.anchor;
     
-    // SACRED CORE: Storage at the holy anchor (High Charity's heart)
+    // SACRED CORE: Storage at the holy anchor (Nexus's heart)
     plan.storage = anchor;
     
     // Terminal forms a cross pattern with storage (religious symbolism)
@@ -263,11 +263,11 @@ export class RoomPlanner {
     plan.powerSpawn = new RoomPosition(anchor.x, anchor.y + 2, this.room.name);
     
     // HIERARCHS' THRONES: Spawns arranged in triangular formation (3 points of hierarchy)
-    // North spawn (Prophet of Truth)
+    // North spawn (Hierarch Artanis)
     plan.spawns.push(new RoomPosition(anchor.x, anchor.y - 3, this.room.name));
-    // Southwest spawn (Prophet of Regret)
+    // Southwest spawn (Executor Tassadar)
     plan.spawns.push(new RoomPosition(anchor.x - 3, anchor.y + 2, this.room.name));
-    // Southeast spawn (Prophet of Mercy)
+    // Southeast spawn (Praetor Fenix)
     plan.spawns.push(new RoomPosition(anchor.x + 3, anchor.y + 2, this.room.name));
     
     // Observer and nuker flanking the sacred core
@@ -276,8 +276,8 @@ export class RoomPlanner {
   }
   
   /**
-   * Plan extensions in radial Covenant pattern
-   * COVENANT THEME: RINGS OF HIGH CHARITY - Sacred geometric tiers
+   * Plan extensions in radial KHALA pattern
+   * KHALA THEME: RINGS OF Nexus - Sacred geometric tiers
    * Forms distinctive hexagonal mandala pattern representing the holy city's layers
    */
   private planExtensions(plan: RoomPlan): void {
@@ -286,7 +286,7 @@ export class RoomPlanner {
     
     const positions: RoomPosition[] = [];
     
-    // RINGS OF HIGH CHARITY: 6-fold sacred symmetry (Covenant religious architecture)
+    // RINGS OF Nexus: 6-fold sacred symmetry (KHALA religious architecture)
     // Each ring represents a tier of the holy city, extensions are prayer shrines
     const baseAngles = [0, 60, 120, 180, 240, 300]; // Primary cardinal directions
     
@@ -380,7 +380,7 @@ export class RoomPlanner {
   
   /**
    * Plan towers in defensive perimeter
-   * COVENANT THEME: Towers arranged as guardian sentinels
+   * KHALA THEME: Towers arranged as guardian sentinels
    */
   private planTowers(plan: RoomPlan): void {
     const anchor = plan.anchor;
@@ -403,7 +403,7 @@ export class RoomPlanner {
   
   /**
    * Plan labs in compact cluster for reactions
-   * COVENANT THEME: Labs arranged in a research sanctum
+   * KHALA THEME: Labs arranged in a research sanctum
    */
   private planLabs(plan: RoomPlan): void {
     const anchor = plan.anchor;
@@ -544,7 +544,7 @@ export class RoomPlanner {
   }
   
   /**
-   * Visualize the room plan with COVENANT SACRED GEOMETRY
+   * Visualize the room plan with KHALA Protoss Architecture
    */
   visualize(): void {
     const plan = this.getPlan();
@@ -565,7 +565,7 @@ export class RoomPlanner {
       opacity: 0.5
     });
     
-    // RINGS OF HIGH CHARITY: Draw concentric hexagons
+    // RINGS OF Nexus: Draw concentric hexagons
     const hexColors = ['#9370DB', '#8A2BE2', '#9400D3', '#8B008B'];
     for (let ring = 1; ring <= 4; ring++) {
       const radius = 3 + ring;
@@ -729,7 +729,7 @@ export class RoomPlanner {
     }
     
     // Draw legend
-    visual.text('⚜ COVENANT BASE LAYOUT ⚜', 25, 1, {
+    visual.text('⚜ KHALA BASE LAYOUT ⚜', 25, 1, {
       color: '#FFD700',
       font: 0.6,
       align: 'center',

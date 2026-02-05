@@ -9,7 +9,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface BoostManagerMemory {
   productionTargets: { [compound: string]: number };
@@ -104,14 +104,14 @@ const BOOST_TARGETS = {
  * Boost Manager - Automated boost production for military operations
  */
 export class BoostManager {
-  private highCharity: HighCharity;
+  private Nexus: Nexus;
   private memory: BoostManagerMemory;
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
     
     // Initialize memory
-    const roomMem: any = Memory.rooms[highCharity.name];
+    const roomMem: any = Memory.rooms[Nexus.name];
     if (!roomMem.boostManager) {
       roomMem.boostManager = {
         productionTargets: {},
@@ -129,7 +129,7 @@ export class BoostManager {
    */
   run(): void {
     // Only run if we have labs
-    if (!this.highCharity.labTemple || this.highCharity.labTemple.labs.length < 3) {
+    if (!this.Nexus.ForgeGateway || this.Nexus.ForgeGateway.labs.length < 3) {
       return;
     }
     
@@ -152,10 +152,10 @@ export class BoostManager {
    * Evaluate what boosts we need to produce
    */
   private evaluateProductionNeeds(): void {
-    if (!this.highCharity.storage) return;
+    if (!this.Nexus.storage) return;
     
-    const storage = this.highCharity.storage;
-    const terminal = this.highCharity.terminal;
+    const storage = this.Nexus.storage;
+    const terminal = this.Nexus.terminal;
     
     // Reset production targets
     this.memory.productionTargets = {};
@@ -189,8 +189,8 @@ export class BoostManager {
    * Check if there's active military operations
    */
   private hasMilitaryActivity(): boolean {
-    // Check VanguardArbiter
-    const vanguard = Object.values(this.highCharity.arbiters).find((a: any) => a.ref === 'vanguard');
+    // Check ColossusArbiter
+    const vanguard = Object.values(this.Nexus.arbiters).find((a: any) => a.ref === 'vanguard');
     if (vanguard) {
       const status = (vanguard as any).getSquadStatus?.();
       if (status && status.size > 0) {
@@ -199,15 +199,15 @@ export class BoostManager {
     }
     
     // Check WarCouncil
-    if (this.highCharity.warCouncil) {
-      const warStatus = this.highCharity.warCouncil.getStatus();
+    if (this.Nexus.warCouncil) {
+      const warStatus = this.Nexus.warCouncil.getStatus();
       if (warStatus.activeSquads > 0 || warStatus.targets > 0) {
         return true;
       }
     }
     
     // Check for combat creeps spawning
-    const combatCreeps = this.highCharity.room.find(FIND_MY_CREEPS, {
+    const combatCreeps = this.Nexus.room.find(FIND_MY_CREEPS, {
       filter: (c: Creep) => c.memory.role === 'attacker' || 
                            c.memory.role === 'healer' || 
                            c.memory.role === 'ranged'
@@ -241,7 +241,7 @@ export class BoostManager {
    * Queue boost production in labs
    */
   private queueBoostProduction(): void {
-    if (!this.highCharity.labTemple) return;
+    if (!this.Nexus.ForgeGateway) return;
     
     // Get compounds sorted by priority (lowest stock first)
     const priorities = Object.entries(this.memory.productionTargets)
@@ -263,7 +263,7 @@ export class BoostManager {
       // Check if we can produce this
       if (this.canProduce(compound as MineralCompoundConstant)) {
         const batchSize = Math.min(amount, 3000); // Produce in 3k batches
-        this.highCharity.labTemple.queueReaction(compound as MineralCompoundConstant, batchSize);
+        this.Nexus.ForgeGateway.queueReaction(compound as MineralCompoundConstant, batchSize);
       }
     }
   }
@@ -294,15 +294,15 @@ export class BoostManager {
    * Check if we can produce a compound
    */
   private canProduce(compound: MineralCompoundConstant): boolean {
-    if (!this.highCharity.storage) return false;
+    if (!this.Nexus.storage) return false;
     
     // Get ingredients needed
     const ingredients = this.getIngredients(compound);
     if (!ingredients) return false;
     
     const [ing1, ing2] = ingredients;
-    const storage = this.highCharity.storage;
-    const terminal = this.highCharity.terminal;
+    const storage = this.Nexus.storage;
+    const terminal = this.Nexus.terminal;
     
     // Check if we have ingredients
     const ing1Amount = (storage.store.getUsedCapacity(ing1) || 0) + 
@@ -369,7 +369,7 @@ export class BoostManager {
    * Request needed minerals from market
    */
   private requestNeededMinerals(): void {
-    if (!this.highCharity.terminal || !this.highCharity.marketManager) return;
+    if (!this.Nexus.terminal || !this.Nexus.marketManager) return;
     
     const baseMinerals = [
       RESOURCE_HYDROGEN,
@@ -382,8 +382,8 @@ export class BoostManager {
     ];
     
     for (const mineral of baseMinerals) {
-      const amount = this.highCharity.storage?.store.getUsedCapacity(mineral) || 0;
-      const terminalAmount = this.highCharity.terminal.store.getUsedCapacity(mineral) || 0;
+      const amount = this.Nexus.storage?.store.getUsedCapacity(mineral) || 0;
+      const terminalAmount = this.Nexus.terminal.store.getUsedCapacity(mineral) || 0;
       const total = amount + terminalAmount;
       
       // If below 3000, request from market
@@ -401,7 +401,7 @@ export class BoostManager {
    * Request boosts for a military creep
    */
   requestBoosts(creep: Creep, role: 'attacker' | 'healer' | 'ranged' | 'dismantler'): void {
-    if (!this.highCharity.boostTemple) return;
+    if (!this.Nexus.BoostGateway) return;
     
     // Determine which boosts to use
     let boosts: ResourceConstant[] = [];
@@ -430,9 +430,9 @@ export class BoostManager {
         break;
     }
     
-    // Request boosts from BoostTemple
+    // Request boosts from BoostGateway
     if (boosts.length > 0) {
-      this.highCharity.boostTemple.requestBoost(creep.name, role, 200); // High priority
+      this.Nexus.BoostGateway.requestBoost(creep.name, role, 200); // High priority
       this.memory.totalCreepsBoosted++;
     }
   }
@@ -445,8 +445,8 @@ export class BoostManager {
     
     for (const boost of options) {
       // Check if we have this boost available
-      const amount = (this.highCharity.storage?.store.getUsedCapacity(boost) || 0) +
-                    (this.highCharity.terminal?.store.getUsedCapacity(boost) || 0);
+      const amount = (this.Nexus.storage?.store.getUsedCapacity(boost) || 0) +
+                    (this.Nexus.terminal?.store.getUsedCapacity(boost) || 0);
       
       if (amount >= 300) { // Need at least 300 for boosting
         selected.push(boost);

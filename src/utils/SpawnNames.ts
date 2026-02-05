@@ -1,9 +1,9 @@
 /**
- * SPAWN NAMING - Covenant-Themed Spawn Names
+ * SPAWN NAMING - KHALA-Themed Spawn Names
  * 
- * "Sacred birthing chambers of the Covenant"
+ * "Sacred birthing chambers of the KHALA"
  * 
- * Provides epic Covenant-themed names for spawns.
+ * Provides epic KHALA-themed names for spawns.
  */
 
 export const SPAWN_NAMES = [
@@ -26,7 +26,7 @@ export const SPAWN_NAMES = [
   'Cradle',
   'Beacon',
   'Altar',
-  'Temple',
+  'Gateway',
   'Vestibule',
   'Sanctum-Prime',
   'Holy-Forge',
@@ -36,7 +36,7 @@ export const SPAWN_NAMES = [
 ];
 
 /**
- * Get a Covenant-themed name for a spawn
+ * Get a KHALA-themed name for a spawn
  */
 export function getSpawnName(roomName: string, spawnIndex: number): string {
   if (spawnIndex < SPAWN_NAMES.length) {
@@ -48,7 +48,7 @@ export function getSpawnName(roomName: string, spawnIndex: number): string {
 }
 
 /**
- * Rename all spawns in a room to Covenant theme
+ * Rename all spawns in a room to KHALA theme
  */
 export function renameRoomSpawns(room: Room): void {
   const spawns = room.find(FIND_MY_SPAWNS);

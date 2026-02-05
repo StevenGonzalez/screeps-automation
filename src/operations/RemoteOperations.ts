@@ -1,7 +1,7 @@
 /**
  * REMOTE OPERATIONS - Resource Extraction from Distant Rooms
  * 
- * "The Covenant's reach extends beyond its borders"
+ * "The KHALA's reach extends beyond its borders"
  * 
  * Manages remote mining operations in unowned rooms to maximize
  * resource income and support rapid expansion.
@@ -9,7 +9,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface RemoteRoom {
   roomName: string;
@@ -30,20 +30,20 @@ export interface RemoteMemory {
  * Remote Operations Manager - Coordinates remote mining
  */
 export class RemoteOperations {
-  private highCharity: HighCharity;
+  private Nexus: Nexus;
   
   private get memory(): RemoteMemory {
-    if (!this.highCharity.memory.remote) {
-      this.highCharity.memory.remote = {
+    if (!this.Nexus.memory.remote) {
+      this.Nexus.memory.remote = {
         rooms: {},
         lastScan: 0
       };
     }
-    return this.highCharity.memory.remote as RemoteMemory;
+    return this.Nexus.memory.remote as RemoteMemory;
   }
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
   }
   
   /**
@@ -51,7 +51,7 @@ export class RemoteOperations {
    */
   run(): void {
     // Only operate at RCL 4+ with stable economy
-    if ((this.highCharity.controller?.level || 0) < 4) return;
+    if ((this.Nexus.controller?.level || 0) < 4) return;
     
     // Scan for remote rooms periodically
     if (Game.time - this.memory.lastScan > 500) {
@@ -75,7 +75,7 @@ export class RemoteOperations {
    * Scan adjacent rooms for remote mining opportunities
    */
   private scanForRemoteRooms(): void {
-    const adjacentRooms = this.getAdjacentRoomNames(this.highCharity.name);
+    const adjacentRooms = this.getAdjacentRoomNames(this.Nexus.name);
     
     for (const roomName of adjacentRooms) {
       // Check if we already know about this room
@@ -142,7 +142,7 @@ export class RemoteOperations {
     if (!intel.controller?.owner) score += 0.1;
     
     // No hostile reservation is good
-    if (!intel.controller?.reservation || intel.controller.reservation.username === this.highCharity.room.controller?.owner?.username) {
+    if (!intel.controller?.reservation || intel.controller.reservation.username === this.Nexus.room.controller?.owner?.username) {
       score += 0.1;
     }
     
@@ -161,7 +161,7 @@ export class RemoteOperations {
       .sort((a, b) => a.distance - b.distance);
     
     // Activate up to 2 remote rooms
-    const maxRemoteRooms = Math.min(2, Math.floor((this.highCharity.controller?.level || 0) / 2));
+    const maxRemoteRooms = Math.min(2, Math.floor((this.Nexus.controller?.level || 0) / 2));
     const activeCount = remoteRooms.filter(r => r.active).length;
     
     if (activeCount < maxRemoteRooms && inactiveRooms.length > 0) {
@@ -277,7 +277,7 @@ export class RemoteOperations {
       // Remove rooms that are now owned by hostile players
       const intel = Memory.intel?.[roomName];
       if (intel?.controller?.owner && 
-          intel.controller.owner !== this.highCharity.room.controller?.owner?.username) {
+          intel.controller.owner !== this.Nexus.room.controller?.owner?.username) {
         delete this.memory.rooms[roomName];
         console.log(`🧹 Cleaned up hostile-owned remote room: ${roomName}`);
       }
@@ -302,7 +302,7 @@ export class RemoteOperations {
    * Calculate path distance to a room
    */
   private calculatePathDistance(roomName: string): number {
-    const route = Game.map.findRoute(this.highCharity.name, roomName);
+    const route = Game.map.findRoute(this.Nexus.name, roomName);
     if (route === ERR_NO_PATH) return 999;
     
     // Estimate: 50 tiles per room + route length * 50
@@ -396,7 +396,7 @@ export class RemoteOperations {
     const active = rooms.filter(r => r.active);
     const available = rooms.filter(r => !r.active && !r.disabled && r.threat < 5);
     
-    let status = `\n📍 ${this.highCharity.name} - Remote Operations`;
+    let status = `\n📍 ${this.Nexus.name} - Remote Operations`;
     status += `\n  Active rooms: ${active.length}`;
     status += `\n  Available rooms: ${available.length}`;
     status += `\n  Total discovered: ${rooms.length}`;

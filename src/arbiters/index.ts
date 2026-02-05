@@ -5,16 +5,16 @@
  */
 
 export { Arbiter, ArbiterPriority } from './Arbiter';
-export { GruntArbiter } from './GruntArbiter';
-export { DroneArbiter } from './DroneArbiter';
-export { JackalArbiter } from './JackalArbiter';
-export { DevoteeArbiter } from './DevoteeArbiter';
+export { ZealotArbiter } from './ZealotArbiter';
+export { ProbeArbiter } from './ProbeArbiter';
+export { AdeptArbiter } from './AdeptArbiter';
+export { SentryArbiter } from './SentryArbiter';
 export { EngineerArbiter } from './EngineerArbiter';
 export { ZealotArbiter } from './ZealotArbiter';
-export { ProphetArbiter } from './ProphetArbiter';
-export { SeekerArbiter } from './SeekerArbiter';
-export { RangerArbiter } from './RangerArbiter';
-export { HunterArbiter } from './HunterArbiter';
+export { HighTemplarArbiter } from './HighTemplarArbiter';
+export { ObserverArbiter } from './ObserverArbiter';
+export { DragoonArbiter } from './DragoonArbiter';
+export { StalkerArbiter } from './StalkerArbiter';
 export { ExcavatorArbiter } from './ExcavatorArbiter';
 export { TerminalArbiter } from './TerminalArbiter';
-export { HeraldArbiter } from './HeraldArbiter';
+export { ObserverArbiter } from './ObserverArbiter';

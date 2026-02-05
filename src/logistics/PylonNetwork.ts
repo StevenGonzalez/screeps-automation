@@ -4,7 +4,7 @@
  * "The Prophets' Will guides all resources to their rightful purpose"
  * 
  * The Prophets Will is the logistics network that manages resource distribution
- * across a High Charity. It coordinates requests and offers, manages link networks,
+ * across a Nexus. It coordinates requests and offers, manages link networks,
  * and ensures resources flow efficiently to where they're needed most.
  */
 
@@ -12,17 +12,17 @@
 
 import { LogisticsRequest, RequestPriority, RequestType } from './LogisticsRequest';
 
-export interface ProphetsWillMemory {
+export interface PylonNetworkMemory {
   requests: { [id: string]: any };
   linkCooldowns: { [linkId: string]: number };
 }
 
 /**
- * Prophets Will - Smart logistics network for a High Charity
+ * Prophets Will - Smart logistics network for a Nexus
  */
-export class ProphetsWill {
-  highCharity: any; // Import type later to avoid circular dependency
-  memory: ProphetsWillMemory;
+export class PylonNetwork {
+  Nexus: any; // Import type later to avoid circular dependency
+  memory: PylonNetworkMemory;
   
   // Request tracking
   withdrawRequests: LogisticsRequest[];
@@ -33,17 +33,17 @@ export class ProphetsWill {
   links: StructureLink[];
   terminal: StructureTerminal | undefined;
   
-  constructor(highCharity: any) {
-    this.highCharity = highCharity;
+  constructor(Nexus: any) {
+    this.Nexus = Nexus;
     
     // Initialize memory
-    if (!highCharity.memory.prophetsWill) {
-      highCharity.memory.prophetsWill = {
+    if (!Nexus.memory.PylonNetwork) {
+      Nexus.memory.PylonNetwork = {
         requests: {},
         linkCooldowns: {}
       };
     }
-    this.memory = highCharity.memory.prophetsWill;
+    this.memory = Nexus.memory.PylonNetwork;
     
     this.withdrawRequests = [];
     this.depositRequests = [];
@@ -80,7 +80,7 @@ export class ProphetsWill {
    * Refresh structure references
    */
   private refreshStructures(): void {
-    const room = this.highCharity.room;
+    const room = this.Nexus.room;
     
     // Get storage structures
     this.storageStructures = [];
@@ -94,7 +94,7 @@ export class ProphetsWill {
     this.storageStructures.push(...containers);
     
     // Get links
-    this.links = this.highCharity.links || [];
+    this.links = this.Nexus.links || [];
     
     // Get terminal
     this.terminal = room.terminal;
@@ -108,8 +108,8 @@ export class ProphetsWill {
     this.depositRequests = [];
     
     // Each Arbiter can register requests
-    for (const arbiterName in this.highCharity.arbiters) {
-      const arbiter = this.highCharity.arbiters[arbiterName];
+    for (const arbiterName in this.Nexus.arbiters) {
+      const arbiter = this.Nexus.arbiters[arbiterName];
       
       // Check if Arbiter has logistics requests
       if (arbiter.getLogisticsRequests) {
@@ -164,7 +164,7 @@ export class ProphetsWill {
       return;
     }
     
-    const room = this.highCharity.room;
+    const room = this.Nexus.room;
     const storage = room.storage;
     
     // Find source links (near sources) and sink links (near storage/controller)
@@ -223,7 +223,7 @@ export class ProphetsWill {
    * Get the best source for a withdraw request
    */
   getBestSource(request: LogisticsRequest): Structure | null {
-    const room = this.highCharity.room;
+    const room = this.Nexus.room;
     const resourceType = request.resourceType;
     
     // For energy, prefer storage > container > terminal
@@ -263,7 +263,7 @@ export class ProphetsWill {
    * Get the best target for a deposit request
    */
   getBestTarget(request: LogisticsRequest): Structure | null {
-    const room = this.highCharity.room;
+    const room = this.Nexus.room;
     const resourceType = request.resourceType;
     
     // For energy deposits

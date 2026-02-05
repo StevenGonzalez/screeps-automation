@@ -10,8 +10,8 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { EnergyCollector } from '../utils/EnergyCollector';
 import { RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
@@ -19,19 +19,19 @@ import { BodyBuilder } from '../utils/BodyBuilder';
 /**
  * Repairer Arbiter - Manages fortification maintenance
  */
-export class HunterArbiter extends Arbiter {
-  repairers: Elite[];
+export class StalkerArbiter extends Arbiter {
+  repairers: Warrior[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'repairer', ArbiterPriority.support.repairer);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'repairer', ArbiterPriority.support.repairer);
     this.repairers = [];
   }
   
   init(): void {
     this.refresh();
     
-    // Update repairers list from elites
-    this.repairers = this.elites;
+    // Update repairers list from Warriors
+    this.repairers = this.warriors;
     
     // Only spawn repairers at RCL 5+ when fortifications become important
     const controllerLevel = this.room.controller?.level || 0;
@@ -54,7 +54,7 @@ export class HunterArbiter extends Arbiter {
     }
   }
   
-  private runRepairer(repairer: Elite): void {
+  private runRepairer(repairer: Warrior): void {
     // State machine: harvesting → repairing
     if (repairer.memory.repairing && repairer.needsEnergy) {
       repairer.memory.repairing = false;
@@ -70,12 +70,12 @@ export class HunterArbiter extends Arbiter {
     }
   }
   
-  private repair(repairer: Elite): void {
-    const defenseTemple = this.highCharity.defenseTemple;
+  private repair(repairer: Warrior): void {
+    const DefenseGateway = this.Nexus.DefenseGateway;
     
     // Focus on ramparts and walls
-    const ramparts = defenseTemple.getRampartsNeedingRepair();
-    const walls = defenseTemple.getWallsNeedingRepair();
+    const ramparts = DefenseGateway.getRampartsNeedingRepair();
+    const walls = DefenseGateway.getWallsNeedingRepair();
     
     // Combine and sort by HP
     const targets = [...ramparts, ...walls].sort((a, b) => a.hits - b.hits);
@@ -115,7 +115,7 @@ export class HunterArbiter extends Arbiter {
     }
   }
   
-  private getEnergy(repairer: Elite): void {
+  private getEnergy(repairer: Warrior): void {
     // Use centralized EnergyCollector - prefer storage first
     EnergyCollector.collect(repairer, {
       useLinks: false, // Links are for upgraders
@@ -124,13 +124,13 @@ export class HunterArbiter extends Arbiter {
   }
   
   private calculateDesiredRepairers(): number {
-    const defenseTemple = this.highCharity.defenseTemple;
+    const DefenseGateway = this.Nexus.DefenseGateway;
     const level = this.room.controller?.level || 0;
-    const phase = this.highCharity.memory.phase;
+    const phase = this.Nexus.memory.phase;
     
     // Count fortifications needing repair
-    const ramparts = defenseTemple.getRampartsNeedingRepair();
-    const walls = defenseTemple.getWallsNeedingRepair();
+    const ramparts = DefenseGateway.getRampartsNeedingRepair();
+    const walls = DefenseGateway.getWallsNeedingRepair();
     const totalNeeded = ramparts.length + walls.length;
     
     // No fortifications need repair
@@ -164,19 +164,19 @@ export class HunterArbiter extends Arbiter {
     const name = `Hunter_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_repairer', // Covenant themed role
+      role: 'Warrior_repairer', // KHALA themed role
       repairing: false
     } as any);
   }
   
   private calculateRepairerBody(): BodyPartConstant[] {
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     // Use BodyBuilder for flexible worker body (repairers are basically workers)
     return BodyBuilder.worker(energy);

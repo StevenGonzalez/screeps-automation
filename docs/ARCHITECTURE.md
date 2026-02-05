@@ -1,56 +1,56 @@
-# 🔱 COVENANT Architecture
+# 🔱 KHALA Architecture
 
 ## 🎯 Overview
 
-**"The will of the Prophets guides all"**
+**"The will of the High Templars guides all"**
 
-COVENANT is a powerful, Halo-inspired automation system for Screeps that manages colonies through a hierarchical command structure with unique theming and strategic implementation.
+KHALA is a powerful, Halo-inspired automation system for Screeps that manages colonies through a hierarchical command structure with unique theming and strategic implementation.
 
 ### Core Philosophy
-- **Distributed Intelligence**: Each High Charity operates autonomously while coordinating with the Covenant
-- **Hierarchical Command**: Arbiters manage specialized Elite teams for specific objectives
-- **Dynamic Response**: Crusades allow flag-based strategic intervention
+- **Distributed Intelligence**: Each Nexus operates autonomously while coordinating with the KHALA
+- **Hierarchical Command**: Arbiters manage specialized Warrior teams for specific objectives
+- **Dynamic Response**: Campaigns allow flag-based strategic intervention
 - **Efficient Execution**: Optimized three-phase execution (Build → Init → Run)
 
-## 🏗️ COVENANT Architecture
+## 🏗️ KHALA Architecture
 
 ### 🔱 Core Components
 
-#### **Covenant** (`core/Covenant.ts`)
+#### **KHALA** (`core/KHALA.ts`)
 The central AI coordinator that manages all operations across the entire game world. Responsible for:
-- Managing all High Charities (colonies)
+- Managing all Nexuses (colonies)
 - Coordinating Arbiters across rooms
-- Processing Crusades (flag-based directives)
+- Processing Campaigns (flag-based directives)
 - Global statistics and performance monitoring
 
-#### **High Charity** (`core/HighCharity.ts`)
-Colony manager for a single owned room. Each High Charity:
+#### **Nexus** (`core/Nexus.ts`)
+Colony manager for a single owned room. Each Nexus:
 - Manages room structures (spawns, towers, links, storage, etc.)
 - Spawns and coordinates Arbiters
 - Tracks economic and military statistics
 - Determines operational phase (bootstrap, developing, mature, powerhouse)
 
 #### **Arbiter** (`arbiters/Arbiter.ts`)
-Specialized creep controllers that manage teams of Elites. Types include:
-- **DroneArbiter** - Harvesting operations at sources
-- **JackalArbiter** - Energy and resource logistics
+Specialized creep controllers that manage teams of Warriors. Types include:
+- **ProbeArbiter** - Harvesting operations at sources
+- **AdeptArbiter** - Energy and resource logistics
 - **EngineerArbiter** - Building and repairing
-- **DevoteeArbiter** - Controller upgrading optimization
+- **SentryArbiter** - Controller upgrading optimization
 - **ExcavatorArbiter** - Mineral mining operations (RCL 6+)
 - **TerminalArbiter** - Terminal management and market trading (RCL 6+)
 - **ZealotArbiter** - Defensive melee combat
-- **ProphetArbiter** - Defensive healing support
-- **VanguardArbiter** - Offensive combat operations
-- **HunterArbiter** - Remote room defense and clearing
+- **High TemplarArbiter** - Defensive healing support
+- **ColossusArbiter** - Offensive combat operations
+- **StalkerArbiter** - Remote room defense and clearing
 
-#### **Elite** (`elites/Elite.ts`)
+#### **Warrior** (`Warriors/Warrior.ts`)
 Enhanced creep wrapper providing:
 - Smart movement and pathfinding
 - Task management system
 - Boosting and combat utilities
 - Simplified creep control interface
 
-#### **Crusade** (`crusades/Crusade.ts`)
+#### **Campaign** (`Campaigns/Campaign.ts`)
 Flag-based directive system for dynamic strategic response:
 - Room claiming and colonization
 - Defense operations
@@ -59,37 +59,37 @@ Flag-based directive system for dynamic strategic response:
 
 ### 📂 Legacy Systems (Being Migrated)
 
-The following systems are being gradually migrated to COVENANT architecture:
+The following systems are being gradually migrated to KHALA architecture:
 
-- **`room.orchestration.ts`** - Will be replaced by HighCharity
+- **`room.orchestration.ts`** - Will be replaced by Nexus
 - **`room.spawning.ts`** - Will be replaced by Arbiter spawning logic
-- **`creep.actions.ts`** - Will be replaced by Elite methods
-- **Structure systems** - Will be replaced by Temple (HiveCluster) pattern
+- **`creep.actions.ts`** - Will be replaced by Warrior methods
+- **Structure systems** - Will be replaced by Gateway (HiveCluster) pattern
 
 ## 🔄 Execution Flow
 
-COVENANT uses a three-phase execution model each tick:
+KHALA uses a three-phase execution model each tick:
 
 ### **Phase 1: Build** 
 Construct the world state and object graph
 - Clean up memory (dead creeps, removed flags)
-- Create High Charity objects for each owned room
-- Build Arbiters for each High Charity
-- Parse flags into Crusades
+- Create Nexus objects for each owned room
+- Build Arbiters for each Nexus
+- Parse flags into Campaigns
 - Refresh structure and creep references
 
 ### **Phase 2: Init**
 Initialize all systems for execution
-- High Charities initialize their Arbiters
-- Arbiters refresh their Elite teams
+- Nexuses initialize their Arbiters
+- Arbiters refresh their Warrior teams
 - Arbiters calculate spawning needs
-- Crusades initialize their objectives
+- Campaigns initialize their objectives
 
 ### **Phase 3: Run**
 Execute all operations
-- High Charities run their operations
-- Arbiters direct their Elites
-- Crusades execute their strategies
+- Nexuses run their operations
+- Arbiters direct their Warriors
+- Campaigns execute their strategies
 - Structures perform automated tasks
 
 ### **Phase 4: End of Tick**
@@ -99,47 +99,47 @@ Performance monitoring and stats
 - Report performance metrics
 - Pixel generation
 
-## 🎮 COVENANT Terminology
+## 🎮 KHALA Terminology
 
-Inspired by Halo's Covenant faction:
+Inspired by StarCraft's KHALA faction:
 
 | Component | Description |
 |-----------|-------------|
-| **Covenant** | Central AI coordinator |
-| **High Charity** | Room/colony manager |
+| **KHALA** | Central AI coordinator |
+| **Nexus** | Room/colony manager |
 | **Arbiter** | Creep controller for specific roles |
-| **Elite** | Enhanced creep wrapper |
-| **Crusade** | Flag-based task system |
-| **Temple** | Structure group (e.g., MiningTemple, PowerTemple) |
-| **Prophets Will** | Resource distribution network |
+| **Warrior** | Enhanced creep wrapper |
+| **Campaign** | Flag-based task system |
+| **Gateway** | Structure group (e.g., MiningGateway, PowerGateway) |
+| **High Templars Will** | Resource distribution network |
 | **War Council** | Combat target scanning and squad management |
 
-### 🏛️ Core Temples
+### 🏛️ Core Gateways
 
-| Temple | Purpose | RCL Required |
+| Gateway | Purpose | RCL Required |
 |--------|---------|--------------|
-| **MiningTemple** | Energy harvesting operations | 1 |
-| **CommandTemple** | Spawn queue and colony commands | 1 |
-| **IntelligenceTemple** | Remote room scanning | 3+ |
-| **LinkTemple** | Instant energy transfer network | 5+ |
-| **DefenseTemple** | Fortification management | 1 |
-| **LabTemple** | Automated compound production | 6+ |
-| **BoostTemple** | Creep enhancement | 6+ |
-| **PowerTemple** | PowerBank harvesting & processing | 8 |
+| **MiningGateway** | Energy harvesting operations | 1 |
+| **CommandGateway** | Spawn queue and colony commands | 1 |
+| **IntelligenceGateway** | Remote room scanning | 3+ |
+| **LinkGateway** | Instant energy transfer network | 5+ |
+| **DefenseGateway** | Fortification management | 1 |
+| **LabGateway** | Automated compound production | 6+ |
+| **BoostGateway** | Creep enhancement | 6+ |
+| **PowerGateway** | PowerBank harvesting & processing | 8 |
 
-### 🎨 Covenant Base Layout - Sacred Geometry
+### 🎨 KHALA Base Layout - Protoss Architecture
 
-Our automatic structure placement uses **distinctive Covenant religious architecture**:
+Our automatic structure placement uses **distinctive KHALA religious architecture**:
 
 **SACRED CORE** (Cross Pattern):
-- Storage at holy anchor (High Charity's heart) 
+- Storage at holy anchor (Nexus's heart) 
 - Terminal, Factory, Power Spawn form cross pattern (religious symbolism)
 
 **HIERARCHS' THRONES** (Triangular Formation):
-- 3 spawns arranged in triangle representing the 3 Prophets
-- North: Prophet of Truth, SW: Prophet of Regret, SE: Prophet of Mercy
+- 3 spawns arranged in triangle representing the 3 High Templars
+- North: High Templar of Truth, SW: High Templar of Regret, SE: High Templar of Mercy
 
-**RINGS OF HIGH CHARITY** (6-Fold Sacred Geometry):
+**RINGS OF Nexus** (6-Fold Protoss Architecture):
 - Extensions arranged in hexagonal mandala pattern
 - Concentric rings representing tiers of the holy city
 - 6-fold symmetry (ceremonial/religious significance)
@@ -155,9 +155,9 @@ Our automatic structure placement uses **distinctive Covenant religious architec
 - Optimized for reaction chains
 - Central reagent sources with surrounding reaction labs
 
-**Visualization**: Toggle with `Game.cov.showPlan()` to see:
+**Visualization**: Toggle with `Game.kha.showPlan()` to see:
 - Golden cross pattern at sacred core
-- Purple concentric hexagons (Rings of High Charity)
+- Purple concentric hexagons (Rings of Nexus)
 - Magenta triangle connecting Hierarchs' Thrones
 - Red hexagon connecting Guardian Sentinels
 - Tier-colored extensions showing city layers
@@ -165,7 +165,7 @@ Our automatic structure placement uses **distinctive Covenant religious architec
 ### 🏗️ Automated Planning Systems
 
 #### **RoomPlanner** (`planning/RoomPlanner.ts`)
-Generates optimal base layouts using sacred geometry patterns and stores them in Memory with version control.
+Generates optimal base layouts using Protoss Architecture patterns and stores them in Memory with version control.
 
 #### **AutoPlanner** (`planning/AutoPlanner.ts`)
 Automatically places construction sites on RCL upgrades:
@@ -182,9 +182,9 @@ Traffic-based intelligent road network:
 ### ⚔️ Military Systems
 
 - **War Council**: Scans nearby rooms for attack targets, evaluates threat levels
-- **VanguardArbiter**: Coordinates attack/healer squads for offensive operations
+- **ColossusArbiter**: Coordinates attack/healer squads for offensive operations
 - **ZealotArbiter**: Defensive melee combat operations
-- **ProphetArbiter**: Defensive healing support (pairs with Zealots during high-threat scenarios)
+- **High TemplarArbiter**: Defensive healing support (pairs with Zealots during high-threat scenarios)
 - **PowerHarvesterArbiter**: Manages PowerBank assault and collection operations
 
 ## � File Structure Overview

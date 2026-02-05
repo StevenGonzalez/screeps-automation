@@ -3,7 +3,7 @@
  * 
  * "Through the grace of the Prophets, we are restored"
  * 
- * Manages healer Elites that provide medical support for defensive operations.
+ * Manages healer Warriors that provide medical support for defensive operations.
  * Designed to support Zealots during high-threat scenarios like power bank defense,
  * SK lair operations, or sustained defensive actions where tower support is insufficient.
  */
@@ -11,20 +11,20 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Prophet Arbiter - Manages defensive healer operations
  */
-export class ProphetArbiter extends Arbiter {
-  healers: Elite[];
+export class HighTemplarArbiter extends Arbiter {
+  healers: Warrior[];
   injured: Creep[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'prophet', ArbiterPriority.defense.ranged);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'prophet', ArbiterPriority.defense.ranged);
     this.healers = [];
     this.injured = [];
   }
@@ -32,8 +32,8 @@ export class ProphetArbiter extends Arbiter {
   init(): void {
     this.refresh();
     
-    // Update healers list from elites
-    this.healers = this.elites;
+    // Update healers list from Warriors
+    this.healers = this.warriors;
     
     // Find injured friendly creeps
     this.injured = this.room.find(FIND_MY_CREEPS, {
@@ -56,8 +56,8 @@ export class ProphetArbiter extends Arbiter {
     // Request boosts for newly spawned healers
     for (const healer of this.healers) {
       if (!healer.creep.ticksToLive || healer.creep.ticksToLive >= 1450) {
-        if (this.highCharity.boostManager) {
-          this.highCharity.boostManager.requestBoosts(healer.creep, 'healer');
+        if (this.Nexus.boostManager) {
+          this.Nexus.boostManager.requestBoosts(healer.creep, 'healer');
         }
       }
     }
@@ -70,7 +70,7 @@ export class ProphetArbiter extends Arbiter {
       for (const healer of this.healers) {
         healer.say('➕🛡️');
         // Position near spawn or rally point
-        const spawns = this.highCharity.spawns;
+        const spawns = this.Nexus.spawns;
         if (spawns.length > 0 && healer.pos.getRangeTo(spawns[0]) > 3) {
           healer.goTo(spawns[0].pos, { range: 3 });
         }
@@ -87,7 +87,7 @@ export class ProphetArbiter extends Arbiter {
   /**
    * Run individual healer logic
    */
-  private runHealer(healer: Elite): void {
+  private runHealer(healer: Warrior): void {
     // Priority 1: Heal injured friendlies
     if (this.injured.length > 0) {
       const target = healer.pos.findClosestByRange(this.injured);
@@ -151,7 +151,7 @@ export class ProphetArbiter extends Arbiter {
       }
       
       // No Zealots, position defensively near spawn
-      const spawns = this.highCharity.spawns;
+      const spawns = this.Nexus.spawns;
       if (spawns.length > 0) {
         const range = healer.pos.getRangeTo(spawns[0]);
         if (range > 5) {
@@ -202,7 +202,7 @@ export class ProphetArbiter extends Arbiter {
     const name = `Prophet_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_prophet'
+      role: 'Warrior_prophet'
     } as any);
   }
   
@@ -211,12 +211,12 @@ export class ProphetArbiter extends Arbiter {
    */
   private calculateHealerBody(): BodyPartConstant[] {
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     // Healer body: HEAL + MOVE pattern for maximum mobility
     // Minimum: 1 HEAL + 1 MOVE (300 energy)
@@ -229,7 +229,7 @@ export class ProphetArbiter extends Arbiter {
    * Manual activation - force spawn a healer
    */
   activate(): void {
-    console.log(`🔱 ${this.highCharity.name}: Prophet Arbiter activated - spawning healer`);
+    console.log(`🔱 ${this.Nexus.name}: Prophet Arbiter activated - spawning healer`);
     this.requestHealer();
   }
   
@@ -248,7 +248,7 @@ export class ProphetArbiter extends Arbiter {
     return this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         creep.memory.arbiter === this.ref ||
-        creep.memory.role === 'elite_prophet' ||
+        creep.memory.role === 'Warrior_prophet' ||
         creep.memory.role === 'prophet'
     });
   }

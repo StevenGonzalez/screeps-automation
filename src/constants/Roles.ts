@@ -1,7 +1,7 @@
 /**
  * ROLE CONSTANTS - Centralized Role Definitions
  * 
- * "The ranks of the Covenant are clearly defined"
+ * "The ranks of the KHALA are clearly defined"
  * 
  * Single source of truth for all creep role names.
  * Update once, apply everywhere.
@@ -9,64 +9,64 @@
 
 export const ROLES = {
   // Core economy
-  GRUNT: 'grunt',
-  ELITE_GRUNT: 'elite_grunt',
+  ZEALOT_UNIT: 'grunt',
+  Warrior_ZEALOT_UNIT: 'Warrior_grunt',
   
-  DRONE: 'drone',
-  ELITE_DRONE: 'elite_drone',
+  PROBE: 'probe',
+  Warrior_DRONE: 'Warrior_drone',
   
-  JACKAL: 'jackal',
-  ELITE_JACKAL: 'elite_jackal',
+  ADEPT: 'adept',
+  Warrior_JACKAL: 'Warrior_jackal',
   
   // Support
   ENGINEER: 'engineer',
-  ELITE_ENGINEER: 'elite_engineer',
+  Warrior_ENGINEER: 'Warrior_engineer',
   
-  DEVOTEE: 'devotee',
-  ELITE_DEVOTEE: 'elite_devotee',
+  SENTRY: 'sentry',
+  Warrior_DEVOTEE: 'Warrior_devotee',
   
   // Military
   ZEALOT: 'zealot',
-  ELITE_ZEALOT: 'elite_zealot',
+  Warrior_ZEALOT: 'Warrior_zealot',
   
-  PROPHET: 'prophet',
-  ELITE_PROPHET: 'elite_prophet',
+  HIGH_TEMPLAR: 'highTemplar',
+  Warrior_PROPHET: 'Warrior_prophet',
   
-  HUNTER: 'hunter',
-  ELITE_HUNTER: 'elite_hunter',
+  STALKER: 'stalker',
+  Warrior_HUNTER: 'Warrior_hunter',
   
   // Expansion
-  RANGER: 'ranger',
-  ELITE_RANGER: 'elite_ranger',
+  DRAGOON: 'dragoon',
+  Warrior_RANGER: 'Warrior_ranger',
   
-  HERALD: 'herald',
-  ELITE_HERALD: 'elite_herald',
+  OBSERVER: 'observer',
+  Warrior_HERALD: 'Warrior_herald',
   
   CLAIMER: 'claimer',
-  ELITE_CLAIMER: 'elite_claimer',
+  Warrior_CLAIMER: 'Warrior_claimer',
   
   PIONEER: 'pioneer',
-  ELITE_PIONEER: 'elite_pioneer',
+  Warrior_PIONEER: 'Warrior_pioneer',
   
   // Remote operations
-  SEEKER: 'seeker',
-  ELITE_SEEKER: 'elite_seeker',
+  SCOUT_OBSERVER: 'scoutObserver',
+  Warrior_SEEKER: 'Warrior_seeker',
   
   REMOTE_MINER: 'remoteMiner',
-  ELITE_REMOTE_MINER: 'elite_remoteMiner',
+  Warrior_REMOTE_MINER: 'Warrior_remoteMiner',
   
   REMOTE_HAULER: 'remoteHauler',
-  ELITE_REMOTE_HAULER: 'elite_remoteHauler',
+  Warrior_REMOTE_HAULER: 'Warrior_remoteHauler',
   
   REMOTE_DEFENDER: 'remoteDefender',
-  ELITE_REMOTE_DEFENDER: 'elite_remoteDefender',
+  Warrior_REMOTE_DEFENDER: 'Warrior_remoteDefender',
   
   // Specialized
   EXCAVATOR: 'excavator',
-  ELITE_EXCAVATOR: 'elite_excavator',
+  Warrior_EXCAVATOR: 'Warrior_excavator',
   
   POWER_HARVESTER: 'powerHarvester',
-  ELITE_POWER_HARVESTER: 'elite_powerHarvester',
+  Warrior_POWER_HARVESTER: 'Warrior_powerHarvester',
   
   // Legacy support (for backwards compatibility during transition)
   LEGACY: {

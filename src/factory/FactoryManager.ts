@@ -1,7 +1,7 @@
 /**
  * FactoryManager
  * 
- * "The forges of the Covenant burn eternal, shaping raw elements into instruments of ascension"
+ * "The forges of Aiur burn eternal, shaping raw elements into instruments of ascension"
  * 
  * Manages automated commodity production in factories.
  * Factories can produce commodities from base minerals and compounds,
@@ -14,7 +14,7 @@
  * - Statistics tracking and efficiency monitoring
  */
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 // Commodity constants (compressed commodities aren't in TypeScript definitions)
 const COMMODITY_UTRIUM_BAR = 'utrium_bar' as CommodityConstant;
@@ -160,10 +160,10 @@ const COMMODITY_RECIPES: { [commodity: string]: CommodityRecipe } = {
 };
 
 export class FactoryManager {
-  private colony: HighCharity;
+  private colony: Nexus;
   private factory: StructureFactory | null;
 
-  constructor(colony: HighCharity) {
+  constructor(colony: Nexus) {
     this.colony = colony;
     this.factory = this.findFactory();
     this.initializeMemory();
@@ -319,7 +319,7 @@ export class FactoryManager {
     if (!this.factory) return;
     
     // The factory will automatically pull resources from nearby containers/storage
-    // Haulers should be keeping the factory stocked via ProphetsWill logistics
+    // Haulers should be keeping the factory stocked via PylonNetwork logistics
     // No manual transfer needed - just verify resources are in the room
   }
 
@@ -388,7 +388,7 @@ export class FactoryManager {
   /**
    * Check if colony is ready for factory automation
    */
-  public static isColonyReady(colony: HighCharity): boolean {
+  public static isColonyReady(colony: Nexus): boolean {
     // Needs RCL 7+ for factory
     if (colony.room.controller && colony.room.controller.level < 7) {
       return false;

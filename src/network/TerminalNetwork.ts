@@ -9,8 +9,8 @@
 
 /// <reference types="@types/screeps" />
 
-import { Covenant } from '../core/Covenant';
-import { HighCharity } from '../core/HighCharity';
+import { KHALA } from '../core/KHALA';
+import { Nexus } from '../core/Nexus';
 
 export interface ResourceNeed {
   roomName: string;
@@ -50,7 +50,7 @@ export interface TerminalNetworkMemory {
  * Terminal Network - Coordinates resource sharing across all colonies
  */
 export class TerminalNetwork {
-  private covenant: Covenant;
+  private khala: Khala;
   
   private get memory(): TerminalNetworkMemory {
     if (!Memory.terminalNetwork) {
@@ -68,8 +68,8 @@ export class TerminalNetwork {
     return Memory.terminalNetwork as TerminalNetworkMemory;
   }
   
-  constructor(covenant: Covenant) {
-    this.covenant = covenant;
+  constructor(khala: Khala) {
+    this.khala = KHALA;
   }
   
   /**
@@ -172,7 +172,7 @@ export class TerminalNetwork {
   /**
    * Identify resource needs across colonies
    */
-  private identifyResourceNeeds(colonies: HighCharity[]): ResourceNeed[] {
+  private identifyResourceNeeds(colonies: Nexus[]): ResourceNeed[] {
     const needs: ResourceNeed[] = [];
     
     for (const colony of colonies) {
@@ -256,7 +256,7 @@ export class TerminalNetwork {
   /**
    * Identify resource surpluses across colonies
    */
-  private identifyResourceSurpluses(colonies: HighCharity[]): ResourceSurplus[] {
+  private identifyResourceSurpluses(colonies: Nexus[]): ResourceSurplus[] {
     const surpluses: ResourceSurplus[] = [];
     
     for (const colony of colonies) {
@@ -378,7 +378,7 @@ export class TerminalNetwork {
       if (!colony.terminal) continue;
       
       // Emergency: Colony under attack with low energy
-      if (colony.defenseTemple.memory.threatLevel >= 7) {
+      if (colony.DefenseGateway.memory.threatLevel >= 7) {
         const energyAmount = colony.terminal.store.getUsedCapacity(RESOURCE_ENERGY);
         
         if (energyAmount < 5000) {
@@ -404,7 +404,7 @@ export class TerminalNetwork {
     const colonies = this.getColoniesWithTerminals();
     
     // Find nearest colony with surplus energy
-    let nearestColony: HighCharity | null = null;
+    let nearestColony: Nexus | null = null;
     let minDistance = 999;
     
     for (const colony of colonies) {
@@ -455,8 +455,8 @@ export class TerminalNetwork {
   /**
    * Get all colonies with terminals
    */
-  private getColoniesWithTerminals(): HighCharity[] {
-    return Object.values(this.covenant.highCharities).filter(hc => hc.terminal);
+  private getColoniesWithTerminals(): Nexus[] {
+    return Object.values(this.khala.nexuses).filter(hc => hc.terminal);
   }
   
   /**
@@ -483,8 +483,8 @@ export class TerminalNetwork {
   /**
    * Check if colony has lab production
    */
-  private hasLabProduction(colony: HighCharity): boolean {
-    return colony.labTemple !== null && colony.room.find(FIND_MY_STRUCTURES, {
+  private hasLabProduction(colony: Nexus): boolean {
+    return colony.ForgeGateway !== null && colony.room.find(FIND_MY_STRUCTURES, {
       filter: s => s.structureType === STRUCTURE_LAB
     }).length >= 3;
   }

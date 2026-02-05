@@ -1,9 +1,9 @@
 /**
- * COMMAND TEMPLE - Colony Command Center
+ * COMMAND Gateway - Colony Command Center
  * 
- * "The heart of the High Charity beats here"
+ * "The heart of the Nexus beats here"
  * 
- * A Command Temple manages the core colony structures:
+ * A Command Gateway manages the core colony structures:
  * - Primary spawn
  * - Storage
  * - Terminal
@@ -13,8 +13,8 @@
 
 /// <reference types="@types/screeps" />
 
-import { Temple } from './Temple';
-import { HighCharity } from '../core/HighCharity';
+import { Gateway } from './Gateway';
+import { Nexus } from '../core/Nexus';
 
 interface SpawnRequest {
   priority: number;
@@ -25,9 +25,9 @@ interface SpawnRequest {
 }
 
 /**
- * Command Temple - Manages core colony structures
+ * Command Gateway - Manages core colony structures
  */
-export class CommandTemple extends Temple {
+export class CommandGateway extends Gateway {
   spawn: StructureSpawn | null;
   storage: StructureStorage | null;
   terminal: StructureTerminal | null;
@@ -35,12 +35,12 @@ export class CommandTemple extends Temple {
   links: StructureLink[];
   spawnQueue: SpawnRequest[];
   
-  constructor(highCharity: HighCharity) {
+  constructor(Nexus: Nexus) {
     // Center on primary spawn or storage
-    const anchor = highCharity.primarySpawn || highCharity.storage;
-    const pos = anchor?.pos || new RoomPosition(25, 25, highCharity.name);
+    const anchor = Nexus.primarySpawn || Nexus.storage;
+    const pos = anchor?.pos || new RoomPosition(25, 25, Nexus.name);
     
-    super(highCharity, pos);
+    super(Nexus, pos);
     
     this.spawn = null;
     this.storage = null;
@@ -52,9 +52,9 @@ export class CommandTemple extends Temple {
   
   init(): void {
     // Gather references to key structures
-    this.spawn = this.highCharity.primarySpawn || null;
-    this.storage = this.highCharity.storage || null;
-    this.terminal = this.highCharity.terminal || null;
+    this.spawn = this.Nexus.primarySpawn || null;
+    this.storage = this.Nexus.storage || null;
+    this.terminal = this.Nexus.terminal || null;
     
     // Find power spawn
     const powerSpawns = this.room.find(FIND_MY_STRUCTURES, {
@@ -114,13 +114,13 @@ export class CommandTemple extends Temple {
     
     if (result === OK) {
       this.spawnQueue.shift(); // Remove from queue
-      console.log(`✨ [CommandTemple] Spawning ${request.name} (priority: ${request.priority})`);
+      console.log(`✨ [CommandGateway] Spawning ${request.name} (priority: ${request.priority})`);
     } else if (result === ERR_NOT_ENOUGH_ENERGY) {
       // Keep in queue, try again next tick
     } else {
       // Other error, remove from queue
       this.spawnQueue.shift();
-      console.log(`❌ [CommandTemple] Failed to spawn ${request.name}: ${result}`);
+      console.log(`❌ [CommandGateway] Failed to spawn ${request.name}: ${result}`);
     }
   }
   
@@ -135,7 +135,7 @@ export class CommandTemple extends Temple {
     if (!centralLink) return;
     
     // Receive energy from remote links
-    // (Remote links would be managed by MiningTemples)
+    // (Remote links would be managed by MiningGateways)
     
     // Distribute energy to controller link if it exists
     const controllerLink = this.room.controller?.pos.findInRange(FIND_MY_STRUCTURES, 3, {

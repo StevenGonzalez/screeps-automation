@@ -1,47 +1,47 @@
 /**
- * HIGH CHARITY - Colony Manager
+ * NEXUS - Colony Manager
  * 
- * "The holy city, seat of the Hierarchs"
+ * "My life for Aiur!"
  * 
- * High Charity represents a controlled room and all its operations.
- * Each High Charity coordinates its Arbiters, Temples, and Elites to achieve
- * the goals set by the Covenant.
+ * The Nexus represents a controlled room and all its operations.
+ * Each Nexus coordinates its Arbiters, Gateways, and Warriors to achieve
+ * the goals set by the Khala.
  */
 
 /// <reference types="@types/screeps" />
 
 // Forward declaration to avoid circular dependency
-import type { Covenant } from './Covenant';
+import type { Khala } from './Khala';
 import { Arbiter } from '../arbiters/Arbiter';
-import { DroneArbiter } from '../arbiters/DroneArbiter';
-import { GruntArbiter } from '../arbiters/GruntArbiter';
-import { JackalArbiter } from '../arbiters/JackalArbiter';
-import { DevoteeArbiter } from '../arbiters/DevoteeArbiter';
+import { ProbeArbiter } from '../arbiters/ProbeArbiter';
+import { ZealotArbiter } from '../arbiters/ZealotArbiter';
+import { AdeptArbiter } from '../arbiters/AdeptArbiter';
+import { SentryArbiter } from '../arbiters/SentryArbiter';
 import { EngineerArbiter } from '../arbiters/EngineerArbiter';
 import { ZealotArbiter } from '../arbiters/ZealotArbiter';
-import { SeekerArbiter } from '../arbiters/SeekerArbiter';
-import { RangerArbiter } from '../arbiters/RangerArbiter';
+import { ObserverArbiter } from '../arbiters/ObserverArbiter';
+import { DragoonArbiter } from '../arbiters/DragoonArbiter';
 import { RemoteDefenderArbiter } from '../arbiters/RemoteDefenderArbiter';
-import { HunterArbiter } from '../arbiters/HunterArbiter';
+import { StalkerArbiter } from '../arbiters/StalkerArbiter';
 import { ExcavatorArbiter } from '../arbiters/ExcavatorArbiter';
 import { TerminalArbiter } from '../arbiters/TerminalArbiter';
-import { HeraldArbiter } from '../arbiters/HeraldArbiter';
-import { PowerHarvesterArbiter } from '../arbiters/PowerHarvesterArbiter';
+import { ObserverArbiter } from '../arbiters/ObserverArbiter';
+import { ImmortalArbiter } from '../arbiters/ImmortalArbiter';
 import { PioneerArbiter } from '../expansion/PioneerArbiter';
-import { Temple } from '../temples/Temple';
-import { MiningTemple } from '../temples/MiningTemple';
-import { CommandTemple } from '../temples/CommandTemple';
-import { IntelligenceTemple } from '../temples/IntelligenceTemple';
-import { DefenseTemple } from '../temples/DefenseTemple';
-import { LabTemple } from '../temples/LabTemple';
-import { BoostTemple } from '../temples/BoostTemple';
-import { PowerTemple } from '../temples/PowerTemple';
-import { LinkTemple } from '../temples/LinkTemple';
-import { ProphetsWill } from '../logistics/ProphetsWill';
+import { Gateway } from '../structures/Gateway';
+import { MiningGateway } from '../structures/MiningGateway';
+import { CommandGateway } from '../structures/CommandGateway';
+import { IntelligenceGateway } from '../structures/IntelligenceGateway';
+import { DefenseGateway } from '../structures/DefenseGateway';
+import { ForgeGateway } from '../structures/ForgeGateway';
+import { BoostGateway } from '../structures/BoostGateway';
+import { PowerGateway } from '../structures/PowerGateway';
+import { LinkGateway } from '../structures/LinkGateway';
+import { PylonNetwork } from '../logistics/PylonNetwork';
 import { RoomPlanner } from '../planning/RoomPlanner';
 import { AutoPlanner } from '../planning/AutoPlanner';
 import { RoadBuilder } from '../planning/RoadBuilder';
-import { CovenantVisuals } from '../visuals/CovenantVisuals';
+import { ProtossVisuals } from '../visuals/ProtossVisuals';
 import { Profiler, TickBudget } from '../utils/Profiler';
 import { CacheSystem, StructureCache } from '../utils/CacheSystem';
 import { WarCouncil } from '../military/WarCouncil';
@@ -58,7 +58,7 @@ import { BoostManager } from '../boost/BoostManager';
 import { FactoryManager } from '../factory/FactoryManager';
 import { SpawnQueue } from '../spawning/SpawnQueue';
 
-export interface HighCharityMemory {
+export interface NexusMemory {
   level: number;
   phase: 'bootstrap' | 'developing' | 'mature' | 'powerhouse';
   lastBuilt: number;
@@ -101,13 +101,13 @@ export interface HighCharityMemory {
 }
 
 /**
- * High Charity - The colony manager for a single room
+ * Nexus - The colony manager for a single room
  */
-export class HighCharity {
+export class Nexus {
   room: Room;
   name: string;
-  memory: HighCharityMemory;
-  covenant: Covenant;
+  memory: NexusMemory;
+  khala: Khala;
   
   // Core references
   controller: StructureController | undefined;
@@ -119,24 +119,24 @@ export class HighCharity {
   links: StructureLink[];
   
   // Creeps
-  elites: Creep[];
+  warriors: Creep[];
   
   // Arbiters
   arbiters: { [name: string]: Arbiter };
   
-  // Temples (structure clusters)
-  temples: { [name: string]: Temple };
-  miningTemples: MiningTemple[];
-  commandTemple: CommandTemple | null;
-  intelligenceTemple: IntelligenceTemple;
-  defenseTemple: DefenseTemple;
-  labTemple: LabTemple | null;
-  boostTemple: BoostTemple | null;
-  powerTemple: PowerTemple | null;
-  linkTemple: LinkTemple | null;
+  // gateways (structure clusters)
+  gateways: { [name: string]: Gateway };
+  miningGateways: MiningGateway[];
+  commandGateway: CommandGateway | null;
+  intelligenceGateway: IntelligenceGateway;
+  defenseGateway: DefenseGateway;
+  forgeGateway: ForgeGateway | null;
+  boostGateway: BoostGateway | null;
+  powerGateway: PowerGateway | null;
+  linkGateway: LinkGateway | null;
   
   // Logistics
-  prophetsWill: ProphetsWill;
+  pylonNetwork: PylonNetwork;
   
   // Planning
   planner: RoomPlanner;
@@ -167,30 +167,30 @@ export class HighCharity {
   spawnQueue: SpawnQueue;
   
   // Visuals
-  visuals: CovenantVisuals;
+  visuals: ProtossVisuals;
   
   // Level
   level: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   
-  constructor(room: Room, covenant: Covenant) {
+  constructor(room: Room, khala: Khala) {
     this.room = room;
     this.name = room.name;
-    this.covenant = covenant;
+    this.khala = KHALA;
     this.controller = room.controller;
     this.spawns = [];
     this.extensions = [];
     this.towers = [];
     this.links = [];
-    this.elites = [];
+    this.warriors = [];
     this.arbiters = {};
-    this.temples = {};
-    this.miningTemples = [];
-    this.commandTemple = null;
-    this.labTemple = null;
-    this.boostTemple = null;
-    this.powerTemple = null;
+    this.gateways = {};
+    this.miningGateways = [];
+    this.commandGateway = null;
+    this.forgeGateway = null;
+    this.boostGateway = null;
+    this.powerGateway = null;
     
-    // Initialize memory FIRST before any temples
+    // Initialize memory FIRST before any gateways
     if (!Memory.rooms[this.name]) {
       Memory.rooms[this.name] = {} as any;
     }
@@ -211,25 +211,25 @@ export class HighCharity {
     }
     
     // Initialize logistics network AFTER memory is set up
-    this.prophetsWill = new ProphetsWill(this);
+    this.pylonNetwork = new PylonNetwork(this);
     
-    // Initialize temples AFTER memory is set up
-    this.intelligenceTemple = new IntelligenceTemple(this);
-    this.defenseTemple = new DefenseTemple(this);
+    // Initialize gateways AFTER memory is set up
+    this.intelligenceGateway = new IntelligenceGateway(this);
+    this.defenseGateway = new DefenseGateway(this);
     
-    // Initialize lab temple if we have labs (RCL 6+)
+    // Initialize lab Gateway if we have labs (RCL 6+)
     if (this.room.controller && this.room.controller.level >= 6) {
-      this.labTemple = new LabTemple(this);
-      this.boostTemple = new BoostTemple(this);
+      this.forgeGateway = new ForgeGateway(this);
+      this.boostGateway = new BoostGateway(this);
     }
     
-    // Initialize power temple at RCL 8
+    // Initialize power Gateway at RCL 8
     if (this.room.controller && this.room.controller.level >= 8) {
-      this.powerTemple = new PowerTemple(this);
+      this.powerGateway = new PowerGateway(this);
     }
     
-    // Defer LinkTemple initialization until build() where structures are refreshed
-    this.linkTemple = null;
+    // Defer LinkGateway initialization until build() where structures are refreshed
+    this.linkGateway = null;
     
     // Initialize room planner
     this.planner = new RoomPlanner(room);
@@ -274,7 +274,7 @@ export class HighCharity {
     this.spawnQueue = new SpawnQueue(this);
     
     // Initialize visuals
-    this.visuals = new CovenantVisuals(this);
+    this.visuals = new ProtossVisuals(this);
     
     this.level = (room.controller?.level || 1) as any;
   }
@@ -283,9 +283,9 @@ export class HighCharity {
    * Build phase - gather references and create structures
    */
   build(): void {
-    Profiler.start(`HighCharity_${this.name}_build`);
+    Profiler.start(`Nexus_${this.name}_build`);
     
-    // Rename spawns to Covenant theme (once per 500 ticks)
+    // Rename spawns to KHALA theme (once per 500 ticks)
     if (Game.time % 500 === 0) {
       this.renameSpawns();
     }
@@ -299,33 +299,33 @@ export class HighCharity {
     // Determine operational phase
     this.determinePhase();
     
-    // Build Temples (structure clusters)
-    this.buildTemples();
+    // Build gateways (structure clusters)
+    this.buildgateways();
     
     // Build Arbiters
     this.buildArbiters();
     
     this.memory.lastBuilt = Game.time;
     
-    Profiler.end(`HighCharity_${this.name}_build`);
+    Profiler.end(`Nexus_${this.name}_build`);
   }
   
   /**
    * Initialize phase - prepare for execution
    */
   init(): void {
-    Profiler.start(`HighCharity_${this.name}_init`);
+    Profiler.start(`Nexus_${this.name}_init`);
     
-    // Initialize all Temples
-    for (const templeName in this.temples) {
-      Profiler.wrap(`Temple_${templeName}_init`, () => {
-        this.temples[templeName].init();
+    // Initialize all gateways
+    for (const GatewayName in this.gateways) {
+      Profiler.wrap(`Gateway_${GatewayName}_init`, () => {
+        this.gateways[GatewayName].init();
       });
     }
     
     // Initialize logistics network
-    Profiler.wrap(`ProphetsWill_init`, () => {
-      this.prophetsWill.init();
+    Profiler.wrap(`PylonNetwork_init`, () => {
+      this.pylonNetwork.init();
     });
     
     // Initialize all Arbiters
@@ -344,7 +344,7 @@ export class HighCharity {
     
     // Debug output every 50 ticks
     if (Game.time % 50 === 0) {
-      const totalCreeps = this.elites.length;
+      const totalCreeps = this.warriors.length;
       const arbiterCount = Object.keys(this.arbiters).length;
       const spawnStatus = this.primarySpawn ? 
         (this.primarySpawn.spawning ? `🔄 Spawning ${this.primarySpawn.spawning.name}` : '✅ Idle') : 
@@ -354,14 +354,14 @@ export class HighCharity {
       console.log(`📜 ${this.print}: RCL${this.level} ${this.memory.phase} | ${totalCreeps} creeps | ${arbiterCount} arbiters | ${spawnStatus} | Energy: ${this.energyAvailable}/${this.energyCapacity}${warStatus}`);
     }
     
-    Profiler.end(`HighCharity_${this.name}_init`);
+    Profiler.end(`Nexus_${this.name}_init`);
   }
   
   /**
    * Run phase - execute operations
    */
   run(): void {
-    Profiler.start(`HighCharity_${this.name}_run`);
+    Profiler.start(`Nexus_${this.name}_run`);
     
     // DEBUG: Energy investigation
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
@@ -388,16 +388,16 @@ export class HighCharity {
       this.autoPlanner.run();
     });
     
-    // Run all Temples
-    for (const templeName in this.temples) {
-      Profiler.wrap(`Temple_${templeName}_run`, () => {
-        this.temples[templeName].run();
+    // Run all gateways
+    for (const GatewayName in this.gateways) {
+      Profiler.wrap(`Gateway_${GatewayName}_run`, () => {
+        this.gateways[GatewayName].run();
       });
     }
     
     // Run logistics network
-    Profiler.wrap(`ProphetsWill_run`, () => {
-      this.prophetsWill.run();
+    Profiler.wrap(`PylonNetwork_run`, () => {
+      this.pylonNetwork.run();
     });
     
     // Run all Arbiters (with CPU budget awareness)
@@ -474,7 +474,7 @@ export class HighCharity {
     }
     
     // Run boost manager (RCL 6+ with labs)
-    if (this.level >= 6 && this.labTemple && !TickBudget.shouldSkipExpensive(0.85)) {
+    if (this.level >= 6 && this.forgeGateway && !TickBudget.shouldSkipExpensive(0.85)) {
       Profiler.wrap('BoostManager_run', () => {
         this.boostManager.run();
       });
@@ -503,7 +503,7 @@ export class HighCharity {
     // Update statistics
     this.updateStatistics();
     
-    Profiler.end(`HighCharity_${this.name}_run`);
+    Profiler.end(`Nexus_${this.name}_run`);
   }
   
   /**
@@ -532,11 +532,11 @@ export class HighCharity {
    * Refresh creep references
    */
   private refreshCreeps(): void {
-    this.elites = this.room.find(FIND_MY_CREEPS);
+    this.warriors = this.room.find(FIND_MY_CREEPS);
   }
   
   /**
-   * Determine the operational phase of this High Charity
+   * Determine the operational phase of this Nexus
    */
   private determinePhase(): void {
     const level = this.level;
@@ -555,76 +555,76 @@ export class HighCharity {
   }
   
   /**
-   * Build Temples for this High Charity
+   * Build gateways for this Nexus
    */
-  protected buildTemples(): void {
-    // Build Mining Temples for each source
+  protected buildgateways(): void {
+    // Build Mining gateways for each source
     const sources = this.room.find(FIND_SOURCES);
-    this.miningTemples = [];
+    this.miningGateways = [];
     
     for (const source of sources) {
-      const temple = new MiningTemple(this, source);
-      this.temples[`mining_${source.id}`] = temple;
-      this.miningTemples.push(temple);
+      const Gateway = new MiningGateway(this, source);
+      this.gateways[`mining_${source.id}`] = Gateway;
+      this.miningGateways.push(Gateway);
     }
     
-    // Build Command Temple (core colony management)
-    this.commandTemple = new CommandTemple(this);
-    this.temples['command'] = this.commandTemple;
+    // Build Command Gateway (core colony management)
+    this.commandGateway = new CommandGateway(this);
+    this.gateways['command'] = this.commandGateway;
     
-    // Build Defense Temple (fortifications)
-    this.temples['defense'] = this.defenseTemple;
+    // Build Defense Gateway (fortifications)
+    this.gateways['defense'] = this.defenseGateway;
     
-    // Build Lab Temple (reactions) if available
-    if (this.labTemple) {
-      this.temples['lab'] = this.labTemple;
+    // Build Lab Gateway (reactions) if available
+    if (this.forgeGateway) {
+      this.gateways['lab'] = this.forgeGateway;
     }
     
-    // Build Boost Temple (creep enhancement) if available
-    if (this.boostTemple) {
-      this.temples['boost'] = this.boostTemple;
+    // Build Boost Gateway (creep enhancement) if available
+    if (this.boostGateway) {
+      this.gateways['boost'] = this.boostGateway;
     }
     
-    // Build Power Temple (power harvesting) if available
-    if (this.powerTemple) {
-      this.temples['power'] = this.powerTemple;
+    // Build Power Gateway (power harvesting) if available
+    if (this.powerGateway) {
+      this.gateways['power'] = this.powerGateway;
     }
     
-    // Build Link Temple (energy conduits) if available
-    // Initialize LinkTemple now that structures have been refreshed (RCL 5+ and at least 2 links)
+    // Build Link Gateway (energy conduits) if available
+    // Initialize LinkGateway now that structures have been refreshed (RCL 5+ and at least 2 links)
     if (this.room.controller && this.room.controller.level >= 5 && this.links.length >= 2) {
-      if (!this.linkTemple) {
-        this.linkTemple = new LinkTemple(this);
+      if (!this.linkGateway) {
+        this.linkGateway = new LinkGateway(this);
       }
-      this.temples['link'] = this.linkTemple;
+      this.gateways['link'] = this.linkGateway;
     }
     
     // Scan for remote mining opportunities (mature colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
-      this.intelligenceTemple.scan();
+      this.intelligenceGateway.scan();
     }
   }
   
   /**
-   * Build Arbiters for this High Charity
+   * Build Arbiters for this Nexus
    */
   protected buildArbiters(): void {
     // Build Grunt Arbiter FIRST (early game energy collection)
     // This is critical for bootstrap - grunts directly collect and deliver energy
-    new GruntArbiter(this);
+    new ZealotArbiter(this);
     
     // Build Drone Arbiters for each source (static miners on containers)
     const sources = this.room.find(FIND_SOURCES);
     for (const source of sources) {
-      new DroneArbiter(this, source);
+      new ProbeArbiter(this, source);
     }
     
     // Build core Arbiters
-    new JackalArbiter(this);  // Energy logistics (haulers)
-    new DevoteeArbiter(this);  // Controller upgrading
+    new AdeptArbiter(this);  // Energy logistics (haulers)
+    new SentryArbiter(this);  // Controller upgrading
     new EngineerArbiter(this); // Construction and repair
     new ZealotArbiter(this); // Military defense
-    new HunterArbiter(this); // Fortification maintenance (RCL 5+)
+    new StalkerArbiter(this); // Fortification maintenance (RCL 5+)
     
     // Build Excavator Arbiter (RCL 6+)
     if (this.room.controller && this.room.controller.level >= 6) {
@@ -642,9 +642,9 @@ export class HighCharity {
     // Build Remote Mining Arbiters (mature+ colonies only)
     if (this.memory.phase === 'mature' || this.memory.phase === 'powerhouse') {
       // Build Ranger Arbiter for room vision
-      new RangerArbiter(this);
+      new DragoonArbiter(this);
       
-      this.buildSeekerArbiters();
+      this.buildObserverArbiters();
       
       // Build Deposit Harvester Arbiters (powerhouse colonies)
       if (this.memory.phase === 'powerhouse') {
@@ -656,12 +656,12 @@ export class HighCharity {
       
       // Build Herald Arbiters for expansion (powerhouse colonies only)
       if (this.memory.phase === 'powerhouse' && this.level === 8) {
-        this.buildHeraldArbiters();
+        this.buildObserverArbiters();
       }
       
-      // Build Power Harvester Arbiter (powerhouse colonies with power temple)
-      if (this.memory.phase === 'powerhouse' && this.powerTemple) {
-        new PowerHarvesterArbiter(this);
+      // Build Power Harvester Arbiter (powerhouse colonies with power Gateway)
+      if (this.memory.phase === 'powerhouse' && this.powerGateway) {
+        new ImmortalArbiter(this);
       }
     }
   }
@@ -669,7 +669,7 @@ export class HighCharity {
   /**
    * Build Seeker Arbiters for profitable nearby sources
    */
-  private buildSeekerArbiters(): void {
+  private buildObserverArbiters(): void {
     // Use RemoteOperations to get active remote rooms
     const activeRooms = this.remoteOperations.getActiveRemoteRooms();
     
@@ -680,7 +680,7 @@ export class HighCharity {
         // Don't create duplicate arbiters
         if (this.arbiters[arbiterName]) continue;
         
-        new SeekerArbiter(this, room.roomName, sourceId);
+        new ObserverArbiter(this, room.roomName, sourceId);
       }
       
       // Build RemoteDefenderArbiter for this room
@@ -694,8 +694,8 @@ export class HighCharity {
   /**
    * Build Herald Arbiters for expansion targets
    */
-  private buildHeraldArbiters(): void {
-    const targets = this.intelligenceTemple.getExpansionTargets();
+  private buildObserverArbiters(): void {
+    const targets = this.intelligenceGateway.getExpansionTargets();
     
     // Limit to 1 active expansion at a time
     for (const target of targets.slice(0, 1)) {
@@ -706,8 +706,8 @@ export class HighCharity {
       
       // Only expand if we have spare capacity (>50% storage, >100k energy)
       if (this.storage && this.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 100000) {
-        console.log(`[HighCharity ${this.room.name}] 🎯 The Hierarchs have decreed expansion to ${target.roomName}!`);
-        new HeraldArbiter(this, target.roomName);
+        console.log(`[Nexus ${this.room.name}] 🎯 The Hierarchs have decreed expansion to ${target.roomName}!`);
+        new ObserverArbiter(this, target.roomName);
       }
     }
   }
@@ -732,7 +732,7 @@ export class HighCharity {
    * Build Pioneer Arbiters for active expansions
    */
   private buildPioneerArbiters(): void {
-    const expansionTarget = this.covenant.reclaimationCouncil.getStatus();
+    const expansionTarget = this.khala.reclaimationCouncil.getStatus();
     
     // Only spawn pioneers if there's an active expansion
     if (!expansionTarget) return;
@@ -748,21 +748,21 @@ export class HighCharity {
   }
   
   /**
-   * Update statistics for this High Charity
+   * Update statistics for this Nexus
    */
   private updateStatistics(): void {
-    this.memory.statistics.creepCount = this.elites.length;
+    this.memory.statistics.creepCount = this.warriors.length;
   }
   
   /**
-   * Get the primary spawn for this High Charity
+   * Get the primary spawn for this Nexus
    */
   get primarySpawn(): StructureSpawn | undefined {
     return this.spawns[0];
   }
   
   /**
-   * Check if this High Charity is in bootstrap mode
+   * Check if this Nexus is in bootstrap mode
    */
   get isBootstrapping(): boolean {
     return this.memory.phase === 'bootstrap';
@@ -803,7 +803,7 @@ export class HighCharity {
   }
   
   /**
-   * Rename spawns to Covenant-themed names
+   * Rename spawns to KHALA-themed names
    */
   private renameSpawns(): void {
     const spawns = this.room.find(FIND_MY_SPAWNS);
@@ -812,7 +812,7 @@ export class HighCharity {
       const spawn = spawns[i];
       const desiredName = SPAWN_NAMES[i] || `Sanctum-${i + 1}`;
       
-      // Check if spawn already has a Covenant-themed name
+      // Check if spawn already has a KHALA-themed name
       if (!SPAWN_NAMES.includes(spawn.name) && !spawn.name.startsWith('Sanctum-')) {
         // Can't directly rename, but we can inform the user
         if (Game.time % 1000 === 0) {
@@ -826,6 +826,6 @@ export class HighCharity {
    * Print representation
    */
   get print(): string {
-    return `<a href="#!/room/${Game.shard.name}/${this.name}">[HighCharity ${this.name}]</a>`;
+    return `<a href="#!/room/${Game.shard.name}/${this.name}">[Nexus ${this.name}]</a>`;
   }
 }

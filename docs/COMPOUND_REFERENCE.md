@@ -245,32 +245,32 @@ Must be obtained through mining or market:
 
 ### Combat Squad (Attack + Heal)
 ```javascript
-Game.cov.produce('XUH2O', 3000)  // Attack boost
-Game.cov.produce('XUHO2', 3000)  // Heal boost
-Game.cov.produce('XZHO2', 2000)  // Movement boost
+Game.kha.produce('XUH2O', 3000)  // Attack boost
+Game.kha.produce('XUHO2', 3000)  // Heal boost
+Game.kha.produce('XZHO2', 2000)  // Movement boost
 ```
 
 ### Builder Squad (Fast Construction)
 ```javascript
-Game.cov.produce('XLH2O', 3000)  // Build boost
-Game.cov.produce('XZHO2', 2000)  // Movement boost
+Game.kha.produce('XLH2O', 3000)  // Build boost
+Game.kha.produce('XZHO2', 2000)  // Movement boost
 ```
 
 ### Upgrader Squad (Fast GCL)
 ```javascript
-Game.cov.produce('XGH2O', 5000)  // Upgrade boost
+Game.kha.produce('XGH2O', 5000)  // Upgrade boost
 ```
 
 ### Dismantler Squad (Structure Destruction)
 ```javascript
-Game.cov.produce('XZH2O', 3000)  // Dismantle boost
-Game.cov.produce('XZHO2', 2000)  // Movement boost
+Game.kha.produce('XZH2O', 3000)  // Dismantle boost
+Game.kha.produce('XZHO2', 2000)  // Movement boost
 ```
 
 ### Defense Squad (Repair + Ranged)
 ```javascript
-Game.cov.produce('XLHO2', 3000)  // Repair boost
-Game.cov.produce('XKHO2', 3000)  // Ranged boost
+Game.kha.produce('XLHO2', 3000)  // Repair boost
+Game.kha.produce('XKHO2', 3000)  // Ranged boost
 ```
 
 ---

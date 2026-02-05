@@ -1,9 +1,9 @@
 /**
- * ELITE - Enhanced Creep Wrapper
+ * Warrior - Enhanced Creep Wrapper
  * 
- * "Warriors of the Covenant"
+ * "Warriors of the Khala"
  * 
- * Elites are enhanced wrappers around Creep objects that provide additional
+ * Warriors are enhanced wrappers around Creep objects that provide additional
  * functionality for movement, tasks, boosting, and combat.
  */
 
@@ -13,9 +13,9 @@ import { Arbiter } from '../arbiters/Arbiter';
 import { EnergyCollector } from '../utils/EnergyCollector';
 
 /**
- * Elite - Enhanced creep wrapper
+ * Warrior - Enhanced creep wrapper
  */
-export class Elite {
+export class Warrior {
   creep: Creep;
   arbiter: Arbiter | null;
   
@@ -93,35 +93,35 @@ export class Elite {
   // === Enhanced Methods ===
   
   /**
-   * Check if the Elite is idle (no task assigned)
+   * Check if the Warrior is idle (no task assigned)
    */
   get isIdle(): boolean {
     return !this.memory.task && !this.memory.working;
   }
   
   /**
-   * Check if the Elite needs energy
+   * Check if the Warrior needs energy
    */
   get needsEnergy(): boolean {
     return this.store.getUsedCapacity(RESOURCE_ENERGY) === 0;
   }
   
   /**
-   * Check if the Elite is full of energy
+   * Check if the Warrior is full of energy
    */
   get isFull(): boolean {
     return this.store.getFreeCapacity(RESOURCE_ENERGY) === 0;
   }
   
   /**
-   * Check if the Elite is boosted
+   * Check if the Warrior is boosted
    */
   get isBoosted(): boolean {
     return this.body.some(part => !!part.boost);
   }
   
   /**
-   * Get the boost labs for this Elite's room
+   * Get the boost labs for this Warrior's room
    */
   getBoostLabs(): StructureLab[] {
     return this.room.find(FIND_MY_STRUCTURES, {
@@ -304,7 +304,7 @@ export class Elite {
   }
   
   /**
-   * Reassign this Elite to a new Arbiter
+   * Reassign this Warrior to a new Arbiter
    */
   reassign(newArbiter: Arbiter, newRole?: string): void {
     this.arbiter = newArbiter;
@@ -321,7 +321,7 @@ export class Elite {
    * Print representation
    */
   get print(): string {
-    return `<a href="#!/room/${Game.shard.name}/${this.pos.roomName}">[Elite ${this.name}]</a>`;
+    return `<a href="#!/room/${Game.shard.name}/${this.pos.roomName}">[Warrior ${this.name}]</a>`;
   }
   
   // === Wrapper for all other Creep methods ===

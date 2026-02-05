@@ -1,19 +1,19 @@
 /**
- * CRUSADE - Task Directive System
+ * Campaign - Task Directive System
  * 
  * "The Great Journey awaits"
  * 
- * Crusades are flag-based directives that allow dynamic task assignment and
- * strategic response to game events. Each Crusade spawns appropriate Arbiters
+ * Campaigns are flag-based directives that allow dynamic task assignment and
+ * strategic response to game events. Each Campaign spawns appropriate Arbiters
  * and manages complex multi-step operations.
  */
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 import { Arbiter } from '../arbiters/Arbiter';
 
-export interface CrusadeMemory {
+export interface CampaignMemory {
   created: number;
   expires?: number;
   persistent?: boolean;
@@ -21,10 +21,10 @@ export interface CrusadeMemory {
 }
 
 /**
- * Base class for all Crusades
+ * Base class for all Campaigns
  */
-export abstract class Crusade {
-  static crusadeName: string;
+export abstract class Campaign {
+  static CampaignName: string;
   static color: ColorConstant;
   static secondaryColor: ColorConstant;
   
@@ -32,17 +32,17 @@ export abstract class Crusade {
   name: string;
   pos: RoomPosition;
   room: Room | undefined;
-  highCharity: HighCharity;
-  memory: CrusadeMemory;
+  Nexus: Nexus;
+  memory: CampaignMemory;
   
   arbiters: { [name: string]: Arbiter };
   
-  constructor(flag: Flag, highCharity: HighCharity) {
+  constructor(flag: Flag, Nexus: Nexus) {
     this.flag = flag;
     this.name = flag.name;
     this.pos = flag.pos;
     this.room = flag.room || undefined;
-    this.highCharity = highCharity;
+    this.Nexus = Nexus;
     this.arbiters = {};
     
     // Initialize memory
@@ -55,15 +55,15 @@ export abstract class Crusade {
       this.memory.created = Game.time;
     }
     
-    // Register with Covenant
+    // Register with KHALA
     const cov = (Game as any).cov;
     if (cov) {
-      cov.registerCrusade(this);
+      cov.registerCampaign(this);
     }
   }
   
   /**
-   * Create Arbiters for this Crusade
+   * Create Arbiters for this Campaign
    * Override in child classes
    */
   abstract spawnArbiters(): void;
@@ -81,7 +81,7 @@ export abstract class Crusade {
   abstract run(): void;
   
   /**
-   * Check if this Crusade should be removed
+   * Check if this Campaign should be removed
    */
   shouldRemove(): boolean {
     if (this.memory.expires && Game.time > this.memory.expires) {
@@ -91,10 +91,10 @@ export abstract class Crusade {
   }
   
   /**
-   * Remove this Crusade and its flag
+   * Remove this Campaign and its flag
    */
   remove(permanent: boolean = false): void {
-    console.log(`🚩 Removing Crusade: ${this.name}`);
+    console.log(`🚩 Removing Campaign: ${this.name}`);
     
     // Remove arbiters
     for (const name in this.arbiters) {
@@ -119,18 +119,18 @@ export abstract class Crusade {
    * Print representation
    */
   get print(): string {
-    return `<a href="#!/room/${Game.shard.name}/${this.pos.roomName}">[Crusade ${this.name}]</a>`;
+    return `<a href="#!/room/${Game.shard.name}/${this.pos.roomName}">[Campaign ${this.name}]</a>`;
   }
   
   /**
-   * Create a Crusade if one doesn't already exist at this position
+   * Create a Campaign if one doesn't already exist at this position
    */
-  static createIfNotPresent<T extends typeof Crusade>(
+  static createIfNotPresent<T extends typeof Campaign>(
     this: T,
     pos: RoomPosition,
     scope: 'room' | 'local' = 'room'
   ): boolean {
-    const flagName = `${this.crusadeName}_${pos.roomName}_${pos.x}_${pos.y}`;
+    const flagName = `${this.CampaignName}_${pos.roomName}_${pos.x}_${pos.y}`;
     
     if (Game.flags[flagName]) {
       return false;
@@ -143,7 +143,7 @@ export abstract class Crusade {
     );
     
     if (typeof result === 'string') {
-      console.log(`🚩 Created ${this.crusadeName} at ${pos.roomName}`);
+      console.log(`🚩 Created ${this.CampaignName} at ${pos.roomName}`);
       return true;
     }
     

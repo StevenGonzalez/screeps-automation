@@ -97,7 +97,7 @@ Score Calculation:
 
 ### View Expansion Status
 ```javascript
-Game.cov.expansion()
+Game.kha.expansion()
 ```
 
 **Output:**
@@ -123,7 +123,7 @@ Game.cov.expansion()
 
 ### Cancel Expansion
 ```javascript
-Game.cov.cancelExpansion()
+Game.kha.cancelExpansion()
 ```
 
 Immediately stops current expansion and allows system to evaluate new targets.
@@ -143,9 +143,9 @@ reclaimationCouncil.run()
 // → Scores and selects best target
 ```
 
-### With HighCharity
+### With Nexus
 ```typescript
-// Each HighCharity checks for expansion commands
+// Each Nexus checks for expansion commands
 buildPioneerArbiters()
 // → If colony is nearest to target, spawn pioneers
 
@@ -154,7 +154,7 @@ pioneerArbiter.run()
 // → Claim room, build infrastructure, upgrade controller
 ```
 
-### With CommandTemple
+### With CommandGateway
 ```typescript
 // Spawn queue prioritizes pioneers
 priority: 100  // Highest priority
@@ -295,7 +295,7 @@ maxCost: 1000 energy
 - Check threat levels manually if concerned
 
 ### 3. Monitor Progress
-- Check `Game.cov.expansion()` regularly
+- Check `Game.kha.expansion()` regularly
 - Watch for timeout warnings
 - Cancel stalled expansions manually if needed
 
@@ -311,9 +311,9 @@ maxCost: 1000 energy
 ### Expansion Not Starting
 
 **Check:**
-- `Game.cov.expansion()` - View conditions
+- `Game.kha.expansion()` - View conditions
 - `Game.gcl.level` - Do you have GCL capacity?
-- `Game.cov.intel()` - Are rooms being scanned?
+- `Game.kha.intel()` - Are rooms being scanned?
 - Storage energy - Is it above 20k?
 
 **Solution:**
@@ -332,7 +332,7 @@ Memory.expansion.lastEvaluation = 0;
 **Solution:**
 ```javascript
 // Check which colony should spawn
-const target = Game.cov.expansion().currentTarget;
+const target = Game.kha.expansion().currentTarget;
 console.log(target.claimingFrom); // Should be nearest colony
 ```
 
@@ -346,7 +346,7 @@ console.log(target.claimingFrom); // Should be nearest colony
 **Solution:**
 ```javascript
 // Cancel and retry
-Game.cov.cancelExpansion();
+Game.kha.cancelExpansion();
 // System will re-evaluate in 1000 ticks
 ```
 
@@ -430,13 +430,13 @@ Add to your Screeps console shortcuts:
 
 ```javascript
 // Quick status
-alias exp="Game.cov.expansion()"
+alias exp="Game.kha.expansion()"
 
 // Cancel expansion
-alias cancel="Game.cov.cancelExpansion()"
+alias cancel="Game.kha.cancelExpansion()"
 
 // View candidates
-alias targets="Game.cov.intel()"
+alias targets="Game.kha.intel()"
 ```
 
 ---
@@ -452,4 +452,4 @@ The Autonomous Expansion System provides **zero-maintenance colony growth**. Sim
 - ✅ Self-healing (timeouts prevent stuck expansions)
 - ✅ Full console visibility and control
 
-**The Great Journey continues...**
+**For Aiur continues...**

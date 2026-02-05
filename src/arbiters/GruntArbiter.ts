@@ -1,7 +1,7 @@
 /**
  * GRUNT ARBITER - Unggoy Laborers
  * 
- * "The Unggoy serve the Covenant with unwavering loyalty"
+ * "The Unggoy serve the KHALA with unwavering loyalty"
  * 
  * Manages Grunt laborers during bootstrap phase (RCL 1-3).
  * Grunts directly harvest energy sources and deliver to spawns/extensions.
@@ -12,25 +12,25 @@
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Grunt Arbiter - Manages early-game energy harvesting
  */
-export class GruntArbiter extends Arbiter {
-  grunts: Elite[];
+export class ZealotArbiter extends Arbiter {
+  grunts: Warrior[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'grunt', ArbiterPriority.economy.mining - 1); // Higher priority than miners
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'grunt', ArbiterPriority.economy.mining - 1); // Higher priority than miners
     this.grunts = [];
   }
   
   init(): void {
     this.refresh();
-    this.grunts = this.elites;
+    this.grunts = this.warriors;
     
     const isActive = this.shouldBeActive();
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
@@ -111,7 +111,7 @@ export class GruntArbiter extends Arbiter {
   /**
    * Run individual grunt logic - simple state machine
    */
-  private rungrunt(grunt: Elite): void {
+  private rungrunt(ZEALOT_UNIT: Warrior): void {
     // State: HARVESTING or DELIVERING (based on carry capacity)
     const isHarvesting = grunt.store.getFreeCapacity() > 0;
     
@@ -154,7 +154,7 @@ export class GruntArbiter extends Arbiter {
         }
       } else {
         // No targets need energy, park near spawn
-        const spawn = this.highCharity.spawns[0];
+        const spawn = this.Nexus.spawns[0];
         if (spawn && !grunt.pos.isNearTo(spawn)) {
           grunt.goTo(spawn.pos);
         }
@@ -166,7 +166,7 @@ export class GruntArbiter extends Arbiter {
   /**
    * Find best source to harvest from (assigns permanently)
    */
-  private findBestSource(grunt: Elite): Source | null {
+  private findBestSource(ZEALOT_UNIT: Warrior): Source | null {
     const sources = this.room.find(FIND_SOURCES_ACTIVE);
     if (sources.length === 0) return null;
     
@@ -201,7 +201,7 @@ export class GruntArbiter extends Arbiter {
    * Find best delivery target (spawn/extension)
    */
   private findDeliveryTarget(
-    grunt: Elite, 
+    ZEALOT_UNIT: Warrior, 
     excludeIds: Id<Structure>[] = []
   ): StructureSpawn | StructureExtension | null {
     // Priority: Spawns first, then extensions
@@ -233,7 +233,7 @@ export class GruntArbiter extends Arbiter {
    */
   private calculateDesiredgrunts(): number {
     const sources = this.room.find(FIND_SOURCES);
-    const spawns = this.highCharity.spawns.length;
+    const spawns = this.Nexus.spawns.length;
     const extensions = this.room.find(FIND_MY_STRUCTURES, {
       filter: s => s.structureType === STRUCTURE_EXTENSION
     }).length;
@@ -241,12 +241,12 @@ export class GruntArbiter extends Arbiter {
     // Early game: Need more harvesters to fill spawns/extensions quickly
     // Formula: 2 per source at RCL 1, scale down as we get containers
     
-    if (this.highCharity.level === 1) {
+    if (this.Nexus.level === 1) {
       // RCL 1: 2 grunts per source minimum
       return Math.max(sources.length * 2, 2);
     }
     
-    if (this.highCharity.level === 2) {
+    if (this.Nexus.level === 2) {
       // RCL 2: Still need multiple grunts
       return Math.max(sources.length * 2, 3);
     }
@@ -276,14 +276,14 @@ export class GruntArbiter extends Arbiter {
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
     const priority = totalCreeps === 0 ? 
       SpawnPriority.EMERGENCY :
-      (this.highCharity.isBootstrapping && this.grunts.length < 2 ?
+      (this.Nexus.isBootstrapping && this.grunts.length < 2 ?
         SpawnPriority.CRITICAL :
         SpawnPriority.ECONOMY);
     
-    const important = totalCreeps === 0 || (this.highCharity.isBootstrapping && this.grunts.length < 2);
+    const important = totalCreeps === 0 || (this.Nexus.isBootstrapping && this.grunts.length < 2);
     
     this.requestSpawn(body, name, {
-      role: ROLES.GRUNT,
+      role: ROLES.ZEALOT_UNIT,
       sourceId: undefined // Will be assigned dynamically
     } as any, priority, important);
   }
@@ -294,9 +294,9 @@ export class GruntArbiter extends Arbiter {
   private calculategruntBody(): BodyPartConstant[] {
     // CRITICAL: If no creeps exist, ALWAYS use available energy (emergency bootstrap)
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+    const energy = (this.Nexus.isBootstrapping || totalCreeps === 0) ? 
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     // Use BodyBuilder to create flexible worker body
     return BodyBuilder.worker(energy);

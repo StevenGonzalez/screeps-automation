@@ -1,22 +1,22 @@
 /**
- * COVENANT VISUALS
+ * KHALA VISUALS
  * 
- * "Let all witness the glory of the Covenant"
+ * "Let all witness the glory of the KHALA"
  * 
- * Visual debugging and information display for High Charities
+ * Visual debugging and information display for Nexuses
  */
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
-export class CovenantVisuals {
-  highCharity: HighCharity;
+export class ProtossVisuals {
+  Nexus: Nexus;
   visual: RoomVisual;
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
-    this.visual = highCharity.room.visual;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
+    this.visual = Nexus.room.visual;
   }
   
   /**
@@ -33,7 +33,7 @@ export class CovenantVisuals {
     this.drawThreatInfo();
     
     // Draw base plan if enabled
-    if (Memory.covenant?.visualize?.[this.highCharity.name]) {
+    if (Memory.KHALA?.visualize?.[this.Nexus.name]) {
       this.drawPlan();
     }
   }
@@ -42,7 +42,7 @@ export class CovenantVisuals {
    * Draw controller progress and level
    */
   private drawControllerInfo(): void {
-    const controller = this.highCharity.controller;
+    const controller = this.Nexus.controller;
     if (!controller) return;
     
     const pos = controller.pos;
@@ -95,7 +95,7 @@ export class CovenantVisuals {
    * Draw energy statistics
    */
   private drawEnergyInfo(): void {
-    const room = this.highCharity.room;
+    const room = this.Nexus.room;
     
     // Energy available/capacity
     const energyText = `⚡ ${room.energyAvailable}/${room.energyCapacityAvailable}`;
@@ -114,8 +114,8 @@ export class CovenantVisuals {
     );
     
     // Storage level
-    if (this.highCharity.storage) {
-      const storage = this.highCharity.storage;
+    if (this.Nexus.storage) {
+      const storage = this.Nexus.storage;
       const energy = storage.store.getUsedCapacity(RESOURCE_ENERGY);
       const capacity = storage.store.getCapacity();
       const percent = Math.floor((energy / capacity) * 100);
@@ -138,7 +138,7 @@ export class CovenantVisuals {
    * Draw creep statistics
    */
   private drawCreepInfo(): void {
-    const creeps = this.highCharity.elites;
+    const creeps = this.Nexus.Warriors;
     
     // Count by role
     const roles: { [role: string]: number } = {};
@@ -172,9 +172,9 @@ export class CovenantVisuals {
    * Draw boost status
    */
   private drawBoostInfo(): void {
-    if (!this.highCharity.boostTemple) return;
+    if (!this.Nexus.BoostGateway) return;
     
-    const boostQueue = this.highCharity.boostTemple.getBoostQueue();
+    const boostQueue = this.Nexus.BoostGateway.getBoostQueue();
     
     if (boostQueue.length > 0) {
       this.visual.text(
@@ -191,7 +191,7 @@ export class CovenantVisuals {
     }
     
     // Show boost indicators on boosted creeps
-    for (const creep of this.highCharity.elites) {
+    for (const creep of this.Nexus.Warriors) {
       if (creep.body.some(part => part.boost)) {
         this.visual.text(
           '✨',
@@ -208,8 +208,8 @@ export class CovenantVisuals {
     }
     
     // Show power bank information (RCL 8+)
-    if (this.highCharity.powerTemple && this.highCharity.powerTemple.isReady) {
-      const targets = this.highCharity.powerTemple.getAvailableTargets();
+    if (this.Nexus.PowerGateway && this.Nexus.PowerGateway.isReady) {
+      const targets = this.Nexus.PowerGateway.getAvailableTargets();
       if (targets.length > 0) {
         this.visual.text(
           `⚡ POWER BANKS: ${targets.length}`,
@@ -230,7 +230,7 @@ export class CovenantVisuals {
    * Draw threat warnings
    */
   private drawThreatInfo(): void {
-    const hostiles = this.highCharity.room.find(FIND_HOSTILE_CREEPS);
+    const hostiles = this.Nexus.room.find(FIND_HOSTILE_CREEPS);
     
     if (hostiles.length > 0) {
       this.visual.text(
@@ -293,7 +293,7 @@ export class CovenantVisuals {
    * Visualize the room plan
    */
   drawPlan(): void {
-    this.highCharity.planner.visualize();
+    this.Nexus.planner.visualize();
   }
   
   /**
@@ -302,12 +302,12 @@ export class CovenantVisuals {
   drawArbiters(): void {
     let y = 45;
     
-    for (const arbiterName in this.highCharity.arbiters) {
-      const arbiter = this.highCharity.arbiters[arbiterName];
-      const eliteCount = arbiter.elites?.length || 0;
+    for (const arbiterName in this.Nexus.arbiters) {
+      const arbiter = this.Nexus.arbiters[arbiterName];
+      const WarriorCount = arbiter.Warriors?.length || 0;
       
       this.visual.text(
-        `${arbiterName}: ${eliteCount} elites`,
+        `${arbiterName}: ${WarriorCount} Warriors`,
         2, y,
         {
           align: 'left',

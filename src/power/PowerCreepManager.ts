@@ -18,7 +18,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 // Extend PowerCreepMemory interface
 declare global {
@@ -45,10 +45,10 @@ export interface PowerCreepStats {
  * Power Creep Manager - Automates power creep operations
  */
 export class PowerCreepManager {
-  private colony: HighCharity;
+  private colony: Nexus;
   private powerCreeps: PowerCreep[];
   
-  constructor(colony: HighCharity) {
+  constructor(colony: Nexus) {
     this.colony = colony;
     this.powerCreeps = [];
   }
@@ -504,7 +504,7 @@ export class PowerCreepManager {
   /**
    * Check if colony should have power creeps
    */
-  public static shouldHavePowerCreeps(colony: HighCharity): boolean {
+  public static shouldHavePowerCreeps(colony: Nexus): boolean {
     return colony.level === 8 && Game.gpl.level > 0;
   }
 }

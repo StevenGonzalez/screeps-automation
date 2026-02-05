@@ -4,12 +4,12 @@
  * "The Great Journey awaits - new worlds to claim"
  * 
  * Manages colony expansion, claiming new rooms, and coordinating
- * pioneer operations to establish new High Charities.
+ * pioneer operations to establish new Nexuses.
  */
 
 /// <reference types="@types/screeps" />
 
-import { Covenant } from '../core/Covenant';
+import { KHALA } from '../core/KHALA';
 import { RoomIntel } from '../intel/ObserverNetwork';
 
 export interface ExpansionTarget {
@@ -35,7 +35,7 @@ export interface ReclaimationMemory {
  * Reclaimation Council - Coordinates colony expansion
  */
 export class ReclaimationCouncil {
-  private covenant: Covenant;
+  private khala: Khala;
   
   private get memory(): ReclaimationMemory {
     if (!Memory.expansion) {
@@ -47,8 +47,8 @@ export class ReclaimationCouncil {
     return Memory.expansion as ReclaimationMemory;
   }
   
-  constructor(covenant: Covenant) {
-    this.covenant = covenant;
+  constructor(khala: Khala) {
+    this.khala = KHALA;
   }
   
   /**
@@ -125,7 +125,7 @@ export class ReclaimationCouncil {
    * Find the best room to expand to
    */
   private findBestExpansionTarget(): ExpansionTarget | null {
-    const candidates = this.covenant.observerNetwork.getExpansionCandidates();
+    const candidates = this.khala.observerNetwork.getExpansionCandidates();
     
     if (candidates.length === 0) return null;
     

@@ -1,20 +1,20 @@
 /**
- * Global type definitions for COVENANT system
+ * Global type definitions for KHALA system
  */
 
-import { Covenant } from './core/Covenant';
+import { KHALA } from './core/KHALA';
 
 declare global {
-  var Cov: Covenant;
+  var Cov: Khala;
   
   namespace NodeJS {
     interface Global {
-      Cov: Covenant;
+      Cov: Khala;
     }
   }
   
   interface Memory {
-    covenant?: {
+    KHALA?: {
       version?: string;
       visualize?: { [roomName: string]: boolean };
       [key: string]: any;

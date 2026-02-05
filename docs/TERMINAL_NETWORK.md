@@ -87,7 +87,7 @@ Match Algorithm:
 
 ### View Network Status
 ```javascript
-Game.cov.network()
+Game.kha.network()
 ```
 
 **Output:**
@@ -117,7 +117,7 @@ Game.cov.network()
 
 ### Force Emergency Energy Transfer
 ```javascript
-Game.cov.sendEnergy('W5N2', 30000)
+Game.kha.sendEnergy('W5N2', 30000)
 ```
 
 Immediately schedules an emergency energy transfer to the specified room.
@@ -149,7 +149,7 @@ WarCouncil: Planning attack on E5N5
 Colonies under attack receive emergency energy:
 ```typescript
 // Threat detected
-DefenseTemple: Threat level 8, Energy: 4k
+DefenseGateway: Threat level 8, Energy: 4k
 → Terminal Network: EMERGENCY 20k energy transfer
 → Result: Towers remain operational
 ```
@@ -158,7 +158,7 @@ DefenseTemple: Threat level 8, Energy: 4k
 Lab production is distributed to colonies:
 ```typescript
 // Lab production complete
-LabTemple: Produced 3000 XGH2O
+LabGateway: Produced 3000 XGH2O
 Terminal: 5000 XGH2O (surplus)
 → Terminal Network: Share 2000 XGH2O with combat colonies
 ```
@@ -217,7 +217,7 @@ Transfers are prioritized:
 - Reduces duplicate lab setups
 
 ### 4. Monitor Network Status
-- Check `Game.cov.network()` regularly
+- Check `Game.kha.network()` regularly
 - Watch for repeated transfers (indicates imbalance)
 - Verify emergency transfers reach destination
 
@@ -288,17 +288,17 @@ Math.min(need.amount, matchingSurplus.amount, 10000)  // Increase if needed
 
 **Check:**
 - Both colonies have terminals
-- Source has surplus (check `Game.cov.network()`)
+- Source has surplus (check `Game.kha.network()`)
 - Terminal not on cooldown
 - Transfer cost not excessive (> 10%)
 
 **Solution:**
 ```javascript
 // Check terminal status
-Game.cov.network()
+Game.kha.network()
 
 // Verify colony phases
-Object.values(Game.cov.highCharities).forEach(hc => 
+Object.values(Game.kha.highCharities).forEach(hc => 
   console.log(`${hc.name}: ${hc.memory.phase}`)
 )
 ```
@@ -306,17 +306,17 @@ Object.values(Game.cov.highCharities).forEach(hc =>
 ### Colony Still Low on Energy
 
 **Check:**
-- Network identifies the need? (`Game.cov.network()`)
+- Network identifies the need? (`Game.kha.network()`)
 - Nearby colony has surplus?
 - Transfer scheduled but not executed yet?
 
 **Solution:**
 ```javascript
 // Force immediate transfer
-Game.cov.sendEnergy('W5N2', 30000)
+Game.kha.sendEnergy('W5N2', 30000)
 
 // Check if colony is classified as needy
-const net = Game.cov.terminalNetwork;
+const net = Game.kha.terminalNetwork;
 // Will show in needs list if detected
 ```
 
@@ -400,7 +400,7 @@ Memory.terminalNetwork.statistics = {
 }
 ```
 
-View with `Game.cov.network()`
+View with `Game.kha.network()`
 
 ---
 
@@ -434,7 +434,7 @@ Tick 5500: Minerals arrive
 ### Attack Response
 ```
 Tick 10000: Enemy enters W6N1
-  → DefenseTemple threat: 8/10
+  → DefenseGateway threat: 8/10
   → Energy: 8k (low from tower usage)
   → Network: EMERGENCY detected
 
@@ -495,4 +495,4 @@ The Terminal Network provides **fully automated resource sharing** across your e
 
 **Zero maintenance required** - the network runs autonomously!
 
-**The Great Journey is shared by all! 🌐**
+**For Aiur is shared by all! 🌐**

@@ -1,5 +1,5 @@
 /**
- * LINK TEMPLE - Energy Conduit Network
+ * LINK Gateway - Energy Conduit Network
  * 
  * "Through sacred conduits, energy flows without labor"
  * 
@@ -11,8 +11,8 @@
 
 /// <reference types="@types/screeps" />
 
-import { Temple } from './Temple';
-import { HighCharity } from '../core/HighCharity';
+import { Gateway } from './Gateway';
+import { Nexus } from '../core/Nexus';
 
 export interface LinkRole {
   link: StructureLink;
@@ -21,18 +21,18 @@ export interface LinkRole {
 }
 
 /**
- * Link Temple - Manages instant energy distribution network
+ * Link Gateway - Manages instant energy distribution network
  */
-export class LinkTemple extends Temple {
+export class LinkGateway extends Gateway {
   private sourceLinks: StructureLink[];
   private controllerLink: StructureLink | null;
   private storageLink: StructureLink | null;
   private upgraderLink: StructureLink | null;
   
-  constructor(highCharity: HighCharity) {
-    // Use storage position as the link temple anchor, or controller if no storage
-    const pos = highCharity.storage?.pos || highCharity.controller?.pos || new RoomPosition(25, 25, highCharity.room.name);
-    super(highCharity, pos);
+  constructor(Nexus: Nexus) {
+    // Use storage position as the link Gateway anchor, or controller if no storage
+    const pos = Nexus.storage?.pos || Nexus.controller?.pos || new RoomPosition(25, 25, Nexus.room.name);
+    super(Nexus, pos);
     this.sourceLinks = [];
     this.controllerLink = null;
     this.storageLink = null;
@@ -56,7 +56,7 @@ export class LinkTemple extends Temple {
    * Categorize links by their role in the network
    */
   private categorizeLinks(): void {
-    const links = this.highCharity.links;
+    const links = this.Nexus.links;
     if (links.length === 0) return;
     
     this.sourceLinks = [];
@@ -65,9 +65,9 @@ export class LinkTemple extends Temple {
     this.upgraderLink = null;
     
     // Find storage link (closest to storage)
-    if (this.highCharity.storage) {
+    if (this.Nexus.storage) {
       const storageLinks = links.filter(link => 
-        link.pos.inRangeTo(this.highCharity.storage!, 2)
+        link.pos.inRangeTo(this.Nexus.storage!, 2)
       );
       if (storageLinks.length > 0) {
         this.storageLink = storageLinks[0];
@@ -185,6 +185,6 @@ export class LinkTemple extends Temple {
    * Check if link network is active (has at least 2 links)
    */
   isActive(): boolean {
-    return this.highCharity.links.length >= 2;
+    return this.Nexus.links.length >= 2;
   }
 }

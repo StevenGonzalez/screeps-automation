@@ -17,7 +17,7 @@
  * 6. MILITARY - Offensive operations (attackers, scouts)
  */
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 import { RoleHelpers } from '../constants/Roles';
 
 export enum SpawnPriority {
@@ -60,13 +60,13 @@ const CODE_VERSION = 'v2025.01.05.2';
 const MAX_QUEUE_SIZE = 20;
 
 export class SpawnQueue {
-  private colony: HighCharity;
+  private colony: Nexus;
   private queue: SpawnRequest[];
   private spawns: StructureSpawn[];
   private requestMap: Map<string, number>; // Map of request ID/name to queue index for O(1) lookup
   private needsSort: boolean; // Defer sorting to run phase
   
-  constructor(colony: HighCharity) {
+  constructor(colony: Nexus) {
     this.colony = colony;
     this.queue = [];
     this.spawns = colony.spawns;
@@ -448,7 +448,7 @@ export class SpawnQueue {
    * Check creep lifecycle and add replacement requests
    */
   private checkLifecycle(): void {
-    const creeps = this.colony.elites;
+    const creeps = this.colony.Warriors;
     const threshold = 50; // Spawn replacement 50 ticks before death
     
     for (const creep of creeps) {
@@ -475,7 +475,7 @@ export class SpawnQueue {
     
     // Minimal bodies for different roles
     if (RoleHelpers.isGrunt(role)) {
-      // Grunt: 1 work, 1 carry, 1 move (200)
+      // ZEALOT_UNIT: 1 work, 1 carry, 1 move (200)
       if (availableEnergy >= 200) {
         return [WORK, CARRY, MOVE];
       }

@@ -1,9 +1,9 @@
 /**
- * MINING TEMPLE - Source Harvesting Cluster
+ * MINING Gateway - Source Harvesting Cluster
  * 
- * "From these sacred springs flow the lifeblood of the Covenant"
+ * "From these sacred springs flow the lifeblood of the KHALA"
  * 
- * A Mining Temple manages a single source and its surrounding infrastructure:
+ * A Mining Gateway manages a single source and its surrounding infrastructure:
  * - Source
  * - Container (for collection)
  * - Link (optional, for fast transport)
@@ -12,25 +12,25 @@
 
 /// <reference types="@types/screeps" />
 
-import { Temple } from './Temple';
-import { HighCharity } from '../core/HighCharity';
+import { Gateway } from './Gateway';
+import { Nexus } from '../core/Nexus';
 
-interface MiningTempleMemory {
+interface MiningGatewayMemory {
   sourceId: string;
   containerPos?: { x: number; y: number };
   linkId?: string;
 }
 
 /**
- * Mining Temple - Manages a source and its infrastructure
+ * Mining Gateway - Manages a source and its infrastructure
  */
-export class MiningTemple extends Temple {
+export class MiningGateway extends Gateway {
   source: Source | null;
   container: StructureContainer | null;
   link: StructureLink | null;
   
-  constructor(highCharity: HighCharity, source: Source) {
-    super(highCharity, source.pos);
+  constructor(Nexus: Nexus, source: Source) {
+    super(Nexus, source.pos);
     
     this.source = source;
     this.container = null;
@@ -60,7 +60,7 @@ export class MiningTemple extends Temple {
   }
   
   run(): void {
-    // Temples are mostly passive - they provide structure references
+    // gateways are mostly passive - they provide structure references
     // The MiningArbiter handles the actual creep logic
     
     // Could implement:
@@ -124,7 +124,7 @@ export class MiningTemple extends Temple {
           this.memory.containerPos = { x: best.x, y: best.y };
           
           // Create construction site if we have the energy
-          if (this.highCharity.level >= 2) {
+          if (this.Nexus.level >= 2) {
             best.createConstructionSite(STRUCTURE_CONTAINER);
           }
         }

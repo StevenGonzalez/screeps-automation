@@ -10,8 +10,8 @@
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority, ArbiterMemory } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { SpawnPriority } from '../spawning/SpawnQueue';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
@@ -26,10 +26,10 @@ interface RemoteDefenderMemory extends ArbiterMemory {
  */
 export class RemoteDefenderArbiter extends Arbiter {
   targetRoom: string;
-  defenders: Elite[];
+  defenders: Warrior[];
   
-  constructor(highCharity: HighCharity, targetRoom: string) {
-    super(highCharity, `remoteDefender_${targetRoom}`, ArbiterPriority.defense.melee);
+  constructor(Nexus: Nexus, targetRoom: string) {
+    super(Nexus, `remoteDefender_${targetRoom}`, ArbiterPriority.defense.melee);
     this.targetRoom = targetRoom;
     this.defenders = [];
     
@@ -79,12 +79,12 @@ export class RemoteDefenderArbiter extends Arbiter {
     }
   }
   
-  private runDefenderIdle(defender: Elite): void {
+  private runDefenderIdle(defender: Warrior): void {
     const creep = defender.creep;
     
     // Stay near spawn in home room
-    if (creep.room.name !== this.highCharity.name) {
-      const exitDir = creep.room.findExitTo(this.highCharity.name);
+    if (creep.room.name !== this.Nexus.name) {
+      const exitDir = creep.room.findExitTo(this.Nexus.name);
       if (exitDir !== ERR_NO_PATH && exitDir !== ERR_INVALID_ARGS) {
         const exit = creep.pos.findClosestByPath(exitDir);
         if (exit) {
@@ -95,7 +95,7 @@ export class RemoteDefenderArbiter extends Arbiter {
     }
     
     // Find a safe position near spawn
-    const spawn = this.highCharity.primarySpawn;
+    const spawn = this.Nexus.primarySpawn;
     if (spawn && !creep.pos.inRangeTo(spawn, 3)) {
       defender.goTo(spawn.pos);
     }
@@ -103,7 +103,7 @@ export class RemoteDefenderArbiter extends Arbiter {
     defender.say('😴');
   }
   
-  private runDefenderActive(defender: Elite): void {
+  private runDefenderActive(defender: Warrior): void {
     const creep = defender.creep;
     
     // Move to target room if not there
@@ -248,7 +248,7 @@ export class RemoteDefenderArbiter extends Arbiter {
     const name = `Zealot_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: 'elite_remoteDefender',
+      role: 'Warrior_remoteDefender',
       targetRoom: this.targetRoom
     } as any, SpawnPriority.DEFENSE);
   }
@@ -259,7 +259,7 @@ export class RemoteDefenderArbiter extends Arbiter {
     
     // Use ranged defenders, heavier if threat is high
     const useRanged = true;
-    return BodyBuilder.defender(this.highCharity.energyAvailable, useRanged);
+    return BodyBuilder.defender(this.Nexus.energyAvailable, useRanged);
   }
   
   protected getCreepsForRole(): Creep[] {
@@ -270,7 +270,7 @@ export class RemoteDefenderArbiter extends Arbiter {
          (creep.memory as any).targetRoom === this.targetRoom)
     });
     
-    this.defenders = creeps.map(c => new Elite(c, this));
+    this.defenders = creeps.map(c => new Warrior(c, this));
     return creeps;
   }
 }

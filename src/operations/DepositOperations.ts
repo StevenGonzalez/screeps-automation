@@ -9,7 +9,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface DepositTarget {
   depositId: Id<Deposit>;
@@ -33,20 +33,20 @@ export interface DepositMemory {
  * Deposit Operations Manager - Coordinates deposit harvesting
  */
 export class DepositOperations {
-  private highCharity: HighCharity;
+  private Nexus: Nexus;
   
   private get memory(): DepositMemory {
-    if (!this.highCharity.memory.deposits) {
-      this.highCharity.memory.deposits = {
+    if (!this.Nexus.memory.deposits) {
+      this.Nexus.memory.deposits = {
         deposits: {},
         lastScan: 0
       };
     }
-    return this.highCharity.memory.deposits as DepositMemory;
+    return this.Nexus.memory.deposits as DepositMemory;
   }
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
   }
   
   /**
@@ -54,11 +54,11 @@ export class DepositOperations {
    */
   run(): void {
     // Only operate at RCL 7+ (need heavy creeps and stable economy)
-    if ((this.highCharity.controller?.level || 0) < 7) return;
+    if ((this.Nexus.controller?.level || 0) < 7) return;
     
     // Need storage and good energy reserves
-    if (!this.highCharity.storage || 
-        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) < 100000) {
+    if (!this.Nexus.storage || 
+        this.Nexus.storage.store.getUsedCapacity(RESOURCE_ENERGY) < 100000) {
       return;
     }
     
@@ -80,7 +80,7 @@ export class DepositOperations {
    */
   private scanForDeposits(): void {
     const scanRange = 7; // Scan up to 7 rooms away
-    const homeRoom = this.highCharity.name;
+    const homeRoom = this.Nexus.name;
     
     // Get all rooms within range
     const roomsToScan = this.getRoomsInRange(homeRoom, scanRange);
@@ -111,7 +111,7 @@ export class DepositOperations {
     // Skip if already registered and active
     if (this.memory.deposits[depositId]) return;
     
-    const distance = Game.map.getRoomLinearDistance(this.highCharity.name, deposit.room!.name);
+    const distance = Game.map.getRoomLinearDistance(this.Nexus.name, deposit.room!.name);
     const profitability = this.calculateProfitability(deposit, distance);
     
     // Skip if not profitable enough

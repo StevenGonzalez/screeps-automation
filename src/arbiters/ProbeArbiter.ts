@@ -11,21 +11,21 @@
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
 
 /**
  * Drone Arbiter - Manages energy harvesting
  */
-export class DroneArbiter extends Arbiter {
+export class ProbeArbiter extends Arbiter {
   source: Source | null;
   container: StructureContainer | null;
-  miners: Elite[];
+  miners: Warrior[];
   
-  constructor(highCharity: HighCharity, source: Source) {
-    super(highCharity, `drone_${source.id}`, ArbiterPriority.economy.mining);
+  constructor(Nexus: Nexus, source: Source) {
+    super(Nexus, `drone_${source.id}`, ArbiterPriority.economy.mining);
     
     this.source = source;
     this.container = null;
@@ -36,8 +36,8 @@ export class DroneArbiter extends Arbiter {
     // Refresh miners
     this.refresh();
     
-    // Update miners list from elites
-    this.miners = this.elites;
+    // Update miners list from Warriors
+    this.miners = this.warriors;
     
     // Find container near source
     if (this.source) {
@@ -48,10 +48,10 @@ export class DroneArbiter extends Arbiter {
     }
     
     // Request boosts for miners at powerhouse colonies
-    if (this.highCharity.memory.phase === 'powerhouse' && this.highCharity.boostTemple?.isReady()) {
+    if (this.Nexus.memory.phase === 'powerhouse' && this.Nexus.BoostGateway?.isReady()) {
       for (const miner of this.miners) {
-        if (!this.highCharity.boostTemple.isCreepBoosted(miner.name)) {
-          this.highCharity.boostTemple.requestBoost(miner.name, 'elite_miner', ArbiterPriority.economy.mining);
+        if (!this.Nexus.BoostGateway.isCreepBoosted(miner.name)) {
+          this.Nexus.BoostGateway.requestBoost(miner.name, 'Warrior_miner', ArbiterPriority.economy.mining);
         }
       }
     }
@@ -89,7 +89,7 @@ export class DroneArbiter extends Arbiter {
     }
   }
   
-  private runMiner(miner: Elite): void {
+  private runMiner(miner: Warrior): void {
     if (!this.source) return;
     
     // If container exists and miner is not on it, move to it
@@ -106,8 +106,8 @@ export class DroneArbiter extends Arbiter {
     }
     
     // Transfer to source link if link network is active
-    if (this.highCharity.linkTemple?.isActive()) {
-      const sourceLinks = this.highCharity.linkTemple.getSourceLinks();
+    if (this.Nexus.LinkGateway?.isActive()) {
+      const sourceLinks = this.Nexus.LinkGateway.getSourceLinks();
       const nearbyLink = sourceLinks.find(link => 
         link.pos.inRangeTo(this.source!, 2) && 
         link.store.getFreeCapacity(RESOURCE_ENERGY) > 0
@@ -132,7 +132,7 @@ export class DroneArbiter extends Arbiter {
   
   private calculateDesiredMiners(): number {
     // Drones only spawn when there's a container AT THIS SOURCE
-    // Before container: GruntArbiter handles energy collection
+    // Before container: ZealotArbiter handles energy collection
     
     // With container near this source, 1 dedicated Drone is optimal
     if (this.container) {
@@ -148,7 +148,7 @@ export class DroneArbiter extends Arbiter {
    */
   private countSpawningMiners(): number {
     let count = 0;
-    for (const spawn of this.highCharity.spawns) {
+    for (const spawn of this.Nexus.spawns) {
       if (spawn.spawning) {
         const spawningCreep = Game.creeps[spawn.spawning.name];
         // Check memory of the creep being spawned
@@ -174,17 +174,17 @@ export class DroneArbiter extends Arbiter {
     // Additional miners during bootstrap or when critically low are CRITICAL
     const priority = allMiners.length === 0 ? 
       SpawnPriority.EMERGENCY :
-      (this.highCharity.isBootstrapping && this.miners.length === 0 ?
+      (this.Nexus.isBootstrapping && this.miners.length === 0 ?
         SpawnPriority.CRITICAL :
         SpawnPriority.ECONOMY);
     
     // IMPORTANT: Mark as important if we're low on miners (< 2 total)
     // This ensures spawning even when energy is below 80% capacity
     // Prevents colony death spiral from energy shortage
-    const important = allMiners.length < 2 || (this.highCharity.isBootstrapping && this.miners.length === 0);
+    const important = allMiners.length < 2 || (this.Nexus.isBootstrapping && this.miners.length === 0);
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_DRONE,
+      role: ROLES.Warrior_DRONE,
       sourceId: this.source?.id
     } as any, priority, important);
   }
@@ -192,12 +192,12 @@ export class DroneArbiter extends Arbiter {
   private calculateMinerBody(): BodyPartConstant[] {
     // CRITICAL: If no creeps exist, ALWAYS use available energy (emergency bootstrap)
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || totalCreeps === 0 || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     // Use BodyBuilder to create flexible miner body
     return BodyBuilder.miner(energy);

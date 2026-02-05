@@ -1,23 +1,23 @@
 ## 🚀 Features
 
-### 🔱 COVENANT AI System
-Inspired by Halo's Covenant, this advanced AI architecture features:
-- **Distributed Intelligence**: Each High Charity (colony) operates autonomously
-- **Hierarchical Command**: Arbiters manage specialized Elite (creep) teams
-- **Dynamic Response**: Crusades allow flag-based strategic intervention
+### 🔱 KHALA AI System
+Inspired by StarCraft's KHALA, this advanced AI architecture features:
+- **Distributed Intelligence**: Each Nexus (colony) operates autonomously
+- **Hierarchical Command**: Arbiters manage specialized Warrior (creep) teams
+- **Dynamic Response**: Campaigns allow flag-based strategic intervention
 - **Three-Phase Execution**: Optimized Build → Init → Run pattern
 
 ### 🎯 Core Systems
-- **High Charities**: Autonomous room management with phase-based adaptation
+- **Nexuses**: Autonomous room management with phase-based adaptation
 - **Arbiters**: Specialized controllers for mining, building, defense, and logistics
-- **Elites**: Enhanced creep wrappers with smart movement and task management
-- **Crusades**: Flag-based directive system for strategic operations
+- **Warriors**: Enhanced creep wrappers with smart movement and task management
+- **Campaigns**: Flag-based directive system for strategic operations
 
 ### 🏗️ Advanced Features
 - **CPU Optimization**: CacheSystem, Profiler, and TickBudget management
-- **Sacred Geometry**: Covenant-themed base layouts with hexagonal symmetry
-- **Combat System**: WarCouncil and VanguardArbiter for military operations
-- **Power Harvesting**: PowerTemple and PowerHarvesterArbiter automation
+- **Protoss Architecture**: KHALA-themed base layouts with hexagonal symmetry
+- **Combat System**: WarCouncil and ColossusArbiter for military operations
+- **Power Harvesting**: PowerGateway and PowerHarvesterArbiter automation
 - **Defense System**: Threat assessment and automatic safe mode activation
 - **Market Automation**: Intelligent buy/sell with price history tracking
   - **Price Tracking**: Monitors market prices every 100 ticks, maintains rolling history
@@ -27,7 +27,7 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Resource Thresholds**: Customizable buy/sell thresholds per resource type
   - **Automatic Commodity Sales**: Sells factory-produced commodities when stockpiled
   - **Trade History**: Tracks last 100 trades with profit/loss analysis
-  - Console commands: `Game.cov.market()`, `Game.cov.price()`, `Game.cov.trade()`
+  - Console commands: `Game.kha.market()`, `Game.kha.price()`, `Game.kha.trade()`
 - **Terminal Network**: Multi-room resource distribution
   - **Energy Balancing**: Automatically shares energy between colonies (surplus > 150k, deficit < 50k)
   - **Mineral Distribution**: Balances base minerals across empire for boost production
@@ -36,7 +36,7 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Cost Optimization**: Calculates transfer costs, ensures sufficient energy reserves
   - **Network Monitoring**: Real-time transfer queue and colony terminal status
   - **Automatic Integration**: Works with boost production and military systems
-  - Console commands: `Game.cov.network()`, `Game.cov.send()`, `Game.cov.emergency()`
+  - Console commands: `Game.kha.network()`, `Game.kha.send()`, `Game.kha.emergency()`
 - **Lab Automation**: Automatic compound production with reaction chains
 - **Observer Network**: Automatic room scanning and intelligence gathering
 - **Remote Mining**: Secure resource extraction with multi-layer threat detection
@@ -52,7 +52,7 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Automatic Retreat**: Disables operations when hostiles detected, re-enables when safe
   - **Hostile Reservation Detection**: Detects and disables when enemy players reserve rooms
   - **Re-evaluation System**: Checks disabled rooms every 1000 ticks to see if safe again
-  - Console commands: `Game.cov.remote()`, `Game.cov.remoteToggle()`
+  - Console commands: `Game.kha.remote()`, `Game.kha.remoteToggle()`
 - **Deposit Harvesting**: Sacred pilgrimages to highway deposits
   - **Automatic Discovery**: Scans highway rooms within 7 range for deposits (biomass, silicon, metal, mist)
   - **Profitability Scoring**: Evaluates deposits based on cooldown, distance, and decay time
@@ -63,7 +63,7 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Multi-Deposit Operations**: Runs up to 2 pilgrimages simultaneously
   - **Powerhouse Colonies Only**: Requires RCL 7+, 100k+ energy reserves
   - **Automatic Cleanup**: Removes fully harvested deposits from memory
-  - Console commands: `Game.cov.deposits()`, `Game.cov.depositToggle()`
+  - Console commands: `Game.kha.deposits()`, `Game.kha.depositToggle()`
 - **Autonomous Expansion**: Intelligent colony growth system
   - Evaluates expansion targets from observer intel
   - Scores rooms based on sources, minerals, distance, and threats
@@ -81,13 +81,13 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Smart energy management (only processes when surplus available)
   - Automatic power delivery requests via terminal network
   - Tracks efficiency metrics and ops generation
-  - Console monitoring with `Game.cov.powerProcessing()`
+  - Console monitoring with `Game.kha.powerProcessing()`
 - **Factory Automation**: Commodity production system
   - Automatically produces Level 0 and Level 1 commodities
   - Resource management via storage and terminal
   - Production prioritization based on available components
   - Tracks production statistics by commodity type
-  - Console monitoring with `Game.cov.factories()`
+  - Console monitoring with `Game.kha.factories()`
 - **Market Automation**: Automated commodity sales
   - Sells factory-produced commodities automatically
   - Price intelligence with historical tracking
@@ -102,16 +102,16 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - Spawn load balancing across multiple spawns
   - Lifecycle tracking for replacement spawning
   - Emergency minimal bodies when under attack
-  - Queue statistics and monitoring with `Game.cov.spawns()`
+  - Queue statistics and monitoring with `Game.kha.spawns()`
 - **Auto-Planner**: Automated construction and layout system
   - Automatic construction site placement on RCL upgrades
   - **RCL 6 Full Automation**: Links, Labs, Terminal, Extractor + Container all placed automatically
   - Traffic-based road planning (builds roads where creeps frequently travel)
   - Defense perimeter planning with automatic ramparts on critical structures
-  - Sacred geometry layouts with hexagonal symmetry
+  - Protoss Architecture layouts with hexagonal symmetry
   - Integration with RoomPlanner for optimal structure placement
   - Visualization tools for layout and traffic heatmaps
-  - Console monitoring with `Game.cov.layout()`, `Game.cov.plan()`, `Game.cov.build()`
+  - Console monitoring with `Game.kha.layout()`, `Game.kha.plan()`, `Game.kha.build()`
 - **Power Creep Automation**: Immortal units with divine abilities
   - Automatic power creep creation at GPL 1+ and RCL 8
   - Spawning and renewal management at Power Spawns
@@ -122,7 +122,7 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - OPERATE_LAB: 4x reaction speed for compound production
   - OPERATE_FACTORY: Reduced cooldown for commodity production
   - GENERATE_OPS: Self-sustaining ops generation from energy
-  - Console monitoring with `Game.cov.powerCreeps()`
+  - Console monitoring with `Game.kha.powerCreeps()`
 - **Advanced Military System**: Squad-based combat with tactical coordination
   - **Squad Coordinator**: Formation movement with 4 formations (line, box, wedge, scatter)
   - **Combat Tactics**: 5 tactic modes (assault, siege, raid, defend, retreat)
@@ -131,8 +131,8 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Formation Movement**: Units maintain tactical positions relative to squad leader
   - **Dynamic Adaptation**: Auto-retreat at 40% health, kiting for ranged units
   - **Console Control**: Launch attacks, change formations, recall units on the fly
-  - **VanguardArbiter Integration**: Seamless integration with existing military system
-  - Commands: `Game.cov.attack()`, `Game.cov.squads()`, `Game.cov.recall()`, `Game.cov.formation()`, `Game.cov.tactic()`
+  - **ColossusArbiter Integration**: Seamless integration with existing military system
+  - Commands: `Game.kha.attack()`, `Game.kha.squads()`, `Game.kha.recall()`, `Game.kha.formation()`, `Game.kha.tactic()`
 - **Boost Production System**: Automated military enhancement automation
   - **Automatic Production**: Monitors stock levels and queues boost compound production
   - **Military Mode**: Detects active combat and prioritizes military boosts
@@ -140,10 +140,10 @@ Inspired by Halo's Covenant, this advanced AI architecture features:
   - **Smart Prioritization**: Prioritizes XUH2O, XLHO2, XKHO2, XGHO2, XZO2 for combat
   - **Mineral Requests**: Automatically identifies missing base minerals
   - **Boost Assignment**: Automatically requests boosts for newly spawned combat creeps
-  - **Integration**: Works with LabTemple, BoostTemple, and VanguardArbiter
-  - **Console Monitoring**: `Game.cov.boosts()` for status, `Game.cov.militaryBoosts(true)` for aggressive mode
+  - **Integration**: Works with LabGateway, BoostGateway, and ColossusArbiter
+  - **Console Monitoring**: `Game.kha.boosts()` for status, `Game.kha.militaryBoosts(true)` for aggressive mode
 - Structure logic for towers, links, spawns, and terminals
-- Console commands via `Game.cov.*` for monitoring and control
+- Console commands via `Game.kha.*` for monitoring and control
 - Designed for clarity, modularity, and ease of iteration
 
 ## 🛠️ Tech Stack

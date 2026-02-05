@@ -1,7 +1,7 @@
 /**
- * BOOST TEMPLE - Creep Enhancement Sanctum
+ * BOOST Gateway - Creep Enhancement Sanctum
  * 
- * "Through sacred alchemy, the Elites shall transcend their mortal limits"
+ * "Through sacred alchemy, the Warriors shall transcend their mortal limits"
  * 
  * Manages boosting operations for creeps, providing powerful enhancements
  * to their capabilities through mineral compounds.
@@ -9,8 +9,8 @@
 
 /// <reference types="@types/screeps" />
 
-import { Temple } from './Temple';
-import { HighCharity } from '../core/HighCharity';
+import { Gateway } from './Gateway';
+import { Nexus } from '../core/Nexus';
 import { ROLES } from '../constants/Roles';
 
 export interface BoostRequest {
@@ -20,7 +20,7 @@ export interface BoostRequest {
   role: string;
 }
 
-export interface BoostTempleMemory {
+export interface BoostGatewayMemory {
   boostQueue: BoostRequest[];
   activeBoosts: { [creepName: string]: ResourceConstant[] };
 }
@@ -30,28 +30,28 @@ export interface BoostTempleMemory {
  */
 export const BOOST_CONFIGS: { [role: string]: ResourceConstant[] } = {
   // Combat boosts
-  [ROLES.ELITE_ZEALOT]: [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_ZYNTHIUM_OXIDE],  // UH2O, GO, ZO
-  'elite_attacker': [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_ZYNTHIUM_OXIDE],  // Alias
-  'elite_defender': [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_LEMERGIUM_OXIDE], // UH2O, GO, LO
-  'elite_healer': [RESOURCE_LEMERGIUM_OXIDE, RESOURCE_LEMERGIUM_ALKALIDE, RESOURCE_GHODIUM_OXIDE], // LO, LHO2, GO
+  [ROLES.Warrior_ZEALOT]: [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_ZYNTHIUM_OXIDE],  // UH2O, GO, ZO
+  'Warrior_attacker': [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_ZYNTHIUM_OXIDE],  // Alias
+  'Warrior_defender': [RESOURCE_UTRIUM_HYDRIDE, RESOURCE_GHODIUM_OXIDE, RESOURCE_LEMERGIUM_OXIDE], // UH2O, GO, LO
+  'Warrior_healer': [RESOURCE_LEMERGIUM_OXIDE, RESOURCE_LEMERGIUM_ALKALIDE, RESOURCE_GHODIUM_OXIDE], // LO, LHO2, GO
   
   // Economic boosts
-  [ROLES.ELITE_DRONE]: [RESOURCE_UTRIUM_OXIDE], // UO - +50% harvest
-  'elite_miner': [RESOURCE_UTRIUM_OXIDE], // Alias
-  [ROLES.ELITE_DEVOTEE]: [RESOURCE_GHODIUM_HYDRIDE], // GH - +50% upgrade
-  'elite_upgrader': [RESOURCE_GHODIUM_HYDRIDE], // Alias
-  [ROLES.ELITE_ENGINEER]: [RESOURCE_LEMERGIUM_HYDRIDE, RESOURCE_ZYNTHIUM_HYDRIDE], // LH, ZH - build/repair speed + move
-  'elite_builder': [RESOURCE_LEMERGIUM_HYDRIDE, RESOURCE_ZYNTHIUM_HYDRIDE], // Alias
-  [ROLES.ELITE_JACKAL]: [RESOURCE_KEANIUM_OXIDE], // KO - +50% carry
-  'elite_hauler': [RESOURCE_KEANIUM_OXIDE], // Alias
+  [ROLES.Warrior_DRONE]: [RESOURCE_UTRIUM_OXIDE], // UO - +50% harvest
+  'Warrior_miner': [RESOURCE_UTRIUM_OXIDE], // Alias
+  [ROLES.Warrior_DEVOTEE]: [RESOURCE_GHODIUM_HYDRIDE], // GH - +50% upgrade
+  'Warrior_upgrader': [RESOURCE_GHODIUM_HYDRIDE], // Alias
+  [ROLES.Warrior_ENGINEER]: [RESOURCE_LEMERGIUM_HYDRIDE, RESOURCE_ZYNTHIUM_HYDRIDE], // LH, ZH - build/repair speed + move
+  'Warrior_builder': [RESOURCE_LEMERGIUM_HYDRIDE, RESOURCE_ZYNTHIUM_HYDRIDE], // Alias
+  [ROLES.Warrior_JACKAL]: [RESOURCE_KEANIUM_OXIDE], // KO - +50% carry
+  'Warrior_hauler': [RESOURCE_KEANIUM_OXIDE], // Alias
   
   // Remote operations
-  [ROLES.ELITE_REMOTE_MINER]: [RESOURCE_UTRIUM_OXIDE, RESOURCE_KEANIUM_OXIDE], // UO, KO
-  [ROLES.ELITE_CLAIMER]: [RESOURCE_GHODIUM_HYDRIDE], // GH - faster claiming
+  [ROLES.Warrior_REMOTE_MINER]: [RESOURCE_UTRIUM_OXIDE, RESOURCE_KEANIUM_OXIDE], // UO, KO
+  [ROLES.Warrior_CLAIMER]: [RESOURCE_GHODIUM_HYDRIDE], // GH - faster claiming
   
   // Mineral operations
-  [ROLES.ELITE_EXCAVATOR]: [RESOURCE_UTRIUM_OXIDE], // UO
-  'elite_mineralMiner': [RESOURCE_UTRIUM_OXIDE], // Alias
+  [ROLES.Warrior_EXCAVATOR]: [RESOURCE_UTRIUM_OXIDE], // UO
+  'Warrior_mineralMiner': [RESOURCE_UTRIUM_OXIDE], // Alias
 };
 
 /**
@@ -82,7 +82,7 @@ const BOOST_TIERS: { [boost: string]: number } = {
   [RESOURCE_GHODIUM_ACID]: 2,
   [RESOURCE_GHODIUM_ALKALIDE]: 2,
   
-  // Tier 3 (T3) - Elite boosts (4x effect)
+  // Tier 3 (T3) - Warrior boosts (4x effect)
   [RESOURCE_CATALYZED_UTRIUM_ACID]: 3,
   [RESOURCE_CATALYZED_UTRIUM_ALKALIDE]: 3,
   [RESOURCE_CATALYZED_KEANIUM_ACID]: 3,
@@ -96,34 +96,34 @@ const BOOST_TIERS: { [boost: string]: number } = {
 };
 
 /**
- * Boost Temple - Manages creep boosting operations
+ * Boost Gateway - Manages creep boosting operations
  */
-export class BoostTemple extends Temple {
+export class BoostGateway extends Gateway {
   labs: StructureLab[];
   boostLabs: StructureLab[]; // Labs designated for boosting
-  memory: BoostTempleMemory;
+  memory: BoostGatewayMemory;
   
-  constructor(highCharity: HighCharity) {
+  constructor(Nexus: Nexus) {
     // Center on labs or storage
-    const labs = highCharity.room.find(FIND_MY_STRUCTURES, {
+    const labs = Nexus.room.find(FIND_MY_STRUCTURES, {
       filter: s => s.structureType === STRUCTURE_LAB
     });
-    const pos = labs[0]?.pos || highCharity.storage?.pos || new RoomPosition(25, 25, highCharity.name);
+    const pos = labs[0]?.pos || Nexus.storage?.pos || new RoomPosition(25, 25, Nexus.name);
     
-    super(highCharity, pos);
+    super(Nexus, pos);
     
     this.labs = [];
     this.boostLabs = [];
     
     // Initialize memory
-    const roomMem: any = Memory.rooms[highCharity.name];
-    if (!roomMem.boostTemple) {
-      roomMem.boostTemple = {
+    const roomMem: any = Memory.rooms[Nexus.name];
+    if (!roomMem.BoostGateway) {
+      roomMem.BoostGateway = {
         boostQueue: [],
         activeBoosts: {}
       };
     }
-    this.memory = roomMem.boostTemple;
+    this.memory = roomMem.BoostGateway;
   }
   
   init(): void {
@@ -133,8 +133,8 @@ export class BoostTemple extends Temple {
     }) as StructureLab[];
     
     // Designate labs for boosting (use labs near storage)
-    if (this.highCharity.storage) {
-      this.boostLabs = this.highCharity.storage.pos.findInRange(this.labs, 2);
+    if (this.Nexus.storage) {
+      this.boostLabs = this.Nexus.storage.pos.findInRange(this.labs, 2);
     } else {
       this.boostLabs = this.labs.slice(0, 3); // Use first 3 labs
     }
@@ -169,7 +169,7 @@ export class BoostTemple extends Temple {
       role
     });
     
-    console.log(`⚗️ [BoostTemple ${this.room.name}] Queued boost for ${creepName} (${role}): ${boosts.join(', ')}`);
+    console.log(`⚗️ [BoostGateway ${this.room.name}] Queued boost for ${creepName} (${role}): ${boosts.join(', ')}`);
   }
   
   /**
@@ -181,8 +181,8 @@ export class BoostTemple extends Temple {
     
     // Filter to only boosts we have in storage/terminal
     const available: ResourceConstant[] = [];
-    const storage = this.highCharity.storage;
-    const terminal = this.highCharity.terminal;
+    const storage = this.Nexus.storage;
+    const terminal = this.Nexus.terminal;
     
     for (const boost of config) {
       const storageAmount = storage?.store.getUsedCapacity(boost) || 0;
@@ -222,7 +222,7 @@ export class BoostTemple extends Temple {
     if (!nearbyLab) {
       // Creep not in position, wait
       if (Game.time % 10 === 0) {
-        console.log(`⚗️ [BoostTemple] Waiting for ${creep.name} to reach boost position`);
+        console.log(`⚗️ [BoostGateway] Waiting for ${creep.name} to reach boost position`);
       }
       return;
     }
@@ -244,7 +244,7 @@ export class BoostTemple extends Temple {
     if (boosted || request.boosts.length === 0) {
       // Boosting complete, remove from queue
       this.memory.boostQueue.shift();
-      console.log(`✨ [BoostTemple] Boosted ${creep.name} - The Hierarchs are pleased!`);
+      console.log(`✨ [BoostGateway] Boosted ${creep.name} - The Hierarchs are pleased!`);
     }
   }
   
@@ -274,14 +274,14 @@ export class BoostTemple extends Temple {
     const result = lab.boostCreep(creep);
     
     if (result === OK) {
-      console.log(`⚗️ [BoostTemple] Applied ${boost} to ${creep.name}`);
+      console.log(`⚗️ [BoostGateway] Applied ${boost} to ${creep.name}`);
       return true;
     } else if (result === ERR_NOT_IN_RANGE) {
       // Creep should move closer
       creep.moveTo(lab);
       return false;
     } else {
-      console.log(`❌ [BoostTemple] Failed to boost ${creep.name} with ${boost}: ${result}`);
+      console.log(`❌ [BoostGateway] Failed to boost ${creep.name} with ${boost}: ${result}`);
       return false;
     }
   }
@@ -295,27 +295,27 @@ export class BoostTemple extends Temple {
     );
     
     if (!lab) {
-      console.log(`⚠️ [BoostTemple] No available labs for ${boost}`);
+      console.log(`⚠️ [BoostGateway] No available labs for ${boost}`);
       return;
     }
     
     // Check if we have the boost in storage/terminal
-    const storage = this.highCharity.storage;
-    const terminal = this.highCharity.terminal;
+    const storage = this.Nexus.storage;
+    const terminal = this.Nexus.terminal;
     
     const storageAmount = storage?.store.getUsedCapacity(boost) || 0;
     const terminalAmount = terminal?.store.getUsedCapacity(boost) || 0;
     
     if (storageAmount + terminalAmount < 30) {
-      console.log(`⚠️ [BoostTemple] Not enough ${boost} for boosting`);
+      console.log(`⚠️ [BoostGateway] Not enough ${boost} for boosting`);
       return;
     }
     
     // Request hauler to fill lab (via logistics)
-    // This would integrate with ProphetsWill logistics network
+    // This would integrate with PylonNetwork logistics network
     // For now, just log
     if (Game.time % 50 === 0) {
-      console.log(`🔄 [BoostTemple] Need to load ${boost} into lab ${lab.id}`);
+      console.log(`🔄 [BoostGateway] Need to load ${boost} into lab ${lab.id}`);
     }
   }
   
@@ -345,10 +345,10 @@ export class BoostTemple extends Temple {
   }
   
   /**
-   * Check if boost temple is ready to boost
+   * Check if boost Gateway is ready to boost
    */
   isReady(): boolean {
     return this.boostLabs.length > 0 && 
-           (!!this.highCharity.storage || !!this.highCharity.terminal);
+           (!!this.Nexus.storage || !!this.Nexus.terminal);
   }
 }

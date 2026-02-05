@@ -12,7 +12,7 @@
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from '../core/HighCharity';
+import { Nexus } from '../core/Nexus';
 
 export interface MarketManagerMemory {
   priceHistory: {
@@ -53,15 +53,15 @@ export interface TradeOpportunity {
  * Market Manager - Automated trading intelligence
  */
 export class MarketManager {
-  highCharity: HighCharity;
+  Nexus: Nexus;
   room: Room;
   terminal: StructureTerminal | null;
   memory: MarketManagerMemory;
   
-  constructor(highCharity: HighCharity) {
-    this.highCharity = highCharity;
-    this.room = highCharity.room;
-    this.terminal = highCharity.terminal || null;
+  constructor(Nexus: Nexus) {
+    this.Nexus = Nexus;
+    this.room = Nexus.room;
+    this.terminal = Nexus.terminal || null;
     
     // Initialize memory
     const roomMem: any = Memory.rooms[this.room.name];
@@ -238,7 +238,7 @@ export class MarketManager {
   private checkSellOpportunities(): void {
     if (!this.terminal) return;
     
-    const storage = this.highCharity.storage;
+    const storage = this.Nexus.storage;
     if (!storage) return;
     
     // Check each resource type
@@ -295,7 +295,7 @@ export class MarketManager {
     if (!this.terminal) return;
     if (Game.market.credits < this.memory.minCredits + 5000) return; // Keep reserve
     
-    const storage = this.highCharity.storage;
+    const storage = this.Nexus.storage;
     if (!storage) return;
     
     // Check resources we need
@@ -497,7 +497,7 @@ export class MarketManager {
     const avgBuy = this.getAveragePrice(resource, 'buy');
     const avgSell = this.getAveragePrice(resource, 'sell');
     
-    const storage = this.highCharity.storage;
+    const storage = this.Nexus.storage;
     const terminal = this.terminal;
     
     const storageAmount = storage?.store.getUsedCapacity(resource) || 0;

@@ -30,8 +30,8 @@ Gathers comprehensive room data:
 
 ### View Intel
 ```javascript
-Game.cov.intel()           // Top 10 scanned rooms
-Game.cov.intel('W1N1')     // Specific room detail
+Game.kha.intel()           // Top 10 scanned rooms
+Game.kha.intel('W1N1')     // Specific room detail
 ```
 
 **Output Example:**
@@ -54,7 +54,7 @@ Game.cov.intel('W1N1')     // Specific room detail
 
 ### Find Expansion Rooms
 ```javascript
-Game.cov.expand()
+Game.kha.expand()
 ```
 
 Shows top 10 unclaimed rooms with 2+ sources, sorted by strategic value.
@@ -78,7 +78,7 @@ Shows top 10 unclaimed rooms with 2+ sources, sorted by strategic value.
 
 ### Detect Threats
 ```javascript
-Game.cov.threats()
+Game.kha.threats()
 ```
 
 Shows rooms with threat level ≥ 5.
@@ -284,9 +284,9 @@ Observer Range: 10 rooms in any direction
 
 1. **Build observers early** (RCL 8) for strategic advantage
 2. **Place flags** in key rooms to prioritize scanning
-3. **Check `Game.cov.intel()` regularly** for threats
-4. **Use `Game.cov.expand()`** before claiming new rooms
-5. **Monitor threat detection** with `Game.cov.threats()`
+3. **Check `Game.kha.intel()` regularly** for threats
+4. **Use `Game.kha.expand()`** before claiming new rooms
+5. **Monitor threat detection** with `Game.kha.threats()`
 
 ## Automation Examples
 

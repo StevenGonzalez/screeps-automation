@@ -3,7 +3,7 @@
  * 
  * "The supply lines must remain unbroken"
  * 
- * Manages hauler Elites that transport energy from containers/storage
+ * Manages hauler Warriors that transport energy from containers/storage
  * to spawns, extensions, and towers. Critical for colony operations.
  */
 
@@ -11,8 +11,8 @@
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
 import { SpawnPriority } from '../spawning/SpawnQueue';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { LogisticsRequest, RequestPriority, RequestType } from '../logistics/LogisticsRequest';
 import { ROLES, RoleHelpers } from '../constants/Roles';
 import { BodyBuilder } from '../utils/BodyBuilder';
@@ -20,19 +20,19 @@ import { BodyBuilder } from '../utils/BodyBuilder';
 /**
  * JACKAL ARBITER - Manages energy distribution
  */
-export class JackalArbiter extends Arbiter {
-  haulers: Elite[];
+export class AdeptArbiter extends Arbiter {
+  haulers: Warrior[];
   
-  constructor(highCharity: HighCharity) {
-    super(highCharity, 'hauler', ArbiterPriority.economy.hauling);
+  constructor(Nexus: Nexus) {
+    super(Nexus, 'hauler', ArbiterPriority.economy.hauling);
     this.haulers = [];
   }
   
   init(): void {
     this.refresh();
     
-    // Update haulers list from elites
-    this.haulers = this.elites;
+    // Update haulers list from Warriors
+    this.haulers = this.warriors;
     
     // Request haulers if needed (once per 10 ticks to avoid spam)
     const desiredHaulers = this.calculateDesiredHaulers();
@@ -64,7 +64,7 @@ export class JackalArbiter extends Arbiter {
     }
   }
   
-  private runHauler(hauler: Elite): void {
+  private runHauler(hauler: Warrior): void {
     // State machine: collecting → delivering
     if (hauler.memory.collecting && hauler.isFull) {
       hauler.memory.collecting = false;
@@ -80,12 +80,12 @@ export class JackalArbiter extends Arbiter {
     }
   }
   
-  private collectEnergy(hauler: Elite): void {
+  private collectEnergy(hauler: Warrior): void {
     // Priority: Storage Link > Containers > Dropped resources > Storage
     
     // Check for storage link first (instant energy distribution)
-    if (this.highCharity.linkTemple?.isActive()) {
-      const storageLink = this.highCharity.linkTemple.getStorageLink();
+    if (this.Nexus.LinkGateway?.isActive()) {
+      const storageLink = this.Nexus.LinkGateway.getStorageLink();
       if (storageLink && storageLink.store.getUsedCapacity(RESOURCE_ENERGY) > 100) {
         hauler.withdrawFrom(storageLink);
         hauler.say('⚡');
@@ -142,9 +142,9 @@ export class JackalArbiter extends Arbiter {
     }
     
     // Use storage if available
-    if (this.highCharity.storage && 
-        this.highCharity.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 1000) {
-      hauler.withdrawFrom(this.highCharity.storage);
+    if (this.Nexus.storage && 
+        this.Nexus.storage.store.getUsedCapacity(RESOURCE_ENERGY) > 1000) {
+      hauler.withdrawFrom(this.Nexus.storage);
       hauler.say('🏦');
       return;
     }
@@ -153,8 +153,8 @@ export class JackalArbiter extends Arbiter {
     hauler.say('💤');
   }
   
-  private deliverEnergy(hauler: Elite): void {
-    const storage = this.highCharity.storage;
+  private deliverEnergy(hauler: Warrior): void {
+    const storage = this.Nexus.storage;
     
     // Priority 1: Fill spawns and extensions first (always)
     const spawnExtensions = this.room.find(FIND_MY_STRUCTURES, {
@@ -227,7 +227,7 @@ export class JackalArbiter extends Arbiter {
     }
     
     // Create withdraw requests for towers
-    const towers = this.highCharity.towers.filter(t => 
+    const towers = this.Nexus.towers.filter(t => 
       t.store.getFreeCapacity(RESOURCE_ENERGY) > 200
     );
     
@@ -247,8 +247,8 @@ export class JackalArbiter extends Arbiter {
   }
   
   private calculateDesiredHaulers(): number {
-    const phase = this.highCharity.memory.phase;
-    const hasStorage = !!this.highCharity.storage;
+    const phase = this.Nexus.memory.phase;
+    const hasStorage = !!this.Nexus.storage;
     
     // Check if there are containers near sources (Drone active)
     const sources = this.room.find(FIND_SOURCES);
@@ -306,7 +306,7 @@ export class JackalArbiter extends Arbiter {
     const important = this.haulers.length < 2;
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_JACKAL, // Covenant themed role
+      role: ROLES.Warrior_JACKAL, // KHALA themed role
       collecting: true
     } as any, priority, important);
   }
@@ -315,12 +315,12 @@ export class JackalArbiter extends Arbiter {
     // Use available energy if no haulers exist (emergency) or during bootstrap
     // OR if room doesn't have at least 90% energy capacity (still accumulating)
     const noHaulers = this.haulers.length === 0;
-    const energyRatio = this.highCharity.energyAvailable / this.highCharity.energyCapacity;
-    const useAvailable = this.highCharity.isBootstrapping || noHaulers || energyRatio < 0.9;
+    const energyRatio = this.Nexus.energyAvailable / this.Nexus.energyCapacity;
+    const useAvailable = this.Nexus.isBootstrapping || noHaulers || energyRatio < 0.9;
     
     const energy = useAvailable ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     // Use BodyBuilder to create flexible hauler body
     return BodyBuilder.hauler(energy);

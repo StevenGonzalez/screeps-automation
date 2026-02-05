@@ -1,17 +1,17 @@
 /**
  * CLAIMER ARBITER - Colony Expansion Manager
  * 
- * "The Covenant expands to new worlds"
+ * "The KHALA expands to new worlds"
  * 
  * Manages room claiming operations. Spawns claimer creeps to claim new rooms
- * identified by IntelligenceTemple, then supports bootstrapping the new colony.
+ * identified by IntelligenceGateway, then supports bootstrapping the new colony.
  */
 
 /// <reference types="@types/screeps" />
 
 import { Arbiter, ArbiterPriority } from './Arbiter';
-import { HighCharity } from '../core/HighCharity';
-import { Elite } from '../elites/Elite';
+import { Nexus } from '../core/Nexus';
+import { Warrior } from '../Warriors/Warrior';
 import { BodyBuilder } from '../utils/BodyBuilder';
 import { ROLES } from '../constants/Roles';
 
@@ -25,14 +25,14 @@ export interface ClaimerMemory {
 /**
  * Claimer Arbiter - Manages room claiming and expansion
  */
-export class HeraldArbiter extends Arbiter {
+export class ObserverArbiter extends Arbiter {
   targetRoom: string;
   targetController: Id<StructureController> | null;
-  claimers: Elite[];
-  pioneers: Elite[]; // Early bootstrap creeps for new room
+  claimers: Warrior[];
+  pioneers: Warrior[]; // Early bootstrap creeps for new room
   
-  constructor(highCharity: HighCharity, targetRoom: string) {
-    super(highCharity, `claimer_${targetRoom}`, ArbiterPriority.expansion.claimer);
+  constructor(Nexus: Nexus, targetRoom: string) {
+    super(Nexus, `claimer_${targetRoom}`, ArbiterPriority.expansion.claimer);
     
     this.targetRoom = targetRoom;
     this.targetController = null;
@@ -64,7 +64,7 @@ export class HeraldArbiter extends Arbiter {
       
       // If controller is reserved by someone else, we need to wait or unreserve
       if (targetRoom.controller.reservation && 
-          targetRoom.controller.reservation.username !== this.highCharity.room.controller!.owner!.username) {
+          targetRoom.controller.reservation.username !== this.Nexus.room.controller!.owner!.username) {
         console.log(`⚠️ ${this.print}: Room ${this.targetRoom} is reserved by ${targetRoom.controller.reservation.username}`);
       }
     }
@@ -96,7 +96,7 @@ export class HeraldArbiter extends Arbiter {
     }
   }
   
-  private runClaimer(claimer: Elite): void {
+  private runClaimer(claimer: Warrior): void {
     const targetRoom = Game.rooms[this.targetRoom];
     
     // Move to target room if not there
@@ -162,7 +162,7 @@ export class HeraldArbiter extends Arbiter {
     }
   }
   
-  private runPioneer(pioneer: Elite): void {
+  private runPioneer(pioneer: Warrior): void {
     const targetRoom = Game.rooms[this.targetRoom];
     
     // Move to target room if not there
@@ -198,7 +198,7 @@ export class HeraldArbiter extends Arbiter {
     }
   }
   
-  private pioneerHarvest(pioneer: Elite, targetRoom: Room): void {
+  private pioneerHarvest(pioneer: Warrior, targetRoom: Room): void {
     // Find closest source
     const source = pioneer.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
     if (source) {
@@ -209,7 +209,7 @@ export class HeraldArbiter extends Arbiter {
     }
   }
   
-  private pioneerWork(pioneer: Elite, targetRoom: Room): void {
+  private pioneerWork(pioneer: Warrior, targetRoom: Room): void {
     // Priority 1: Build spawn if needed
     const spawnSites = targetRoom.find(FIND_MY_CONSTRUCTION_SITES, {
       filter: s => s.structureType === STRUCTURE_SPAWN
@@ -276,7 +276,7 @@ export class HeraldArbiter extends Arbiter {
     const name = `Herald_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_CLAIMER,
+      role: ROLES.Warrior_CLAIMER,
       targetRoom: this.targetRoom
     } as any);
   }
@@ -286,14 +286,14 @@ export class HeraldArbiter extends Arbiter {
     const name = `Vanguard_${this.targetRoom}_${Game.time}`;
     
     this.requestSpawn(body, name, {
-      role: ROLES.ELITE_PIONEER,
+      role: ROLES.Warrior_PIONEER,
       targetRoom: this.targetRoom,
       working: false
     } as any);
   }
   
   private calculateClaimerBody(): BodyPartConstant[] {
-    const energy = this.highCharity.energyCapacity;
+    const energy = this.Nexus.energyCapacity;
     
     // Claimer needs CLAIM and MOVE parts
     // Basic claimer: 650 energy (1 CLAIM, 1 MOVE)
@@ -309,9 +309,9 @@ export class HeraldArbiter extends Arbiter {
     // Pioneers are general workers for bootstrapping new rooms
     // Use capacity when not bootstrapping for full-size bodies
     const totalCreeps = this.room.find(FIND_MY_CREEPS).length;
-    const energy = (this.highCharity.isBootstrapping || totalCreeps === 0) ? 
-      this.highCharity.energyAvailable : 
-      this.highCharity.energyCapacity;
+    const energy = (this.Nexus.isBootstrapping || totalCreeps === 0) ? 
+      this.Nexus.energyAvailable : 
+      this.Nexus.energyCapacity;
     
     return BodyBuilder.worker(energy);
   }
@@ -320,8 +320,8 @@ export class HeraldArbiter extends Arbiter {
     const claimerCreeps = this.room.find(FIND_MY_CREEPS, {
       filter: (creep) => 
         (creep.memory.arbiter === this.ref) ||
-        (creep.memory.role === ROLES.ELITE_CLAIMER && (creep.memory as any).targetRoom === this.targetRoom) ||
-        (creep.memory.role === ROLES.ELITE_PIONEER && (creep.memory as any).targetRoom === this.targetRoom)
+        (creep.memory.role === ROLES.Warrior_CLAIMER && (creep.memory as any).targetRoom === this.targetRoom) ||
+        (creep.memory.role === ROLES.Warrior_PIONEER && (creep.memory as any).targetRoom === this.targetRoom)
     });
     
     return claimerCreeps;
@@ -331,11 +331,11 @@ export class HeraldArbiter extends Arbiter {
     super.refresh();
     
     // Separate claimers and pioneers
-    this.claimers = this.elites.filter(e => 
-      e.memory.role === ROLES.ELITE_CLAIMER
+    this.claimers = this.warriors.filter(e => 
+      e.memory.role === ROLES.Warrior_CLAIMER
     );
-    this.pioneers = this.elites.filter(e => 
-      e.memory.role === ROLES.ELITE_PIONEER
+    this.pioneers = this.warriors.filter(e => 
+      e.memory.role === ROLES.Warrior_PIONEER
     );
   }
 }

@@ -1,28 +1,28 @@
 /**
- * COVENANT - Main AI Coordinator
+ * KHALA - Main AI Coordinator
  * 
- * "The will of the Prophets guides all"
+ * "En Taro Adun! My life for Aiur!"
  * 
- * The Covenant is the central intelligence that manages all High Charities (colonies),
- * coordinates Arbiters (overlords), and executes Crusades (directives) across the game world.
+ * The Khala is the central intelligence that manages all Nexuses (colonies),
+ * coordinates Arbiters (controllers), and executes Campaigns (directives) across the game world.
  * 
- * Inspired by Halo's Covenant - a powerful collective with distributed intelligence.
+ * Inspired by StarCraft's Protoss - a powerful race connected by the psychic Khala.
  */
 
 /// <reference types="@types/screeps" />
 
-import { HighCharity } from './HighCharity';
+import { Nexus } from './Nexus';
 import { Arbiter } from '../arbiters/Arbiter';
-import { Crusade } from '../crusades/Crusade';
-import { CovenantCommands } from '../utils/CovenantCommands';
+import { Campaign } from '../campaigns/Campaign';
+import { KhalaCommands } from '../utils/KhalaCommands';
 import { ObserverNetwork } from '../intel/ObserverNetwork';
 import { ReclaimationCouncil } from '../expansion/ReclaimationCouncil';
 import { TerminalNetwork } from '../network/TerminalNetwork';
 
-interface CovenantMemory {
+interface KhalaMemory {
   version: string;
   lastTick: number;
-  highCharities: { [roomName: string]: any };
+  nexuses: { [roomName: string]: any };
   visualize?: { [roomName: string]: boolean }; // Toggle base plan visualization
   stats: {
     gcl: number;
@@ -34,15 +34,15 @@ interface CovenantMemory {
 }
 
 /**
- * The Covenant - Central AI that manages everything
+ * The Khala - Central AI that manages everything
  */
-export class Covenant {
-  static instance: Covenant;
+export class Khala {
+  static instance: Khala;
   
-  memory: CovenantMemory;
-  highCharities: { [roomName: string]: HighCharity };
+  memory: KhalaMemory;
+  nexuses: { [roomName: string]: Nexus };
   arbiters: { [ref: string]: Arbiter };
-  crusades: { [name: string]: Crusade };
+  campaigns: { [name: string]: Campaign };
   observerNetwork: ObserverNetwork;
   reclaimationCouncil: ReclaimationCouncil;
   terminalNetwork: TerminalNetwork;
@@ -51,13 +51,13 @@ export class Covenant {
   cache: any; // Will hold cached data for the tick
   
   // Console commands
-  commands: CovenantCommands;
+  commands: KhalaCommands;
   
   constructor() {
     this.memory = Memory as any;
-    this.highCharities = {};
+    this.nexuses = {};
     this.arbiters = {};
-    this.crusades = {};
+    this.campaigns = {};
     this.shouldBuild = true;
     this.cache = {};
     this.observerNetwork = new ObserverNetwork();
@@ -65,7 +65,7 @@ export class Covenant {
     this.terminalNetwork = new TerminalNetwork(this);
     
     // Initialize console commands
-    this.commands = new CovenantCommands(this);
+    this.commands = new KhalaCommands(this);
     
     // Initialize memory structure
     this.initializeMemory();
@@ -74,11 +74,11 @@ export class Covenant {
   /**
    * Get the singleton instance
    */
-  static getInstance(): Covenant {
-    if (!Covenant.instance) {
-      Covenant.instance = new Covenant();
+  static getInstance(): Khala {
+    if (!Khala.instance) {
+      Khala.instance = new Khala();
     }
-    return Covenant.instance;
+    return Khala.instance;
   }
   
   /**
@@ -88,8 +88,8 @@ export class Covenant {
     if (!this.memory.version) {
       this.memory.version = '1.0.0';
     }
-    if (!this.memory.highCharities) {
-      this.memory.highCharities = {};
+    if (!this.memory.nexuses) {
+      this.memory.nexuses = {};
     }
     if (!this.memory.stats) {
       this.memory.stats = {
@@ -103,7 +103,7 @@ export class Covenant {
   }
   
   /**
-   * Build phase - construct all High Charities and their components
+   * Build phase - construct all Nexuses and their components
    */
   build(): void {
     if (!this.shouldBuild) return;
@@ -113,25 +113,25 @@ export class Covenant {
     // Clean up memory of dead creeps
     this.cleanupMemory();
     
-    // Build High Charities for each owned room
+    // Build Nexuses for each owned room
     for (const roomName in Game.rooms) {
       const room = Game.rooms[roomName];
       if (room.controller && room.controller.my) {
-        this.highCharities[roomName] = new HighCharity(room, this);
+        this.nexuses[roomName] = new Nexus(room, this);
       }
     }
     
-    // Build phase for all High Charities
-    for (const roomName in this.highCharities) {
-      this.highCharities[roomName].build();
+    // Build phase for all Nexuses
+    for (const roomName in this.nexuses) {
+      this.nexuses[roomName].build();
     }
     
-    // Process flags into Crusades
-    this.buildCrusades();
+    // Process flags into Campaigns
+    this.buildCampaigns();
     
     const buildCpu = Game.cpu.getUsed() - startCpu;
     if (Game.time % 100 === 0) {
-      console.log(`⚡ COVENANT Build Phase: ${buildCpu.toFixed(2)} CPU`);
+      console.log(`⚡ KHALA Build Phase: ${buildCpu.toFixed(2)} CPU`);
     }
     
     this.shouldBuild = false;
@@ -143,14 +143,14 @@ export class Covenant {
   init(): void {
     const startCpu = Game.cpu.getUsed();
     
-    // Initialize all High Charities
-    for (const roomName in this.highCharities) {
-      this.highCharities[roomName].init();
+    // Initialize all Nexuses
+    for (const roomName in this.nexuses) {
+      this.nexuses[roomName].init();
     }
     
-    // Initialize all Crusades
-    for (const name in this.crusades) {
-      this.crusades[name].init();
+    // Initialize all Campaigns
+    for (const name in this.campaigns) {
+      this.campaigns[name].init();
     }
     
     // Initialize all Arbiters
@@ -160,7 +160,7 @@ export class Covenant {
     
     const initCpu = Game.cpu.getUsed() - startCpu;
     if (Game.time % 100 === 0) {
-      console.log(`🔧 COVENANT Init Phase: ${initCpu.toFixed(2)} CPU`);
+      console.log(`🔧 KHALA Init Phase: ${initCpu.toFixed(2)} CPU`);
     }
   }
   
@@ -181,14 +181,14 @@ export class Covenant {
     // Run terminal network (resource sharing)
     this.terminalNetwork.run();
     
-    // Run all High Charities
-    for (const roomName in this.highCharities) {
-      this.highCharities[roomName].run();
+    // Run all Nexuses
+    for (const roomName in this.nexuses) {
+      this.nexuses[roomName].run();
     }
     
-    // Run all Crusades
-    for (const name in this.crusades) {
-      this.crusades[name].run();
+    // Run all Campaigns
+    for (const name in this.campaigns) {
+      this.campaigns[name].run();
     }
     
     // Run all Arbiters
@@ -198,7 +198,7 @@ export class Covenant {
     
     const runCpu = Game.cpu.getUsed() - startCpu;
     if (Game.time % 100 === 0) {
-      console.log(`🎯 COVENANT Run Phase: ${runCpu.toFixed(2)} CPU`);
+      console.log(`🎯 KHALA Run Phase: ${runCpu.toFixed(2)} CPU`);
     }
   }
   
@@ -247,15 +247,15 @@ export class Covenant {
   }
   
   /**
-   * Build Crusades from flags
+   * Build Campaigns from flags
    */
-  private buildCrusades(): void {
+  private buildCampaigns(): void {
     // Will implement flag-based directive system
     // For now, placeholder
     for (const flagName in Game.flags) {
       const flag = Game.flags[flagName];
-      // Parse flag color and create appropriate Crusade
-      // TODO: Implement Crusade factory
+      // Parse flag color and create appropriate Campaign
+      // TODO: Implement Campaign factory
     }
   }
   
@@ -277,8 +277,8 @@ export class Covenant {
    * Draw visuals for debugging
    */
   private drawVisuals(): void {
-    // Draw connection lines between High Charities
-    // Draw Crusade markers
+    // Draw connection lines between Nexuses
+    // Draw Campaign markers
     // TODO: Implement visual system
   }
   
@@ -287,18 +287,18 @@ export class Covenant {
    */
   private reportPerformance(): void {
     const stats = this.memory.stats;
-    const charityCount = Object.keys(this.highCharities).length;
+    const nexusCount = Object.keys(this.nexuses).length;
     const arbiterCount = Object.keys(this.arbiters).length;
-    const crusadeCount = Object.keys(this.crusades).length;
+    const campaignCount = Object.keys(this.campaigns).length;
     
     console.log(`
 ╔════════════════════════════════════════════════════════╗
-║           🔱 COVENANT STATUS REPORT 🔱                 ║
+║           ⚡ KHALA STATUS REPORT ⚡                     ║
 ╠════════════════════════════════════════════════════════╣
 ║ GCL: ${stats.gcl} (${(stats.gclProgress * 100).toFixed(1)}%)
-║ High Charities: ${charityCount}
+║ Nexuses: ${nexusCount}
 ║ Arbiters: ${arbiterCount}
-║ Active Crusades: ${crusadeCount}
+║ Active Campaigns: ${campaignCount}
 ║ CPU: ${stats.cpu.toFixed(1)}/${Game.cpu.limit} (Bucket: ${stats.bucket})
 ║ Credits: ${stats.credits.toLocaleString()}
 ╚════════════════════════════════════════════════════════╝
@@ -306,19 +306,19 @@ export class Covenant {
   }
   
   /**
-   * Register an Arbiter with the Covenant
+   * Register an Arbiter with the Khala
    */
   registerArbiter(arbiter: Arbiter): void {
     this.arbiters[arbiter.ref] = arbiter;
   }
   
   /**
-   * Register a Crusade with the Covenant
+   * Register a Campaign with the Khala
    */
-  registerCrusade(crusade: Crusade): void {
-    this.crusades[crusade.name] = crusade;
+  registerCampaign(campaign: Campaign): void {
+    this.campaigns[campaign.name] = campaign;
   }
 }
 
 // Global accessor
-export const Cov = Covenant.getInstance();
+export const Kha = Khala.getInstance();

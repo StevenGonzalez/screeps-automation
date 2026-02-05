@@ -4,5 +4,5 @@
  * Central export point for all logistics types
  */
 
-export { ProphetsWill } from './ProphetsWill';
+export { PylonNetwork } from './PylonNetwork';
 export { LogisticsRequest, RequestPriority, RequestType } from './LogisticsRequest';
