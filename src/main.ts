@@ -12,8 +12,6 @@ declare const _: any;
 
 // The main game loop - executed every tick
 export const loop = ErrorMapper.wrapLoop(() => {
-  console.log(`👑 Tick ${Game.time} - The Kingdom Stirs`);
-
   // Initialize memory on first run
   if (!Memory.initialized) {
     initializeMemory();
