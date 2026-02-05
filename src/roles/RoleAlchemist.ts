@@ -3,7 +3,7 @@
  * Upgraders transmute energy to strengthen the realm
  */
 
-export class RoleUpgrader {
+export class RoleAlchemist {
   public static run(creep: Creep): void {
     // Toggle working state
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {

@@ -9,13 +9,13 @@ export class BodyBuilder {
    */
   public static buildBody(role: string, energy: number): BodyPartConstant[] {
     switch (role) {
-      case 'harvester':
+      case 'peasant':
         return this.buildHarvesterBody(energy);
-      case 'builder':
+      case 'mason':
         return this.buildBuilderBody(energy);
-      case 'upgrader':
+      case 'alchemist':
         return this.buildUpgraderBody(energy);
-      case 'hauler':
+      case 'merchant':
         return this.buildHaulerBody(energy);
       default:
         return [WORK, CARRY, MOVE];

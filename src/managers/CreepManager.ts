@@ -3,10 +3,10 @@
  * Directs all subjects in their duties
  */
 
-import { RoleHarvester } from '../roles/RoleHarvester';
-import { RoleBuilder } from '../roles/RoleBuilder';
-import { RoleUpgrader } from '../roles/RoleUpgrader';
-import { RoleHauler } from '../roles/RoleHauler';
+import { RolePeasant } from '../roles/RolePeasant';
+import { RoleMason } from '../roles/RoleMason';
+import { RoleAlchemist } from '../roles/RoleAlchemist';
+import { RoleMerchant } from '../roles/RoleMerchant';
 
 export class CreepManager {
   /**
@@ -17,17 +17,17 @@ export class CreepManager {
       const creep = Game.creeps[name];
       
       switch (creep.memory.role) {
-        case 'harvester':
-          RoleHarvester.run(creep);
+        case 'peasant':
+          RolePeasant.run(creep);
           break;
-        case 'builder':
-          RoleBuilder.run(creep);
+        case 'mason':
+          RoleMason.run(creep);
           break;
-        case 'upgrader':
-          RoleUpgrader.run(creep);
+        case 'alchemist':
+          RoleAlchemist.run(creep);
           break;
-        case 'hauler':
-          RoleHauler.run(creep);
+        case 'merchant':
+          RoleMerchant.run(creep);
           break;
         default:
           console.log(`⚠️ ${name} has unknown role: ${creep.memory.role}`);

@@ -27,16 +27,16 @@ export class NameGenerator {
     let namePool: string[];
 
     switch (role) {
-      case 'harvester':
+      case 'peasant':
         namePool = this.HARVESTER_NAMES;
         break;
-      case 'builder':
+      case 'mason':
         namePool = this.BUILDER_NAMES;
         break;
-      case 'upgrader':
+      case 'alchemist':
         namePool = this.UPGRADER_NAMES;
         break;
-      case 'hauler':
+      case 'merchant':
         namePool = this.HAULER_NAMES;
         break;
       default:

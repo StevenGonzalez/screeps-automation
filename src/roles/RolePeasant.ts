@@ -3,7 +3,7 @@
  * Harvesters gather energy from the land
  */
 
-export class RoleHarvester {
+export class RolePeasant {
   public static run(creep: Creep): void {
     if (creep.store.getFreeCapacity() > 0) {
       // Find energy source

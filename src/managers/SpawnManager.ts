@@ -22,23 +22,23 @@ export class SpawnManager {
     // Count creeps by role
     const creeps = room.find(FIND_MY_CREEPS);
     const roleCount = {
-      harvester: creeps.filter(c => c.memory.role === 'harvester').length,
-      builder: creeps.filter(c => c.memory.role === 'builder').length,
-      upgrader: creeps.filter(c => c.memory.role === 'upgrader').length,
-      hauler: creeps.filter(c => c.memory.role === 'hauler').length,
+      peasant: creeps.filter(c => c.memory.role === 'peasant').length,
+      mason: creeps.filter(c => c.memory.role === 'mason').length,
+      alchemist: creeps.filter(c => c.memory.role === 'alchemist').length,
+      merchant: creeps.filter(c => c.memory.role === 'merchant').length,
     };
 
     // Determine what role to spawn (priority order)
     let roleToSpawn: string | null = null;
 
-    if (roleCount.harvester < 2) {
-      roleToSpawn = 'harvester';
-    } else if (roleCount.hauler < 2) {
-      roleToSpawn = 'hauler';
-    } else if (roleCount.builder < 3) {
-      roleToSpawn = 'builder';
-    } else if (roleCount.upgrader < 2) {
-      roleToSpawn = 'upgrader';
+    if (roleCount.peasant < 2) {
+      roleToSpawn = 'peasant';
+    } else if (roleCount.merchant < 2) {
+      roleToSpawn = 'merchant';
+    } else if (roleCount.mason < 3) {
+      roleToSpawn = 'mason';
+    } else if (roleCount.alchemist < 2) {
+      roleToSpawn = 'alchemist';
     }
 
     if (roleToSpawn) {

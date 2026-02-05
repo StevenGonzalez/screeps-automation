@@ -3,7 +3,7 @@
  * Haulers transport goods between storage and consumers
  */
 
-export class RoleHauler {
+export class RoleMerchant {
   public static run(creep: Creep): void {
     // Toggle working state
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {

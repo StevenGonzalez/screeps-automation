@@ -3,7 +3,7 @@
  * Builders construct and repair structures
  */
 
-export class RoleBuilder {
+export class RoleMason {
   public static run(creep: Creep): void {
     // Toggle working state
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
