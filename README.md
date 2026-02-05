@@ -1,11 +1,118 @@
-## 🚀 Features
+# � The Royal Keep - Screeps Automation
 
-### 🔱 KHALA AI System
-Inspired by StarCraft's KHALA, this advanced AI architecture features:
-- **Distributed Intelligence**: Each Nexus (colony) operates autonomously
-- **Hierarchical Command**: Arbiters manage specialized Warrior (creep) teams
-- **Dynamic Response**: Campaigns allow flag-based strategic intervention
-- **Three-Phase Execution**: Optimized Build → Init → Run pattern
+A Medieval Kingdom-themed Screeps automation project where you rule as monarch over your realm.
+
+## 🎭 Theme
+
+This project uses Medieval Kingdom as its central theme:
+
+- **The Royal Keep**: The main control center (your colony)
+- **His Majesty's Court**: Command structure directing all subjects
+- **Royal Subjects**: The creeps serving the Crown
+- **The Royal Archives**: Memory management system
+- **Fallen in Service**: Where deceased creeps are honored
+
+## 👥 Creep Roles
+
+### The Peasants (Harvesters) 🌾
+Gather energy from sources and deliver to the castle.
+- Named after: Cedric, Oswald, Aldric, Godwin, Beorn
+
+### The Masons (Builders) 🔨
+Build construction sites and repair damaged structures.
+- Named after: Edmund, Baldwin, Godfrey, Reinhard, Wulfric
+
+### The Alchemists (Upgraders) ⚗️
+Transmute energy to strengthen and advance the realm.
+- Named after: Merlin, Aldous, Cornelius, Magnus, Ambrose
+
+### The Merchants (Haulers) 📦
+Transport energy and resources efficiently across the kingdom.
+- Named after: Gilbert, Roland, Percival, Tristan, Gawain
+
+## 🚀 Quick Start
+
+1. **Install dependencies:**
+   ```bash
+   yarn install
+   ```
+
+2. **Configure your Screeps credentials:**
+   - Copy `screeps.json.example` to `screeps.json`
+   - Add your Screeps API credentials
+
+3. **Deploy to Screeps:**
+   ```bash
+   yarn deploy
+   ```
+
+4. **Watch it run:**
+   Your kingdom will automatically recruit subjects and manage resources!
+
+## 📁 Project Structure
+
+```
+src/
+├── main.ts                 # Main game loop (The Royal Keep)
+├── managers/
+│   ├── SpawnManager.ts     # The Royal Barracks
+│   └── CreepManager.ts     # The Royal Court
+├── roles/
+│   ├── RoleHarvester.ts    # The Peasants
+│   ├── RoleBuilder.ts      # The Masons
+│   ├── RoleUpgrader.ts     # The Alchemists
+│   └── RoleHauler.ts       # The Merchants
+└── utils/
+    ├── BodyBuilder.ts      # The Quartermaster's Workshop
+    ├── NameGenerator.ts    # The Royal Herald
+    ├── ErrorMapper.ts      # The Royal Scribe
+    └── MemoryManager.ts    # The Royal Archives
+```
+
+## 🎯 Features
+
+- ✅ Automatic subject recruitment with priority system
+- ✅ Energy harvesting and distribution
+- ✅ Construction and repair automation
+- ✅ Kingdom advancement (controller upgrading)
+- ✅ Medieval naming theme
+- ✅ Clean code architecture
+- ✅ TypeScript with full type safety
+
+## 🛠️ Extending the Project
+
+Want to add more roles? Follow the Medieval theme:
+
+- **Defenders**: The Knights (military defense)
+- **Scouts**: The Rangers (exploration)
+- **Miners**: The Miners (mineral extraction)
+- **Claimer**: The Lord (room claiming)
+
+## 📜 Scripts
+
+- `yarn build` - Compile TypeScript
+- `yarn deploy` - Build and deploy to Screeps
+- `yarn deploy:sim` - Deploy to simulation room
+
+## 🎨 Customization
+
+Feel free to customize the theme! You could use different naming conventions:
+- English Medieval (current): Cedric, Edmund, Roland...
+- French Medieval: Guillaume, Philippe, Henri...
+- Fantasy Medieval: Aragorn, Boromir, Faramir...
+- Historical Kings: Richard, Henry, Edward...
+
+Just update the names in [NameGenerator.ts](src/utils/NameGenerator.ts) and comments throughout!
+
+## 📖 License
+
+MIT - Rule your kingdom freely!
+
+---
+
+*Long live the King! May your realm prosper! 👑*
+
+## 🚀 Features (Legacy Documentation)
 
 ### 🎯 Core Systems
 - **Nexuses**: Autonomous room management with phase-based adaptation
