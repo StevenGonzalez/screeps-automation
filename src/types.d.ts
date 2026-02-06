@@ -12,6 +12,7 @@ declare global {
     working: boolean;
     room: string;
     targetId?: string;
+    sourceId?: string;
   }
 
   interface RoomMemory {

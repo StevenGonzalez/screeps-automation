@@ -22,6 +22,24 @@ export function harvestEnergy(creep: Creep, pathColor: string = '#ffaa00'): numb
 }
 
 /**
+ * Harvest minerals from the closest mineral deposit
+ * @param creep The creep performing the action
+ * @param pathColor Optional color for movement visualization
+ * @returns The result of the harvest operation
+ */
+export function harvestMineral(creep: Creep, pathColor: string = '#8b4513'): number {
+  const mineral = creep.pos.findClosestByPath(FIND_MINERALS);
+  if (mineral) {
+    const result = creep.harvest(mineral);
+    if (result === ERR_NOT_IN_RANGE) {
+      creep.moveTo(mineral, { visualizePathStyle: { stroke: pathColor } });
+    }
+    return result;
+  }
+  return ERR_NOT_FOUND;
+}
+
+/**
  * Transfer energy to a target structure (spawn, extension, or tower)
  * @param creep The creep performing the transfer
  * @param includeStructures Array of structure types to include (default: SPAWN and EXTENSION)
@@ -199,4 +217,65 @@ export function isHarvestMode(creep: Creep): boolean {
  */
 export function isWorkingMode(creep: Creep): boolean {
   return creep.memory.working || false;
+}
+
+/**
+ * Assign a miner to an energy source, ensuring only one miner per source
+ * @param creep The miner creep
+ * @returns The assigned source or null if none available
+ */
+export function assignToSource(creep: Creep): Source | null {
+  // Check if already assigned to a valid source
+  if (creep.memory.sourceId) {
+    const source = Game.getObjectById(creep.memory.sourceId) as Source | null;
+    if (source && source.energy > 0) {
+      return source;
+    }
+  }
+
+  // Find all sources in the room
+  const sources = creep.room.find(FIND_SOURCES_ACTIVE);
+  
+  // Find sources not already assigned to another miner
+  for (const source of sources) {
+    // Check if any other miner is assigned to this source
+    const isClaimed = Object.values(Game.creeps).some(
+      (otherCreep) => 
+        otherCreep.memory.sourceId === source.id && 
+        otherCreep.name !== creep.name
+    );
+
+    if (!isClaimed) {
+      // Assign this source to the miner
+      creep.memory.sourceId = source.id;
+      return source;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Mine at an assigned source location
+ * Miner stays in place and extracts from the source
+ * @param creep The miner creep
+ * @param pathColor Optional color for movement visualization
+ * @returns The result of the harvest operation
+ */
+export function mineSource(creep: Creep, pathColor: string = '#8b4513'): number {
+  const source = assignToSource(creep);
+  
+  if (!source) {
+    return ERR_NOT_FOUND;
+  }
+
+  // If not adjacent to the source, move closer
+  if (creep.pos.inRangeTo(source.pos, 1)) {
+    // Adjacent to the source, harvest it
+    return creep.harvest(source);
+  } else {
+    // Move adjacent to the source
+    creep.moveTo(source, { visualizePathStyle: { stroke: pathColor } });
+    return ERR_NOT_IN_RANGE;
+  }
 }
