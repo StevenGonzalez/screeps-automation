@@ -9,6 +9,8 @@ export class BodyBuilder {
    */
   public static buildBody(role: string, energy: number): BodyPartConstant[] {
     switch (role) {
+      case 'miner':
+        return this.buildMinerBody(energy);
       case 'peasant':
         return this.buildPeasantBody(energy);
       case 'mason':
@@ -21,6 +23,19 @@ export class BodyBuilder {
         return this.buildBlacksmithBody(energy);
       default:
         return [WORK, CARRY, MOVE];
+    }
+  }
+
+  private static buildMinerBody(energy: number): BodyPartConstant[] {
+    // Miner focuses on WORK for maximum extraction
+    if (energy >= 550) {
+      return [WORK, WORK, WORK, WORK, WORK, MOVE];
+    } else if (energy >= 400) {
+      return [WORK, WORK, WORK, WORK, MOVE];
+    } else if (energy >= 300) {
+      return [WORK, WORK, WORK, MOVE];
+    } else {
+      return [WORK, WORK, MOVE];
     }
   }
 

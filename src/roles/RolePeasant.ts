@@ -3,7 +3,7 @@
  * Harvesters gather energy from the land
  */
 
-import { harvestEnergy, transferEnergy, collectFromContainers } from '../utils/CreepActions';
+import { harvestEnergy, transferEnergy, collectFromContainers, upgradeController } from '../utils/CreepActions';
 
 export class RolePeasant {
   public static run(creep: Creep): void {
@@ -11,13 +11,17 @@ export class RolePeasant {
       // Priority 1: Collect from containers
       const containerResult = collectFromContainers(creep);
       
-      // Priority 2: Harvest from sources only if no containers available
-      if (containerResult === ERR_NOT_FOUND) {
+      // Priority 2: Harvest from sources if no containers or containers are empty
+      if (containerResult === ERR_NOT_FOUND || containerResult === ERR_NOT_ENOUGH_RESOURCES) {
         harvestEnergy(creep);
       }
     } else {
       // Deposit energy with priority: Spawn → Extensions → Controller Container
-      transferEnergy(creep, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_CONTAINER]);
+      const transferResult = transferEnergy(creep, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_CONTAINER]);
+      if (transferResult === ERR_NOT_FOUND) {
+        // Nothing needs energy, help upgrade the controller
+        upgradeController(creep);
+      }
     }
   }
 }

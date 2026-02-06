@@ -3,7 +3,7 @@
  * Repair and maintain the kingdom's structures
  */
 
-import { toggleWorkingState, harvestEnergy, repairStructure, repairWalls } from '../utils/CreepActions';
+import { toggleWorkingState, harvestEnergy, repairStructure, repairWalls, collectFromContainers, upgradeController } from '../utils/CreepActions';
 
 export class RoleBlacksmith {
   public static run(creep: Creep): void {
@@ -16,11 +16,18 @@ export class RoleBlacksmith {
       
       // If nothing to repair, maintain walls at minimum health threshold
       if (repairResult === ERR_NOT_FOUND) {
-        repairWalls(creep, 10000);
+        const wallResult = repairWalls(creep, 10000);
+        if (wallResult === ERR_NOT_FOUND) {
+          // Nothing to repair, help upgrade the controller
+          upgradeController(creep);
+        }
       }
     } else {
-      // Harvest energy
-      harvestEnergy(creep);
+      // Try collecting from containers first, then harvest
+      const containerResult = collectFromContainers(creep);
+      if (containerResult === ERR_NOT_FOUND || containerResult === ERR_NOT_ENOUGH_RESOURCES) {
+        harvestEnergy(creep);
+      }
     }
   }
 }

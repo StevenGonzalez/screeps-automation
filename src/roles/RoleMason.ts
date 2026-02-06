@@ -3,7 +3,7 @@
  * Builders construct new structures
  */
 
-import { toggleWorkingState, harvestEnergy, buildStructure } from '../utils/CreepActions';
+import { toggleWorkingState, harvestEnergy, buildStructure, collectFromContainers, upgradeController } from '../utils/CreepActions';
 
 export class RoleMason {
   public static run(creep: Creep): void {
@@ -11,11 +11,17 @@ export class RoleMason {
     toggleWorkingState(creep);
 
     if (creep.memory.working) {
-      // Build construction sites
-      buildStructure(creep);
+      // Build construction sites, or upgrade if none exist
+      const buildResult = buildStructure(creep);
+      if (buildResult === ERR_NOT_FOUND) {
+        upgradeController(creep);
+      }
     } else {
-      // Harvest energy
-      harvestEnergy(creep);
+      // Try collecting from containers first, then harvest
+      const containerResult = collectFromContainers(creep);
+      if (containerResult === ERR_NOT_FOUND || containerResult === ERR_NOT_ENOUGH_RESOURCES) {
+        harvestEnergy(creep);
+      }
     }
   }
 }

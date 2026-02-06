@@ -22,17 +22,23 @@ export class SpawnManager {
     // Count creeps by role
     const creeps = room.find(FIND_MY_CREEPS);
     const roleCount = {
+      miner: creeps.filter(c => c.memory.role === 'miner').length,
       peasant: creeps.filter(c => c.memory.role === 'peasant').length,
       mason: creeps.filter(c => c.memory.role === 'mason').length,
       alchemist: creeps.filter(c => c.memory.role === 'alchemist').length,
       merchant: creeps.filter(c => c.memory.role === 'merchant').length,
       blacksmith: creeps.filter(c => c.memory.role === 'blacksmith').length,
     };
+    
+    // Count sources to determine how many miners we need
+    const sources = room.find(FIND_SOURCES);
 
     // Determine what role to spawn (priority order)
     let roleToSpawn: string | null = null;
 
-    if (roleCount.peasant < 2) {
+    if (roleCount.miner < sources.length) {
+      roleToSpawn = 'miner';
+    } else if (roleCount.peasant < 2) {
       roleToSpawn = 'peasant';
     } else if (roleCount.merchant < 2) {
       roleToSpawn = 'merchant';

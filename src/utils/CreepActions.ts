@@ -10,11 +10,20 @@
  * @returns The result of the harvest operation
  */
 export function harvestEnergy(creep: Creep, pathColor: string = '#ffaa00'): number {
-  const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+  const activeSource = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+  const source = activeSource || creep.pos.findClosestByPath(FIND_SOURCES);
   if (source) {
     const result = creep.harvest(source);
+    // Move to source if not in range OR if source is empty (so we're ready when it regenerates)
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(source, { visualizePathStyle: { stroke: pathColor } });
+    }
+    if (result === ERR_NOT_ENOUGH_RESOURCES) {
+      const alternateSource = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, {
+        filter: (s) => s.id !== source.id
+      });
+      const targetSource = alternateSource || activeSource || source;
+      creep.moveTo(targetSource, { visualizePathStyle: { stroke: pathColor } });
     }
     return result;
   }
@@ -31,7 +40,7 @@ export function harvestMineral(creep: Creep, pathColor: string = '#8b4513'): num
   const mineral = creep.pos.findClosestByPath(FIND_MINERALS);
   if (mineral) {
     const result = creep.harvest(mineral);
-    if (result === ERR_NOT_IN_RANGE) {
+    if (result === ERR_NOT_IN_RANGE || result === ERR_NOT_ENOUGH_RESOURCES) {
       creep.moveTo(mineral, { visualizePathStyle: { stroke: pathColor } });
     }
     return result;
@@ -288,19 +297,20 @@ export function assignToSource(creep: Creep): Source | null {
   // Check if already assigned to a valid source
   if (creep.memory.sourceId) {
     const source = Game.getObjectById(creep.memory.sourceId) as Source | null;
-    if (source && source.energy > 0) {
+    if (source) {
       return source;
     }
   }
 
-  // Find all sources in the room
-  const sources = creep.room.find(FIND_SOURCES_ACTIVE);
+  // Find all sources in the room (including depleted ones)
+  const sources = creep.room.find(FIND_SOURCES);
   
   // Find sources not already assigned to another miner
   for (const source of sources) {
     // Check if any other miner is assigned to this source
     const isClaimed = Object.values(Game.creeps).some(
       (otherCreep) => 
+        otherCreep.memory.role === 'miner' &&
         otherCreep.memory.sourceId === source.id && 
         otherCreep.name !== creep.name
     );
@@ -330,12 +340,11 @@ export function mineSource(creep: Creep, pathColor: string = '#8b4513'): number 
   }
 
   // If not adjacent to the source, move closer
-  if (creep.pos.inRangeTo(source.pos, 1)) {
-    // Adjacent to the source, harvest it
-    return creep.harvest(source);
-  } else {
-    // Move adjacent to the source
+  if (!creep.pos.inRangeTo(source.pos, 1)) {
     creep.moveTo(source, { visualizePathStyle: { stroke: pathColor } });
     return ERR_NOT_IN_RANGE;
   }
+  
+  // Adjacent to the source, harvest it
+  return creep.harvest(source);
 }
