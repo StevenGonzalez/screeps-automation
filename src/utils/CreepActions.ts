@@ -40,7 +40,8 @@ export function harvestMineral(creep: Creep, pathColor: string = '#8b4513'): num
 }
 
 /**
- * Transfer energy to a target structure (spawn, extension, or tower)
+ * Transfer energy to target structures in priority order
+ * Priority: Spawn → Extensions → Controller Container
  * @param creep The creep performing the transfer
  * @param includeStructures Array of structure types to include (default: SPAWN and EXTENSION)
  * @param pathColor Optional color for movement visualization
@@ -51,12 +52,39 @@ export function transferEnergy(
   includeStructures: string[] = [STRUCTURE_SPAWN, STRUCTURE_EXTENSION],
   pathColor: string = '#ffffff'
 ): number {
-  const target = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+  // Find all structures with free capacity
+  const structures = creep.room.find(FIND_STRUCTURES, {
     filter: (structure) => {
       return includeStructures.includes(structure.structureType) &&
              (structure as any).store?.getFreeCapacity(RESOURCE_ENERGY) > 0;
     }
   });
+
+  if (structures.length === 0) {
+    return ERR_NOT_FOUND;
+  }
+
+  // Priority 1: Spawn
+  let target: AnyStructure | null = structures.find(s => s.structureType === STRUCTURE_SPAWN) || null;
+  
+  // Priority 2: Extensions
+  if (!target) {
+    target = structures.find(s => s.structureType === STRUCTURE_EXTENSION) || null;
+  }
+
+  // Priority 3: Controller container
+  if (!target && includeStructures.includes(STRUCTURE_CONTAINER)) {
+    target = structures.find(s => 
+      s.structureType === STRUCTURE_CONTAINER &&
+      creep.room.controller &&
+      s.pos.inRangeTo(creep.room.controller.pos, 1)
+    ) || null;
+  }
+
+  // If still no target, use closest of remaining
+  if (!target) {
+    target = creep.pos.findClosestByPath(structures) as AnyStructure | null;
+  }
 
   if (target) {
     const result = creep.transfer(target as any, RESOURCE_ENERGY);
@@ -83,6 +111,38 @@ export function pickupEnergy(creep: Creep, pathColor: string = '#ffaa00'): numbe
     const result = creep.pickup(droppedEnergy);
     if (result === ERR_NOT_IN_RANGE) {
       creep.moveTo(droppedEnergy, { visualizePathStyle: { stroke: pathColor } });
+    }
+    return result;
+  }
+  return ERR_NOT_FOUND;
+}
+
+/**
+ * Collect energy from containers (harvest secondary source)
+ * Excludes the controller-adjacent container reserved for upgraders
+ * @param creep The creep performing the collection
+ * @param pathColor Optional color for movement visualization
+ * @returns The result of the withdraw operation
+ */
+export function collectFromContainers(creep: Creep, pathColor: string = '#ffa500'): number {
+  const container = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+    filter: (structure) => {
+      // Skip containers next to the controller (reserved for upgraders)
+      if (creep.room.controller && 
+          structure.pos.inRangeTo(creep.room.controller.pos, 1)) {
+        return false;
+      }
+
+      return (structure.structureType === STRUCTURE_CONTAINER ||
+              structure.structureType === STRUCTURE_STORAGE) &&
+             (structure as any).store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+    }
+  }) as StructureContainer | StructureStorage | null;
+
+  if (container) {
+    const result = creep.withdraw(container, RESOURCE_ENERGY);
+    if (result === ERR_NOT_IN_RANGE) {
+      creep.moveTo(container, { visualizePathStyle: { stroke: pathColor } });
     }
     return result;
   }
