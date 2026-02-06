@@ -8,11 +8,11 @@ export class RoleAlchemist {
     // Toggle working state
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
       creep.memory.working = false;
-      creep.say('⚡ harvest');
+      creep.say('⚡');
     }
     if (!creep.memory.working && creep.store.getFreeCapacity() === 0) {
       creep.memory.working = true;
-      creep.say('⬆️ upgrade');
+      creep.say('⬆️');
     }
 
     if (creep.memory.working) {

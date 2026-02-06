@@ -30,24 +30,4 @@ export const loop = ErrorMapper.wrapLoop(() => {
 
   // Command all subjects
   CreepManager.runAll();
-
-  // Display statistics
-  if (Game.time % 10 === 0) {
-    displayKingdomStats();
-  }
 });
-
-function displayKingdomStats(): void {
-  // Clear console with separator
-  console.log('\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`👑 Tick ${Game.time} - Kingdom Status`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-  
-  const creepsByRole = _.groupBy(Game.creeps, (c: Creep) => c.memory.role);
-  console.log('📊 Kingdom Census:');
-  for (const role in creepsByRole) {
-    console.log(`  ${role}: ${creepsByRole[role].length}`);
-  }
-  
-  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-}
