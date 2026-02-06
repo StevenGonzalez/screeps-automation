@@ -1,6 +1,6 @@
 /**
  * The Masons
- * Builders construct and repair structures
+ * Builders construct new structures
  */
 
 export class RoleMason {
@@ -23,23 +23,6 @@ export class RoleMason {
           creep.moveTo(constructionSite, {
             visualizePathStyle: { stroke: '#00ff00' }
           });
-        }
-      } else {
-        // No construction sites, repair damaged structures
-        const damagedStructure = creep.pos.findClosestByPath(FIND_STRUCTURES, {
-          filter: (structure) => {
-            return structure.hits < structure.hitsMax &&
-                   structure.structureType !== STRUCTURE_WALL &&
-                   structure.structureType !== STRUCTURE_RAMPART;
-          }
-        });
-
-        if (damagedStructure) {
-          if (creep.repair(damagedStructure) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(damagedStructure, {
-              visualizePathStyle: { stroke: '#00ff00' }
-            });
-          }
         }
       }
     } else {

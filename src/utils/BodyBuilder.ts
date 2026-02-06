@@ -17,6 +17,8 @@ export class BodyBuilder {
         return this.buildAlchemistBody(energy);
       case 'merchant':
         return this.buildMerchantBody(energy);
+      case 'blacksmith':
+        return this.buildBlacksmithBody(energy);
       default:
         return [WORK, CARRY, MOVE];
     }
@@ -71,6 +73,19 @@ export class BodyBuilder {
       return [CARRY, CARRY, MOVE, MOVE];
     } else {
       return [CARRY, MOVE];
+    }
+  }
+
+  private static buildBlacksmithBody(energy: number): BodyPartConstant[] {
+    // Blacksmith focuses on WORK for repairs, with CARRY and MOVE
+    if (energy >= 550) {
+      return [WORK, WORK, WORK, CARRY, CARRY, MOVE, MOVE, MOVE];
+    } else if (energy >= 400) {
+      return [WORK, WORK, CARRY, CARRY, MOVE, MOVE];
+    } else if (energy >= 300) {
+      return [WORK, CARRY, MOVE, MOVE];
+    } else {
+      return [WORK, CARRY, MOVE];
     }
   }
 }

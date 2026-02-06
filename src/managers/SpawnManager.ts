@@ -26,6 +26,7 @@ export class SpawnManager {
       mason: creeps.filter(c => c.memory.role === 'mason').length,
       alchemist: creeps.filter(c => c.memory.role === 'alchemist').length,
       merchant: creeps.filter(c => c.memory.role === 'merchant').length,
+      blacksmith: creeps.filter(c => c.memory.role === 'blacksmith').length,
     };
 
     // Determine what role to spawn (priority order)
@@ -35,6 +36,8 @@ export class SpawnManager {
       roleToSpawn = 'peasant';
     } else if (roleCount.merchant < 2) {
       roleToSpawn = 'merchant';
+    } else if (roleCount.blacksmith < 1) {
+      roleToSpawn = 'blacksmith';
     } else if (roleCount.mason < 3) {
       roleToSpawn = 'mason';
     } else if (roleCount.alchemist < 2) {

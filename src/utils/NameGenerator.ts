@@ -20,6 +20,10 @@ export class NameGenerator {
     'Gilbert', 'Roland', 'Percival', 'Tristan', 'Gawain'
   ];
 
+  private static readonly BLACKSMITH_NAMES = [
+    'Hargrave', 'Thaddeus', 'Branimir', 'Osric', 'Dunstan'
+  ];
+
   /**
    * Generate a themed name for a creep role
    */
@@ -38,6 +42,9 @@ export class NameGenerator {
         break;
       case 'merchant':
         namePool = this.HAULER_NAMES;
+        break;
+      case 'blacksmith':
+        namePool = this.BLACKSMITH_NAMES;
         break;
       default:
         namePool = ['Commoner'];

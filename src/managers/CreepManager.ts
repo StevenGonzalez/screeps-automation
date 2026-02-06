@@ -7,6 +7,7 @@ import { RolePeasant } from '../roles/RolePeasant';
 import { RoleMason } from '../roles/RoleMason';
 import { RoleAlchemist } from '../roles/RoleAlchemist';
 import { RoleMerchant } from '../roles/RoleMerchant';
+import { RoleBlacksmith } from '../roles/RoleBlacksmith';
 
 export class CreepManager {
   /**
@@ -28,6 +29,9 @@ export class CreepManager {
           break;
         case 'merchant':
           RoleMerchant.run(creep);
+          break;
+        case 'blacksmith':
+          RoleBlacksmith.run(creep);
           break;
         default:
           console.log(`⚠️ ${name} has unknown role: ${creep.memory.role}`);
