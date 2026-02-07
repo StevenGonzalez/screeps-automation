@@ -134,7 +134,7 @@ export function pickupEnergy(creep: Creep, pathColor: string = '#ffaa00'): numbe
  * @returns The result of the withdraw operation
  */
 export function collectFromContainers(creep: Creep, pathColor: string = '#ffa500'): number {
-  const container = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+  const containers = creep.room.find(FIND_STRUCTURES, {
     filter: (structure) => {
       // Skip containers next to the controller (reserved for upgraders)
       if (creep.room.controller && 
@@ -146,7 +146,12 @@ export function collectFromContainers(creep: Creep, pathColor: string = '#ffa500
               structure.structureType === STRUCTURE_STORAGE) &&
              (structure as any).store.getUsedCapacity(RESOURCE_ENERGY) > 0;
     }
-  }) as StructureContainer | StructureStorage | null;
+  }) as (StructureContainer | StructureStorage)[];
+
+  // Sort by energy amount (descending) to prioritize fullest containers
+  const container = containers.sort((a, b) => {
+    return (b as any).store.getUsedCapacity(RESOURCE_ENERGY) - (a as any).store.getUsedCapacity(RESOURCE_ENERGY);
+  })[0] || null;
 
   if (container) {
     const result = creep.withdraw(container, RESOURCE_ENERGY);
@@ -170,13 +175,18 @@ export function collectFromControllerContainer(creep: Creep, pathColor: string =
     return ERR_NOT_FOUND;
   }
 
-  const container = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+  const containers = creep.room.find(FIND_STRUCTURES, {
     filter: (structure) => {
       return structure.structureType === STRUCTURE_CONTAINER &&
              structure.pos.inRangeTo(controller.pos, 1) &&
              (structure as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0;
     }
-  }) as StructureContainer | null;
+  }) as StructureContainer[];
+
+  // Sort by energy amount (descending) to prioritize fullest container
+  const container = containers.sort((a, b) => {
+    return b.store.getUsedCapacity(RESOURCE_ENERGY) - a.store.getUsedCapacity(RESOURCE_ENERGY);
+  })[0] || null;
 
   if (container) {
     const result = creep.withdraw(container, RESOURCE_ENERGY);
