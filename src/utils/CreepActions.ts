@@ -368,7 +368,7 @@ export function assignToSource(creep: Creep): Source | null {
 
 /**
  * Mine at an assigned source location
- * Miner stays in place and extracts from the source
+ * Miner positions itself on a nearby container and extracts from the source
  * @param creep The miner creep
  * @param pathColor Optional color for movement visualization
  * @returns The result of the harvest operation
@@ -380,12 +380,23 @@ export function mineSource(creep: Creep, pathColor: string = '#8b4513'): number 
     return ERR_NOT_FOUND;
   }
 
-  // If not adjacent to the source, move closer
-  if (!creep.pos.inRangeTo(source.pos, 1)) {
-    creep.moveTo(source, { visualizePathStyle: { stroke: pathColor } });
+  // Try to find a container near the source (within 2 range)
+  const container = source.pos.findClosestByPath(FIND_STRUCTURES, {
+    filter: (structure) => {
+      return structure.structureType === STRUCTURE_CONTAINER &&
+             structure.pos.inRangeTo(source.pos, 2);
+    }
+  }) as StructureContainer | null;
+
+  // Determine mining position: container if available, otherwise source
+  const miningPosition = container ? container.pos : source.pos;
+
+  // If not at the mining position, move there
+  if (!creep.pos.isEqualTo(miningPosition)) {
+    creep.moveTo(miningPosition, { visualizePathStyle: { stroke: pathColor } });
     return ERR_NOT_IN_RANGE;
   }
   
-  // Adjacent to the source, harvest it
+  // At the mining position, harvest the source
   return creep.harvest(source);
 }
