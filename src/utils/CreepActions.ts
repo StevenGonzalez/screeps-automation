@@ -159,6 +159,37 @@ export function collectFromContainers(creep: Creep, pathColor: string = '#ffa500
 }
 
 /**
+ * Collect energy from the controller-adjacent container
+ * @param creep The creep performing the collection
+ * @param pathColor Optional color for movement visualization
+ * @returns The result of the withdraw operation
+ */
+export function collectFromControllerContainer(creep: Creep, pathColor: string = '#ffa500'): number {
+  const controller = creep.room.controller;
+  if (!controller) {
+    return ERR_NOT_FOUND;
+  }
+
+  const container = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+    filter: (structure) => {
+      return structure.structureType === STRUCTURE_CONTAINER &&
+             structure.pos.inRangeTo(controller.pos, 1) &&
+             (structure as StructureContainer).store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+    }
+  }) as StructureContainer | null;
+
+  if (container) {
+    const result = creep.withdraw(container, RESOURCE_ENERGY);
+    if (result === ERR_NOT_IN_RANGE) {
+      creep.moveTo(container, { visualizePathStyle: { stroke: pathColor } });
+    }
+    return result;
+  }
+
+  return ERR_NOT_FOUND;
+}
+
+/**
  * Repair the closest damaged structure
  * @param creep The creep performing the repair
  * @param excludeTypes Optional array of structure types to exclude (default: walls and ramparts)
