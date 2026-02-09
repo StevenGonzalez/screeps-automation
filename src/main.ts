@@ -6,6 +6,7 @@
 import { ErrorMapper } from './utils/ErrorMapper';
 import { SpawnManager } from './managers/SpawnManager';
 import { CreepManager } from './managers/CreepManager';
+import { TowerManager } from './managers/TowerManager';
 import { initializeMemory, cleanMemory } from './utils/MemoryManager';
 
 declare const _: any;
@@ -26,6 +27,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
     
     // Recruit new subjects as needed
     SpawnManager.run(room);
+    
+    // Manage tower defenses
+    TowerManager.run(room);
   }
 
   // Command all subjects
