@@ -3,7 +3,7 @@
  * Haulers transport goods between storage and consumers
  */
 
-import { toggleWorkingState, harvestEnergy, transferEnergy, pickupEnergy, collectFromContainers, upgradeController } from '../utils/CreepActions';
+import { toggleWorkingState, harvestEnergy, transferEnergy, pickupEnergy, collectFromContainers, collectFromBaseLink, upgradeController } from '../utils/CreepActions';
 
 export class RoleMerchant {
   public static run(creep: Creep): void {
@@ -18,6 +18,12 @@ export class RoleMerchant {
         upgradeController(creep);
       }
     } else {
+      // Prefer the base link if it has energy
+      const linkResult = collectFromBaseLink(creep);
+      if (linkResult === OK || linkResult === ERR_NOT_IN_RANGE) {
+        return;
+      }
+
       // Try picking up dropped energy first
       const pickupResult = pickupEnergy(creep);
       if (pickupResult === ERR_NOT_FOUND) {

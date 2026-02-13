@@ -3,7 +3,7 @@
  * Harvesters gather energy from the land
  */
 
-import { harvestEnergy, transferEnergy, collectFromContainers, upgradeController } from '../utils/CreepActions';
+import { harvestEnergy, transferEnergy, collectFromContainers, transferToNearbySourceLink, upgradeController } from '../utils/CreepActions';
 
 export class RolePeasant {
   public static run(creep: Creep): void {
@@ -16,6 +16,12 @@ export class RolePeasant {
         harvestEnergy(creep);
       }
     } else {
+      // If standing near a source link, deposit there first
+      const linkResult = transferToNearbySourceLink(creep);
+      if (linkResult === OK || linkResult === ERR_NOT_IN_RANGE) {
+        return;
+      }
+
       // Deposit energy with priority: Spawn → Extensions → Controller Container
       const transferResult = transferEnergy(creep, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_CONTAINER]);
       if (transferResult === ERR_NOT_FOUND) {

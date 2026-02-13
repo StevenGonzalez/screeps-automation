@@ -3,6 +3,8 @@
  * Centralized, reusable functions for common creep behaviors to follow DRY principle
  */
 
+import { getBaseLink, getSourceLinks } from './LinkUtils';
+
 /**
  * Harvest energy from the closest active energy source
  * @param creep The creep performing the action
@@ -161,6 +163,56 @@ export function collectFromContainers(creep: Creep, pathColor: string = '#ffa500
     return result;
   }
   return ERR_NOT_FOUND;
+}
+
+/**
+ * Collect energy from the base link (near the main anchor)
+ * @param creep The creep performing the collection
+ * @param pathColor Optional color for movement visualization
+ * @returns The result of the withdraw operation
+ */
+export function collectFromBaseLink(creep: Creep, pathColor: string = '#ffd966'): number {
+  const baseLink = getBaseLink(creep.room);
+  if (!baseLink) {
+    return ERR_NOT_FOUND;
+  }
+
+  if (baseLink.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
+    return ERR_NOT_ENOUGH_RESOURCES;
+  }
+
+  const result = creep.withdraw(baseLink, RESOURCE_ENERGY);
+  if (result === ERR_NOT_IN_RANGE) {
+    creep.moveTo(baseLink, { visualizePathStyle: { stroke: pathColor } });
+  }
+  return result;
+}
+
+/**
+ * Transfer energy to a nearby source link (when harvesting at sources)
+ * @param creep The creep performing the transfer
+ * @param pathColor Optional color for movement visualization
+ * @returns The result of the transfer operation
+ */
+export function transferToNearbySourceLink(creep: Creep, pathColor: string = '#ffd966'): number {
+  const sourceLinks = getSourceLinks(creep.room).filter(link =>
+    link.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && creep.pos.inRangeTo(link.pos, 2)
+  );
+
+  if (sourceLinks.length === 0) {
+    return ERR_NOT_FOUND;
+  }
+
+  const target = creep.pos.findClosestByPath(sourceLinks) as StructureLink | null;
+  if (!target) {
+    return ERR_NOT_FOUND;
+  }
+
+  const result = creep.transfer(target, RESOURCE_ENERGY);
+  if (result === ERR_NOT_IN_RANGE) {
+    creep.moveTo(target, { visualizePathStyle: { stroke: pathColor } });
+  }
+  return result;
 }
 
 /**

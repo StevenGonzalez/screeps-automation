@@ -7,6 +7,7 @@ import { ErrorMapper } from './utils/ErrorMapper';
 import { SpawnManager } from './managers/SpawnManager';
 import { CreepManager } from './managers/CreepManager';
 import { TowerManager } from './managers/TowerManager';
+import { LinkManager } from './managers/LinkManager';
 import { initializeMemory, cleanMemory } from './utils/MemoryManager';
 
 declare const _: any;
@@ -30,6 +31,9 @@ export const loop = ErrorMapper.wrapLoop(() => {
     
     // Manage tower defenses
     TowerManager.run(room);
+
+    // Manage link transfers
+    LinkManager.run(room);
   }
 
   // Command all subjects
