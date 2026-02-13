@@ -25,8 +25,12 @@ export class RolePeasant {
       // Deposit energy with priority: Spawn → Extensions → Controller Container
       const transferResult = transferEnergy(creep, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_CONTAINER]);
       if (transferResult === ERR_NOT_FOUND) {
-        // Nothing needs energy, help upgrade the controller
-        upgradeController(creep);
+        // If core consumers are full, deposit surplus into storage
+        const storageResult = transferEnergy(creep, [STRUCTURE_STORAGE]);
+        if (storageResult === ERR_NOT_FOUND) {
+          // Nothing needs energy, help upgrade the controller
+          upgradeController(creep);
+        }
       }
     }
   }

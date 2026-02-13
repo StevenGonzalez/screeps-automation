@@ -14,8 +14,12 @@ export class RoleMerchant {
       // Deliver to spawn, extension, or tower
       const transferResult = transferEnergy(creep, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER]);
       if (transferResult === ERR_NOT_FOUND) {
-        // Nothing needs energy, help upgrade the controller
-        upgradeController(creep);
+        // If core consumers are full, deposit surplus into storage
+        const storageResult = transferEnergy(creep, [STRUCTURE_STORAGE]);
+        if (storageResult === ERR_NOT_FOUND) {
+          // Nothing needs energy, help upgrade the controller
+          upgradeController(creep);
+        }
       }
     } else {
       // Prefer the base link if it has energy
