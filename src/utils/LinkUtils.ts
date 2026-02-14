@@ -52,3 +52,16 @@ export function getSourceLinks(room: Room): StructureLink[] {
 
   return links.filter(link => sources.some(source => link.pos.inRangeTo(source.pos, 2)));
 }
+/**
+ * Get the primary source link (the one dedicated to energy sources)
+ * Excludes the base link to ensure we get the actual source link
+ * @param room The room to search
+ * @returns The primary source link or null if none found
+ */
+export function getPrimarySourceLink(room: Room): StructureLink | null {
+  const baseLink = getBaseLink(room);
+  const sourceLinks = getSourceLinks(room);
+  
+  // Return the first source link that is NOT the base link
+  return sourceLinks.find(link => !baseLink || link.id !== baseLink.id) || null;
+}

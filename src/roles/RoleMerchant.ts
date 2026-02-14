@@ -3,7 +3,7 @@
  * Haulers transport goods between storage and consumers
  */
 
-import { toggleWorkingState, harvestEnergy, transferEnergy, pickupEnergy, collectFromContainers, collectFromBaseLink, upgradeController } from '../utils/CreepActions';
+import { toggleWorkingState, harvestEnergy, transferEnergy, pickupEnergy, collectFromContainers, collectFromBaseLink, transferToNearbySourceLink, upgradeController } from '../utils/CreepActions';
 
 export class RoleMerchant {
   public static run(creep: Creep): void {
@@ -11,6 +11,12 @@ export class RoleMerchant {
     toggleWorkingState(creep);
 
     if (creep.memory.working) {
+      // If standing near a source link, deposit there first
+      const linkResult = transferToNearbySourceLink(creep);
+      if (linkResult === OK || linkResult === ERR_NOT_IN_RANGE) {
+        return;
+      }
+
       // Deliver to spawn, extension, or tower
       const transferResult = transferEnergy(creep, [STRUCTURE_SPAWN, STRUCTURE_EXTENSION, STRUCTURE_TOWER]);
       if (transferResult === ERR_NOT_FOUND) {

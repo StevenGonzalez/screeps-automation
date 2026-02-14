@@ -3,7 +3,7 @@
  * Centralized, reusable functions for common creep behaviors to follow DRY principle
  */
 
-import { getBaseLink, getSourceLinks } from './LinkUtils';
+import { getBaseLink, getPrimarySourceLink } from './LinkUtils';
 
 /**
  * Harvest energy from the closest active energy source
@@ -189,28 +189,29 @@ export function collectFromBaseLink(creep: Creep, pathColor: string = '#ffd966')
 }
 
 /**
- * Transfer energy to a nearby source link (when harvesting at sources)
+ * Transfer energy to the primary source link (when harvesting at sources)
  * @param creep The creep performing the transfer
  * @param pathColor Optional color for movement visualization
  * @returns The result of the transfer operation
  */
 export function transferToNearbySourceLink(creep: Creep, pathColor: string = '#ffd966'): number {
-  const sourceLinks = getSourceLinks(creep.room).filter(link =>
-    link.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && creep.pos.inRangeTo(link.pos, 2)
-  );
-
-  if (sourceLinks.length === 0) {
+  const sourceLink = getPrimarySourceLink(creep.room);
+  if (!sourceLink) {
     return ERR_NOT_FOUND;
   }
 
-  const target = creep.pos.findClosestByPath(sourceLinks) as StructureLink | null;
-  if (!target) {
-    return ERR_NOT_FOUND;
+  if (sourceLink.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
+    return ERR_NOT_ENOUGH_RESOURCES;
   }
 
-  const result = creep.transfer(target, RESOURCE_ENERGY);
+  // Only transfer if within reasonable range of the link (creep is at source area)
+  if (!creep.pos.inRangeTo(sourceLink.pos, 3)) {
+    return ERR_NOT_IN_RANGE;
+  }
+
+  const result = creep.transfer(sourceLink, RESOURCE_ENERGY);
   if (result === ERR_NOT_IN_RANGE) {
-    creep.moveTo(target, { visualizePathStyle: { stroke: pathColor } });
+    creep.moveTo(sourceLink, { visualizePathStyle: { stroke: pathColor } });
   }
   return result;
 }
