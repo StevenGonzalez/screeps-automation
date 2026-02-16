@@ -189,12 +189,14 @@ export function collectFromBaseLink(creep: Creep, pathColor: string = '#ffd966')
 }
 
 /**
- * Transfer energy to the primary source link (when harvesting at sources)
+ * Transfer energy to the primary source link (economical strategy)
+ * Only uses link if miner containers are sufficiently full to warrant the energy cost
  * @param creep The creep performing the transfer
+ * @param fullnessThreshold Container fullness threshold (0-1, default 0.8 = 80%)
  * @param pathColor Optional color for movement visualization
  * @returns The result of the transfer operation
  */
-export function transferToNearbySourceLink(creep: Creep, pathColor: string = '#ffd966'): number {
+export function transferToNearbySourceLink(creep: Creep, fullnessThreshold: number = 0.8, pathColor: string = '#ffd966'): number {
   const sourceLink = getPrimarySourceLink(creep.room);
   if (!sourceLink) {
     return ERR_NOT_FOUND;
@@ -204,9 +206,25 @@ export function transferToNearbySourceLink(creep: Creep, pathColor: string = '#f
     return ERR_NOT_ENOUGH_RESOURCES;
   }
 
-  // Only transfer if within reasonable range of the link (creep is at source area)
-  if (!creep.pos.inRangeTo(sourceLink.pos, 3)) {
-    return ERR_NOT_IN_RANGE;
+  // Check if any miner containers are full enough to warrant link usage (economical)
+  const sources = creep.room.find(FIND_SOURCES);
+  const hasFullContainers = sources.some(source => {
+    const container = source.pos.findClosestByPath(FIND_STRUCTURES, {
+      filter: (structure) => {
+        return structure.structureType === STRUCTURE_CONTAINER &&
+               structure.pos.inRangeTo(source.pos, 2);
+      }
+    }) as StructureContainer | null;
+
+    if (!container) return false;
+    
+    const fullness = container.store.getUsedCapacity(RESOURCE_ENERGY) / container.store.getCapacity(RESOURCE_ENERGY);
+    return fullness >= fullnessThreshold;
+  });
+
+  // Only use link if miner containers are sufficiently full (saves time vs creep movement)
+  if (!hasFullContainers) {
+    return ERR_NOT_ENOUGH_RESOURCES;
   }
 
   const result = creep.transfer(sourceLink, RESOURCE_ENERGY);
