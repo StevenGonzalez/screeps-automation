@@ -5,6 +5,7 @@ import {
   ROLE_REPAIRER,
   ROLE_MINER,
   ROLE_HAULER,
+  normalizeRole,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
@@ -21,17 +22,22 @@ export function loop() {
 }
 
 function processCreep(creep: Creep) {
-  if (creep.memory.role === ROLE_HARVESTER) {
+  const role = normalizeRole(creep.memory.role);
+  if (role && creep.memory.role !== role) {
+    creep.memory.role = role;
+  }
+
+  if (role === ROLE_HARVESTER) {
     runHarvester(creep);
-  } else if (creep.memory.role === ROLE_UPGRADER) {
+  } else if (role === ROLE_UPGRADER) {
     runUpgrader(creep);
-  } else if (creep.memory.role === ROLE_BUILDER) {
+  } else if (role === ROLE_BUILDER) {
     runBuilder(creep);
-  } else if (creep.memory.role === ROLE_REPAIRER) {
+  } else if (role === ROLE_REPAIRER) {
     runRepairer(creep);
-  } else if (creep.memory.role === ROLE_MINER) {
+  } else if (role === ROLE_MINER) {
     runMiner(creep);
-  } else if (creep.memory.role === ROLE_HAULER) {
+  } else if (role === ROLE_HAULER) {
     runHauler(creep);
   }
 }

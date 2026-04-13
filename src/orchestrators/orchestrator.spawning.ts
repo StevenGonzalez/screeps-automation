@@ -5,6 +5,7 @@ import {
   ROLE_REPAIRER,
   ROLE_MINER,
   ROLE_HAULER,
+  normalizeRole,
 } from "../config/config.roles";
 
 import {
@@ -26,7 +27,7 @@ function buildScaledBody(
   role: string,
   availableEnergy: number
 ): BodyPartConstant[] {
-  if (role === "harvester") {
+  if (role === ROLE_HARVESTER) {
     const body: BodyPartConstant[] = [];
     let energyLeft = availableEnergy;
     while (energyLeft >= 200) {
@@ -61,8 +62,12 @@ function calculateBodyPartCost(parts: BodyPartConstant[]): number {
 
 function getCreepsByRole(role: string): Creep[] {
   return Object.values(Game.creeps).filter(
-    (creep) => creep.memory.role === role
+    (creep) => normalizeRole(creep.memory.role) === role
   );
+}
+
+function getCreepsByRoleInRoom(role: string, room: Room): Creep[] {
+  return getCreepsByRole(role).filter((creep) => creep.room.name === room.name);
 }
 
 function getMinerPopulationTarget(room: Room): number {
@@ -80,9 +85,7 @@ function getMinerPopulationTarget(room: Room): number {
 }
 
 function getHarvesterPopulationTarget(room: Room): number {
-  const minerCount = getCreepsByRole(ROLE_MINER).filter(
-    (c) => c.room.name === room.name
-  ).length;
+  const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
   return Math.max(0, 2 - minerCount);
 }
 
@@ -141,7 +144,9 @@ function shouldSpawnHauler(room: Room): boolean {
   const targetFromContainers = containers.length;
 
   const totalMinerWork = Object.values(Game.creeps)
-    .filter((c) => c.memory.role === ROLE_MINER && c.room?.name === room.name)
+    .filter(
+      (c) => normalizeRole(c.memory.role) === ROLE_MINER && c.room?.name === room.name
+    )
     .reduce(
       (sum, c) => sum + (c.body.filter((p) => p.type === WORK).length || 0),
       0
@@ -179,29 +184,25 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function shouldSpawnMiner(room: Room): boolean {
-  const miners = getCreepsByRole(ROLE_MINER).filter(
-    (c) => c.room.name === room.name
-  );
+  const miners = getCreepsByRoleInRoom(ROLE_MINER, room);
   const target = getMinerPopulationTarget(room);
   return miners.length < target;
 }
 
 function shouldSpawnHarvester(room: Room): boolean {
-  const harvesters = getCreepsByRole(ROLE_HARVESTER).filter(
-    (c) => c.room.name === room.name
-  );
+  const harvesters = getCreepsByRoleInRoom(ROLE_HARVESTER, room);
   const targetPopulation = getHarvesterPopulationTarget(room);
   return harvesters.length < targetPopulation;
 }
 
 function shouldSpawnUpgrader(room: Room): boolean {
-  const upgraders = getCreepsByRole(ROLE_UPGRADER);
+  const upgraders = getCreepsByRoleInRoom(ROLE_UPGRADER, room);
   const targetPopulation = getPopulationTarget(ROLE_UPGRADER, room);
   return upgraders.length < targetPopulation;
 }
 
 function shouldSpawnBuilder(room: Room): boolean {
-  const builders = getCreepsByRole(ROLE_BUILDER);
+  const builders = getCreepsByRoleInRoom(ROLE_BUILDER, room);
   const targetPopulation = getPopulationTarget(ROLE_BUILDER, room);
   if (builders.length >= targetPopulation) return false;
   const sites = room.find(FIND_CONSTRUCTION_SITES);
@@ -223,9 +224,7 @@ function getRepairerPopulationTarget(room: Room): number {
   return target;
 }
 function shouldSpawnRepairer(room: Room): boolean {
-  const repairers = getCreepsByRole(ROLE_REPAIRER).filter(
-    (c) => c.room?.name === room.name
-  );
+  const repairers = getCreepsByRoleInRoom(ROLE_REPAIRER, room);
   const target = getRepairerPopulationTarget(room);
   return repairers.length < target && target > 0;
 }

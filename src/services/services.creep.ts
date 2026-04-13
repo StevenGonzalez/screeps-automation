@@ -1,4 +1,9 @@
-import { ENERGY_DEPOSIT_PRIORITY } from "../config/config.roles";
+import {
+  ENERGY_DEPOSIT_PRIORITY,
+  ROLE_HAULER,
+  ROLE_MINER,
+  normalizeRole,
+} from "../config/config.roles";
 
 export function findClosestSource(creep: Creep): Source | null {
   return creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
@@ -8,7 +13,8 @@ export function findEnergyDepositTarget(
   creep: Creep,
   role: string
 ): Structure | null {
-  const priorityList = ENERGY_DEPOSIT_PRIORITY[role] || [];
+  const canonicalRole = normalizeRole(role) || role;
+  const priorityList = ENERGY_DEPOSIT_PRIORITY[canonicalRole] || [];
 
   const targets = creep.room.find(FIND_STRUCTURES, {
     filter: (structure): structure is AnyStoreStructure => {
@@ -388,7 +394,7 @@ export function findDepositTargetExcludingMiner(
   if (priorityTarget && minerIds.indexOf(priorityTarget.id) === -1)
     return priorityTarget;
 
-  if (role === "hauler") {
+  if ((normalizeRole(role) || role) === ROLE_HAULER) {
     const upgradeId = (creep.room.memory as any).upgradeContainerId as
       | Id<StructureContainer>
       | undefined;
@@ -433,7 +439,7 @@ export function signControllerIfNeeded(
   creep: Creep,
   controller: StructureController
 ): boolean {
-  const desiredSignature = "Under New Management";
+  const desiredSignature = "By Decree of the Iron Keep";
 
   const currentSign = controller.sign;
   const myUsername =
@@ -492,7 +498,7 @@ export function findUnclaimedMinerAssignment(
     for (const container of containers) {
       const taken = Object.values(Game.creeps).some(
         (c) =>
-          c.memory.role === "miner" &&
+          normalizeRole(c.memory.role) === ROLE_MINER &&
           c.memory.assignedContainerId === container.id
       );
       if (!taken) {
@@ -513,7 +519,7 @@ export function findUnclaimedHaulerAssignment(
   for (const container of containers) {
     const taken = Object.values(Game.creeps).some(
       (c) =>
-        c.memory.role === "hauler" &&
+        normalizeRole(c.memory.role) === ROLE_HAULER &&
         c.memory.assignedContainerId === container.id
     );
     if (!taken) {

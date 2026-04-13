@@ -10,6 +10,7 @@ import {
   findClosestMinerContainerWithEnergy,
   findDepositTargetExcludingMiner,
 } from "../services/services.creep";
+import { ROLE_HAULER } from "../config/config.roles";
 
 export function runHauler(creep: Creep) {
   if (!creep.memory.assignedContainerId) {
@@ -53,7 +54,7 @@ export function runHauler(creep: Creep) {
     }
   }
 
-  const depositTarget = findDepositTargetExcludingMiner(creep, "hauler");
+  const depositTarget = findDepositTargetExcludingMiner(creep, ROLE_HAULER);
   if (depositTarget) {
     transferEnergyTo(creep, depositTarget);
     return;
