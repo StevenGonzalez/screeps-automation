@@ -1,29 +1,30 @@
 {
-    "name": "screeps-automation",
-    "version": "1.0.0",
-    "description": "Screeps automation scripts",
-    "main": "dist/main.js",
-    "scripts": {
-        "build": "rollup -c",
-        "deploy": "rollup -c --environment DEST:main",
-        "watch": "rollup -cw"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/StevenGonzalez/screeps-automation.git"
-    },
-    "author": "StevenGonzalez",
-    "license": "ISC",
-    "devDependencies": {
-        "@types/lodash": "^4.14.202",
-        "@types/screeps": "^3.3.8",
-        "rollup": "^2.79.1",
-        "rollup-plugin-clear": "^2.0.7",
-        "rollup-plugin-screeps": "^1.0.1",
-        "rollup-plugin-typescript2": "^0.36.0",
-        "typescript": "^5.3.3"
-    },
-    "dependencies": {
-        "lodash": "^4.17.21"
-    }
+  "name": "screeps-automation",
+  "version": "1.0.0",
+  "description": "Screeps automation scripts",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "rollup -c",
+    "deploy": "rollup -c --environment DEST:main",
+    "deploy:sim": "rollup -c",
+    "watch": "rollup -cw"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/StevenGonzalez/screeps-automation.git"
+  },
+  "author": "StevenGonzalez",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/lodash": "^4.14.202",
+    "@types/screeps": "^3.3.8",
+    "rollup": "^2.79.1",
+    "rollup-plugin-clear": "^2.0.7",
+    "rollup-plugin-screeps": "^1.0.1",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "lodash": "^4.17.21"
+  }
 }

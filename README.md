@@ -1,22 +1,26 @@
-## 🚀 Features
+# The Royal Keep - Screeps Automation
+
+A medieval kingdom-themed Screeps automation project focused on modular systems, stable logistics, and iterative strategy.
+
+## Features
 
 - Medieval command structure with role-based units: peasant, steward, mason, blacksmith, quarryman, and carter
-- Tick-driven orchestration layers for memory, spawning, structures, towers, and pixels
+- Tick-driven orchestration for memory, spawning, structures, towers, and pixels
 - Room planning with roads, containers, ramparts, towers, and expansion support
 - Practical automation priorities for economy stability, fortification, and controller progress
-- Built for readable, modular iteration as your kingdom grows
+- Designed for clarity, modularity, and ease of iteration
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-- **Language**: TypeScript
-- **Package Manager**: Yarn
-- **Editor**: Visual Studio Code
-- **Environment**: Screeps MMO sandbox
+- Language: TypeScript
+- Package Manager: Yarn
+- Editor: Visual Studio Code
+- Environment: Screeps MMO sandbox
 
-## 📄 License
+## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT License.
 
-## 🤝 About
+## About
 
-Created and maintained by [Steven Gonzalez](https://github.com/StevenGonzalez) as part of an ongoing exploration into autonomous systems, game AI, and modular software architecture.
+Created and maintained by Steven Gonzalez as part of an ongoing exploration into autonomous systems, game AI, and modular software architecture.
