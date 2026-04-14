@@ -134,6 +134,27 @@ export function planMineralContainer(
         s.pos,
         { pos: mineral.pos, range: offset },
         {
+          roomCallback: (roomName: string): boolean | CostMatrix => {
+            if (roomName !== room.name) return false;
+            const costMatrix = new PathFinder.CostMatrix();
+            // Mark walls as impassable
+            for (let x = 0; x < 50; x++) {
+              for (let y = 0; y < 50; y++) {
+                const terrain = room.getTerrain().get(x, y);
+                if (terrain === TERRAIN_MASK_WALL) costMatrix.set(x, y, 255);
+              }
+            }
+            // Mark structures as impassable (except roads)
+            const structures = room.find(FIND_STRUCTURES) as Structure[];
+            for (const struct of structures) {
+              if (struct.structureType === STRUCTURE_ROAD) {
+                costMatrix.set(struct.pos.x, struct.pos.y, 1);
+                continue;
+              }
+              costMatrix.set(struct.pos.x, struct.pos.y, 255);
+            }
+            return costMatrix;
+          },
           plainCost: 2,
           swampCost: 10,
           maxOps: 2000,
