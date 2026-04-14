@@ -143,6 +143,31 @@ function applyPlannedConstruction(room: Room) {
   }
 }
 
+function cleanupUnplannedConstructionSites(room: Room) {
+  if (!room.memory.plannedStructures) return;
+  const sites = room.find(FIND_CONSTRUCTION_SITES);
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+
+  for (const site of sites) {
+    // Build a set of all planned positions for this structure type
+    const plannedPositions = new Set<string>();
+    for (const key of Object.keys(mem)) {
+      const type = structureTypeForKey(key);
+      if (type !== site.structureType) continue;
+      const positions = plannedPositionsFromMemory(room, key);
+      for (const pos of positions) {
+        plannedPositions.add(`${pos.x},${pos.y}`);
+      }
+    }
+
+    // If this construction site is not in the planned positions, remove it
+    const siteKey = `${site.pos.x},${site.pos.y}`;
+    if (!plannedPositions.has(siteKey)) {
+      site.remove();
+    }
+  }
+}
+
 function ensureRampartsForExistingStructures(room: Room) {
   const rampTypes = (STRUCTURE_PLANNER.rampartOnTopFor ||
     []) as StructureConstant[];
@@ -176,6 +201,7 @@ export function loop() {
     if (!room.controller || !room.controller.my) continue;
     processRoomStructures(room);
     applyPlannedConstruction(room);
+    cleanupUnplannedConstructionSites(room);
     ensureRampartsForExistingStructures(room);
   }
 }
