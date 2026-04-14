@@ -5,6 +5,7 @@ import {
   ROLE_REPAIRER,
   ROLE_MINER,
   ROLE_HAULER,
+  ROLE_MINERAL_MINER,
   normalizeRole,
 } from "../config/config.roles";
 
@@ -119,6 +120,7 @@ function processRoomSpawning(room: Room) {
   if (!spawn) return;
   if (spawn.spawning) return;
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
+  if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
@@ -229,6 +231,23 @@ function shouldSpawnRepairer(room: Room): boolean {
   return repairers.length < target && target > 0;
 }
 
+function shouldSpawnMineralMiner(room: Room): boolean {
+  const mineralId = room.memory.mineralId;
+  if (!mineralId) return false;
+
+  const mineral = Game.getObjectById(mineralId) as Mineral | null;
+  if (!mineral || mineral.mineralAmount === 0) return false;
+
+  const extractorId = room.memory.extractorId;
+  if (!extractorId) return false;
+
+  const extractor = Game.getObjectById(extractorId) as StructureExtractor | null;
+  if (!extractor || extractor.cooldown > 0) return false;
+
+  const mineralMiners = getCreepsByRoleInRoom(ROLE_MINERAL_MINER, room);
+  return mineralMiners.length === 0;
+}
+
 function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_REPAIRER}${Game.time}`;
   const allowedEnergy = Math.floor(
@@ -237,6 +256,30 @@ function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
   const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_REPAIRER },
+  });
+  return res === OK;
+}
+
+function spawnMineralMiner(room: Room, spawn: StructureSpawn): boolean {
+  const newName = `${ROLE_MINERAL_MINER}${Game.time}`;
+  const maxWorkParts = 5;
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  let availableEnergy = allowedEnergy;
+  const workCost = BODYPART_COST[WORK];
+  const moveCost = BODYPART_COST[MOVE];
+  let workParts = Math.min(
+    Math.floor(availableEnergy / (workCost + moveCost)),
+    maxWorkParts
+  );
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < workParts; i++) {
+    body.push(WORK, MOVE);
+  }
+  if (body.length === 0) body.push(WORK, MOVE);
+  const res = spawn.spawnCreep(body, newName, {
+    memory: { role: ROLE_MINERAL_MINER },
   });
   return res === OK;
 }

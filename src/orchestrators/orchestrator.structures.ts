@@ -396,22 +396,32 @@ function processRoomStructures(room: Room) {
         room,
         `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
       );
+      const containerKey = `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`;
+      const mineralKey = `${PLANNER_KEYS.ROAD_PREFIX}${spawn.id}_${PLANNER_KEYS.NODE_MINERAL_PREFIX}${mineral.id}`;
+
       if (plannedMineral.length === 0) {
         const mpos = planMineralContainer(room, mineral);
-        if (mpos)
-          addPlannedStructureToMemory(
-            room,
-            `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`,
-            mpos
-          );
+        if (mpos) {
+          addPlannedStructureToMemory(room, containerKey, mpos);
+        }
+      } else if (plannedMineral.length > 0) {
+        // Check if container position changed (container moved or pathfinding found better spot)
+        // If position changed, clear old road so it gets replanned to new location
+        const mem = room.memory.plannedStructures as Record<string, string[]>;
+        const currentPos = plannedMineral[0];
+        const oldPosStr = mem[containerKey]?.[0];
+
+        if (oldPosStr && oldPosStr !== `${currentPos.x},${currentPos.y}`) {
+          // Position changed, clear old road to force replanning
+          mem[mineralKey] = [];
+        }
       }
 
-      const mineralKey = `${PLANNER_KEYS.ROAD_PREFIX}${spawn.id}_${PLANNER_KEYS.NODE_MINERAL_PREFIX}${mineral.id}`;
       const existingMineralRoad = plannedPositionsFromMemory(room, mineralKey);
       if (existingMineralRoad.length === 0) {
         const plannedMineral2 = plannedPositionsFromMemory(
           room,
-          `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
+          containerKey
         );
         const targetPos =
           plannedMineral2.length > 0 ? plannedMineral2[0] : mineral.pos;

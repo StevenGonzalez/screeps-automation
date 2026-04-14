@@ -71,6 +71,24 @@ function processRoomMemory(room: Room) {
     });
     room.memory.towerIds = towers.map((t) => t.id);
 
+    const terminals = room.find(FIND_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_TERMINAL,
+    });
+    room.memory.terminalId = terminals.length > 0 ? terminals[0].id : undefined;
+
+    const extractors = room.find(FIND_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
+    });
+    room.memory.extractorId = extractors.length > 0 ? extractors[0].id : undefined;
+
+    if (minerals.length > 0) {
+      const mineralContainers = containers.filter(
+        (c) => c.pos.getRangeTo(minerals[0].pos) <= 1
+      );
+      room.memory.mineralContainerId =
+        mineralContainers.length > 0 ? mineralContainers[0].id : undefined;
+    }
+
     room.memory.lastScan = Game.time;
   }
 }

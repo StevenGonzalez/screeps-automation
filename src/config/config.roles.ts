@@ -4,6 +4,7 @@ export const ROLE_UPGRADER = "steward";
 export const ROLE_REPAIRER = "blacksmith";
 export const ROLE_MINER = "quarryman";
 export const ROLE_HAULER = "carter";
+export const ROLE_MINERAL_MINER = "prospector";
 
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
   builder: ROLE_BUILDER,
@@ -12,6 +13,7 @@ const LEGACY_ROLE_ALIASES: Record<string, string> = {
   repairer: ROLE_REPAIRER,
   miner: ROLE_MINER,
   hauler: ROLE_HAULER,
+  prospector: ROLE_MINERAL_MINER,
 };
 
 export function normalizeRole(role?: string): string | undefined {
@@ -38,4 +40,5 @@ export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
     STRUCTURE_STORAGE,
     STRUCTURE_CONTAINER,
   ],
+  [ROLE_MINERAL_MINER]: [STRUCTURE_CONTAINER, STRUCTURE_STORAGE, STRUCTURE_TERMINAL],
 };

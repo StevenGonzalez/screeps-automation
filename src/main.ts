@@ -4,6 +4,7 @@ import * as pixelsSystem from "./orchestrators/orchestrator.pixels";
 import * as spawningSystem from "./orchestrators/orchestrator.spawning";
 import * as structuresSystem from "./orchestrators/orchestrator.structures";
 import * as towerSystem from "./orchestrators/orchestrator.tower";
+import * as terminalSystem from "./orchestrators/orchestrator.terminal";
 
 export function loop() {
   creepRunnerSystem.loop();
@@ -12,4 +13,5 @@ export function loop() {
   spawningSystem.loop();
   structuresSystem.loop();
   towerSystem.loop();
+  terminalSystem.loop();
 }

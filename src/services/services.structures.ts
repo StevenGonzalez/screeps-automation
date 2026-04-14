@@ -126,6 +126,46 @@ export function planMineralContainer(
   });
   if (existing.length > 0) return null;
 
+  const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
+  if (spawns.length > 0) {
+    let bestResult: { path: PathStep[] } | null = null;
+    for (const s of spawns) {
+      const res = PathFinder.search(
+        s.pos,
+        { pos: mineral.pos, range: offset },
+        {
+          plainCost: 2,
+          swampCost: 10,
+          maxOps: 2000,
+        }
+      );
+      if (
+        !bestResult ||
+        (res.path && res.path.length < bestResult.path.length)
+      ) {
+        bestResult = res as any;
+      }
+    }
+
+    if (bestResult && bestResult.path && bestResult.path.length > 0) {
+      for (let i = bestResult.path.length - 1; i >= 0; i--) {
+        const step = bestResult.path[i];
+        for (let dx = -offset; dx <= offset; dx++) {
+          for (let dy = -offset; dy <= offset; dy++) {
+            if (dx === 0 && dy === 0) continue;
+            const x = step.x + dx;
+            const y = step.y + dy;
+            const distX = Math.abs(x - mineral.pos.x);
+            const distY = Math.abs(y - mineral.pos.y);
+            if (distX > offset || distY > offset) continue;
+            if (isBuildableTile(room, x, y))
+              return new RoomPosition(x, y, room.name);
+          }
+        }
+      }
+    }
+  }
+
   for (let dx = -offset; dx <= offset; dx++) {
     for (let dy = -offset; dy <= offset; dy++) {
       if (dx === 0 && dy === 0) continue;
