@@ -5,8 +5,8 @@
   "main": "dist/main.js",
   "scripts": {
     "build": "rollup -c",
-    "deploy": "rollup -c --environment DEST:main",
-    "deploy:sim": "rollup -c",
+    "deploy": "rollup -c --environment DEPLOY:true",
+    "deploy:sim": "rollup -c --environment DEPLOY:true",
     "watch": "rollup -cw"
   },
   "repository": {

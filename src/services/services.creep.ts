@@ -5,6 +5,54 @@ import {
   normalizeRole,
 } from "../config/config.roles";
 
+let assignmentCacheTick = -1;
+const assignedContainerIdsByRoomAndRole: Record<string, Set<string>> = {};
+
+let roomContainersCacheTick = -1;
+const roomContainersCache: Record<string, StructureContainer[]> = {};
+
+function getAssignedContainerIdsByRole(room: Room, role: string): Set<string> {
+  if (assignmentCacheTick !== Game.time) {
+    assignmentCacheTick = Game.time;
+    for (const key of Object.keys(assignedContainerIdsByRoomAndRole)) {
+      delete assignedContainerIdsByRoomAndRole[key];
+    }
+  }
+
+  const cacheKey = `${room.name}:${role}`;
+  if (!assignedContainerIdsByRoomAndRole[cacheKey]) {
+    const taken = new Set<string>();
+    for (const creepName in Game.creeps) {
+      const creep = Game.creeps[creepName];
+      if (creep.room.name !== room.name) continue;
+      if (normalizeRole(creep.memory.role) !== role) continue;
+      const assigned = creep.memory.assignedContainerId;
+      if (assigned) taken.add(assigned.toString());
+    }
+    assignedContainerIdsByRoomAndRole[cacheKey] = taken;
+  }
+
+  return assignedContainerIdsByRoomAndRole[cacheKey];
+}
+
+function getRoomContainers(room: Room): StructureContainer[] {
+  if (roomContainersCacheTick !== Game.time) {
+    roomContainersCacheTick = Game.time;
+    for (const key of Object.keys(roomContainersCache)) {
+      delete roomContainersCache[key];
+    }
+  }
+
+  if (!roomContainersCache[room.name]) {
+    roomContainersCache[room.name] = room.find(FIND_STRUCTURES, {
+      filter: (s): s is StructureContainer =>
+        s.structureType === STRUCTURE_CONTAINER,
+    });
+  }
+
+  return roomContainersCache[room.name];
+}
+
 export function findClosestSource(creep: Creep): Source | null {
   return creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
 }
@@ -16,19 +64,23 @@ export function findEnergyDepositTarget(
   const canonicalRole = normalizeRole(role) || role;
   const priorityList = ENERGY_DEPOSIT_PRIORITY[canonicalRole] || [];
 
-  const targets = creep.room.find(FIND_STRUCTURES, {
-    filter: (structure): structure is AnyStoreStructure => {
-      return (
-        priorityList.includes(structure.structureType) &&
-        "store" in structure &&
-        structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-      );
-    },
-  });
+  for (const structureType of priorityList) {
+    const targets = creep.room.find(FIND_STRUCTURES, {
+      filter: (structure): structure is AnyStoreStructure => {
+        return (
+          structure.structureType === structureType &&
+          "store" in structure &&
+          structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+        );
+      },
+    });
 
-  if (targets.length > 0) {
-    return creep.pos.findClosestByPath(targets);
+    if (targets.length > 0) {
+      const closest = creep.pos.findClosestByPath(targets) as Structure | null;
+      if (closest) return closest;
+    }
   }
+
   return null;
 }
 
@@ -390,14 +442,13 @@ export function findDepositTargetExcludingMiner(
 ): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
 
-  const priorityTarget = findEnergyDepositTarget(creep, role);
-  if (priorityTarget && minerIds.indexOf(priorityTarget.id) === -1)
-    return priorityTarget;
-
-  if ((normalizeRole(role) || role) === ROLE_HAULER) {
+  const canonicalRole = normalizeRole(role) || role;
+  if (canonicalRole === ROLE_HAULER) {
     const upgradeId = (creep.room.memory as any).upgradeContainerId as
       | Id<StructureContainer>
       | undefined;
+
+    // Prioritize controller container so upgraders stay supplied.
     if (upgradeId) {
       const upgradeCont = Game.getObjectById(
         upgradeId
@@ -410,6 +461,28 @@ export function findDepositTargetExcludingMiner(
         return upgradeCont;
       }
     }
+
+    // Next priority is storage, then any non-miner containers.
+    const storage = creep.room.storage;
+    if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+      return storage;
+    }
+
+    const nonMinerContainers = getRoomContainers(creep.room).filter(
+      (container) =>
+        minerIds.indexOf(container.id) === -1 &&
+        container.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    );
+    if (nonMinerContainers.length > 0) {
+      return creep.pos.findClosestByPath(nonMinerContainers) || null;
+    }
+
+    return null;
+  }
+
+  const priorityTarget = findEnergyDepositTarget(creep, role);
+  if (priorityTarget && minerIds.indexOf(priorityTarget.id) === -1) {
+    return priorityTarget;
   }
 
   const targets = creep.room.find(FIND_STRUCTURES, {
@@ -482,26 +555,20 @@ export function findContainersForSource(
   room: Room,
   source: Source
 ): StructureContainer[] {
-  return room.find(FIND_STRUCTURES, {
-    filter: (s): s is StructureContainer =>
-      s.structureType === STRUCTURE_CONTAINER &&
-      s.pos.getRangeTo(source.pos) <= 1,
-  });
+  const containers = getRoomContainers(room);
+  return containers.filter((container) => container.pos.getRangeTo(source.pos) <= 1);
 }
 
 export function findUnclaimedMinerAssignment(
   room: Room
 ): { source: Source; container: StructureContainer } | null {
   const sources = getSources(room);
+  const takenContainerIds = getAssignedContainerIdsByRole(room, ROLE_MINER);
   for (const source of sources) {
     const containers = findContainersForSource(room, source);
     for (const container of containers) {
-      const taken = Object.values(Game.creeps).some(
-        (c) =>
-          normalizeRole(c.memory.role) === ROLE_MINER &&
-          c.memory.assignedContainerId === container.id
-      );
-      if (!taken) {
+      if (!takenContainerIds.has(container.id)) {
+        takenContainerIds.add(container.id);
         return { source, container };
       }
     }
@@ -512,17 +579,11 @@ export function findUnclaimedMinerAssignment(
 export function findUnclaimedHaulerAssignment(
   room: Room
 ): StructureContainer | null {
-  const containers = room.find(FIND_STRUCTURES, {
-    filter: (s): s is StructureContainer =>
-      s.structureType === STRUCTURE_CONTAINER,
-  });
+  const containers = getRoomContainers(room);
+  const takenContainerIds = getAssignedContainerIdsByRole(room, ROLE_HAULER);
   for (const container of containers) {
-    const taken = Object.values(Game.creeps).some(
-      (c) =>
-        normalizeRole(c.memory.role) === ROLE_HAULER &&
-        c.memory.assignedContainerId === container.id
-    );
-    if (!taken) {
+    if (!takenContainerIds.has(container.id)) {
+      takenContainerIds.add(container.id);
       return container;
     }
   }

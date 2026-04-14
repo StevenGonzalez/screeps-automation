@@ -295,9 +295,9 @@ function processRoomStructures(room: Room) {
     let hasControllerContainer = false;
     let foundContainer: StructureContainer | null = null;
 
-    if (room.memory.upgraderContainerId) {
+    if (room.memory.upgradeContainerId) {
       const container = Game.getObjectById(
-        room.memory.upgraderContainerId
+        room.memory.upgradeContainerId
       ) as StructureContainer | null;
       if (
         container &&

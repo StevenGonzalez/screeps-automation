@@ -2,6 +2,7 @@ declare global {
   interface CreepMemory {
     role: string;
     working?: boolean;
+    room?: string;
     sourceId?: string;
     targetId?: string;
     assignedSourceId?: Id<Source>;
@@ -19,13 +20,17 @@ declare global {
     towerIds?: Id<StructureTower>[];
     plannedStructures?: Record<string, string[]>;
     plannedStructuresMeta?: Record<string, { createdAt: number }>;
-    upgraderContainerId?: Id<StructureContainer>;
+    upgradeContainerId?: Id<StructureContainer>;
     storagePositions?: string[];
   }
 
   interface Memory {
+    initialized?: boolean;
     uuid: number;
     log: any;
+    threatNotifyLastTick?: {
+      [roomName: string]: number;
+    };
     sources?: {
       [roomName: string]: Id<Source>[];
     };
