@@ -6,6 +6,9 @@ import {
   ROLE_MINER,
   ROLE_HAULER,
   ROLE_MINERAL_MINER,
+  ROLE_SCOUT,
+  ROLE_REMOTE_MINER,
+  ROLE_REMOTE_HAULER,
   normalizeRole,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
@@ -15,6 +18,9 @@ import { runRepairer } from "../roles/role.repairer";
 import { runMiner } from "../roles/role.miner";
 import { runHauler } from "../roles/role.hauler";
 import { runMineralMiner } from "../roles/role.mineral_miner";
+import { runScout } from "../roles/role.scout";
+import { runRemoteMiner } from "../roles/role.remote_miner";
+import { runRemoteHauler } from "../roles/role.remote_hauler";
 
 export function loop() {
   for (const name in Game.creeps) {
@@ -40,6 +46,14 @@ function processCreep(creep: Creep) {
   } else if (role === ROLE_MINER) {
     runMiner(creep);
   } else if (role === ROLE_HAULER) {
-    runHauler(creep);  } else if (role === ROLE_MINERAL_MINER) {
-    runMineralMiner(creep);  }
+    runHauler(creep);
+  } else if (role === ROLE_MINERAL_MINER) {
+    runMineralMiner(creep);
+  } else if (role === ROLE_SCOUT) {
+    runScout(creep);
+  } else if (role === ROLE_REMOTE_MINER) {
+    runRemoteMiner(creep);
+  } else if (role === ROLE_REMOTE_HAULER) {
+    runRemoteHauler(creep);
+  }
 }

@@ -6,6 +6,9 @@ import {
   ROLE_MINER,
   ROLE_HAULER,
   ROLE_MINERAL_MINER,
+  ROLE_SCOUT,
+  ROLE_REMOTE_MINER,
+  ROLE_REMOTE_HAULER,
   normalizeRole,
 } from "../config/config.roles";
 
@@ -140,6 +143,10 @@ function processRoomSpawning(room: Room) {
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
+  // Remote roles after local economy is stable
+  if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
+  if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
+  if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
@@ -384,4 +391,159 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
     memory: { role: ROLE_MINER },
   });
   return res === OK;
+}
+
+// ── Remote role helpers ───────────────────────────────────────────────────────
+
+function getActiveRemoteRooms(room: Room): RemoteRoomData[] {
+  return (room.memory.remoteRooms ?? []).filter(
+    (r) => !r.hostile && r.sources.length > 0
+  );
+}
+
+function shouldSpawnScout(room: Room): boolean {
+  const pending = room.memory.pendingScoutRooms ?? [];
+  if (pending.length === 0) return false;
+  // Don't spawn a second scout if one is already en route to the same room
+  const scouts = getCreepsByRoleInRoom(ROLE_SCOUT, room);
+  const assignedRooms = new Set(scouts.map((c) => c.memory.targetRoom));
+  return pending.some((r) => !assignedRooms.has(r));
+}
+
+function spawnScout(room: Room, spawn: StructureSpawn): boolean {
+  const pending = room.memory.pendingScoutRooms ?? [];
+  const scouts = getCreepsByRoleInRoom(ROLE_SCOUT, room);
+  const assignedRooms = new Set(scouts.map((c) => c.memory.targetRoom));
+  const target = pending.find((r) => !assignedRooms.has(r));
+  if (!target) return false;
+
+  const res = spawn.spawnCreep([MOVE], `${ROLE_SCOUT}${Game.time}`, {
+    memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
+  });
+  return res === OK;
+}
+
+function shouldSpawnRemoteMiner(room: Room): boolean {
+  // Only at RCL 3+ — remote mining without reserving isn't worth it early
+  if ((room.controller?.level ?? 0) < 3) return false;
+  const activeRooms = getActiveRemoteRooms(room);
+  const miners = getCreepsByRole(ROLE_REMOTE_MINER).filter(
+    (c) => c.memory.homeRoom === room.name
+  );
+  const assignedSources = new Set(miners.map((c) => c.memory.remoteSourceId));
+  for (const remote of activeRooms) {
+    for (const src of remote.sources) {
+      if (!assignedSources.has(src.sourceId)) return true;
+    }
+  }
+  return false;
+}
+
+function spawnRemoteMiner(room: Room, spawn: StructureSpawn): boolean {
+  const activeRooms = getActiveRemoteRooms(room);
+  const miners = getCreepsByRole(ROLE_REMOTE_MINER).filter(
+    (c) => c.memory.homeRoom === room.name
+  );
+  const assignedSources = new Set(miners.map((c) => c.memory.remoteSourceId));
+
+  for (const remote of activeRooms) {
+    for (const src of remote.sources) {
+      if (assignedSources.has(src.sourceId)) continue;
+
+      const allowedEnergy = Math.floor(
+        room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+      );
+      const body = buildRemoteMinerBody(allowedEnergy);
+      if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+      const res = spawn.spawnCreep(body, `${ROLE_REMOTE_MINER}${Game.time}`, {
+        memory: {
+          role: ROLE_REMOTE_MINER,
+          homeRoom: room.name,
+          targetRoom: remote.roomName,
+          remoteSourceId: src.sourceId,
+        },
+      });
+      return res === OK;
+    }
+  }
+  return false;
+}
+
+function shouldSpawnRemoteHauler(room: Room): boolean {
+  if ((room.controller?.level ?? 0) < 3) return false;
+  const activeRooms = getActiveRemoteRooms(room);
+  if (activeRooms.length === 0) return false;
+
+  const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter(
+    (c) => c.memory.homeRoom === room.name
+  );
+
+  // 2 haulers per active remote room (one filling, one depositing)
+  return haulers.length < activeRooms.length * 2;
+}
+
+function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
+  const activeRooms = getActiveRemoteRooms(room);
+  if (activeRooms.length === 0) return false;
+
+  // Assign to the remote room with the fewest haulers
+  const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter(
+    (c) => c.memory.homeRoom === room.name
+  );
+  const haulersByRoom: Record<string, number> = {};
+  for (const h of haulers) {
+    const r = h.memory.targetRoom ?? "";
+    haulersByRoom[r] = (haulersByRoom[r] ?? 0) + 1;
+  }
+
+  let targetRoomName = activeRooms[0].roomName;
+  let minHaulers = Infinity;
+  for (const remote of activeRooms) {
+    const count = haulersByRoom[remote.roomName] ?? 0;
+    if (count < minHaulers) {
+      minHaulers = count;
+      targetRoomName = remote.roomName;
+    }
+  }
+
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  );
+  const body = buildRemoteHaulerBody(allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+  const res = spawn.spawnCreep(body, `${ROLE_REMOTE_HAULER}${Game.time}`, {
+    memory: {
+      role: ROLE_REMOTE_HAULER,
+      homeRoom: room.name,
+      targetRoom: targetRoomName,
+    },
+  });
+  return res === OK;
+}
+
+function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[] {
+  // Remote miners travel without roads: WORK:MOVE = 1:1
+  const workCost = BODYPART_COST[WORK];
+  const moveCost = BODYPART_COST[MOVE];
+  const maxWork = 5;
+  const pairCost = workCost + moveCost; // 150e per WORK+MOVE pair
+  const pairs = Math.min(maxWork, Math.max(1, Math.floor(availableEnergy / pairCost)));
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < pairs; i++) body.push(WORK);
+  for (let i = 0; i < pairs; i++) body.push(MOVE);
+  return body;
+}
+
+function buildRemoteHaulerBody(availableEnergy: number): BodyPartConstant[] {
+  // Remote haulers on plains: CARRY:MOVE = 1:1
+  const pattern: BodyPartConstant[] = [CARRY, MOVE];
+  const patternCost = calculateBodyPartCost(pattern);
+  const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
+  const maxByEnergy = Math.floor(availableEnergy / patternCost);
+  const repeats = Math.max(2, Math.min(maxByParts, maxByEnergy));
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < repeats; i++) body.push(...pattern);
+  return body;
 }

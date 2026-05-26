@@ -1,4 +1,17 @@
 declare global {
+  interface RemoteSourceData {
+    sourceId: Id<Source>;
+    containerId?: Id<StructureContainer>;
+  }
+
+  interface RemoteRoomData {
+    roomName: string;
+    sources: RemoteSourceData[];
+    lastSeen: number;
+    hostile: boolean;
+    hostileUntil?: number;
+  }
+
   interface CreepMemory {
     role: string;
     working?: boolean;
@@ -7,6 +20,10 @@ declare global {
     targetId?: string;
     assignedSourceId?: Id<Source>;
     assignedContainerId?: Id<StructureContainer>;
+    // Remote harvesting
+    homeRoom?: string;
+    targetRoom?: string;
+    remoteSourceId?: Id<Source>;
   }
 
   interface RoomMemory {
@@ -26,6 +43,9 @@ declare global {
     plannedStructuresMeta?: Record<string, { createdAt: number }>;
     upgradeContainerId?: Id<StructureContainer>;
     storagePositions?: string[];
+    // Remote harvesting
+    pendingScoutRooms?: string[];
+    remoteRooms?: RemoteRoomData[];
   }
 
   interface Memory {
