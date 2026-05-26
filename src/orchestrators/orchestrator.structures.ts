@@ -156,7 +156,11 @@ function ensureRampartsForExistingStructures(room: Room) {
     []) as StructureConstant[];
   const structures = room.find(FIND_STRUCTURES) as Structure[];
 
-  // Build the planned-rampart set once rather than recreating it per structure.
+  // Precompute existing rampart positions and planned-rampart set — avoids lookForAt per structure.
+  const existingRampSet = new Set<string>();
+  for (const s of structures) {
+    if (s.structureType === STRUCTURE_RAMPART) existingRampSet.add(`${s.pos.x},${s.pos.y}`);
+  }
   const plannedRampSet = new Set<string>(
     room.memory.plannedStructures?.[PLANNER_KEYS.RAMPARTS_KEY] ?? []
   );
@@ -164,21 +168,16 @@ function ensureRampartsForExistingStructures(room: Room) {
   for (const s of structures) {
     if (!rampTypes.includes(s.structureType as StructureConstant)) continue;
     if (s.structureType === STRUCTURE_RAMPART) continue;
-    const x = s.pos.x;
-    const y = s.pos.y;
-    const existing = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
-    if (existing.some((st) => st.structureType === STRUCTURE_RAMPART)) continue;
+    const posKey = `${s.pos.x},${s.pos.y}`;
+    if (existingRampSet.has(posKey) || plannedRampSet.has(posKey)) continue;
 
-    const posKey = `${x},${y}`;
-    if (plannedRampSet.has(posKey)) continue;
     plannedRampSet.add(posKey);
-
     addPlannedStructureToMemory(
       room,
       PLANNER_KEYS.RAMPARTS_KEY,
-      new RoomPosition(x, y, room.name)
+      new RoomPosition(s.pos.x, s.pos.y, room.name)
     );
-    room.createConstructionSite(x, y, STRUCTURE_RAMPART);
+    room.createConstructionSite(s.pos.x, s.pos.y, STRUCTURE_RAMPART);
   }
 }
 
@@ -208,6 +207,11 @@ function processRoomStructures(room: Room) {
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
   const pruneAge = STRUCTURE_PLANNER.plannedRoadPruneTicks;
   if (pruneAge > 0) {
+    // Precompute occupied positions once instead of calling lookForAt per road tile.
+    const occupiedPos = new Set<string>();
+    for (const s of room.find(FIND_STRUCTURES) as Structure[]) occupiedPos.add(`${s.pos.x},${s.pos.y}`);
+    for (const s of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) occupiedPos.add(`${s.pos.x},${s.pos.y}`);
+
     for (const key of Object.keys(mem)) {
       if (
         !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
@@ -221,14 +225,7 @@ function processRoomStructures(room: Room) {
       if (Game.time - info.createdAt < pruneAge) continue;
       let anyLive = false;
       for (const p of mem[key] ?? []) {
-        const [px, py] = p.split(",").map(Number);
-        if (
-          room.lookForAt(LOOK_STRUCTURES, px, py).length > 0 ||
-          room.lookForAt(LOOK_CONSTRUCTION_SITES, px, py).length > 0
-        ) {
-          anyLive = true;
-          break;
-        }
+        if (occupiedPos.has(p)) { anyLive = true; break; }
       }
       if (!anyLive) {
         delete room.memory.plannedStructures![key];
