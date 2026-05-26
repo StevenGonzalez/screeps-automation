@@ -72,17 +72,8 @@ function getCreepsByRoleInRoom(role: string, room: Room): Creep[] {
 }
 
 function getMinerPopulationTarget(room: Room): number {
-  const sources = getSources(room);
-  let count = 0;
-  for (const source of sources) {
-    const containers = room.find(FIND_STRUCTURES, {
-      filter: (s) =>
-        s.structureType === STRUCTURE_CONTAINER &&
-        s.pos.getRangeTo(source.pos) <= 1,
-    });
-    if (containers.length > 0) count++;
-  }
-  return count;
+  // Use the cached list from the memory orchestrator (refreshed every 100 ticks).
+  return (room.memory.minerContainerIds ?? []).length;
 }
 
 type RoomPhase = "bootstrap" | "developing" | "established" | "powerhouse";
@@ -224,9 +215,12 @@ function getContainerDistances(
 }
 
 function shouldSpawnHauler(room: Room): boolean {
-  const containers = room.find(FIND_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_CONTAINER,
-  }) as StructureContainer[];
+  // Use IDs cached by the memory orchestrator instead of a per-tick room.find.
+  const containerIds = room.memory.containerIds ?? [];
+  if (containerIds.length === 0) return false;
+  const containers = containerIds
+    .map((id) => Game.getObjectById(id))
+    .filter(Boolean) as StructureContainer[];
 
   if (containers.length === 0) return false;
 
@@ -299,10 +293,13 @@ function shouldSpawnBuilder(room: Room): boolean {
   return builders.length < getBuilderPopulationTarget(room);
 }
 
+const repairerTargetCache: Record<string, { value: number; tick: number }> = {};
+
 function getRepairerPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
+  const cached = repairerTargetCache[room.name];
+  if (cached && Game.time - cached.tick < 20) return cached.value;
   // Exclude walls and ramparts — they start at 1/300M hits and would always trigger.
-  // Towers handle rampart upkeep; walls need manual repair or a dedicated logic.
   const critical = room.find(FIND_STRUCTURES, {
     filter: (s) => {
       if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) return false;
@@ -310,7 +307,9 @@ function getRepairerPopulationTarget(room: Room): number {
       return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.5;
     },
   });
-  return Math.min(2, Math.ceil(critical.length / 5));
+  const value = Math.min(2, Math.ceil(critical.length / 5));
+  repairerTargetCache[room.name] = { value, tick: Game.time };
+  return value;
 }
 
 function shouldSpawnRepairer(room: Room): boolean {

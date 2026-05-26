@@ -22,11 +22,13 @@ export function runHauler(creep: Creep) {
   if (isCreepEmpty(creep)) {
     creep.memory.fillTargetId = undefined;
 
-    const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+    // findInRange is O(local area) vs findClosestByPath which scans the whole room.
+    const nearbyDropped = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 10, {
       filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 50,
-    }) as Resource | null;
-    if (dropped) {
-      if (pickupDroppedResource(creep, dropped)) return;
+    }) as Resource[];
+    if (nearbyDropped.length > 0) {
+      const best = nearbyDropped.reduce((a, b) => (a.amount > b.amount ? a : b));
+      pickupDroppedResource(creep, best);
       return;
     }
 
@@ -40,17 +42,10 @@ export function runHauler(creep: Creep) {
     return;
   }
 
-  // Try cached fill target before doing an expensive find+findClosestByPath.
+  // Re-use any cached deposit target (spawn, extension, tower, storage, container).
   if (creep.memory.fillTargetId) {
-    const cached = Game.getObjectById(creep.memory.fillTargetId as Id<Structure>) as AnyStoreStructure | null;
-    if (
-      cached &&
-      "store" in cached &&
-      cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-      (cached.structureType === STRUCTURE_SPAWN ||
-        cached.structureType === STRUCTURE_EXTENSION ||
-        cached.structureType === STRUCTURE_TOWER)
-    ) {
+    const cached = Game.getObjectById(creep.memory.fillTargetId as Id<AnyStoreStructure>) as AnyStoreStructure | null;
+    if (cached && "store" in cached && cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
       transferEnergyTo(creep, cached as Structure);
       return;
     }
@@ -76,6 +71,7 @@ export function runHauler(creep: Creep) {
 
   const depositTarget = findDepositTargetExcludingMiner(creep, ROLE_HAULER);
   if (depositTarget) {
+    creep.memory.fillTargetId = depositTarget.id;
     transferEnergyTo(creep, depositTarget);
     return;
   }

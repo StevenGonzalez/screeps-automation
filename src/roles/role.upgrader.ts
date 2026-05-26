@@ -2,7 +2,6 @@ import {
   isCreepEmpty,
   isCreepFull,
   upgradeController,
-  withdrawFromControllerContainer,
   withdrawFromContainer,
   acquireEnergy,
 } from "../services/services.creep";
@@ -41,10 +40,7 @@ export function runUpgrader(creep: Creep) {
     }
   }
 
-  // Priority 3: any container near the controller
-  if (withdrawFromControllerContainer(creep)) return;
-
-  // Priority 4: storage
+  // Priority 3: storage
   const storage = creep.room.storage;
   if (storage && storage.store[RESOURCE_ENERGY] > 0) {
     if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {

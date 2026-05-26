@@ -170,11 +170,12 @@ export function acquireEnergy(creep: Creep): boolean {
     creep.memory.energySourceId = undefined;
   }
 
-  // Pick up dropped energy first — free and ephemeral, not cached.
-  const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
-    filter: (d) => d.resourceType === RESOURCE_ENERGY,
-  }) as Resource | null;
-  if (dropped) {
+  // Pick up nearby dropped energy — findInRange is O(local area) vs room-wide pathfinding.
+  const droppedInRange = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 8, {
+    filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 0,
+  }) as Resource[];
+  if (droppedInRange.length > 0) {
+    const dropped = droppedInRange.reduce((a, b) => (a.amount > b.amount ? a : b));
     const res = creep.pickup(dropped);
     if (res === ERR_NOT_IN_RANGE) {
       creep.moveTo(dropped, { reusePath: 5 });
