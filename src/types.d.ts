@@ -27,6 +27,7 @@ declare global {
     // Per-creep target caches to avoid repeated findClosestByPath
     fillTargetId?: string;
     constructionSiteId?: Id<ConstructionSite>;
+    energySourceId?: Id<AnyStoreStructure>;
   }
 
   interface RoomMemory {
@@ -42,6 +43,7 @@ declare global {
     extractorId?: Id<StructureExtractor>;
     lastStructurePlanTick?: number;
     towerIds?: Id<StructureTower>[];
+    linkIds?: Id<StructureLink>[];
     plannedStructures?: Record<string, string[]>;
     plannedStructuresMeta?: Record<string, { createdAt: number }>;
     upgradeContainerId?: Id<StructureContainer>;

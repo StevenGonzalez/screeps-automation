@@ -101,15 +101,27 @@ function hasEnergyGatherers(room: Room): boolean {
   return harvesters.length + miners.length > 0;
 }
 
+// Energy is critically low when spawn energy is below 15% capacity AND storage has little energy.
+// During this state we suppress non-essential spawns to let the economy recover.
+function isEnergyEmergency(room: Room): boolean {
+  const stored = room.storage?.store[RESOURCE_ENERGY] ?? 0;
+  const cap = room.energyCapacityAvailable;
+  return cap > 0 && room.energyAvailable / cap < 0.15 && stored < 5000;
+}
+
 function getHarvesterPopulationTarget(room: Room): number {
   const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
   const phase = getRoomPhase(room);
-  // Bootstrap rooms need harvesters until miners exist; established rooms phase them out
-  if (phase === "bootstrap") return Math.max(2, 2 - minerCount);
+  // Bootstrap rooms need harvesters until miners exist; established rooms phase them out.
+  // During an energy emergency keep at least 2 harvesters to help the room recover.
+  if (phase === "bootstrap" || isEnergyEmergency(room)) return Math.max(2, 2 - minerCount);
   return Math.max(0, 2 - minerCount);
 }
 
 function getUpgraderPopulationTarget(room: Room): number {
+  // Don't respawn upgraders while the economy is struggling — let them die off naturally.
+  if (isEnergyEmergency(room)) return 0;
+
   const phase = getRoomPhase(room);
   const rcl = room.controller?.level ?? 0;
 
@@ -131,6 +143,7 @@ function getUpgraderPopulationTarget(room: Room): number {
 }
 
 function getBuilderPopulationTarget(room: Room): number {
+  if (isEnergyEmergency(room)) return 0;
   const sites = room.find(FIND_CONSTRUCTION_SITES);
   if (sites.length === 0) return 0;
   const phase = getRoomPhase(room);
@@ -155,10 +168,18 @@ function processRoomSpawning(room: Room) {
     return;
   }
 
-  if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
-  if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
-  if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
+  // Core economy — always spawn these first regardless of energy level.
+  // Harvesters come before miners: a harvester is cheaper and lets the room
+  // recover faster when spawn energy is critically low.
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
+  if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
+  if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
+
+  // Non-essential spawns are suppressed during an energy emergency so that
+  // every spare joule goes back into harvesters and miners.
+  if (isEnergyEmergency(room)) return;
+
+  if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
   if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
@@ -210,8 +231,9 @@ function shouldSpawnHauler(room: Room): boolean {
 
   if (containers.length === 0) return false;
 
+  // Filter by homeRoom so haulers currently in a remote room are still counted.
   const haulers = getCreepsByRole(ROLE_HAULER).filter(
-    (c) => c.room.name === room.name
+    (c) => (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
   const totalMinerWork = Object.values(Game.creeps)
@@ -246,7 +268,7 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
   );
   const body = buildScaledBody(ROLE_HAULER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
-    memory: { role: ROLE_HAULER },
+    memory: { role: ROLE_HAULER, homeRoom: room.name },
   });
   return res === OK;
 }
@@ -274,6 +296,7 @@ function shouldSpawnBuilder(room: Room): boolean {
 }
 
 function getRepairerPopulationTarget(room: Room): number {
+  if (isEnergyEmergency(room)) return 0;
   const critical = room.find(FIND_STRUCTURES, {
     filter: (s): s is AnyOwnedStructure | AnyStructure =>
       "hits" in s && "hitsMax" in s && s.hits < s.hitsMax * 0.5,
@@ -303,6 +326,11 @@ function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function shouldSpawnMineralMiner(room: Room): boolean {
+  // A mineral miner is useless without a container to deposit into — don't waste energy on one.
+  if (!room.memory.mineralContainerId) return false;
+  const container = Game.getObjectById(room.memory.mineralContainerId) as StructureContainer | null;
+  if (!container) return false;
+
   const mineralId = room.memory.mineralId;
   if (!mineralId) return false;
 
@@ -313,7 +341,7 @@ function shouldSpawnMineralMiner(room: Room): boolean {
   if (!extractorId) return false;
 
   const extractor = Game.getObjectById(extractorId) as StructureExtractor | null;
-  if (!extractor || extractor.cooldown > 0) return false;
+  if (!extractor) return false;
 
   const mineralMiners = getCreepsByRoleInRoom(ROLE_MINERAL_MINER, room);
   return mineralMiners.length === 0;
@@ -417,19 +445,23 @@ function getActiveRemoteRooms(room: Room): RemoteRoomData[] {
   );
 }
 
+// Scouts travel away from home, so we track them by homeRoom memory rather
+// than current room — a scout in transit would otherwise be invisible to the
+// spawn check and cause duplicate scouts to be queued.
+function getScoutsForRoom(room: Room): Creep[] {
+  return getCreepsByRole(ROLE_SCOUT).filter((c) => c.memory.homeRoom === room.name);
+}
+
 function shouldSpawnScout(room: Room): boolean {
   const pending = room.memory.pendingScoutRooms ?? [];
   if (pending.length === 0) return false;
-  // Don't spawn a second scout if one is already en route to the same room
-  const scouts = getCreepsByRoleInRoom(ROLE_SCOUT, room);
-  const assignedRooms = new Set(scouts.map((c) => c.memory.targetRoom));
+  const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
   return pending.some((r) => !assignedRooms.has(r));
 }
 
 function spawnScout(room: Room, spawn: StructureSpawn): boolean {
   const pending = room.memory.pendingScoutRooms ?? [];
-  const scouts = getCreepsByRoleInRoom(ROLE_SCOUT, room);
-  const assignedRooms = new Set(scouts.map((c) => c.memory.targetRoom));
+  const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
   const target = pending.find((r) => !assignedRooms.has(r));
   if (!target) return false;
 

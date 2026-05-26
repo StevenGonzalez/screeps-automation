@@ -22,9 +22,12 @@ export function loop() {
 }
 
 function processRoomLinks(room: Room) {
-  const links = room.find(FIND_MY_STRUCTURES, {
-    filter: (s): s is StructureLink => s.structureType === STRUCTURE_LINK,
-  });
+  const linkIds = room.memory.linkIds ?? [];
+  if (linkIds.length < 2) return;
+
+  const links = linkIds
+    .map((id) => Game.getObjectById(id))
+    .filter(Boolean) as StructureLink[];
 
   if (links.length < 2) return;
 

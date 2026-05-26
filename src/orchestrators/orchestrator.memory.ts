@@ -73,6 +73,11 @@ function processRoomMemory(room: Room) {
     });
     room.memory.towerIds = towers.map((t) => t.id as Id<StructureTower>);
 
+    const links = room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_LINK,
+    });
+    room.memory.linkIds = links.map((l) => l.id as Id<StructureLink>);
+
     const terminals = room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_TERMINAL,
     });

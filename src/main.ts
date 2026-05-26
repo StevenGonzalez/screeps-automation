@@ -11,21 +11,43 @@ import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 const CPU_WARN_THRESHOLD = 0.85;
 const CPU_REPORT_INTERVAL = 100;
 
+// Skip expensive-but-non-critical systems when the tick is already loaded.
+// Structures planning runs heavy pathfinding; visuals are cosmetic.
+// Using fractions of cpu.limit keeps thresholds portable across account tiers.
+const CPU_SKIP_STRUCTURES_THRESHOLD = 0.70; // skip structure planner above 70% of limit
+const CPU_SKIP_VISUALS_THRESHOLD = 0.60;    // skip visuals above 60% of limit
+
+// When the bucket is drained the game is about to throttle us — shed load aggressively.
+const CPU_BUCKET_CRITICAL = 2000;
+
 export function loop() {
   const tickStart = Game.cpu.getUsed();
+  const limit = Game.cpu.limit;
+  const bucketCritical = Game.cpu.bucket < CPU_BUCKET_CRITICAL;
 
   runSafe("memory", () => memorySystem.loop());
   runSafe("creeps", () => creepRunnerSystem.loop());
   runSafe("spawning", () => spawningSystem.loop());
-  runSafe("structures", () => structuresSystem.loop());
+
+  // Structure planning includes pathfinding — skip when CPU is already consumed
+  // or the bucket is critically low.
+  const cpuAfterCore = Game.cpu.getUsed() - tickStart;
+  if (!bucketCritical && cpuAfterCore / limit < CPU_SKIP_STRUCTURES_THRESHOLD) {
+    runSafe("structures", () => structuresSystem.loop());
+  }
+
   runSafe("links", () => linksSystem.loop());
   runSafe("towers", () => towerSystem.loop());
   runSafe("terminal", () => terminalSystem.loop());
   runSafe("pixels", () => pixelsSystem.loop());
-  runSafe("visuals", () => visualsSystem.loop());
+
+  // Visuals are purely cosmetic — first thing to drop under load.
+  const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
+  if (!bucketCritical && cpuBeforeVisuals / limit < CPU_SKIP_VISUALS_THRESHOLD) {
+    runSafe("visuals", () => visualsSystem.loop());
+  }
 
   const used = Game.cpu.getUsed() - tickStart;
-  const limit = Game.cpu.limit;
 
   if (used / limit > CPU_WARN_THRESHOLD) {
     console.log(

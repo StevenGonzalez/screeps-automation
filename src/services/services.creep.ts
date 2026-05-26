@@ -93,21 +93,31 @@ export function findEnergyDepositTarget(
 ): Structure | null {
   const canonicalRole = normalizeRole(role) || role;
   const priorityList = ENERGY_DEPOSIT_PRIORITY[canonicalRole] || [];
+  if (priorityList.length === 0) return null;
+
+  const typeSet = new Set<StructureConstant>(priorityList);
+
+  // Single room.find instead of one call per priority type
+  const all = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStoreStructure =>
+      typeSet.has(s.structureType) &&
+      "store" in s &&
+      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+  }) as AnyStoreStructure[];
+
+  if (all.length === 0) return null;
+
+  const byType = new Map<StructureConstant, AnyStoreStructure[]>();
+  for (const s of all) {
+    let bucket = byType.get(s.structureType);
+    if (!bucket) { bucket = []; byType.set(s.structureType, bucket); }
+    bucket.push(s);
+  }
 
   for (const structureType of priorityList) {
-    const targets = creep.room.find(FIND_STRUCTURES, {
-      filter: (structure): structure is AnyStoreStructure => {
-        return (
-          structure.structureType === structureType &&
-          "store" in structure &&
-          structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-        );
-      },
-    });
-
-    if (targets.length > 0) {
-      const closest = creep.pos.findClosestByPath(targets) as Structure | null;
-      if (closest) return closest;
+    const bucket = byType.get(structureType);
+    if (bucket && bucket.length > 0) {
+      return creep.pos.findClosestByPath(bucket) as Structure | null;
     }
   }
 
@@ -144,66 +154,23 @@ export function harvestFromSource(creep: Creep, source: Source): void {
 }
 
 export function acquireEnergy(creep: Creep): boolean {
-  const storeTargets = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStoreStructure =>
-      (s.structureType === STRUCTURE_CONTAINER ||
-        s.structureType === STRUCTURE_STORAGE) &&
-      "store" in s &&
-      s.store[RESOURCE_ENERGY] > 0,
-  });
-
-  const upgradeId = creep.room.memory.upgradeContainerId;
-  let nonUpgradeTargets = storeTargets;
-  if (upgradeId) {
-    nonUpgradeTargets = storeTargets.filter((s) => s.id !== upgradeId);
-  }
-  let chosenTarget: AnyStoreStructure | null = null;
-  if (nonUpgradeTargets.length > 0) {
-    chosenTarget = creep.pos.findClosestByPath(
-      nonUpgradeTargets
-    ) as AnyStoreStructure;
-  } else if (storeTargets.length > 0) {
-    chosenTarget = creep.pos.findClosestByPath(
-      storeTargets
-    ) as AnyStoreStructure;
-  }
-  if (chosenTarget) {
-    const res = creep.withdraw(chosenTarget, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(chosenTarget, { reusePath: 20 });
-      return true;
-    }
-    return res === OK;
-  }
-
-  const links = creep.room.find(FIND_STRUCTURES, {
-    filter: (s) =>
-      s.structureType === STRUCTURE_LINK && (s as StructureLink).energy > 0,
-  }) as StructureLink[];
-  if (links.length > 0) {
-    const link = creep.pos.findClosestByPath(links)!;
-    if (link) {
-      const res = creep.withdraw(link, RESOURCE_ENERGY);
+  // Re-use the cached container/storage/link target from the previous tick as long
+  // as it still exists and still holds energy — avoids the expensive findClosestByPath
+  // scan on every tick.
+  if (creep.memory.energySourceId) {
+    const cached = Game.getObjectById(creep.memory.energySourceId) as AnyStoreStructure | null;
+    if (cached && cached.store[RESOURCE_ENERGY] > 0) {
+      const res = creep.withdraw(cached, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(link, { reusePath: 20 });
+        creep.moveTo(cached, { reusePath: 20 });
         return true;
       }
-      return res === OK;
+      if (res === OK) return true;
     }
+    creep.memory.energySourceId = undefined;
   }
 
-  const tomb = creep.pos.findClosestByPath(FIND_TOMBSTONES, {
-    filter: (t) => t.store && t.store[RESOURCE_ENERGY] > 0,
-  }) as Tombstone | null;
-  if (tomb) {
-    const res = creep.withdraw(tomb, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(tomb, { reusePath: 20 });
-      return true;
-    }
-    return res === OK;
-  }
-
+  // Pick up dropped energy first — free and ephemeral, not cached.
   const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
     filter: (d) => d.resourceType === RESOURCE_ENERGY,
   }) as Resource | null;
@@ -216,9 +183,70 @@ export function acquireEnergy(creep: Creep): boolean {
     return res === OK;
   }
 
-  const source = creep.pos.findClosestByPath(
-    FIND_SOURCES_ACTIVE
-  ) as Source | null;
+  // Containers and storage — cache the chosen target.
+  const upgradeId = creep.room.memory.upgradeContainerId;
+  const storeTargets = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStoreStructure =>
+      (s.structureType === STRUCTURE_CONTAINER ||
+        s.structureType === STRUCTURE_STORAGE) &&
+      "store" in s &&
+      s.store[RESOURCE_ENERGY] > 0,
+  });
+
+  const nonUpgrade = upgradeId
+    ? storeTargets.filter((s) => s.id !== upgradeId)
+    : storeTargets;
+
+  const storeTarget = nonUpgrade.length > 0
+    ? creep.pos.findClosestByPath(nonUpgrade) as AnyStoreStructure | null
+    : storeTargets.length > 0
+      ? creep.pos.findClosestByPath(storeTargets) as AnyStoreStructure | null
+      : null;
+
+  if (storeTarget) {
+    creep.memory.energySourceId = storeTarget.id;
+    const res = creep.withdraw(storeTarget, RESOURCE_ENERGY);
+    if (res === ERR_NOT_IN_RANGE) {
+      creep.moveTo(storeTarget, { reusePath: 20 });
+      return true;
+    }
+    return res === OK;
+  }
+
+  // Links with energy — cache the chosen one.
+  const links = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is StructureLink =>
+      s.structureType === STRUCTURE_LINK &&
+      (s as StructureLink).store[RESOURCE_ENERGY] > 0,
+  }) as StructureLink[];
+  if (links.length > 0) {
+    const link = creep.pos.findClosestByPath(links) as StructureLink | null;
+    if (link) {
+      creep.memory.energySourceId = link.id as unknown as Id<AnyStoreStructure>;
+      const res = creep.withdraw(link, RESOURCE_ENERGY);
+      if (res === ERR_NOT_IN_RANGE) {
+        creep.moveTo(link, { reusePath: 20 });
+        return true;
+      }
+      return res === OK;
+    }
+  }
+
+  // Tombstones — ephemeral, not cached.
+  const tomb = creep.pos.findClosestByPath(FIND_TOMBSTONES, {
+    filter: (t) => t.store && t.store[RESOURCE_ENERGY] > 0,
+  }) as Tombstone | null;
+  if (tomb) {
+    const res = creep.withdraw(tomb, RESOURCE_ENERGY);
+    if (res === ERR_NOT_IN_RANGE) {
+      creep.moveTo(tomb, { reusePath: 20 });
+      return true;
+    }
+    return res === OK;
+  }
+
+  // Last resort: harvest directly from a source.
+  const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE) as Source | null;
   if (source) {
     const res = creep.harvest(source);
     if (res === ERR_NOT_IN_RANGE) {

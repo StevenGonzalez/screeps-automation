@@ -194,6 +194,59 @@ export function loop() {
       cleanupUnplannedConstructionSites(room);
       ensureRampartsForExistingStructures(room);
     }
+    // Place container sites in visible remote rooms so miners have somewhere to deposit.
+    if (Game.time % 100 === 0) planRemoteRoomContainers(room);
+  }
+}
+
+// For each source in a remote room that is currently visible, create a container
+// construction site adjacent to the source if none exists yet.  We write back
+// the planned/found container ID so remote haulers can find it immediately.
+function planRemoteRoomContainers(homeRoom: Room) {
+  for (const remote of homeRoom.memory.remoteRooms ?? []) {
+    if (remote.hostile) continue;
+    const remoteRoom = Game.rooms[remote.roomName];
+    if (!remoteRoom) continue;
+
+    const terrain = remoteRoom.getTerrain();
+    for (const sourceData of remote.sources) {
+      const source = Game.getObjectById(sourceData.sourceId) as Source | null;
+      if (!source) continue;
+
+      // Keep cached ID in sync with reality.
+      if (sourceData.containerId) {
+        const existing = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
+        if (existing) continue;
+        sourceData.containerId = undefined;
+      }
+
+      // Check for a container already built near the source.
+      const built = source.pos.findInRange(FIND_STRUCTURES, 1, {
+        filter: (s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER,
+      }) as StructureContainer[];
+      if (built.length > 0) {
+        sourceData.containerId = built[0].id;
+        continue;
+      }
+
+      // Check for an in-progress construction site.
+      const site = source.pos.findInRange(FIND_CONSTRUCTION_SITES, 1, {
+        filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+      });
+      if (site.length > 0) continue;
+
+      // Place a site on the first walkable tile adjacent to the source.
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          if (dx === 0 && dy === 0) continue;
+          const x = source.pos.x + dx;
+          const y = source.pos.y + dy;
+          if (x < 1 || x >= 49 || y < 1 || y >= 49) continue;
+          if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+          if (remoteRoom.createConstructionSite(x, y, STRUCTURE_CONTAINER) === OK) break;
+        }
+      }
+    }
   }
 }
 
