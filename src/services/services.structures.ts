@@ -618,45 +618,57 @@ export function pruneRoadsUnderStructures(room: Room) {
       k.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
       k.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
   );
+  if (roadKeys.length === 0) return;
+
+  // Precompute structure positions from Screeps-cached find — avoids lookForAt per road tile.
+  const nonRoadPosSet = new Set<string>();
+  const roadsByPos = new Map<string, Structure[]>();
+  for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
+    const k = `${s.pos.x},${s.pos.y}`;
+    if (s.structureType !== STRUCTURE_ROAD) {
+      nonRoadPosSet.add(k);
+    } else {
+      if (!roadsByPos.has(k)) roadsByPos.set(k, []);
+      roadsByPos.get(k)!.push(s);
+    }
+  }
 
   for (const key of roadKeys) {
     const arr = mem[key] || [];
+    if (arr.length === 0) continue;
     const keep: string[] = [];
     for (const posStr of arr) {
-      const [px, py] = posStr.split(",").map(Number);
-      const structs = room.lookForAt(LOOK_STRUCTURES, px, py) as Structure[];
-      const nonRoadExists = structs.some(
-        (s) => s.structureType !== STRUCTURE_ROAD
-      );
-      if (nonRoadExists) {
-        for (const s of structs) {
-          if (s.structureType === STRUCTURE_ROAD) {
-            try {
-              (s as any).destroy();
-            } catch (e) {}
+      if (nonRoadPosSet.has(posStr)) {
+        const roads = roadsByPos.get(posStr);
+        if (roads) {
+          for (const s of roads) {
+            try { (s as any).destroy(); } catch (e) {}
           }
         }
-        continue;
+      } else {
+        keep.push(posStr);
       }
-      keep.push(posStr);
     }
     mem[key] = keep;
   }
 }
 
-function getAllPlannedRoadTiles(room: Room): RoomPosition[] {
+type XY = { x: number; y: number };
+
+function getAllPlannedRoadTiles(room: Room): XY[] {
   if (!room.memory.plannedStructures) return [];
   const mem = room.memory.plannedStructures as Record<string, string[]>;
-  const out: RoomPosition[] = [];
+  const out: XY[] = [];
   for (const key of Object.keys(mem)) {
     if (
-      !(
-        key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
-        key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
-      )
+      !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
+      !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
     )
       continue;
-    out.push(...deserializePositions(room, mem[key]));
+    for (const p of mem[key]) {
+      const comma = p.indexOf(",");
+      out.push({ x: +p.slice(0, comma), y: +p.slice(comma + 1) });
+    }
   }
   return out;
 }
@@ -702,27 +714,26 @@ function plannedNonRoadStructureAt(room: Room, x: number, y: number): boolean {
   return plannedNonRoadSetByRoom[room.name].has(`${x},${y}`);
 }
 
-function clusterTiles(tiles: RoomPosition[]): RoomPosition[][] {
+function clusterTiles(tiles: XY[]): XY[][] {
   const idxMap = new Map<string, number>();
   tiles.forEach((t, i) => idxMap.set(`${t.x},${t.y}`, i));
   const visited = new Array(tiles.length).fill(false);
-  const clusters: RoomPosition[][] = [];
+  const clusters: XY[][] = [];
   for (let i = 0; i < tiles.length; i++) {
     if (visited[i]) continue;
     const stack = [i];
-    const cluster: RoomPosition[] = [];
+    const cluster: XY[] = [];
     visited[i] = true;
     while (stack.length > 0) {
       const cur = stack.pop()!;
       const p = tiles[cur];
       cluster.push(p);
-      const neigh = [
+      for (const n of [
         `${p.x + 1},${p.y}`,
         `${p.x - 1},${p.y}`,
         `${p.x},${p.y + 1}`,
         `${p.x},${p.y - 1}`,
-      ];
-      for (const n of neigh) {
+      ]) {
         const j = idxMap.get(n);
         if (j !== undefined && !visited[j]) {
           visited[j] = true;
@@ -764,8 +775,7 @@ export function connectRoadClusters(
 
         const ca = clusters[a];
         const cb = clusters[b];
-        let best: { da: RoomPosition; db: RoomPosition; dist: number } | null =
-          null;
+        let best: { da: XY; db: XY; dist: number } | null = null;
         for (const pa of ca) {
           for (const pb of cb) {
             const d = Math.abs(pa.x - pb.x) + Math.abs(pa.y - pb.y);
@@ -777,7 +787,12 @@ export function connectRoadClusters(
         if (best.dist > maxConnectorLength) continue;
         const key = `${PLANNER_KEYS.CONNECTOR_PREFIX}${a}_${b}`;
         if (mem[key] && mem[key].length > 0) continue;
-        getOrPlanRoad(room, key, best.da, best.db);
+        // Create RoomPositions only here where PathFinder actually needs them.
+        getOrPlanRoad(
+          room, key,
+          new RoomPosition(best.da.x, best.da.y, room.name),
+          new RoomPosition(best.db.x, best.db.y, room.name)
+        );
         createdThisTick++;
         addedThisPass = true;
       }

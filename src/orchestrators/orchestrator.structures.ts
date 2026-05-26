@@ -2,7 +2,6 @@ import {
   planSourceContainer,
   planControllerContainer,
   planMineralContainer,
-  planRampartsForStructures,
   addPlannedStructureToMemory,
   ensureMemoryRoomStructures,
   plannedPositionsFromMemory,
@@ -144,6 +143,12 @@ function ensureRampartsForExistingStructures(room: Room) {
   const rampTypes = (STRUCTURE_PLANNER.rampartOnTopFor ||
     []) as StructureConstant[];
   const structures = room.find(FIND_STRUCTURES) as Structure[];
+
+  // Build the planned-rampart set once rather than recreating it per structure.
+  const plannedRampSet = new Set<string>(
+    room.memory.plannedStructures?.[PLANNER_KEYS.RAMPARTS_KEY] ?? []
+  );
+
   for (const s of structures) {
     if (!rampTypes.includes(s.structureType as StructureConstant)) continue;
     if (s.structureType === STRUCTURE_RAMPART) continue;
@@ -152,10 +157,9 @@ function ensureRampartsForExistingStructures(room: Room) {
     const existing = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
     if (existing.some((st) => st.structureType === STRUCTURE_RAMPART)) continue;
 
-    const planned = plannedPositionsFromMemory(room, PLANNER_KEYS.RAMPARTS_KEY);
-    if (planned.some((p) => p.x === x && p.y === y)) {
-      continue;
-    }
+    const posKey = `${x},${y}`;
+    if (plannedRampSet.has(posKey)) continue;
+    plannedRampSet.add(posKey);
 
     addPlannedStructureToMemory(
       room,
@@ -311,18 +315,5 @@ function processRoomStructures(room: Room) {
   connectRoadClusters(room);
 
   room.memory.lastStructurePlanTick = Game.time;
-
-  // Ramparts for all planned positions
-  const allTypes = Object.keys((room.memory.plannedStructures || {}) as any);
-  const allPositions: RoomPosition[] = [];
-  for (const t of allTypes) allPositions.push(...plannedPositionsFromMemory(room, t));
-
-  const ramparts = planRampartsForStructures(room, allPositions);
-  const existingRampSet = new Set(
-    plannedPositionsFromMemory(room, PLANNER_KEYS.RAMPARTS_KEY).map((p) => `${p.x},${p.y}`)
-  );
-  for (const p of ramparts) {
-    if (!existingRampSet.has(`${p.x},${p.y}`))
-      addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, p);
-  }
+  // Ramparts for existing structures are handled by ensureRampartsForExistingStructures (runs every 5t).
 }
