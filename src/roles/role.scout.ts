@@ -26,7 +26,7 @@ export function runScout(creep: Creep) {
       return;
     }
     const exitPos = creep.pos.findClosestByRange(exit);
-    if (exitPos) creep.moveTo(exitPos, { reusePath: 20, visualizePathStyle: {} });
+    if (exitPos) creep.moveTo(exitPos, { reusePath: 50, visualizePathStyle: {} });
     return;
   }
 
@@ -38,7 +38,7 @@ export function runScout(creep: Creep) {
   if (home) {
     const spawn = home.find(FIND_MY_SPAWNS)[0];
     if (spawn) {
-      creep.moveTo(spawn, { reusePath: 20 });
+      creep.moveTo(spawn, { reusePath: 50 });
       return;
     }
   }

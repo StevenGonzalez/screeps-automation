@@ -11,6 +11,12 @@ const assignedContainerIdsByRoomAndRole: Record<string, Set<string>> = {};
 let roomContainersCacheTick = -1;
 const roomContainersCache: Record<string, StructureContainer[]> = {};
 
+let criticalRepairCacheTick = -1;
+const criticalRepairByRoom: Record<string, AnyStructure | null> = {};
+
+let towerRepairCacheTick = -1;
+const towerRepairByRoom: Record<string, AnyStructure | null> = {};
+
 function getAssignedContainerIdsByRole(room: Room, role: string): Set<string> {
   if (assignmentCacheTick !== Game.time) {
     assignmentCacheTick = Game.time;
@@ -149,7 +155,7 @@ export function getSources(room: Room, ttl: number = 100): Source[] {
 
 export function harvestFromSource(creep: Creep, source: Source): void {
   if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
-    creep.moveTo(source, { reusePath: 20 });
+    creep.moveTo(source, { reusePath: 50 });
   }
 }
 
@@ -162,7 +168,7 @@ export function acquireEnergy(creep: Creep): boolean {
     if (cached && cached.store[RESOURCE_ENERGY] > 0) {
       const res = creep.withdraw(cached, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(cached, { reusePath: 20 });
+        creep.moveTo(cached, { reusePath: 50 });
         return true;
       }
       if (res === OK) return true;
@@ -208,7 +214,7 @@ export function acquireEnergy(creep: Creep): boolean {
     creep.memory.energySourceId = storeTarget.id;
     const res = creep.withdraw(storeTarget, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(storeTarget, { reusePath: 20 });
+      creep.moveTo(storeTarget, { reusePath: 50 });
       return true;
     }
     return res === OK;
@@ -226,7 +232,7 @@ export function acquireEnergy(creep: Creep): boolean {
       creep.memory.energySourceId = link.id as unknown as Id<AnyStoreStructure>;
       const res = creep.withdraw(link, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
-        creep.moveTo(link, { reusePath: 20 });
+        creep.moveTo(link, { reusePath: 50 });
         return true;
       }
       return res === OK;
@@ -240,7 +246,7 @@ export function acquireEnergy(creep: Creep): boolean {
   if (tomb) {
     const res = creep.withdraw(tomb, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(tomb, { reusePath: 20 });
+      creep.moveTo(tomb, { reusePath: 50 });
       return true;
     }
     return res === OK;
@@ -251,7 +257,7 @@ export function acquireEnergy(creep: Creep): boolean {
   if (source) {
     const res = creep.harvest(source);
     if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(source, { reusePath: 20 });
+      creep.moveTo(source, { reusePath: 50 });
       return true;
     }
     return res === OK;
@@ -315,7 +321,7 @@ export function withdrawFromControllerContainer(creep: Creep): boolean {
   if (containerWithEnergy) {
     const res = creep.withdraw(containerWithEnergy, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(containerWithEnergy, { reusePath: 20 });
+      creep.moveTo(containerWithEnergy, { reusePath: 50 });
       return true;
     }
     return res === OK;
@@ -334,7 +340,7 @@ export function isCreepFull(creep: Creep): boolean {
 
 export function transferEnergyTo(creep: Creep, target: Structure): void {
   if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-    creep.moveTo(target, { reusePath: 20 });
+    creep.moveTo(target, { reusePath: 50 });
   }
 }
 
@@ -379,36 +385,51 @@ export function findClosestDamagedRampart(
 export function findMostCriticalRepairTarget(
   creep: Creep
 ): AnyStructure | null {
+  if (criticalRepairCacheTick !== Game.time) {
+    criticalRepairCacheTick = Game.time;
+    for (const k in criticalRepairByRoom) delete criticalRepairByRoom[k];
+  }
+  const rn = creep.room.name;
+  if (rn in criticalRepairByRoom) return criticalRepairByRoom[rn];
+
   const damaged = creep.room.find(FIND_STRUCTURES, {
     filter: (s): s is AnyStructure => isDamaged(s as AnyStructure),
   });
 
-  if (damaged.length === 0) return null;
-
-  const nonDefensive = damaged.filter(
-    (s) =>
-      s.structureType !== STRUCTURE_RAMPART &&
-      s.structureType !== STRUCTURE_WALL
-  );
-  if (nonDefensive.length > 0) {
-    return nonDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
+  let result: AnyStructure | null = null;
+  if (damaged.length > 0) {
+    const nonDefensive = damaged.filter(
+      (s) =>
+        s.structureType !== STRUCTURE_RAMPART &&
+        s.structureType !== STRUCTURE_WALL
+    );
+    if (nonDefensive.length > 0) {
+      result = nonDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
+    } else {
+      const RAMPART_CRITICAL = 1000;
+      const criticalDefensive = damaged.filter(
+        (s) =>
+          (s.structureType === STRUCTURE_RAMPART ||
+            s.structureType === STRUCTURE_WALL) &&
+          s.hits < RAMPART_CRITICAL
+      );
+      result = criticalDefensive.length > 0
+        ? criticalDefensive.reduce((a, b) => (a.hits < b.hits ? a : b))
+        : damaged.reduce((a, b) => (a.hits < b.hits ? a : b));
+    }
   }
 
-  const RAMPART_CRITICAL = 1000;
-  const criticalDefensive = damaged.filter(
-    (s) =>
-      (s.structureType === STRUCTURE_RAMPART ||
-        s.structureType === STRUCTURE_WALL) &&
-      s.hits < RAMPART_CRITICAL
-  );
-  if (criticalDefensive.length > 0) {
-    return criticalDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
-  }
-
-  return damaged.reduce((a, b) => (a.hits < b.hits ? a : b));
+  criticalRepairByRoom[rn] = result;
+  return result;
 }
 
 export function findTowerRepairTarget(room: Room): AnyStructure | null {
+  if (towerRepairCacheTick !== Game.time) {
+    towerRepairCacheTick = Game.time;
+    for (const k in towerRepairByRoom) delete towerRepairByRoom[k];
+  }
+  if (room.name in towerRepairByRoom) return towerRepairByRoom[room.name];
+
   const decayThreshold = 1000;
   const candidates = room.find(FIND_STRUCTURES, {
     filter: (s): s is AnyStructure => {
@@ -422,8 +443,11 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
       return st.hits < st.hitsMax * 0.1;
     },
   });
-  if (candidates.length === 0) return null;
-  return candidates.reduce((a, b) => (a.hits < b.hits ? a : b));
+  const result = candidates.length === 0
+    ? null
+    : candidates.reduce((a, b) => (a.hits < b.hits ? a : b));
+  towerRepairByRoom[room.name] = result;
+  return result;
 }
 
 export function getClosestContainerOrStorage(creep: Creep): Structure | null {
@@ -546,7 +570,7 @@ export function upgradeController(creep: Creep): void {
   if (signControllerIfNeeded(creep, controller)) return;
 
   if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
-    creep.moveTo(controller, { reusePath: 20 });
+    creep.moveTo(controller, { reusePath: 50 });
   }
 }
 
@@ -565,7 +589,7 @@ export function signControllerIfNeeded(
     currentSign.text !== desiredSignature
   ) {
     if (creep.pos.getRangeTo(controller.pos) > 1) {
-      creep.moveTo(controller, { reusePath: 20 });
+      creep.moveTo(controller, { reusePath: 50 });
       return true;
     } else {
       creep.signController(controller, desiredSignature);
@@ -582,13 +606,13 @@ export function buildAtConstructionSite(
   site: ConstructionSite
 ): number {
   const res = creep.build(site);
-  if (res === ERR_NOT_IN_RANGE) return creep.moveTo(site, { reusePath: 20 });
+  if (res === ERR_NOT_IN_RANGE) return creep.moveTo(site, { reusePath: 50 });
   return res;
 }
 
 export function repairStructure(creep: Creep, target: AnyStructure): number {
   const res = creep.repair(target);
-  if (res === ERR_NOT_IN_RANGE) return creep.moveTo(target, { reusePath: 20 });
+  if (res === ERR_NOT_IN_RANGE) return creep.moveTo(target, { reusePath: 50 });
   return res;
 }
 

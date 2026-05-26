@@ -19,7 +19,7 @@ export function runMiner(creep: Creep) {
 
     if (source && container) {
       if (!creep.pos.isEqualTo(container.pos)) {
-        creep.moveTo(container.pos, { reusePath: 20 });
+        creep.moveTo(container.pos, { reusePath: 50 });
         return;
       }
 
@@ -51,7 +51,7 @@ export function runMiner(creep: Creep) {
     if (containers.length > 0) {
       const container = containers[0];
       if (!creep.pos.isEqualTo(container.pos)) {
-        creep.moveTo(container.pos, { reusePath: 20 });
+        creep.moveTo(container.pos, { reusePath: 50 });
         return;
       }
       harvestFromSource(creep, source);

@@ -102,7 +102,7 @@ function depositEnergy(creep: Creep, homeRoom: string) {
   const storage = creep.room.storage;
   if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
     const res = creep.transfer(storage, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 20 });
+    if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 50 });
     return;
   }
 
@@ -117,7 +117,7 @@ function depositEnergy(creep: Creep, homeRoom: string) {
   if (fillTargets.length > 0) {
     const target = creep.pos.findClosestByRange(fillTargets)!;
     const res = creep.transfer(target, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) creep.moveTo(target, { reusePath: 20 });
+    if (res === ERR_NOT_IN_RANGE) creep.moveTo(target, { reusePath: 50 });
     return;
   }
 
@@ -130,14 +130,14 @@ function depositEnergy(creep: Creep, homeRoom: string) {
   if (towers.length > 0) {
     const tower = creep.pos.findClosestByRange(towers)!;
     const res = creep.transfer(tower, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) creep.moveTo(tower, { reusePath: 20 });
+    if (res === ERR_NOT_IN_RANGE) creep.moveTo(tower, { reusePath: 50 });
     return;
   }
 
   // Nowhere to deposit — idle near spawn
   const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
   if (spawn && !creep.pos.isNearTo(spawn)) {
-    creep.moveTo(spawn, { reusePath: 20 });
+    creep.moveTo(spawn, { reusePath: 50 });
   }
 }
 

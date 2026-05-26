@@ -298,7 +298,7 @@ const repairerTargetCache: Record<string, { value: number; tick: number }> = {};
 function getRepairerPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
   const cached = repairerTargetCache[room.name];
-  if (cached && Game.time - cached.tick < 20) return cached.value;
+  if (cached && Game.time - cached.tick < 50) return cached.value;
   // Exclude walls and ramparts — they start at 1/300M hits and would always trigger.
   const critical = room.find(FIND_STRUCTURES, {
     filter: (s) => {

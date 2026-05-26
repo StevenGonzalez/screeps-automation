@@ -26,7 +26,7 @@ export function runUpgrader(creep: Creep) {
   if (controllerLink && controllerLink.store[RESOURCE_ENERGY] > 0) {
     const res = creep.withdraw(controllerLink, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) {
-      creep.moveTo(controllerLink, { reusePath: 20 });
+      creep.moveTo(controllerLink, { reusePath: 50 });
     }
     if (res === OK || res === ERR_NOT_IN_RANGE) return;
   }
@@ -44,7 +44,7 @@ export function runUpgrader(creep: Creep) {
   const storage = creep.room.storage;
   if (storage && storage.store[RESOURCE_ENERGY] > 0) {
     if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(storage, { reusePath: 20 });
+      creep.moveTo(storage, { reusePath: 50 });
     }
     return;
   }

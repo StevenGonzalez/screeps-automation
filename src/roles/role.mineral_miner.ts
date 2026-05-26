@@ -14,7 +14,7 @@ export function runMineralMiner(creep: Creep): void {
   if (!container) return;
 
   if (!creep.pos.isEqualTo(container.pos)) {
-    creep.moveTo(container.pos, { reusePath: 20 });
+    creep.moveTo(container.pos, { reusePath: 50 });
     return;
   }
 
@@ -31,6 +31,6 @@ export function runMineralMiner(creep: Creep): void {
 
   const result = creep.harvest(mineral);
   if (result === ERR_NOT_IN_RANGE) {
-    creep.moveTo(mineral, { reusePath: 20 });
+    creep.moveTo(mineral, { reusePath: 50 });
   }
 }
