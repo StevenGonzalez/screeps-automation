@@ -24,6 +24,9 @@ declare global {
     homeRoom?: string;
     targetRoom?: string;
     remoteSourceId?: Id<Source>;
+    // Per-creep target caches to avoid repeated findClosestByPath
+    fillTargetId?: string;
+    constructionSiteId?: Id<ConstructionSite>;
   }
 
   interface RoomMemory {
@@ -49,6 +52,9 @@ declare global {
     // Castle stamp planner
     castleAnchor?: { x: number; y: number };
     lastRcl?: number;
+    // Cached controller link IDs (refreshed every ~200 ticks)
+    controllerLinkIds?: Id<StructureLink>[];
+    controllerLinkScanTick?: number;
   }
 
   interface Memory {

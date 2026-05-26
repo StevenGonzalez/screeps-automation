@@ -57,12 +57,27 @@ export function runUpgrader(creep: Creep) {
   acquireEnergy(creep);
 }
 
+const CONTROLLER_LINK_SCAN_TTL = 200;
+
 function findControllerLink(creep: Creep): StructureLink | null {
-  const controller = creep.room.controller;
+  const room = creep.room;
+  const controller = room.controller;
   if (!controller) return null;
-  const links = controller.pos.findInRange(FIND_MY_STRUCTURES, 3, {
-    filter: (s): s is StructureLink => s.structureType === STRUCTURE_LINK,
-  }) as StructureLink[];
+
+  if (
+    !room.memory.controllerLinkIds ||
+    Game.time - (room.memory.controllerLinkScanTick ?? 0) > CONTROLLER_LINK_SCAN_TTL
+  ) {
+    const found = controller.pos.findInRange(FIND_MY_STRUCTURES, 3, {
+      filter: (s): s is StructureLink => s.structureType === STRUCTURE_LINK,
+    }) as StructureLink[];
+    room.memory.controllerLinkIds = found.map((l) => l.id);
+    room.memory.controllerLinkScanTick = Game.time;
+  }
+
+  const links = room.memory.controllerLinkIds!
+    .map((id) => Game.getObjectById(id))
+    .filter(Boolean) as StructureLink[];
   if (links.length === 0) return null;
   return links.reduce((a, b) =>
     a.store[RESOURCE_ENERGY] > b.store[RESOURCE_ENERGY] ? a : b

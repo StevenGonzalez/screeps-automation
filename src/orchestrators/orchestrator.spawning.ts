@@ -45,10 +45,26 @@ function calculateBodyPartCost(parts: BodyPartConstant[]): number {
   return parts.reduce((cost, part) => cost + BODYPART_COST[part], 0);
 }
 
+let creepCacheTick = -1;
+const creepsByRoleCache: Record<string, Creep[]> = {};
+
+function rebuildCreepCache(): void {
+  if (creepCacheTick === Game.time) return;
+  creepCacheTick = Game.time;
+  for (const key of Object.keys(creepsByRoleCache)) delete creepsByRoleCache[key];
+  for (const name in Game.creeps) {
+    const creep = Game.creeps[name];
+    const role = normalizeRole(creep.memory.role) ?? "";
+    if (role) {
+      if (!creepsByRoleCache[role]) creepsByRoleCache[role] = [];
+      creepsByRoleCache[role].push(creep);
+    }
+  }
+}
+
 function getCreepsByRole(role: string): Creep[] {
-  return Object.values(Game.creeps).filter(
-    (creep) => normalizeRole(creep.memory.role) === role
-  );
+  rebuildCreepCache();
+  return creepsByRoleCache[role] ?? [];
 }
 
 function getCreepsByRoleInRoom(role: string, room: Room): Creep[] {

@@ -168,13 +168,17 @@ function ensureRampartsForExistingStructures(room: Room) {
 
 export function loop() {
   cleanupPlannedStructuresGlobal();
+  // Construction site management doesn't need to run every tick — once per 5 ticks is plenty.
+  const applyConstruction = Game.time % 5 === 0;
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room.controller || !room.controller.my) continue;
     processRoomStructures(room);
-    applyPlannedConstruction(room);
-    cleanupUnplannedConstructionSites(room);
-    ensureRampartsForExistingStructures(room);
+    if (applyConstruction) {
+      applyPlannedConstruction(room);
+      cleanupUnplannedConstructionSites(room);
+      ensureRampartsForExistingStructures(room);
+    }
   }
 }
 

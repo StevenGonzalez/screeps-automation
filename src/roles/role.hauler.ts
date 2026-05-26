@@ -20,6 +20,8 @@ export function runHauler(creep: Creep) {
     }
   }
   if (isCreepEmpty(creep)) {
+    creep.memory.fillTargetId = undefined;
+
     const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
       filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 50,
     }) as Resource | null;
@@ -37,6 +39,24 @@ export function runHauler(creep: Creep) {
     acquireEnergy(creep);
     return;
   }
+
+  // Try cached fill target before doing an expensive find+findClosestByPath.
+  if (creep.memory.fillTargetId) {
+    const cached = Game.getObjectById(creep.memory.fillTargetId as Id<Structure>) as AnyStoreStructure | null;
+    if (
+      cached &&
+      "store" in cached &&
+      cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+      (cached.structureType === STRUCTURE_SPAWN ||
+        cached.structureType === STRUCTURE_EXTENSION ||
+        cached.structureType === STRUCTURE_TOWER)
+    ) {
+      transferEnergyTo(creep, cached as Structure);
+      return;
+    }
+    creep.memory.fillTargetId = undefined;
+  }
+
   const targets = creep.room.find(FIND_STRUCTURES, {
     filter: (s) =>
       (s.structureType === STRUCTURE_SPAWN ||
@@ -48,6 +68,7 @@ export function runHauler(creep: Creep) {
   if (targets.length > 0) {
     const target = creep.pos.findClosestByPath(targets);
     if (target) {
+      creep.memory.fillTargetId = target.id;
       transferEnergyTo(creep, target);
       return;
     }
