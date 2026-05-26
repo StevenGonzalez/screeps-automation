@@ -781,5 +781,20 @@ export function structureTypeForKey(key: string): StructureConstant | null {
   if (key.startsWith(PLANNER_KEYS.STORAGE_PREFIX)) return STRUCTURE_STORAGE;
   if (key === PLANNER_KEYS.RAMPARTS_KEY) return STRUCTURE_RAMPART;
   if (key === PLANNER_KEYS.CONTAINER_CONTROLLER) return STRUCTURE_CONTAINER;
+  // Stamp keys
+  if (key.startsWith(PLANNER_KEYS.STAMP_SPAWN_PREFIX))  return STRUCTURE_SPAWN;
+  if (key.startsWith(PLANNER_KEYS.STAMP_TOWER_PREFIX))  return STRUCTURE_TOWER;
+  if (key === PLANNER_KEYS.STAMP_EXTENSION_KEY)         return STRUCTURE_EXTENSION;
+  if (key === PLANNER_KEYS.STAMP_STORAGE_KEY)           return STRUCTURE_STORAGE;
+  if (key === PLANNER_KEYS.STAMP_TERMINAL_KEY)          return STRUCTURE_TERMINAL;
+  if (key === PLANNER_KEYS.STAMP_FACTORY_KEY)           return STRUCTURE_FACTORY;
+  if (key === PLANNER_KEYS.STAMP_LAB_KEY)               return STRUCTURE_LAB;
+  if (key === PLANNER_KEYS.STAMP_NUKER_KEY)             return STRUCTURE_NUKER;
+  if (key === PLANNER_KEYS.STAMP_POWER_SPAWN_KEY)       return STRUCTURE_POWER_SPAWN;
+  if (key === PLANNER_KEYS.STAMP_OBSERVER_KEY)          return STRUCTURE_OBSERVER;
+  if (key === PLANNER_KEYS.STAMP_ROAD_KEY)              return STRUCTURE_ROAD;
+  if (key === PLANNER_KEYS.STAMP_RAMPART_KEY)           return STRUCTURE_RAMPART;
+  if (key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX)) return STRUCTURE_ROAD;
+  if (key.startsWith("cardinal_connector_"))              return STRUCTURE_ROAD;
   return null;
 }

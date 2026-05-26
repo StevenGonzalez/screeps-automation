@@ -49,6 +49,27 @@ export const PLANNER_KEYS = {
   RAMPARTS_KEY: "ramparts",
   EXTENSIONS_PREFIX: "extensions_for_",
   STORAGE_PREFIX: "storage_for_",
+  // Castle stamp keys
+  CASTLE_STAMP_KEY:      "castle_stamp",
+  STAMP_SPAWN_PREFIX:    "stamp_spawn_",
+  STAMP_STORAGE_KEY:     "stamp_storage",
+  STAMP_TERMINAL_KEY:    "stamp_terminal",
+  STAMP_FACTORY_KEY:     "stamp_factory",
+  STAMP_TOWER_PREFIX:    "stamp_tower_",
+  STAMP_EXTENSION_KEY:   "stamp_extensions",
+  STAMP_LAB_KEY:         "stamp_labs",
+  STAMP_NUKER_KEY:       "stamp_nuker",
+  STAMP_POWER_SPAWN_KEY: "stamp_power_spawn",
+  STAMP_OBSERVER_KEY:    "stamp_observer",
+  STAMP_ROAD_KEY:        "stamp_roads",
+  STAMP_RAMPART_KEY:     "stamp_ramparts",
+  CARDINAL_ROAD_PREFIX:  "cardinal_road_",
+};
+
+export const STAMP_PLANNER = {
+  halfSize: 6,
+  anchorMinEdgeDistance: 8,
+  bfsMaxRadius: 5,
 };
 
 export const TOWER_COUNT_PER_RCL: Record<number, number> = {

@@ -46,6 +46,9 @@ declare global {
     // Remote harvesting
     pendingScoutRooms?: string[];
     remoteRooms?: RemoteRoomData[];
+    // Castle stamp planner
+    castleAnchor?: { x: number; y: number };
+    lastRcl?: number;
   }
 
   interface Memory {

@@ -3,18 +3,16 @@ import {
   planControllerContainer,
   planMineralContainer,
   planRampartsForStructures,
-  planExtensionPositions,
-  planTowerPositions,
   addPlannedStructureToMemory,
   ensureMemoryRoomStructures,
   plannedPositionsFromMemory,
-  getOrPlanRoad,
   planRoadsAroundStructures,
   pruneRoadsUnderStructures,
   connectRoadClusters,
   structureTypeForKey,
 } from "../services/services.structures";
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
+import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
 
 function cleanupPlannedStructuresGlobal() {
   const interval = (STRUCTURE_PLANNER as any).plannedCleanupInterval || 0;
@@ -32,7 +30,7 @@ function cleanupPlannedStructuresGlobal() {
         key === PLANNER_KEYS.CONTAINER_CONTROLLER ||
         key.startsWith(PLANNER_KEYS.CONTAINER_SOURCE_PREFIX) ||
         key.startsWith(PLANNER_KEYS.CONTAINER_MINERAL_PREFIX) ||
-        key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)
+        (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX) && !key.startsWith("stamp_"))
       ) {
         mem[key] = [arr[0]];
         if (meta[key]) meta[key].createdAt = Game.time;
@@ -185,6 +183,7 @@ function processRoomStructures(room: Room) {
   if (Game.time - last < STRUCTURE_PLANNER.planInterval) return;
   ensureMemoryRoomStructures(room);
 
+  // Prune stale road keys that never got built
   const meta = room.memory.plannedStructuresMeta ?? {};
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
   const pruneAge = STRUCTURE_PLANNER.plannedRoadPruneTicks;
@@ -192,69 +191,50 @@ function processRoomStructures(room: Room) {
     for (const key of Object.keys(mem)) {
       if (
         !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
-        !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
+        !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX) &&
+        !key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX) &&
+        !key.startsWith("cardinal_connector_")
       )
         continue;
       const info = meta[key];
       if (!info?.createdAt) continue;
       if (Game.time - info.createdAt < pruneAge) continue;
-
       let anyLive = false;
       for (const p of mem[key] ?? []) {
         const [px, py] = p.split(",").map(Number);
-        if (room.lookForAt(LOOK_STRUCTURES, px, py).length > 0) {
-          anyLive = true;
-          break;
-        }
-        if (room.lookForAt(LOOK_CONSTRUCTION_SITES, px, py).length > 0) {
+        if (
+          room.lookForAt(LOOK_STRUCTURES, px, py).length > 0 ||
+          room.lookForAt(LOOK_CONSTRUCTION_SITES, px, py).length > 0
+        ) {
           anyLive = true;
           break;
         }
       }
       if (!anyLive) {
         delete room.memory.plannedStructures![key];
-        if (room.memory.plannedStructuresMeta) {
-          delete room.memory.plannedStructuresMeta[key];
-        }
+        if (room.memory.plannedStructuresMeta) delete room.memory.plannedStructuresMeta[key];
       }
     }
   }
 
-  let spawn: StructureSpawn | null = null;
-  if (room.memory.spawnId) {
-    spawn = Game.getObjectById(room.memory.spawnId) as StructureSpawn | null;
-  }
-  if (spawn && room.controller && room.controller.level >= 4) {
-    const storageKey = `${PLANNER_KEYS.STORAGE_PREFIX}${spawn.id}`;
-    const plannedStorage = plannedPositionsFromMemory(room, storageKey);
-    const hasStorage =
-      room.find(FIND_STRUCTURES, {
-        filter: (s) => s.structureType === STRUCTURE_STORAGE,
-      }).length > 0;
-    if (!hasStorage && plannedStorage.length === 0) {
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          if (dx === 0 && dy === 0) continue;
-          const x = spawn.pos.x + dx;
-          const y = spawn.pos.y + dy;
-          if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
-          const terrain = room.getTerrain().get(x, y);
-          if (terrain === TERRAIN_MASK_WALL) continue;
-          const structs = room.lookForAt(LOOK_STRUCTURES, x, y);
-          const sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y);
-          if (structs.length === 0 && sites.length === 0) {
-            addPlannedStructureToMemory(
-              room,
-              storageKey,
-              new RoomPosition(x, y, room.name)
-            );
-            break;
-          }
-        }
+  // Migrate: remove old per-spawn extension/tower/storage keys once anchor is set
+  if (room.memory.castleAnchor) {
+    for (const key of Object.keys(mem)) {
+      if (
+        key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX) ||
+        key.startsWith(PLANNER_KEYS.TOWERS_PREFIX) ||
+        key.startsWith(PLANNER_KEYS.STORAGE_PREFIX)
+      ) {
+        delete mem[key];
+        if (room.memory.plannedStructuresMeta) delete room.memory.plannedStructuresMeta[key];
       }
     }
   }
 
+  // Castle stamp: place RCL-appropriate structures
+  applyCastleStamp(room);
+
+  // Source containers
   const sources = room.find(FIND_SOURCES);
   for (const source of sources) {
     const planned = plannedPositionsFromMemory(
@@ -271,14 +251,10 @@ function processRoomStructures(room: Room) {
       );
   }
 
+  // Controller container
   if (room.controller) {
-    const planned = plannedPositionsFromMemory(
-      room,
-      PLANNER_KEYS.CONTAINER_CONTROLLER
-    );
-
+    const planned = plannedPositionsFromMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER);
     let hasControllerContainer = false;
-    let foundContainer: StructureContainer | null = null;
 
     if (room.memory.upgradeContainerId) {
       const container = Game.getObjectById(
@@ -290,228 +266,59 @@ function processRoomStructures(room: Room) {
         container.pos.getRangeTo(room.controller.pos) <= 2
       ) {
         hasControllerContainer = true;
-        foundContainer = container;
       }
     }
-
     if (!hasControllerContainer) {
       const containers = room.find(FIND_STRUCTURES, {
         filter: (s) =>
           s.structureType === STRUCTURE_CONTAINER &&
           s.pos.getRangeTo(room.controller!.pos) <= 2,
       }) as StructureContainer[];
-      if (containers.length > 0) {
-        hasControllerContainer = true;
-        foundContainer = containers[0];
-      }
+      if (containers.length > 0) hasControllerContainer = true;
     }
 
     if (hasControllerContainer && planned.length > 0) {
-      const mem = room.memory.plannedStructures as Record<string, string[]>;
-      if (mem && mem[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
-        delete mem[PLANNER_KEYS.CONTAINER_CONTROLLER];
-      }
-      const meta = room.memory.plannedStructuresMeta;
-      if (meta && meta[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
-        delete meta[PLANNER_KEYS.CONTAINER_CONTROLLER];
-      }
-    }
-    if (planned.length > 1) {
-      const mem = room.memory.plannedStructures as Record<string, string[]>;
-      if (mem && mem[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
-        mem[PLANNER_KEYS.CONTAINER_CONTROLLER] = [
-          mem[PLANNER_KEYS.CONTAINER_CONTROLLER][0],
-        ];
-      }
-    }
-
-    if (planned.length === 0 && !hasControllerContainer) {
+      delete mem[PLANNER_KEYS.CONTAINER_CONTROLLER];
+      if (room.memory.plannedStructuresMeta) delete room.memory.plannedStructuresMeta[PLANNER_KEYS.CONTAINER_CONTROLLER];
+    } else if (planned.length > 1) {
+      mem[PLANNER_KEYS.CONTAINER_CONTROLLER] = [mem[PLANNER_KEYS.CONTAINER_CONTROLLER][0]];
+    } else if (planned.length === 0 && !hasControllerContainer) {
       const pos = planControllerContainer(room, room.controller);
-      if (pos)
-        addPlannedStructureToMemory(
-          room,
-          PLANNER_KEYS.CONTAINER_CONTROLLER,
-          pos
-        );
+      if (pos) addPlannedStructureToMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER, pos);
     }
   }
 
-  if (spawn) {
-    for (const source of sources) {
-      const containerPlanned = plannedPositionsFromMemory(
-        room,
-        `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`
-      );
-      if (containerPlanned.length === 0) continue;
-      const target = containerPlanned[0];
-      const roadKey = `${PLANNER_KEYS.ROAD_PREFIX}${spawn.id}_${PLANNER_KEYS.NODE_SOURCE_PREFIX}${source.id}`;
-      const existingRoad = plannedPositionsFromMemory(room, roadKey);
-      if (existingRoad.length > 0) continue;
-      const roadPoints = getOrPlanRoad(room, roadKey, spawn.pos, target);
-      for (const p of roadPoints) addPlannedStructureToMemory(room, roadKey, p);
-    }
-
-    const controllerContainers = plannedPositionsFromMemory(
-      room,
-      PLANNER_KEYS.CONTAINER_CONTROLLER
-    );
-    let controllerTarget: RoomPosition | null = null;
-    if (controllerContainers.length > 0)
-      controllerTarget = controllerContainers[0];
-    else if (room.controller) controllerTarget = room.controller.pos;
-
-    if (controllerTarget) {
-      const roadKey = `${PLANNER_KEYS.ROAD_PREFIX}${spawn.id}_${PLANNER_KEYS.NODE_CONTROLLER}`;
-      const existingRoad = plannedPositionsFromMemory(room, roadKey);
-      if (existingRoad.length === 0) {
-        const roadPoints = getOrPlanRoad(
-          room,
-          roadKey,
-          spawn.pos,
-          controllerTarget
-        );
-        for (const p of roadPoints)
-          addPlannedStructureToMemory(room, roadKey, p);
-      }
-    }
-
-    const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
-    if (mineral) {
-      const plannedMineral = plannedPositionsFromMemory(
-        room,
-        `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
-      );
-      const containerKey = `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`;
-      const mineralKey = `${PLANNER_KEYS.ROAD_PREFIX}${spawn.id}_${PLANNER_KEYS.NODE_MINERAL_PREFIX}${mineral.id}`;
-
-      if (plannedMineral.length === 0) {
-        const mpos = planMineralContainer(room, mineral);
-        if (mpos) {
-          addPlannedStructureToMemory(room, containerKey, mpos);
-        }
-      } else if (plannedMineral.length > 0) {
-        // Check if container position changed (container moved or pathfinding found better spot)
-        // If position changed, clear old road so it gets replanned to new location
-        const mem = room.memory.plannedStructures as Record<string, string[]>;
-        const currentPos = plannedMineral[0];
-        const oldPosStr = mem[containerKey]?.[0];
-
-        if (oldPosStr && oldPosStr !== `${currentPos.x},${currentPos.y}`) {
-          // Position changed, clear old road to force replanning
-          mem[mineralKey] = [];
-        }
-      }
-
-      const existingMineralRoad = plannedPositionsFromMemory(room, mineralKey);
-      if (existingMineralRoad.length === 0) {
-        const plannedMineral2 = plannedPositionsFromMemory(
-          room,
-          containerKey
-        );
-        const targetPos =
-          plannedMineral2.length > 0 ? plannedMineral2[0] : mineral.pos;
-        const roadPoints = getOrPlanRoad(
-          room,
-          mineralKey,
-          spawn.pos,
-          targetPos
-        );
-        for (const p of roadPoints)
-          addPlannedStructureToMemory(room, mineralKey, p);
-      }
-    }
-
-    const energyNodes: { id: string; pos: RoomPosition }[] = [];
-    for (const source of sources) {
-      const containerPlanned = plannedPositionsFromMemory(
-        room,
-        `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`
-      );
-      if (containerPlanned.length > 0)
-        energyNodes.push({
-          id: `${PLANNER_KEYS.NODE_SOURCE_PREFIX}${source.id}`,
-          pos: containerPlanned[0],
-        });
-      else
-        energyNodes.push({
-          id: `${PLANNER_KEYS.NODE_SOURCE_PREFIX}${source.id}`,
-          pos: source.pos,
-        });
-    }
-
-    if (controllerTarget) {
-      energyNodes.push({
-        id: PLANNER_KEYS.NODE_CONTROLLER,
-        pos: controllerTarget,
-      });
-    }
-
-    if (mineral) {
-      const plannedMineral3 = plannedPositionsFromMemory(
-        room,
-        `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
-      );
-      energyNodes.push({
-        id: `${PLANNER_KEYS.NODE_MINERAL_PREFIX}${mineral.id}`,
-        pos: plannedMineral3.length > 0 ? plannedMineral3[0] : mineral.pos,
-      });
-    }
-
-    for (let i = 0; i < energyNodes.length; i++) {
-      for (let j = i + 1; j < energyNodes.length; j++) {
-        const a = energyNodes[i];
-        const b = energyNodes[j];
-        const key = `${PLANNER_KEYS.ROAD_PREFIX}${a.id}_${b.id}`;
-        const existing = plannedPositionsFromMemory(room, key);
-        if (existing.length > 0) continue;
-        const roadPoints = getOrPlanRoad(room, key, a.pos, b.pos);
-        for (const p of roadPoints) addPlannedStructureToMemory(room, key, p);
-      }
-    }
-
-    const towerKey = `${PLANNER_KEYS.TOWERS_PREFIX}${spawn.id}`;
-    const existingTowers = plannedPositionsFromMemory(room, towerKey);
-    if (existingTowers.length === 0) {
-      const towerPositions = planTowerPositions(room, spawn);
-      for (const p of towerPositions)
-        addPlannedStructureToMemory(room, towerKey, p);
-    }
-
-    const extKey = `${PLANNER_KEYS.EXTENSIONS_PREFIX}${spawn.id}`;
-    const existingExt = plannedPositionsFromMemory(room, extKey);
-    if (existingExt.length === 0) {
-      const extPositions = planExtensionPositions(
-        room,
-        spawn as StructureSpawn
-      );
-      for (const p of extPositions)
-        addPlannedStructureToMemory(room, extKey, p);
+  // Mineral container
+  const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
+  if (mineral) {
+    const containerKey = `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`;
+    const plannedMineral = plannedPositionsFromMemory(room, containerKey);
+    if (plannedMineral.length === 0) {
+      const mpos = planMineralContainer(room, mineral);
+      if (mpos) addPlannedStructureToMemory(room, containerKey, mpos);
     }
   }
 
-  const importantTypes = Object.keys(
-    (room.memory.plannedStructures || {}) as any
-  );
-  const importantPositions: RoomPosition[] = [];
-  for (const t of importantTypes)
-    importantPositions.push(...plannedPositionsFromMemory(room, t));
+  // Cardinal arteries + economic connectors
+  planCardinalArteries(room);
 
   planRoadsAroundStructures(room);
-
   pruneRoadsUnderStructures(room);
-
   connectRoadClusters(room);
 
   room.memory.lastStructurePlanTick = Game.time;
 
-  const ramparts = planRampartsForStructures(room, importantPositions);
-  const rampKey = PLANNER_KEYS.RAMPARTS_KEY;
-  const existingRamparts = plannedPositionsFromMemory(room, rampKey).map(
-    (p) => `${p.x},${p.y}`
+  // Ramparts for all planned positions
+  const allTypes = Object.keys((room.memory.plannedStructures || {}) as any);
+  const allPositions: RoomPosition[] = [];
+  for (const t of allTypes) allPositions.push(...plannedPositionsFromMemory(room, t));
+
+  const ramparts = planRampartsForStructures(room, allPositions);
+  const existingRampSet = new Set(
+    plannedPositionsFromMemory(room, PLANNER_KEYS.RAMPARTS_KEY).map((p) => `${p.x},${p.y}`)
   );
-  const existingSet = new Set(existingRamparts);
   for (const p of ramparts) {
-    const key = `${p.x},${p.y}`;
-    if (!existingSet.has(key)) addPlannedStructureToMemory(room, rampKey, p);
+    if (!existingRampSet.has(`${p.x},${p.y}`))
+      addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, p);
   }
 }
