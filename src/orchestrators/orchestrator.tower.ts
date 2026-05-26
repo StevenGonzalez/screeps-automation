@@ -5,14 +5,12 @@ const THREAT_NOTIFY_COOLDOWN = 200;
 export function loop() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
-    if (room.controller && room.controller.my) {
-      notifyOnHostiles(room);
-    }
-    const towers = room.find(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_TOWER,
-    }) as StructureTower[];
-    for (const tower of towers) {
-      runTower(tower);
+    if (!room.controller?.my) continue;
+    notifyOnHostiles(room);
+    const towerIds = room.memory.towerIds ?? [];
+    for (const id of towerIds) {
+      const tower = Game.getObjectById(id);
+      if (tower) runTower(tower);
     }
   }
 }

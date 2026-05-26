@@ -12,92 +12,66 @@ import {
   planRoadsAroundStructures,
   pruneRoadsUnderStructures,
   connectRoadClusters,
+  structureTypeForKey,
 } from "../services/services.structures";
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
-
-function structureTypeForKey(key: string): StructureConstant | null {
-  switch (true) {
-    case key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX):
-      return STRUCTURE_CONTAINER;
-    case key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX):
-      return STRUCTURE_EXTENSION;
-    case key.startsWith(PLANNER_KEYS.ROAD_PREFIX):
-    case key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX):
-      return STRUCTURE_ROAD;
-    case key.startsWith(PLANNER_KEYS.TOWERS_PREFIX):
-      return STRUCTURE_TOWER;
-    case key.startsWith(PLANNER_KEYS.STORAGE_PREFIX):
-      return STRUCTURE_STORAGE;
-    case key === PLANNER_KEYS.RAMPARTS_KEY:
-      return STRUCTURE_RAMPART;
-    case key === PLANNER_KEYS.CONTAINER_CONTROLLER:
-      return STRUCTURE_CONTAINER;
-    default:
-      return null;
-  }
-}
 
 function cleanupPlannedStructuresGlobal() {
   const interval = (STRUCTURE_PLANNER as any).plannedCleanupInterval || 0;
   if (!interval || Game.time % interval !== 0) return;
 
   for (const rn in Game.rooms) {
-    try {
-      const room = Game.rooms[rn];
-      const mem = room.memory.plannedStructures as
-        | Record<string, string[]>
-        | undefined;
-      const meta = (room as any).memory.plannedStructuresMeta || {};
-      if (mem) {
-        for (const key of Object.keys(mem)) {
-          const arr = mem[key] || [];
-          if (arr.length <= 1) continue;
-          if (
-            key === PLANNER_KEYS.CONTAINER_CONTROLLER ||
-            key.startsWith(PLANNER_KEYS.CONTAINER_SOURCE_PREFIX) ||
-            key.startsWith(PLANNER_KEYS.CONTAINER_MINERAL_PREFIX) ||
-            key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)
-          ) {
-            mem[key] = [arr[0]];
-            if (meta && meta[key]) meta[key].createdAt = Game.time;
-          } else {
-            const seen = new Set<string>();
-            const keep: string[] = [];
-            for (const p of arr) {
-              if (seen.has(p)) continue;
-              const [x, y] = p.split(",").map(Number);
-              if (isNaN(x) || isNaN(y) || x < 0 || x >= 50 || y < 0 || y >= 50)
-                continue;
-              seen.add(p);
-              keep.push(p);
-            }
-            mem[key] = keep;
-            if (meta && meta[key] && mem[key].length === 0) delete meta[key];
-          }
+    const room = Game.rooms[rn];
+    const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
+    const meta = room.memory.plannedStructuresMeta ?? {};
+    if (!mem) continue;
+    for (const key of Object.keys(mem)) {
+      const arr = mem[key] ?? [];
+      if (arr.length <= 1) continue;
+      if (
+        key === PLANNER_KEYS.CONTAINER_CONTROLLER ||
+        key.startsWith(PLANNER_KEYS.CONTAINER_SOURCE_PREFIX) ||
+        key.startsWith(PLANNER_KEYS.CONTAINER_MINERAL_PREFIX) ||
+        key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)
+      ) {
+        mem[key] = [arr[0]];
+        if (meta[key]) meta[key].createdAt = Game.time;
+      } else {
+        const seen = new Set<string>();
+        const keep: string[] = [];
+        for (const p of arr) {
+          if (seen.has(p)) continue;
+          const [x, y] = p.split(",").map(Number);
+          if (isNaN(x) || isNaN(y) || x < 0 || x >= 50 || y < 0 || y >= 50)
+            continue;
+          seen.add(p);
+          keep.push(p);
         }
+        mem[key] = keep;
+        if (meta[key] && mem[key].length === 0) delete meta[key];
       }
-    } catch (e) {}
+    }
   }
 
-  const unseenAge = (STRUCTURE_PLANNER as any).plannedCleanupUnseenAge || 0;
-  if (unseenAge <= 0) return;
+  const unseenAge = STRUCTURE_PLANNER.plannedCleanupUnseenAge;
+  if (!unseenAge || unseenAge <= 0) return;
   if (!Memory.rooms) return;
   for (const rname of Object.keys(Memory.rooms)) {
     if (Game.rooms[rname]) continue;
-    const rm = (Memory.rooms as any)[rname];
-    if (!rm || !rm.plannedStructuresMeta) continue;
+    const rm = Memory.rooms[rname];
+    if (!rm?.plannedStructuresMeta) continue;
     let anyRecent = false;
     for (const k of Object.keys(rm.plannedStructuresMeta)) {
-      const info = rm.plannedStructuresMeta[k] as any;
-      if (!info || !info.createdAt) continue;
+      const info = rm.plannedStructuresMeta[k];
+      if (!info?.createdAt) continue;
       if (Game.time - info.createdAt < unseenAge) {
         anyRecent = true;
         break;
       }
     }
     if (!anyRecent) {
-      delete (Memory.rooms as any)[rname].plannedStructures;
-      delete (Memory.rooms as any)[rname].plannedStructuresMeta;
+      delete rm.plannedStructures;
+      delete rm.plannedStructuresMeta;
     }
   }
 }
@@ -211,55 +185,40 @@ function processRoomStructures(room: Room) {
   if (Game.time - last < STRUCTURE_PLANNER.planInterval) return;
   ensureMemoryRoomStructures(room);
 
-  try {
-    const meta = (room as any).memory.plannedStructuresMeta || {};
-    const mem = (room.memory.plannedStructures || {}) as Record<
-      string,
-      string[]
-    >;
-    const now = Game.time;
-    const pruneAge = (STRUCTURE_PLANNER as any).plannedRoadPruneTicks || 0;
-    if (pruneAge > 0) {
-      for (const key of Object.keys(mem)) {
-        if (
-          !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
-          !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
-        )
-          continue;
-        const info = meta[key];
-        if (!info || !info.createdAt) continue;
-        if (now - info.createdAt < pruneAge) continue;
+  const meta = room.memory.plannedStructuresMeta ?? {};
+  const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
+  const pruneAge = STRUCTURE_PLANNER.plannedRoadPruneTicks;
+  if (pruneAge > 0) {
+    for (const key of Object.keys(mem)) {
+      if (
+        !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
+        !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
+      )
+        continue;
+      const info = meta[key];
+      if (!info?.createdAt) continue;
+      if (Game.time - info.createdAt < pruneAge) continue;
 
-        const positions = mem[key] || [];
-        let anyLive = false;
-        for (const p of positions) {
-          const [px, py] = p.split(",").map(Number);
-          const structs = room.lookForAt(
-            LOOK_STRUCTURES,
-            px,
-            py
-          ) as Structure[];
-          if (structs.length > 0) {
-            anyLive = true;
-            break;
-          }
-          const sites = room.lookForAt(
-            LOOK_CONSTRUCTION_SITES,
-            px,
-            py
-          ) as ConstructionSite[];
-          if (sites.length > 0) {
-            anyLive = true;
-            break;
-          }
+      let anyLive = false;
+      for (const p of mem[key] ?? []) {
+        const [px, py] = p.split(",").map(Number);
+        if (room.lookForAt(LOOK_STRUCTURES, px, py).length > 0) {
+          anyLive = true;
+          break;
         }
-        if (!anyLive) {
-          delete (room as any).memory.plannedStructures[key];
-          delete (room as any).memory.plannedStructuresMeta[key];
+        if (room.lookForAt(LOOK_CONSTRUCTION_SITES, px, py).length > 0) {
+          anyLive = true;
+          break;
+        }
+      }
+      if (!anyLive) {
+        delete room.memory.plannedStructures![key];
+        if (room.memory.plannedStructuresMeta) {
+          delete room.memory.plannedStructuresMeta[key];
         }
       }
     }
-  } catch (e) {}
+  }
 
   let spawn: StructureSpawn | null = null;
   if (room.memory.spawnId) {
@@ -352,7 +311,7 @@ function processRoomStructures(room: Room) {
       if (mem && mem[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
         delete mem[PLANNER_KEYS.CONTAINER_CONTROLLER];
       }
-      const meta = (room as any).memory.plannedStructuresMeta;
+      const meta = room.memory.plannedStructuresMeta;
       if (meta && meta[PLANNER_KEYS.CONTAINER_CONTROLLER]) {
         delete meta[PLANNER_KEYS.CONTAINER_CONTROLLER];
       }

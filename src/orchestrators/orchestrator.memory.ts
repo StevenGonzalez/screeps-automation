@@ -35,58 +35,59 @@ function processRoomMemory(room: Room) {
 
     const containers = room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_CONTAINER,
-    });
-    room.memory.containerIds = containers.map((c) => c.id);
+    }) as StructureContainer[];
+    room.memory.containerIds = containers.map((c) => c.id as Id<StructureContainer>);
 
-    const sourceList = room.find(FIND_SOURCES) as Source[];
-    const minerContainerIds: string[] = [];
+    const minerContainerIds: Id<StructureContainer>[] = [];
     for (const c of containers) {
-      for (const s of sourceList) {
+      for (const s of sources) {
         if (c.pos.getRangeTo(s.pos) <= 1) {
-          minerContainerIds.push(c.id);
+          minerContainerIds.push(c.id as Id<StructureContainer>);
           break;
         }
       }
     }
-
-    (room.memory as any).minerContainerIds = minerContainerIds;
+    room.memory.minerContainerIds = minerContainerIds;
 
     if (room.controller) {
       const controllerContainers = containers.filter(
         (c) => c.pos.getRangeTo(room.controller!.pos) <= 2
       );
       if (controllerContainers.length > 0) {
-        const closest =
-          room.controller!.pos.findClosestByPath(controllerContainers);
-        (room.memory as any).upgradeContainerId = closest
-          ? closest.id
+        const closest = room.controller!.pos.findClosestByPath(controllerContainers);
+        room.memory.upgradeContainerId = closest
+          ? (closest.id as Id<StructureContainer>)
           : undefined;
       } else {
-        (room.memory as any).upgradeContainerId = undefined;
+        room.memory.upgradeContainerId = undefined;
       }
     }
 
     const towers = room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_TOWER,
     });
-    room.memory.towerIds = towers.map((t) => t.id);
+    room.memory.towerIds = towers.map((t) => t.id as Id<StructureTower>);
 
     const terminals = room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_TERMINAL,
     });
-    room.memory.terminalId = terminals.length > 0 ? terminals[0].id : undefined;
+    room.memory.terminalId =
+      terminals.length > 0 ? (terminals[0].id as Id<StructureTerminal>) : undefined;
 
     const extractors = room.find(FIND_STRUCTURES, {
       filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
     });
-    room.memory.extractorId = extractors.length > 0 ? extractors[0].id : undefined;
+    room.memory.extractorId =
+      extractors.length > 0 ? (extractors[0].id as Id<StructureExtractor>) : undefined;
 
     if (minerals.length > 0) {
       const mineralContainers = containers.filter(
         (c) => c.pos.getRangeTo(minerals[0].pos) <= 1
       );
       room.memory.mineralContainerId =
-        mineralContainers.length > 0 ? mineralContainers[0].id : undefined;
+        mineralContainers.length > 0
+          ? (mineralContainers[0].id as Id<StructureContainer>)
+          : undefined;
     }
 
     room.memory.lastScan = Game.time;

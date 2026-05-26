@@ -62,6 +62,6 @@ export function runHauler(creep: Creep) {
   const idle =
     getClosestContainerOrStorage(creep) || creep.room.find(FIND_MY_SPAWNS)[0];
   if (idle && !creep.pos.isNearTo(idle)) {
-    creep.moveTo(idle);
+    creep.moveTo(idle, { reusePath: 20 });
   }
 }

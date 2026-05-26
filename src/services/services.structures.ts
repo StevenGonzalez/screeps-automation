@@ -284,32 +284,24 @@ export function planRampartsForStructures(
   return result;
 }
 
+const EXTENSIONS_PER_RCL: Record<number, number> = {
+  0: 0, 1: 0, 2: 5, 3: 10, 4: 20, 5: 30, 6: 40, 7: 50, 8: 60,
+};
+
 export function planExtensionPositions(room: Room, spawn: StructureSpawn) {
   const out: RoomPosition[] = [];
-  const pref = (STRUCTURE_PLANNER as any).extensionOffsetsFromSpawn || [];
-  let maxPerSpawn = (STRUCTURE_PLANNER as any).maxExtensionsPerSpawn || 10;
-  const extensionsPerRCL: Record<number, number> = {
-    0: 0,
-    1: 0,
-    2: 5,
-    3: 10,
-    4: 20,
-    5: 30,
-    6: 40,
-    7: 50,
-    8: 60,
-  };
-  const rcl = room.controller ? room.controller.level : 0;
-  const allowed = extensionsPerRCL[rcl] || maxPerSpawn;
+  const pref = STRUCTURE_PLANNER.extensionOffsetsFromSpawn;
+  const rcl = room.controller?.level ?? 0;
+  const allowed = EXTENSIONS_PER_RCL[rcl] ?? STRUCTURE_PLANNER.maxExtensionsPerSpawn;
   const existingExtensions = room.find(FIND_STRUCTURES, {
     filter: (s) => s.structureType === STRUCTURE_EXTENSION,
   }).length;
-  maxPerSpawn = Math.max(
+  let maxPerSpawn = Math.max(
     0,
-    Math.min(maxPerSpawn, allowed - existingExtensions)
+    Math.min(STRUCTURE_PLANNER.maxExtensionsPerSpawn, allowed - existingExtensions)
   );
 
-  const minDist = (STRUCTURE_PLANNER as any).extensionMinDistanceFromSpawn || 0;
+  const minDist = STRUCTURE_PLANNER.extensionMinDistanceFromSpawn;
 
   for (const off of pref) {
     if (out.length >= maxPerSpawn) break;
@@ -324,10 +316,10 @@ export function planExtensionPositions(room: Room, spawn: StructureSpawn) {
     out.push(new RoomPosition(x, y, room.name));
   }
 
-  const radius = (STRUCTURE_PLANNER as any).extensionSearchRadius || 6;
+  const radius = STRUCTURE_PLANNER.extensionSearchRadius;
 
-  if (out.length < maxPerSpawn && (STRUCTURE_PLANNER as any).extensionUseRing) {
-    const ringR = (STRUCTURE_PLANNER as any).extensionRingRadius || 2;
+  if (out.length < maxPerSpawn && STRUCTURE_PLANNER.extensionUseRing) {
+    const ringR = STRUCTURE_PLANNER.extensionRingRadius;
     const ringPositions: RoomPosition[] = [];
     for (let dx = -ringR; dx <= ringR; dx++) {
       for (let dy = -ringR; dy <= ringR; dy++) {
@@ -411,7 +403,7 @@ export function planExtensionPositions(room: Room, spawn: StructureSpawn) {
     }
   }
 
-  const entrances = (STRUCTURE_PLANNER as any).extensionRingEntrances || 2;
+  const entrances = STRUCTURE_PLANNER.extensionRingEntrances;
   if (out.length > entrances) {
     const removeCount = Math.min(entrances, out.length - 1);
     const roadTiles = getAllPlannedRoadTiles(room);
@@ -780,13 +772,13 @@ export function removePlannedStructureFromMemory(
   mem[type] = arr.filter((s) => s !== key);
 }
 
-function structureTypeForKey(key: string): StructureConstant | null {
+export function structureTypeForKey(key: string): StructureConstant | null {
   if (key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX)) return STRUCTURE_CONTAINER;
-  if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX))
-    return STRUCTURE_EXTENSION;
+  if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)) return STRUCTURE_EXTENSION;
   if (key.startsWith(PLANNER_KEYS.ROAD_PREFIX)) return STRUCTURE_ROAD;
   if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) return STRUCTURE_ROAD;
   if (key.startsWith(PLANNER_KEYS.TOWERS_PREFIX)) return STRUCTURE_TOWER;
+  if (key.startsWith(PLANNER_KEYS.STORAGE_PREFIX)) return STRUCTURE_STORAGE;
   if (key === PLANNER_KEYS.RAMPARTS_KEY) return STRUCTURE_RAMPART;
   if (key === PLANNER_KEYS.CONTAINER_CONTROLLER) return STRUCTURE_CONTAINER;
   return null;

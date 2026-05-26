@@ -28,32 +28,13 @@ function buildScaledBody(
   role: string,
   availableEnergy: number
 ): BodyPartConstant[] {
-  if (role === ROLE_HARVESTER) {
-    const body: BodyPartConstant[] = [];
-    let energyLeft = availableEnergy;
-    while (energyLeft >= 200) {
-      body.push(WORK, CARRY, MOVE);
-      energyLeft -= 200;
-    }
-    return body;
-  }
-  const pattern = BODY_PATTERNS[role];
-  if (!pattern) {
-    return [WORK, CARRY, MOVE];
-  }
+  const pattern = BODY_PATTERNS[role] ?? [WORK, CARRY, MOVE];
   const patternCost = calculateBodyPartCost(pattern);
+  const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
+  const maxByEnergy = Math.floor(availableEnergy / patternCost);
+  const repeats = Math.max(1, Math.min(maxByParts, maxByEnergy));
   const body: BodyPartConstant[] = [];
-  let timesToRepeat = Math.floor(availableEnergy / patternCost);
-  timesToRepeat = Math.min(
-    timesToRepeat,
-    Math.floor(MAX_BODY_PART_COUNT / pattern.length)
-  );
-  for (let i = 0; i < timesToRepeat; i++) {
-    body.push(...pattern);
-  }
-  if (body.length === 0) {
-    return pattern;
-  }
+  for (let i = 0; i < repeats; i++) body.push(...pattern);
   return body;
 }
 
@@ -85,28 +66,57 @@ function getMinerPopulationTarget(room: Room): number {
   return count;
 }
 
+type RoomPhase = "bootstrap" | "developing" | "established" | "powerhouse";
+
+function getRoomPhase(room: Room): RoomPhase {
+  const rcl = room.controller?.level ?? 0;
+  if (rcl <= 2) return "bootstrap";
+  if (rcl <= 4) return "developing";
+  if (rcl <= 6) return "established";
+  return "powerhouse";
+}
+
+function hasEnergyGatherers(room: Room): boolean {
+  const harvesters = getCreepsByRoleInRoom(ROLE_HARVESTER, room);
+  const miners = getCreepsByRoleInRoom(ROLE_MINER, room);
+  return harvesters.length + miners.length > 0;
+}
+
 function getHarvesterPopulationTarget(room: Room): number {
   const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
+  const phase = getRoomPhase(room);
+  // Bootstrap rooms need harvesters until miners exist; established rooms phase them out
+  if (phase === "bootstrap") return Math.max(2, 2 - minerCount);
   return Math.max(0, 2 - minerCount);
 }
 
-function getPopulationTarget(role: string, room: Room): number {
-  if (role === ROLE_HARVESTER) return 2;
-  if (role === ROLE_UPGRADER) {
-    let base = 1;
+function getUpgraderPopulationTarget(room: Room): number {
+  const phase = getRoomPhase(room);
+  const rcl = room.controller?.level ?? 0;
 
-    if (room.controller && room.controller.level >= 6) base++;
+  // RCL 8 is max — one upgrader is enough (diminishing returns)
+  if (rcl >= 8) return 1;
 
-    const storage = room.storage;
-    if (storage && storage.store[RESOURCE_ENERGY] > 50000)
-      base += Math.floor(storage.store[RESOURCE_ENERGY] / 50000);
+  let base = phase === "bootstrap" ? 1 : 2;
 
-    if (room.energyAvailable > 1500) base++;
-
-    return Math.min(base, 4);
+  // Extra upgraders when energy is overflowing
+  const storage = room.storage;
+  if (storage && storage.store[RESOURCE_ENERGY] > 50000) {
+    base += Math.floor(storage.store[RESOURCE_ENERGY] / 50000);
+  } else if (room.energyAvailable > 1500) {
+    base++;
   }
-  if (role === ROLE_BUILDER) return 1;
-  return 0;
+
+  const cap = phase === "powerhouse" ? 6 : 4;
+  return Math.min(base, cap);
+}
+
+function getBuilderPopulationTarget(room: Room): number {
+  const sites = room.find(FIND_CONSTRUCTION_SITES);
+  if (sites.length === 0) return 0;
+  const phase = getRoomPhase(room);
+  if (phase === "bootstrap") return 1;
+  return sites.length > 5 ? 2 : 1;
 }
 
 function getSpawnForRoom(room: Room): StructureSpawn | null {
@@ -119,6 +129,13 @@ function processRoomSpawning(room: Room) {
   const spawn = getSpawnForRoom(room);
   if (!spawn) return;
   if (spawn.spawning) return;
+
+  // Emergency recovery: if no energy gatherers exist, bypass energy reserve
+  if (!hasEnergyGatherers(room)) {
+    spawnEmergencyHarvester(room, spawn);
+    return;
+  }
+
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
@@ -128,46 +145,72 @@ function processRoomSpawning(room: Room) {
   if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
 }
 
-function shouldSpawnHauler(room: Room): boolean {
-  const WORKS_PER_HAULER = 5;
-  const DISTANCE_LONG = 20;
-  const MAX_HAULERS = 6;
+const HAULER_SPAWN = {
+  WORKS_PER_HAULER: 5,
+  DISTANCE_LONG: 20,
+  MAX_HAULERS: 6,
+  DISTANCE_CACHE_TTL: 500,
+} as const;
 
+// Per-room cache: container id → path length from spawn, refreshed every TTL ticks.
+const containerDistanceCache: Record<
+  string,
+  { distances: Record<string, number>; cachedAt: number }
+> = {};
+
+function getContainerDistances(
+  room: Room,
+  spawn: StructureSpawn,
+  containers: StructureContainer[]
+): Record<string, number> {
+  const cache = containerDistanceCache[room.name];
+  if (cache && Game.time - cache.cachedAt < HAULER_SPAWN.DISTANCE_CACHE_TTL) {
+    return cache.distances;
+  }
+  const distances: Record<string, number> = {};
+  for (const c of containers) {
+    const result = PathFinder.search(spawn.pos, { pos: c.pos, range: 1 }, {
+      plainCost: 2,
+      swampCost: 10,
+      maxOps: 2000,
+    });
+    distances[c.id] = result.incomplete ? 999 : result.path.length;
+  }
+  containerDistanceCache[room.name] = { distances, cachedAt: Game.time };
+  return distances;
+}
+
+function shouldSpawnHauler(room: Room): boolean {
   const containers = room.find(FIND_STRUCTURES, {
     filter: (s) => s.structureType === STRUCTURE_CONTAINER,
   }) as StructureContainer[];
+
+  if (containers.length === 0) return false;
 
   const haulers = getCreepsByRole(ROLE_HAULER).filter(
     (c) => c.room.name === room.name
   );
 
-  if (containers.length === 0) return false;
-
-  const targetFromContainers = containers.length;
-
   const totalMinerWork = Object.values(Game.creeps)
     .filter(
       (c) => normalizeRole(c.memory.role) === ROLE_MINER && c.room?.name === room.name
     )
-    .reduce(
-      (sum, c) => sum + (c.body.filter((p) => p.type === WORK).length || 0),
-      0
-    );
+    .reduce((sum, c) => sum + c.body.filter((p) => p.type === WORK).length, 0);
 
-  const targetFromWork = Math.ceil(totalMinerWork / WORKS_PER_HAULER);
+  const targetFromWork = Math.ceil(totalMinerWork / HAULER_SPAWN.WORKS_PER_HAULER);
 
   const spawn = getSpawnForRoom(room);
   let extraLong = 0;
   if (spawn) {
-    for (const container of containers) {
-      const path = spawn.pos.findPathTo(container.pos, { ignoreCreeps: true });
-      if (path.length > DISTANCE_LONG) extraLong++;
+    const distances = getContainerDistances(room, spawn, containers);
+    for (const c of containers) {
+      if ((distances[c.id] ?? 0) > HAULER_SPAWN.DISTANCE_LONG) extraLong++;
     }
   }
 
   const desired = Math.min(
-    MAX_HAULERS,
-    Math.max(targetFromContainers, targetFromWork + extraLong)
+    HAULER_SPAWN.MAX_HAULERS,
+    Math.max(containers.length, targetFromWork + extraLong)
   );
 
   return haulers.length < desired;
@@ -199,36 +242,41 @@ function shouldSpawnHarvester(room: Room): boolean {
 
 function shouldSpawnUpgrader(room: Room): boolean {
   const upgraders = getCreepsByRoleInRoom(ROLE_UPGRADER, room);
-  const targetPopulation = getPopulationTarget(ROLE_UPGRADER, room);
-  return upgraders.length < targetPopulation;
+  return upgraders.length < getUpgraderPopulationTarget(room);
 }
 
 function shouldSpawnBuilder(room: Room): boolean {
   const builders = getCreepsByRoleInRoom(ROLE_BUILDER, room);
-  const targetPopulation = getPopulationTarget(ROLE_BUILDER, room);
-  if (builders.length >= targetPopulation) return false;
-  const sites = room.find(FIND_CONSTRUCTION_SITES);
-  return sites.length > 0;
+  return builders.length < getBuilderPopulationTarget(room);
 }
+
 function getRepairerPopulationTarget(room: Room): number {
   const critical = room.find(FIND_STRUCTURES, {
-    filter: (s) => {
-      const st = s as any;
-      if (typeof st.hits !== "number" || typeof st.hitsMax !== "number")
-        return false;
-      return st.hits < st.hitsMax * 0.5;
-    },
+    filter: (s): s is AnyOwnedStructure | AnyStructure =>
+      "hits" in s && "hitsMax" in s && s.hits < s.hitsMax * 0.5,
   });
-  const criticalCount = critical.length;
-  const perRepairer = 3;
-  const cap = 3;
-  const target = Math.min(cap, Math.ceil(criticalCount / perRepairer));
-  return target;
+  return Math.min(3, Math.ceil(critical.length / 3));
 }
+
 function shouldSpawnRepairer(room: Room): boolean {
   const repairers = getCreepsByRoleInRoom(ROLE_REPAIRER, room);
   const target = getRepairerPopulationTarget(room);
   return repairers.length < target && target > 0;
+}
+
+function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): boolean {
+  // Minimum body: one harvester that can actually work. Use available energy.
+  const body = room.energyAvailable >= 300
+    ? [WORK, CARRY, MOVE]
+    : [WORK, CARRY, MOVE]; // cheapest working body costs 200 exactly
+  if (room.energyAvailable < 200) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_HARVESTER}_emrg${Game.time}`, {
+    memory: { role: ROLE_HARVESTER },
+  });
+  if (res === OK) {
+    console.log(`[Spawn] Emergency harvester spawned in ${room.name}`);
+  }
+  return res === OK;
 }
 
 function shouldSpawnMineralMiner(room: Room): boolean {
@@ -262,22 +310,10 @@ function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
 
 function spawnMineralMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINERAL_MINER}${Game.time}`;
-  const maxWorkParts = 5;
   const allowedEnergy = Math.floor(
     room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
   );
-  let availableEnergy = allowedEnergy;
-  const workCost = BODYPART_COST[WORK];
-  const moveCost = BODYPART_COST[MOVE];
-  let workParts = Math.min(
-    Math.floor(availableEnergy / (workCost + moveCost)),
-    maxWorkParts
-  );
-  const body: BodyPartConstant[] = [];
-  for (let i = 0; i < workParts; i++) {
-    body.push(WORK, MOVE);
-  }
-  if (body.length === 0) body.push(WORK, MOVE);
+  const body = buildMinerBody(allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_MINERAL_MINER },
   });
@@ -320,24 +356,30 @@ function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
+function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
+  // Stationary miner: maximize WORK parts (each WORK = 2 energy/tick from source).
+  // Source regenerates 10 energy/tick → 5 WORK parts saturates it.
+  // One MOVE is enough since the miner sits on a container.
+  const workCost = BODYPART_COST[WORK];
+  const moveCost = BODYPART_COST[MOVE];
+  const maxWork = 5;
+  const workParts = Math.min(
+    maxWork,
+    Math.floor((availableEnergy - moveCost) / workCost)
+  );
+  if (workParts <= 0) return [WORK, MOVE];
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < workParts; i++) body.push(WORK);
+  body.push(MOVE);
+  return body;
+}
+
 function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINER}${Game.time}`;
-  const maxWorkParts = 5;
   const allowedEnergy = Math.floor(
     room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
   );
-  let availableEnergy = allowedEnergy;
-  const workCost = BODYPART_COST[WORK];
-  const moveCost = BODYPART_COST[MOVE];
-  let workParts = Math.min(
-    Math.floor(availableEnergy / (workCost + moveCost)),
-    maxWorkParts
-  );
-  const body: BodyPartConstant[] = [];
-  for (let i = 0; i < workParts; i++) {
-    body.push(WORK, MOVE);
-  }
-  if (body.length === 0) body.push(WORK, MOVE);
+  const body = buildMinerBody(allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_MINER },
   });

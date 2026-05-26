@@ -24,7 +24,7 @@ export function runRepairer(creep: Creep) {
     const container = getClosestContainerOrStorage(creep);
     if (container) {
       if (creep.withdraw(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(container);
+        creep.moveTo(container, { reusePath: 20 });
       }
       return;
     }

@@ -12,6 +12,7 @@ declare global {
   interface RoomMemory {
     spawnId?: Id<StructureSpawn>;
     lastScan?: number;
+    lastSigned?: number;
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];
@@ -31,15 +32,11 @@ declare global {
     initialized?: boolean;
     uuid: number;
     log: any;
-    threatNotifyLastTick?: {
-      [roomName: string]: number;
-    };
-    sources?: {
-      [roomName: string]: Id<Source>[];
-    };
-    sourcesLastScan?: {
-      [roomName: string]: number;
-    };
+    creeps: Record<string, CreepMemory>;
+    rooms: Record<string, RoomMemory>;
+    threatNotifyLastTick?: Record<string, number>;
+    sources?: Record<string, Id<Source>[]>;
+    sourcesLastScan?: Record<string, number>;
   }
 
   var _: _.LoDashStatic;
