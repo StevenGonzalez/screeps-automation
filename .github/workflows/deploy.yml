@@ -16,5 +16,5 @@ jobs:
       - run: yarn install --frozen-lockfile
       - name: Create screeps.json
         run: |
-          echo '{"main":{"token":"${{ secrets.SCREEPS_TOKEN }}","protocol":"https","hostname":"screeps.com","port":443,"path":"/","branch":"default"}}' > screeps.json
+          echo '{"token":"${{ secrets.SCREEPS_TOKEN }}","protocol":"https","hostname":"screeps.com","port":443,"path":"/","branch":"default"}' > screeps.json
       - run: yarn deploy
