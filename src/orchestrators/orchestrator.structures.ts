@@ -76,64 +76,76 @@ function cleanupPlannedStructuresGlobal() {
 function applyPlannedConstruction(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
+
+  // Precompute structure and construction-site positions grouped by type.
+  // Avoids two lookForAt calls per planned position (which is O(positions) lookForAt calls).
+  const builtByType = new Map<StructureConstant, Set<string>>();
+  const sitesByType = new Map<StructureConstant, Set<string>>();
+  for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
+    const t = s.structureType as StructureConstant;
+    if (!builtByType.has(t)) builtByType.set(t, new Set());
+    builtByType.get(t)!.add(`${s.pos.x},${s.pos.y}`);
+  }
+  for (const s of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) {
+    const t = s.structureType as StructureConstant;
+    if (!sitesByType.has(t)) sitesByType.set(t, new Set());
+    sitesByType.get(t)!.add(`${s.pos.x},${s.pos.y}`);
+  }
+
+  const rampOnTopTypes = new Set<StructureConstant>(
+    STRUCTURE_PLANNER.rampartOnTopFor as StructureConstant[]
+  );
+
   for (const key of Object.keys(mem)) {
     const type = structureTypeForKey(key);
     if (!type) continue;
-    const positions = plannedPositionsFromMemory(room, key);
-    for (const pos of positions) {
-      const structs = room.lookForAt(
-        LOOK_STRUCTURES,
-        pos.x,
-        pos.y
-      ) as Structure[];
-      if (structs.some((s) => s.structureType === type)) {
-        const arr = mem[key] || [];
-        const keyStr = `${pos.x},${pos.y}`;
-        mem[key] = arr.filter((s) => s !== keyStr);
-        const rampOnTop = (STRUCTURE_PLANNER.rampartOnTopFor || []).some(
-          (t) => t === type
-        );
-        if (rampOnTop) {
-          addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, pos);
-          room.createConstructionSite(pos.x, pos.y, STRUCTURE_RAMPART);
+    const built = builtByType.get(type as StructureConstant);
+    const sites = sitesByType.get(type as StructureConstant);
+    const arr = mem[key];
+    const keep: string[] = [];
+    for (const posStr of arr) {
+      if (built?.has(posStr)) {
+        if (rampOnTopTypes.has(type as StructureConstant)) {
+          const comma = posStr.indexOf(",");
+          const x = +posStr.slice(0, comma);
+          const y = +posStr.slice(comma + 1);
+          addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, new RoomPosition(x, y, room.name));
+          room.createConstructionSite(x, y, STRUCTURE_RAMPART);
         }
-        continue;
+        continue; // already built — don't keep in planned list
       }
-      const sites = room.lookForAt(
-        LOOK_CONSTRUCTION_SITES,
-        pos.x,
-        pos.y
-      ) as ConstructionSite[];
-      if (sites.some((s) => s.structureType === type)) continue;
-      room.createConstructionSite(
-        pos.x,
-        pos.y,
-        type as BuildableStructureConstant
-      );
+      keep.push(posStr);
+      if (!sites?.has(posStr)) {
+        const comma = posStr.indexOf(",");
+        const x = +posStr.slice(0, comma);
+        const y = +posStr.slice(comma + 1);
+        room.createConstructionSite(x, y, type as BuildableStructureConstant);
+      }
     }
+    mem[key] = keep;
   }
 }
 
 function cleanupUnplannedConstructionSites(room: Room) {
   if (!room.memory.plannedStructures) return;
   const sites = room.find(FIND_CONSTRUCTION_SITES);
+  if (sites.length === 0) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
 
-  for (const site of sites) {
-    // Build a set of all planned positions for this structure type
-    const plannedPositions = new Set<string>();
-    for (const key of Object.keys(mem)) {
-      const type = structureTypeForKey(key);
-      if (type !== site.structureType) continue;
-      const positions = plannedPositionsFromMemory(room, key);
-      for (const pos of positions) {
-        plannedPositions.add(`${pos.x},${pos.y}`);
-      }
-    }
+  // Build type → planned-position set once, not once per construction site.
+  const plannedByType = new Map<StructureConstant, Set<string>>();
+  for (const key of Object.keys(mem)) {
+    const type = structureTypeForKey(key);
+    if (!type) continue;
+    const t = type as StructureConstant;
+    if (!plannedByType.has(t)) plannedByType.set(t, new Set());
+    const set = plannedByType.get(t)!;
+    for (const p of mem[key]) set.add(p);
+  }
 
-    // If this construction site is not in the planned positions, remove it
-    const siteKey = `${site.pos.x},${site.pos.y}`;
-    if (!plannedPositions.has(siteKey)) {
+  for (const site of sites) {
+    const set = plannedByType.get(site.structureType as StructureConstant);
+    if (!set?.has(`${site.pos.x},${site.pos.y}`)) {
       site.remove();
     }
   }
