@@ -101,12 +101,13 @@ function hasEnergyGatherers(room: Room): boolean {
   return harvesters.length + miners.length > 0;
 }
 
-// Energy is critically low when spawn energy is below 15% capacity AND storage has little energy.
-// During this state we suppress non-essential spawns to let the economy recover.
+// Energy is critically low when spawn energy is below 25% capacity AND storage has little buffer.
+// Pre-storage rooms use only the spawn energy fraction (no stored energy to fall back on).
 function isEnergyEmergency(room: Room): boolean {
-  const stored = room.storage?.store[RESOURCE_ENERGY] ?? 0;
   const cap = room.energyCapacityAvailable;
-  return cap > 0 && room.energyAvailable / cap < 0.15 && stored < 5000;
+  if (cap === 0) return false;
+  if (!room.storage) return room.energyAvailable / cap < 0.25;
+  return room.energyAvailable / cap < 0.25 && room.storage.store[RESOURCE_ENERGY] < 20000;
 }
 
 function getHarvesterPopulationTarget(room: Room): number {
@@ -130,15 +131,13 @@ function getUpgraderPopulationTarget(room: Room): number {
 
   let base = phase === "bootstrap" ? 1 : 2;
 
-  // Extra upgraders when energy is overflowing
+  // Extra upgraders only when storage is comfortably stocked — don't drain the room
   const storage = room.storage;
-  if (storage && storage.store[RESOURCE_ENERGY] > 50000) {
-    base += Math.floor(storage.store[RESOURCE_ENERGY] / 50000);
-  } else if (room.energyAvailable > 1500) {
-    base++;
+  if (storage && storage.store[RESOURCE_ENERGY] > 100000) {
+    base += Math.floor(storage.store[RESOURCE_ENERGY] / 100000);
   }
 
-  const cap = phase === "powerhouse" ? 6 : 4;
+  const cap = phase === "powerhouse" ? 4 : 3;
   return Math.min(base, cap);
 }
 
@@ -253,9 +252,14 @@ function shouldSpawnHauler(room: Room): boolean {
     }
   }
 
+  // Floor on miner containers only — upgrade and mineral containers don't need a dedicated hauler.
+  const minerContainerIds = new Set(room.memory.minerContainerIds ?? []);
+  const minerContainerCount = containers.filter((c) =>
+    minerContainerIds.has(c.id as Id<StructureContainer>)
+  ).length;
   const desired = Math.min(
     HAULER_SPAWN.MAX_HAULERS,
-    Math.max(containers.length, targetFromWork + extraLong)
+    Math.max(minerContainerCount, targetFromWork + extraLong)
   );
 
   return haulers.length < desired;
@@ -297,11 +301,16 @@ function shouldSpawnBuilder(room: Room): boolean {
 
 function getRepairerPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
+  // Exclude walls and ramparts — they start at 1/300M hits and would always trigger.
+  // Towers handle rampart upkeep; walls need manual repair or a dedicated logic.
   const critical = room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyOwnedStructure | AnyStructure =>
-      "hits" in s && "hitsMax" in s && s.hits < s.hitsMax * 0.5,
+    filter: (s) => {
+      if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) return false;
+      const st = s as AnyStructure;
+      return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.5;
+    },
   });
-  return Math.min(3, Math.ceil(critical.length / 3));
+  return Math.min(2, Math.ceil(critical.length / 5));
 }
 
 function shouldSpawnRepairer(room: Room): boolean {
