@@ -557,34 +557,54 @@ export function planRoadsAroundStructures(room: Room) {
   const roadKey = `${PLANNER_KEYS.ROAD_PREFIX}around`;
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
+
+  // Build coordinate sets once — O(1) lookups replace the original O(keys×positions) scans.
+  // This function mutates mem during its run, so it manages its own sets rather than the
+  // per-tick cache used by plannedRoadOrConnectorAt / plannedNonRoadStructureAt.
+  const roadSet = new Set<string>();
+  const nonRoadSet = new Set<string>();
+  for (const key of Object.keys(mem)) {
+    const isRoad =
+      key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
+      key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX);
+    for (const p of mem[key]) {
+      if (isRoad) roadSet.add(p);
+      else nonRoadSet.add(p);
+    }
+  }
+
+  // Precompute occupied tiles using Screeps-cached find results — avoids lookForAt per position.
+  const terrain = room.getTerrain();
+  const occupiedSet = new Set<string>();
+  for (const s of room.find(FIND_STRUCTURES)) {
+    occupiedSet.add(`${s.pos.x},${s.pos.y}`);
+  }
+  for (const s of room.find(FIND_CONSTRUCTION_SITES)) {
+    occupiedSet.add(`${s.pos.x},${s.pos.y}`);
+  }
+
+  const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]] as const;
+
   for (const key of Object.keys(mem)) {
     if (key.startsWith(PLANNER_KEYS.ROAD_PREFIX)) continue;
     if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) continue;
     if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)) continue;
 
-    const positions = plannedPositionsFromMemory(room, key);
-    for (const s of positions) {
-      const directions = [
-        { dx: 0, dy: -1 }, // North
-        { dx: 0, dy: 1 }, // South
-        { dx: -1, dy: 0 }, // West
-        { dx: 1, dy: 0 }, // East
-      ];
-      for (const { dx, dy } of directions) {
-        const x = s.x + dx;
-        const y = s.y + dy;
+    for (const posStr of mem[key]) {
+      const comma = posStr.indexOf(",");
+      const sx = +posStr.slice(0, comma);
+      const sy = +posStr.slice(comma + 1);
+      for (const [dx, dy] of DIRS) {
+        const x = sx + dx;
+        const y = sy + dy;
         if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
-        if (!isBuildableTile(room, x, y)) continue;
-        if (plannedRoadOrConnectorAt(room, x, y)) continue;
-        if (plannedNonRoadStructureAt(room, x, y)) continue;
-        const existing = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
-        if (existing.some((es) => es.structureType === STRUCTURE_ROAD))
-          continue;
-        addPlannedStructureToMemory(
-          room,
-          roadKey,
-          new RoomPosition(x, y, room.name)
-        );
+        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+        const posKey = `${x},${y}`;
+        if (occupiedSet.has(posKey)) continue;
+        if (roadSet.has(posKey)) continue;
+        if (nonRoadSet.has(posKey)) continue;
+        roadSet.add(posKey); // prevent duplicate additions in this same run
+        addPlannedStructureToMemory(room, roadKey, new RoomPosition(x, y, room.name));
       }
     }
   }
@@ -641,38 +661,45 @@ function getAllPlannedRoadTiles(room: Room): RoomPosition[] {
   return out;
 }
 
-function plannedRoadOrConnectorAt(room: Room, x: number, y: number): boolean {
-  if (!room.memory.plannedStructures) return false;
-  const mem = room.memory.plannedStructures as Record<string, string[]>;
-  for (const key of Object.keys(mem)) {
-    if (
-      !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
-      !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
-    )
-      continue;
-    for (const p of mem[key]) {
-      const [px, py] = p.split(",").map(Number);
-      if (px === x && py === y) return true;
+// Per-tick Set caches for planned position lookups used by planExtensionPositions.
+// planRoadsAroundStructures manages its own local sets (it mutates memory mid-run).
+let plannedSetCacheTick = -1;
+let plannedRoadSetByRoom: Record<string, Set<string>> = {};
+let plannedNonRoadSetByRoom: Record<string, Set<string>> = {};
+
+function ensurePlannedSets(room: Room): void {
+  if (plannedSetCacheTick !== Game.time) {
+    plannedSetCacheTick = Game.time;
+    plannedRoadSetByRoom = {};
+    plannedNonRoadSetByRoom = {};
+  }
+  if (plannedRoadSetByRoom[room.name]) return;
+  const roads = new Set<string>();
+  const nonRoads = new Set<string>();
+  const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
+  if (mem) {
+    for (const key of Object.keys(mem)) {
+      const isRoad =
+        key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
+        key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX);
+      for (const p of mem[key]) {
+        if (isRoad) roads.add(p);
+        else nonRoads.add(p);
+      }
     }
   }
-  return false;
+  plannedRoadSetByRoom[room.name] = roads;
+  plannedNonRoadSetByRoom[room.name] = nonRoads;
+}
+
+function plannedRoadOrConnectorAt(room: Room, x: number, y: number): boolean {
+  ensurePlannedSets(room);
+  return plannedRoadSetByRoom[room.name].has(`${x},${y}`);
 }
 
 function plannedNonRoadStructureAt(room: Room, x: number, y: number): boolean {
-  if (!room.memory.plannedStructures) return false;
-  const mem = room.memory.plannedStructures as Record<string, string[]>;
-  for (const key of Object.keys(mem)) {
-    if (
-      key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
-      key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
-    )
-      continue;
-    for (const p of mem[key]) {
-      const [px, py] = p.split(",").map(Number);
-      if (px === x && py === y) return true;
-    }
-  }
-  return false;
+  ensurePlannedSets(room);
+  return plannedNonRoadSetByRoom[room.name].has(`${x},${y}`);
 }
 
 function clusterTiles(tiles: RoomPosition[]): RoomPosition[][] {
