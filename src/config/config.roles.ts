@@ -5,7 +5,7 @@ export const ROLE_REPAIRER = "blacksmith";
 export const ROLE_MINER = "quarryman";
 export const ROLE_HAULER = "carter";
 export const ROLE_MINERAL_MINER = "prospector";
-export const ROLE_SCOUT = "pathfinder";
+export const ROLE_SCOUT = "outrider";
 export const ROLE_REMOTE_MINER = "delver";
 export const ROLE_REMOTE_HAULER = "courier";
 
