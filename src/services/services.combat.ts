@@ -42,6 +42,21 @@ export function seekBoost(creep: Creep): boolean {
   return true;
 }
 
+export type ThreatSeverity = "none" | "low" | "medium" | "high";
+
+// Thresholds derived from score formula: 10/creep + 5/ATTACK part + 5/RANGED_ATTACK part + 8/HEAL part
+// low  (~1 weak creep), medium (~small unhealed squad), high (~healer-backed raid)
+const SEVERITY_MEDIUM = 80;
+const SEVERITY_HIGH   = 150;
+
+export function getThreatSeverity(room: Room): ThreatSeverity {
+  const { score } = getThreatInfo(room);
+  if (score === 0) return "none";
+  if (score < SEVERITY_MEDIUM) return "low";
+  if (score < SEVERITY_HIGH) return "medium";
+  return "high";
+}
+
 const threatCache: Record<string, { info: ThreatInfo; tick: number }> = {};
 
 // Returns a threat score for the room: 0 = no hostiles.

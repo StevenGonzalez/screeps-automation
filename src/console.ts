@@ -1,5 +1,6 @@
 import { resolveChain, getStockForCompound } from "./services/services.labs";
 import { cancelOp } from "./orchestrators/orchestrator.military";
+import { getThreatInfo, getThreatSeverity } from "./services/services.combat";
 
 const EXPANSION_CANDIDATE_SOURCES_WEIGHT = 40;
 const EXPANSION_CANDIDATE_DIST_PENALTY = 5;
@@ -332,6 +333,67 @@ export function setupConsole() {
       console.log(
         `  In target room: ${inTarget}/${members.length}${op.clearedSince ? `  Cleared since: ${Game.time - op.clearedSince} ticks ago` : ""}`
       );
+    },
+
+    // Show threat status across all owned rooms
+    threat: () => {
+      let found = false;
+      for (const rn in Game.rooms) {
+        const room = Game.rooms[rn];
+        if (!room.controller?.my) continue;
+        found = true;
+        const { hostiles, score } = getThreatInfo(room);
+        const severity = getThreatSeverity(room);
+        const towerIds = room.memory.towerIds ?? [];
+        const towerEnergy = towerIds.reduce((sum, id) => {
+          const t = Game.getObjectById(id) as StructureTower | null;
+          return sum + (t?.store[RESOURCE_ENERGY] ?? 0);
+        }, 0);
+        const safemodeStatus = room.controller.safeMode
+          ? `ACTIVE (${room.controller.safeMode} ticks)`
+          : room.controller.safeModeAvailable
+          ? `ready (${room.controller.safeModeAvailable} charge${room.controller.safeModeAvailable !== 1 ? "s" : ""})`
+          : "unavailable";
+        console.log(
+          `[Threat] ${rn}: severity=${severity} score=${score} hostiles=${hostiles.length}` +
+          `  towers=${towerIds.length} energy=${towerEnergy}  safemode=${safemodeStatus}`
+        );
+        if (hostiles.length > 0) {
+          for (const h of hostiles) {
+            const parts = h.body.map((p) => p.type).join(",");
+            console.log(`  ${h.name} (${h.owner.username}) hp=${h.hits}/${h.hitsMax} parts=${parts}`);
+          }
+        }
+      }
+      if (!found) console.log("[Threat] No owned rooms");
+    },
+
+    // Manually activate safemode in a room
+    safemode: (roomName: string) => {
+      if (!roomName) {
+        console.log("[SafeMode] Usage: Game.arca.safemode('W1N1')");
+        return;
+      }
+      const room = Game.rooms[roomName];
+      if (!room?.controller?.my) {
+        console.log(`[SafeMode] ${roomName} is not a room you own or is not in vision`);
+        return;
+      }
+      const ctrl = room.controller;
+      if (ctrl.safeMode) {
+        console.log(`[SafeMode] ${roomName} already has safemode active (${ctrl.safeMode} ticks remaining)`);
+        return;
+      }
+      if (!ctrl.safeModeAvailable) {
+        console.log(`[SafeMode] ${roomName} has no safemode charges available`);
+        return;
+      }
+      const result = ctrl.activateSafeMode();
+      if (result === OK) {
+        console.log(`[SafeMode] Activated in ${roomName} manually`);
+      } else {
+        console.log(`[SafeMode] Failed to activate in ${roomName}: error ${result}`);
+      }
     },
 
     // Enable or disable auto-production for a room's lab system

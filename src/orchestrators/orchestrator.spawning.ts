@@ -18,7 +18,7 @@ import {
   ROLE_CHEMIST,
   normalizeRole,
 } from "../config/config.roles";
-import { getThreatInfo } from "../services/services.combat";
+import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
 import { getStockForCompound } from "../services/services.labs";
 import { getRampartTargetHP } from "../services/services.creep";
 
@@ -168,10 +168,22 @@ function processRoomSpawning(room: Room) {
     return;
   }
 
-  // Core economy — always spawn these first regardless of energy level.
-  // Harvesters come before miners: a harvester is cheaper and lets the room
-  // recover faster when spawn energy is critically low.
+  // Evaluate threat before the economy queue so heavy raids can jump the line.
+  const { score: threatScore } = getThreatInfo(room);
+  const threatSeverity = getThreatSeverity(room);
+  const phase = getRoomPhase(room);
+
+  // Core economy — harvesters always first: cheapest path back from energy collapse.
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
+
+  // Under a serious raid (healer-backed squad), defenders take the next spawn slot
+  // before stationary miners and haulers — a dead miner respawns, a dead spawn does not.
+  if (threatSeverity === "high" && phase !== "bootstrap") {
+    if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
+    if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
+    if (shouldSpawnPaladin(room, threatScore) && spawnPaladin(room, spawn)) return;
+  }
+
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
   if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
 
@@ -179,10 +191,8 @@ function processRoomSpawning(room: Room) {
   // every spare joule goes back into harvesters and miners.
   if (isEnergyEmergency(room)) return;
 
-  // Defenders get priority over economy improvements when threats are active.
-  // Only spawn in developing+ rooms — bootstrap can't afford the body cost.
-  const { score: threatScore } = getThreatInfo(room);
-  if (threatScore > 0 && getRoomPhase(room) !== "bootstrap") {
+  // Low/medium threat: defenders still get priority over improvements, just not miners.
+  if (threatScore > 0 && phase !== "bootstrap") {
     if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
     if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
     if (shouldSpawnPaladin(room, threatScore) && spawnPaladin(room, spawn)) return;
