@@ -7,6 +7,7 @@ import * as spawningSystem from "./orchestrators/orchestrator.spawning";
 import * as structuresSystem from "./orchestrators/orchestrator.structures";
 import * as towerSystem from "./orchestrators/orchestrator.tower";
 import * as terminalSystem from "./orchestrators/orchestrator.terminal";
+import * as militarySystem from "./orchestrators/orchestrator.military";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { setupConsole } from "./console";
 
@@ -43,6 +44,7 @@ export function loop() {
   runSafe("links", () => linksSystem.loop());
   runSafe("towers", () => towerSystem.loop());
   runSafe("terminal", () => terminalSystem.loop());
+  runSafe("military", () => militarySystem.loop());
   runSafe("pixels", () => pixelsSystem.loop());
 
   // Visuals are purely cosmetic — first thing to drop under load.

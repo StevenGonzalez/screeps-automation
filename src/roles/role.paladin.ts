@@ -1,10 +1,21 @@
 import { seekBoost } from "../services/services.combat";
+import { runOffensivePaladin } from "../orchestrators/orchestrator.military";
 
 const SELF_HEAL_THRESHOLD = 0.5;
 
 export function runPaladin(creep: Creep) {
   if (creep.memory.boostCompound && seekBoost(creep)) return;
-  // Self-preservation: if critically injured, retreat and heal self
+
+  if (creep.memory.offensiveTarget) {
+    const op = Memory.militaryOp;
+    if (op && op.targetRoom === creep.memory.offensiveTarget) {
+      runOffensivePaladin(creep, op);
+      return;
+    }
+    delete creep.memory.offensiveTarget;
+  }
+
+  // Defensive: self-preservation when critically injured
   if (creep.hits < creep.hitsMax * SELF_HEAL_THRESHOLD) {
     creep.heal(creep);
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
@@ -14,7 +25,6 @@ export function runPaladin(creep: Creep) {
     return;
   }
 
-  // Find the most injured creep in the room (including self)
   const wounded = creep.room.find(FIND_MY_CREEPS, {
     filter: (c) => c.hits < c.hitsMax,
   });

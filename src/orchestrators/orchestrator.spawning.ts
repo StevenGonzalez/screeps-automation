@@ -194,6 +194,7 @@ function processRoomSpawning(room: Room) {
     if (shouldSpawnPioneer(room) && spawnPioneer(room, spawn)) return;
   }
 
+  if (shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
   if (shouldSpawnChemist(room) && spawnChemist(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
@@ -873,6 +874,79 @@ function spawnPioneer(room: Room, spawn: StructureSpawn): boolean {
       targetRoom: exp.roomName,
     },
   });
+  return res === OK;
+}
+
+// ── Offensive squad helpers ───────────────────────────────────────────────────
+
+function getOffensiveSquadMembers(op: MilitaryOp): Creep[] {
+  return Object.values(Game.creeps).filter(
+    (c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom
+  );
+}
+
+function shouldSpawnOffensiveCreep(room: Room): boolean {
+  const op = Memory.militaryOp;
+  if (!op || op.homeRoom !== room.name || op.phase !== "forming") return false;
+  const members = getOffensiveSquadMembers(op);
+  return (
+    members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredKnights ||
+    members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredWizards ||
+    members.filter((c) => c.memory.role === ROLE_PALADIN).length < op.requiredPaladins
+  );
+}
+
+function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
+  const op = Memory.militaryOp;
+  if (!op) return false;
+
+  const members = getOffensiveSquadMembers(op);
+  const knights = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
+  const wizards = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
+  const paladins = members.filter((c) => c.memory.role === ROLE_PALADIN).length;
+
+  let roleToSpawn: string | null = null;
+  if (knights < op.requiredKnights) roleToSpawn = ROLE_KNIGHT;
+  else if (wizards < op.requiredWizards) roleToSpawn = ROLE_WIZARD;
+  else if (paladins < op.requiredPaladins) roleToSpawn = ROLE_PALADIN;
+  if (!roleToSpawn) return false;
+
+  // Offensive creeps spawn at full capacity — wait for max-strength body
+  const energy = room.energyCapacityAvailable;
+  let body: BodyPartConstant[];
+  let boostKey: string;
+  let combatPartType: BodyPartConstant;
+
+  if (roleToSpawn === ROLE_KNIGHT) {
+    body = buildKnightBody(energy);
+    boostKey = "knight";
+    combatPartType = ATTACK;
+  } else if (roleToSpawn === ROLE_WIZARD) {
+    body = buildWizardBody(energy);
+    boostKey = "wizard";
+    combatPartType = RANGED_ATTACK;
+  } else {
+    body = buildPaladinBody(energy);
+    boostKey = "paladin";
+    combatPartType = HEAL;
+  }
+
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+  const combatParts = body.filter((p) => p === combatPartType).length;
+  const boost = pickBoostCompound(room, boostKey, combatParts);
+
+  const res = spawn.spawnCreep(body, `${roleToSpawn}_off${Game.time}`, {
+    memory: {
+      role: roleToSpawn,
+      homeRoom: room.name,
+      offensiveTarget: op.targetRoom,
+      ...(boost ? { boostCompound: boost } : {}),
+    },
+  });
+  if (res === OK) {
+    console.log(`[Military] Spawning offensive ${roleToSpawn} for ${op.targetRoom}`);
+  }
   return res === OK;
 }
 

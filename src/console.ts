@@ -1,4 +1,5 @@
 import { resolveChain, getStockForCompound } from "./services/services.labs";
+import { cancelOp } from "./orchestrators/orchestrator.military";
 
 const EXPANSION_CANDIDATE_SOURCES_WEIGHT = 40;
 const EXPANSION_CANDIDATE_DIST_PENALTY = 5;
@@ -228,6 +229,109 @@ export function setupConsole() {
         });
         console.log(`    Minerals: ${stockParts.join("  ")}`);
       }
+    },
+
+    // Launch an offensive military operation against a target room
+    attack: (roomName: string, knights = 2, wizards = 1, paladins = 1) => {
+      if (!roomName) {
+        console.log("[Military] Usage: Game.arca.attack('W2N1')  or  Game.arca.attack('W2N1', 3, 2, 1)");
+        return;
+      }
+
+      if (Memory.militaryOp) {
+        const op = Memory.militaryOp;
+        console.log(
+          `[Military] Already running op against ${op.targetRoom} (${op.phase}) — cancel first with Game.arca.retreat()`
+        );
+        return;
+      }
+
+      // Validate squad requirements
+      if (knights < 0 || wizards < 0 || paladins < 0 || knights + wizards + paladins === 0) {
+        console.log("[Military] Squad must have at least 1 member");
+        return;
+      }
+
+      // Validate target room isn't already ours
+      const targetRoom = Game.rooms[roomName];
+      if (targetRoom?.controller?.my) {
+        console.log(`[Military] ${roomName} is already yours`);
+        return;
+      }
+
+      // Pick closest owned room as home base
+      const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
+      if (ownedRooms.length === 0) {
+        console.log("[Military] No owned rooms to launch from");
+        return;
+      }
+      const homeRoom = ownedRooms.reduce((best, r) => {
+        const d = Game.map.getRoomLinearDistance(r.name, roomName);
+        const bd = Game.map.getRoomLinearDistance(best.name, roomName);
+        return d < bd ? r : best;
+      });
+
+      Memory.militaryOp = {
+        targetRoom: roomName,
+        homeRoom: homeRoom.name,
+        phase: "forming",
+        startedAt: Game.time,
+        requiredKnights: knights,
+        requiredWizards: wizards,
+        requiredPaladins: paladins,
+      };
+      console.log(
+        `[Military] Op launched: ${roomName}  squad=${knights}K/${wizards}W/${paladins}P  home=${homeRoom.name}`
+      );
+      console.log(`[Military] Spawning squad... check status with Game.arca.military()`);
+    },
+
+    // Abort the active military operation and stand down all squad members
+    retreat: () => {
+      if (!Memory.militaryOp) {
+        console.log("[Military] No active operation");
+        return;
+      }
+      const room = Memory.militaryOp.targetRoom;
+      cancelOp();
+      console.log(`[Military] Operation against ${room} aborted — squad stood down`);
+    },
+
+    // Show current military operation status
+    military: () => {
+      const op = Memory.militaryOp;
+      if (!op) {
+        console.log("[Military] No active operation");
+        return;
+      }
+
+      const age = Game.time - op.startedAt;
+      console.log(`[Military] Op: ${op.homeRoom} → ${op.targetRoom}`);
+      console.log(`  Phase: ${op.phase}  |  Age: ${age} ticks`);
+      console.log(
+        `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ${op.requiredPaladins}P`
+      );
+
+      const members = Object.values(Game.creeps).filter(
+        (c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom
+      );
+
+      if (members.length === 0) {
+        console.log("  Squad: none yet (still spawning)");
+        return;
+      }
+
+      for (const c of members) {
+        const hpPct = Math.round((c.hits / c.hitsMax) * 100);
+        console.log(
+          `  ${c.name}  role=${c.memory.role}  room=${c.room.name}  hp=${hpPct}%  ttl=${c.ticksToLive ?? "?"}`
+        );
+      }
+
+      const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
+      console.log(
+        `  In target room: ${inTarget}/${members.length}${op.clearedSince ? `  Cleared since: ${Game.time - op.clearedSince} ticks ago` : ""}`
+      );
     },
 
     // Enable or disable auto-production for a room's lab system

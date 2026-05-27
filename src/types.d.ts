@@ -23,6 +23,17 @@ declare global {
     autoEnabled?: boolean;
   }
 
+  interface MilitaryOp {
+    targetRoom: string;
+    homeRoom: string;
+    phase: "forming" | "rallying" | "attacking" | "retreating";
+    startedAt: number;
+    requiredKnights: number;
+    requiredWizards: number;
+    requiredPaladins: number;
+    clearedSince?: number;
+  }
+
   interface ExpansionData {
     roomName: string;
     homeRoom: string;
@@ -63,6 +74,8 @@ declare global {
     // Lab boosting
     boostCompound?: string;
     boosted?: boolean;
+    // Military offense
+    offensiveTarget?: string;
   }
 
   interface RoomMemory {
@@ -109,6 +122,7 @@ declare global {
     sources?: Record<string, Id<Source>[]>;
     sourcesLastScan?: Record<string, number>;
     expansion?: ExpansionData;
+    militaryOp?: MilitaryOp;
   }
 
   var _: _.LoDashStatic;

@@ -1,10 +1,22 @@
 import { seekBoost } from "../services/services.combat";
+import { runOffensiveKnight } from "../orchestrators/orchestrator.military";
 
 const RETREAT_THRESHOLD = 0.2;
 
 export function runKnight(creep: Creep) {
   if (creep.memory.boostCompound && seekBoost(creep)) return;
-  // Retreat to spawn when critically injured so towers and paladins can heal us
+
+  // Offensive squad: tagged creep follows military orchestrator orders
+  if (creep.memory.offensiveTarget) {
+    const op = Memory.militaryOp;
+    if (op && op.targetRoom === creep.memory.offensiveTarget) {
+      runOffensiveKnight(creep, op);
+      return;
+    }
+    delete creep.memory.offensiveTarget; // stale from a completed/cancelled op
+  }
+
+  // Defensive: retreat to spawn when critically injured so towers/paladins can heal
   if (creep.hits < creep.hitsMax * RETREAT_THRESHOLD) {
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn) {
