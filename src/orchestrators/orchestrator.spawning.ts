@@ -16,6 +16,9 @@ import {
   ROLE_CLAIMER,
   ROLE_PIONEER,
   ROLE_CHEMIST,
+  ROLE_POWER_ATTACKER,
+  ROLE_POWER_HEALER,
+  ROLE_POWER_CARRIER,
   normalizeRole,
 } from "../config/config.roles";
 import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
@@ -205,6 +208,7 @@ function processRoomSpawning(room: Room) {
   }
 
   if (shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
+  if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
   if (shouldSpawnChemist(room) && spawnChemist(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
@@ -961,6 +965,101 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
 }
 
 // ── Chemist helpers ───────────────────────────────────────────────────────────
+
+// ── Power bank squad helpers ──────────────────────────────────────────────────
+
+function getPowerSquadForRoom(room: Room): PowerBankOp | undefined {
+  return Memory.powerOps?.find(
+    (o) => o.homeRoom === room.name && o.phase === "forming"
+  );
+}
+
+function getPowerSquadMembersById(opId: number): Creep[] {
+  const result: Creep[] = [];
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.memory.powerOpId === opId) result.push(c);
+  }
+  return result;
+}
+
+function shouldSpawnPowerCreep(room: Room): boolean {
+  const op = getPowerSquadForRoom(room);
+  if (!op) return false;
+  const members = getPowerSquadMembersById(op.id);
+  return (
+    members.filter((c) => c.memory.role === ROLE_POWER_ATTACKER).length < op.requiredAttackers ||
+    members.filter((c) => c.memory.role === ROLE_POWER_HEALER).length < op.requiredHealers ||
+    members.filter((c) => c.memory.role === ROLE_POWER_CARRIER).length < op.requiredCarriers
+  );
+}
+
+function spawnNextPowerCreep(room: Room, spawn: StructureSpawn): boolean {
+  const op = getPowerSquadForRoom(room);
+  if (!op) return false;
+
+  const members = getPowerSquadMembersById(op.id);
+  const attackers = members.filter((c) => c.memory.role === ROLE_POWER_ATTACKER).length;
+  const healers = members.filter((c) => c.memory.role === ROLE_POWER_HEALER).length;
+  const carriers = members.filter((c) => c.memory.role === ROLE_POWER_CARRIER).length;
+
+  let roleToSpawn: string | null = null;
+  if (attackers < op.requiredAttackers) roleToSpawn = ROLE_POWER_ATTACKER;
+  else if (healers < op.requiredHealers) roleToSpawn = ROLE_POWER_HEALER;
+  else if (carriers < op.requiredCarriers) roleToSpawn = ROLE_POWER_CARRIER;
+  if (!roleToSpawn) return false;
+
+  let body: BodyPartConstant[];
+  if (roleToSpawn === ROLE_POWER_ATTACKER) {
+    body = buildPowerAttackerBody();
+  } else if (roleToSpawn === ROLE_POWER_HEALER) {
+    body = buildPowerHealerBody();
+  } else {
+    body = buildPowerCarrierBody();
+  }
+
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+  const res = spawn.spawnCreep(body, `${roleToSpawn}${Game.time}`, {
+    memory: {
+      role: roleToSpawn,
+      homeRoom: room.name,
+      powerOpId: op.id,
+    },
+  });
+  if (res === OK) {
+    console.log(`[Power] Spawning ${roleToSpawn} for op #${op.id} → ${op.roomName}`);
+  }
+  return res === OK;
+}
+
+// Attacker: TOUGH absorbs reflected damage, ATTACK parts die last
+// 20 TOUGH + 10 MOVE + 20 ATTACK = 50 parts, 2300 energy
+function buildPowerAttackerBody(): BodyPartConstant[] {
+  return [
+    ...Array(20).fill(TOUGH),
+    ...Array(10).fill(MOVE),
+    ...Array(20).fill(ATTACK),
+  ] as BodyPartConstant[];
+}
+
+// Healer: MOVE dies before HEAL so healing parts survive longer
+// 25 MOVE + 25 HEAL = 50 parts, 7500 energy
+function buildPowerHealerBody(): BodyPartConstant[] {
+  return [
+    ...Array(25).fill(MOVE),
+    ...Array(25).fill(HEAL),
+  ] as BodyPartConstant[];
+}
+
+// Carrier: full carry capacity for collection run
+// 25 CARRY + 25 MOVE = 50 parts, 2500 energy
+function buildPowerCarrierBody(): BodyPartConstant[] {
+  return [
+    ...Array(25).fill(CARRY),
+    ...Array(25).fill(MOVE),
+  ] as BodyPartConstant[];
+}
 
 function shouldSpawnChemist(room: Room): boolean {
   // Labs unlock at RCL 6; don't bother before then

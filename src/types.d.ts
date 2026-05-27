@@ -23,6 +23,20 @@ declare global {
     autoEnabled?: boolean;
   }
 
+  interface PowerBankOp {
+    id: number;
+    bankId?: Id<StructurePowerBank>;
+    roomName: string;
+    homeRoom: string;
+    power: number;
+    phase: "forming" | "cracking" | "collecting" | "done";
+    startedAt: number;
+    requiredAttackers: number;
+    requiredHealers: number;
+    requiredCarriers: number;
+    collectingStartedAt?: number;
+  }
+
   interface MilitaryOp {
     targetRoom: string;
     homeRoom: string;
@@ -76,6 +90,8 @@ declare global {
     boosted?: boolean;
     // Military offense
     offensiveTarget?: string;
+    // Power bank ops
+    powerOpId?: number;
   }
 
   interface RoomMemory {
@@ -110,6 +126,10 @@ declare global {
     lastMarketBuyTick?: number;
     // Inter-room resource transfer
     pendingSend?: PendingTerminalSend;
+    // Observer + PowerSpawn
+    observerId?: Id<StructureObserver>;
+    powerSpawnId?: Id<StructurePowerSpawn>;
+    observerScanQueue?: string[];
   }
 
   interface Memory {
@@ -123,6 +143,8 @@ declare global {
     sourcesLastScan?: Record<string, number>;
     expansion?: ExpansionData;
     militaryOp?: MilitaryOp;
+    powerOps?: PowerBankOp[];
+    nextPowerOpId?: number;
   }
 
   var _: _.LoDashStatic;

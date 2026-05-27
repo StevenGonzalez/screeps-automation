@@ -16,6 +16,9 @@ import {
   ROLE_CLAIMER,
   ROLE_PIONEER,
   ROLE_CHEMIST,
+  ROLE_POWER_ATTACKER,
+  ROLE_POWER_HEALER,
+  ROLE_POWER_CARRIER,
   normalizeRole,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
@@ -35,6 +38,9 @@ import { runPaladin } from "../roles/role.paladin";
 import { runClaimer } from "../roles/role.claimer";
 import { runPioneer } from "../roles/role.pioneer";
 import { runChemist } from "../roles/role.chemist";
+import { runPowerAttacker } from "../roles/role.powerattacker";
+import { runPowerHealer } from "../roles/role.powerhealer";
+import { runPowerCarrier } from "../roles/role.powercarrier";
 
 export function loop() {
   for (const name in Game.creeps) {
@@ -83,5 +89,11 @@ function processCreep(creep: Creep) {
     runPioneer(creep);
   } else if (role === ROLE_CHEMIST) {
     runChemist(creep);
+  } else if (role === ROLE_POWER_ATTACKER) {
+    runPowerAttacker(creep);
+  } else if (role === ROLE_POWER_HEALER) {
+    runPowerHealer(creep);
+  } else if (role === ROLE_POWER_CARRIER) {
+    runPowerCarrier(creep);
   }
 }

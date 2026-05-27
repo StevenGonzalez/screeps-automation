@@ -101,6 +101,18 @@ function processRoomMemory(room: Room) {
           : undefined;
     }
 
+    const observers = room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_OBSERVER,
+    });
+    room.memory.observerId =
+      observers.length > 0 ? (observers[0].id as Id<StructureObserver>) : undefined;
+
+    const powerSpawns = room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_POWER_SPAWN,
+    });
+    room.memory.powerSpawnId =
+      powerSpawns.length > 0 ? (powerSpawns[0].id as Id<StructurePowerSpawn>) : undefined;
+
     room.memory.lastScan = Game.time;
   }
 }

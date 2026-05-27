@@ -396,6 +396,46 @@ export function setupConsole() {
       }
     },
 
+    // Show power bank operation status
+    power: () => {
+      const ops = Memory.powerOps;
+      if (!ops || ops.length === 0) {
+        console.log("[Power] No active power bank operations");
+        return;
+      }
+      for (const op of ops) {
+        const age = Game.time - op.startedAt;
+        const members = Object.values(Game.creeps).filter((c) => c.memory.powerOpId === op.id);
+        const attackers = members.filter((c) => c.memory.role === "breacher").length;
+        const healers = members.filter((c) => c.memory.role === "battlepriest").length;
+        const carriers = members.filter((c) => c.memory.role === "caravan").length;
+        console.log(
+          `[Power] Op #${op.id}: ${op.homeRoom} → ${op.roomName}` +
+          `  phase=${op.phase}  power=${op.power}  age=${age}`
+        );
+        console.log(
+          `  Squad: ${attackers}/${op.requiredAttackers}A  ${healers}/${op.requiredHealers}H  ${carriers}/${op.requiredCarriers}C`
+        );
+        for (const c of members) {
+          const hpPct = Math.round((c.hits / c.hitsMax) * 100);
+          console.log(`  ${c.name}  role=${c.memory.role}  room=${c.room.name}  hp=${hpPct}%`);
+        }
+      }
+      // PowerSpawn status
+      let foundPs = false;
+      for (const rn in Game.rooms) {
+        const room = Game.rooms[rn];
+        if (!room.controller?.my || !room.memory.powerSpawnId) continue;
+        const ps = Game.getObjectById(room.memory.powerSpawnId) as StructurePowerSpawn | null;
+        if (!ps) continue;
+        foundPs = true;
+        console.log(
+          `[Power] ${rn} PowerSpawn: power=${ps.power}  energy=${ps.store[RESOURCE_ENERGY]}`
+        );
+      }
+      if (!foundPs) console.log("[Power] No PowerSpawn structures found (RCL 8 required)");
+    },
+
     // Enable or disable auto-production for a room's lab system
     autoLabs: (roomName: string, enabled: boolean) => {
       const room = Game.rooms[roomName];
