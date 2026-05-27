@@ -4,6 +4,7 @@ declare global {
     homeRoom: string;
     phase: "claiming" | "bootstrapping" | "established";
     startedAt: number;
+    establishedAt?: number;
   }
 
   interface RemoteSourceData {

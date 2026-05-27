@@ -1,6 +1,19 @@
+const SELF_HEAL_THRESHOLD = 0.5;
+
 export function runPaladin(creep: Creep) {
+  // Self-preservation: if critically injured, retreat and heal self
+  if (creep.hits < creep.hitsMax * SELF_HEAL_THRESHOLD) {
+    creep.heal(creep);
+    const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
+    if (spawn && !creep.pos.isNearTo(spawn)) {
+      creep.moveTo(spawn, { reusePath: 5 });
+    }
+    return;
+  }
+
+  // Find the most injured creep in the room (including self)
   const wounded = creep.room.find(FIND_MY_CREEPS, {
-    filter: (c) => c.hits < c.hitsMax && c.id !== creep.id,
+    filter: (c) => c.hits < c.hitsMax,
   });
 
   if (wounded.length === 0) {

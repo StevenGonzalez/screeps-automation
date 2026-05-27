@@ -10,6 +10,7 @@ export function loop() {
     processRoomMemory(room);
   }
   processRemoteRoomDiscovery();
+  cleanupEstablishedExpansion();
 }
 
 function cleanupDeadCreeps() {
@@ -192,6 +193,23 @@ function refreshVisibleRemoteRooms(room: Room) {
       }) as StructureContainer[];
       entry.containerId = containers.length > 0 ? containers[0].id : undefined;
     }
+  }
+}
+
+// Auto-clear expansion data 1000 ticks after the new room is established so
+// it doesn't accumulate stale state across multiple expansion cycles.
+const EXPANSION_CLEANUP_DELAY = 1000;
+
+function cleanupEstablishedExpansion() {
+  const exp = Memory.expansion;
+  if (!exp || exp.phase !== "established") return;
+  if (!exp.establishedAt) {
+    exp.establishedAt = Game.time;
+    return;
+  }
+  if (Game.time - exp.establishedAt > EXPANSION_CLEANUP_DELAY) {
+    console.log(`[Expansion] Clearing expansion record for ${exp.roomName}`);
+    delete Memory.expansion;
   }
 }
 
