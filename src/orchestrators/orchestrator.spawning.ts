@@ -20,6 +20,7 @@ import {
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
 import { getStockForCompound } from "../services/services.labs";
+import { getRampartTargetHP } from "../services/services.creep";
 
 import {
   BODY_PATTERNS,
@@ -325,7 +326,8 @@ function getRepairerPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
   const cached = repairerTargetCache[room.name];
   if (cached && Game.time - cached.tick < 50) return cached.value;
-  // Exclude walls and ramparts — they start at 1/300M hits and would always trigger.
+
+  // Urgent non-defensive repairs (structures below 50% HP)
   const critical = room.find(FIND_STRUCTURES, {
     filter: (s) => {
       if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) return false;
@@ -333,7 +335,25 @@ function getRepairerPopulationTarget(room: Room): number {
       return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.5;
     },
   });
-  const value = Math.min(2, Math.ceil(critical.length / 5));
+  let value = Math.min(2, Math.ceil(critical.length / 5));
+
+  // Wall/rampart maintenance — add 1 repairer when walls are below target and
+  // the economy has enough buffer to afford sustained repair work.
+  const rcl = room.controller?.level ?? 0;
+  if (rcl >= 2) {
+    const hasEnergyBuffer =
+      !room.storage || room.storage.store[RESOURCE_ENERGY] > 20_000;
+    if (hasEnergyBuffer) {
+      const wallTarget = getRampartTargetHP(rcl);
+      const wallsNeedRepair = room.find(FIND_STRUCTURES, {
+        filter: (s): s is AnyStructure =>
+          (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
+          (s as AnyStructure).hits < wallTarget,
+      }).length > 0;
+      if (wallsNeedRepair) value = Math.min(2, value + 1);
+    }
+  }
+
   repairerTargetCache[room.name] = { value, tick: Game.time };
   return value;
 }

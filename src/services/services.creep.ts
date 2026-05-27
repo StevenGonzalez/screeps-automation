@@ -358,6 +358,21 @@ export function findClosestConstructionSite(
   return creep.pos.findClosestByPath(sites) || null;
 }
 
+// HP targets for ramparts/walls by RCL — creeps repair up to this level.
+const RAMPART_TARGET_HP: Record<number, number> = {
+  2:        10_000,
+  3:        20_000,
+  4:        50_000,
+  5:       100_000,
+  6:       300_000,
+  7:     1_000_000,
+  8:    10_000_000,
+};
+
+export function getRampartTargetHP(rcl: number): number {
+  return RAMPART_TARGET_HP[Math.min(8, Math.max(2, rcl))] ?? 10_000;
+}
+
 function isDamaged(s: AnyStructure): boolean {
   return s.hits < s.hitsMax;
 }
@@ -392,32 +407,39 @@ export function findMostCriticalRepairTarget(
   const rn = creep.room.name;
   if (rn in criticalRepairByRoom) return criticalRepairByRoom[rn];
 
-  const damaged = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStructure => isDamaged(s as AnyStructure),
-  });
+  const rcl = creep.room.controller?.level ?? 0;
+  const wallTarget = getRampartTargetHP(rcl);
 
-  let result: AnyStructure | null = null;
-  if (damaged.length > 0) {
-    const nonDefensive = damaged.filter(
-      (s) =>
-        s.structureType !== STRUCTURE_RAMPART &&
-        s.structureType !== STRUCTURE_WALL
-    );
-    if (nonDefensive.length > 0) {
-      result = nonDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
-    } else {
-      const RAMPART_CRITICAL = 1000;
-      const criticalDefensive = damaged.filter(
-        (s) =>
-          (s.structureType === STRUCTURE_RAMPART ||
-            s.structureType === STRUCTURE_WALL) &&
-          s.hits < RAMPART_CRITICAL
+  // Priority 1: non-defensive structures below 80% HP (most critical first)
+  const nonDefensive = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStructure => {
+      const st = s as AnyStructure;
+      return (
+        st.structureType !== STRUCTURE_WALL &&
+        st.structureType !== STRUCTURE_RAMPART &&
+        st.hits < st.hitsMax * 0.8
       );
-      result = criticalDefensive.length > 0
-        ? criticalDefensive.reduce((a, b) => (a.hits < b.hits ? a : b))
-        : damaged.reduce((a, b) => (a.hits < b.hits ? a : b));
-    }
+    },
+  });
+  if (nonDefensive.length > 0) {
+    const result = nonDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
+    criticalRepairByRoom[rn] = result;
+    return result;
   }
+
+  // Priority 2: walls/ramparts below RCL-scaled target HP (most critical first)
+  const belowTarget = creep.room.find(FIND_STRUCTURES, {
+    filter: (s): s is AnyStructure => {
+      const st = s as AnyStructure;
+      return (
+        (st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART) &&
+        st.hits < wallTarget
+      );
+    },
+  });
+  const result = belowTarget.length > 0
+    ? belowTarget.reduce((a, b) => (a.hits < b.hits ? a : b))
+    : null;
 
   criticalRepairByRoom[rn] = result;
   return result;
@@ -430,15 +452,15 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
   }
   if (room.name in towerRepairByRoom) return towerRepairByRoom[room.name];
 
-  const decayThreshold = 1000;
+  const rcl = room.controller?.level ?? 0;
+  // Towers handle emergencies — cap at 50k so they don't burn all energy on healthy walls.
+  const towerWallThreshold = Math.min(50_000, Math.max(5_000, getRampartTargetHP(rcl) * 0.05));
+
   const candidates = room.find(FIND_STRUCTURES, {
     filter: (s): s is AnyStructure => {
       const st = s as AnyStructure;
-      if (
-        st.structureType === STRUCTURE_RAMPART ||
-        st.structureType === STRUCTURE_WALL
-      ) {
-        return st.hits < decayThreshold;
+      if (st.structureType === STRUCTURE_RAMPART || st.structureType === STRUCTURE_WALL) {
+        return st.hits < towerWallThreshold;
       }
       return st.hits < st.hitsMax * 0.1;
     },
