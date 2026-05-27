@@ -14,6 +14,7 @@ export const ROLE_WIZARD = "wizard";
 export const ROLE_PALADIN = "paladin";
 export const ROLE_CLAIMER = "claimer";
 export const ROLE_PIONEER = "pioneer";
+export const ROLE_CHEMIST = "chemist";
 
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
   // original code-level names

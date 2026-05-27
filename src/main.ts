@@ -1,4 +1,5 @@
 import * as creepRunnerSystem from "./orchestrators/orchestrator.creep";
+import * as labsSystem from "./orchestrators/orchestrator.labs";
 import * as linksSystem from "./orchestrators/orchestrator.links";
 import * as memorySystem from "./orchestrators/orchestrator.memory";
 import * as pixelsSystem from "./orchestrators/orchestrator.pixels";
@@ -38,6 +39,7 @@ export function loop() {
     runSafe("structures", () => structuresSystem.loop());
   }
 
+  runSafe("labs", () => labsSystem.loop());
   runSafe("links", () => linksSystem.loop());
   runSafe("towers", () => towerSystem.loop());
   runSafe("terminal", () => terminalSystem.loop());

@@ -4,11 +4,14 @@ import {
   ROLE_UPGRADER,
   ROLE_HAULER,
   ROLE_REPAIRER,
+  ROLE_CHEMIST,
 } from "./config.roles";
 
 export const BODY_PATTERNS: Record<string, BodyPartConstant[]> = {
   // 2:1 carry-to-move on roads; scales up with energy
   [ROLE_HAULER]: [CARRY, CARRY, MOVE],
+  // Chemist moves resources between storage and labs — same carry-heavy pattern
+  [ROLE_CHEMIST]: [CARRY, CARRY, MOVE],
   // WORK-heavy for maximum build/repair throughput
   [ROLE_BUILDER]: [WORK, WORK, CARRY, MOVE],
   [ROLE_REPAIRER]: [WORK, WORK, CARRY, MOVE],

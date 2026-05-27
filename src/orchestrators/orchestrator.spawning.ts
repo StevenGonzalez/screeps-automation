@@ -15,6 +15,7 @@ import {
   ROLE_PALADIN,
   ROLE_CLAIMER,
   ROLE_PIONEER,
+  ROLE_CHEMIST,
   normalizeRole,
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
@@ -191,6 +192,7 @@ function processRoomSpawning(room: Room) {
     if (shouldSpawnPioneer(room) && spawnPioneer(room, spawn)) return;
   }
 
+  if (shouldSpawnChemist(room) && spawnChemist(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
   if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
@@ -824,6 +826,26 @@ function spawnPioneer(room: Room, spawn: StructureSpawn): boolean {
       homeRoom: room.name,
       targetRoom: exp.roomName,
     },
+  });
+  return res === OK;
+}
+
+// ── Chemist helpers ───────────────────────────────────────────────────────────
+
+function shouldSpawnChemist(room: Room): boolean {
+  // Labs unlock at RCL 6; don't bother before then
+  if ((room.controller?.level ?? 0) < 6) return false;
+  // Only spawn when labs have been identified (inputLabIds set by orchestrator)
+  if (!room.memory.labSystem?.inputLabIds?.length) return false;
+  return getCreepsByRoleInRoom(ROLE_CHEMIST, room).length < 1;
+}
+
+function spawnChemist(room: Room, spawn: StructureSpawn): boolean {
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildScaledBody(ROLE_CHEMIST, allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_CHEMIST}${Game.time}`, {
+    memory: { role: ROLE_CHEMIST },
   });
   return res === OK;
 }

@@ -1,4 +1,21 @@
 declare global {
+  interface LabQueueEntry {
+    compound: string;
+    amount: number;
+  }
+
+  interface LabSystemMemory {
+    queue: LabQueueEntry[];
+    activeCompound?: string;
+    inputCompounds?: [string, string];
+    inputLabIds?: Id<StructureLab>[];
+    outputLabIds?: Id<StructureLab>[];
+    lastPlanTick?: number;
+    startStock?: number;
+    targetAmount?: number;
+    autoEnabled?: boolean;
+  }
+
   interface ExpansionData {
     roomName: string;
     homeRoom: string;
@@ -65,6 +82,8 @@ declare global {
     // Cached controller link IDs (refreshed every ~200 ticks)
     controllerLinkIds?: Id<StructureLink>[];
     controllerLinkScanTick?: number;
+    // Lab / compound production
+    labSystem?: LabSystemMemory;
   }
 
   interface Memory {

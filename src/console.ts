@@ -1,3 +1,5 @@
+import { resolveChain, getStockForCompound } from "./services/services.labs";
+
 const EXPANSION_CANDIDATE_SOURCES_WEIGHT = 40;
 const EXPANSION_CANDIDATE_DIST_PENALTY = 5;
 
@@ -132,6 +134,82 @@ export function setupConsole() {
       const room = Memory.expansion.roomName;
       delete Memory.expansion;
       console.log(`[ARCA] Expansion to ${room} cancelled`);
+    },
+
+    // Show lab system status for all owned rooms
+    labs: () => {
+      let found = false;
+      for (const rn in Game.rooms) {
+        const room = Game.rooms[rn];
+        if (!room.controller?.my) continue;
+        found = true;
+        const ls = room.memory.labSystem;
+        if (!ls) {
+          console.log(`[Labs] ${rn}: no lab system (need RCL 6+ and 3+ labs)`);
+          continue;
+        }
+        const active = ls.activeCompound ?? "idle";
+        const inputCount = ls.inputLabIds?.length ?? 0;
+        const outputCount = ls.outputLabIds?.length ?? 0;
+        console.log(
+          `[Labs] ${rn}: active=${active}  queue=${ls.queue.length}  inputs=${inputCount}  outputs=${outputCount}  auto=${ls.autoEnabled !== false}`
+        );
+        if (ls.inputCompounds) {
+          console.log(`  Reagents: ${ls.inputCompounds[0]} + ${ls.inputCompounds[1]}`);
+        }
+        if (ls.queue.length > 0) {
+          console.log(`  Queue: ${ls.queue.map((e) => `${e.compound}×${e.amount}`).join(", ")}`);
+        }
+        // Stock report for auto-production compounds
+        const targets: Record<string, number> = {
+          XUH2O: 3000, XUHO2: 3000, XKHO2: 3000,
+          XZHO2: 2000, XGH2O: 3000, OH: 10000, G: 5000,
+        };
+        const stockLines = Object.entries(targets)
+          .map(([c, t]) => `${c}=${getStockForCompound(c, room)}/${t}`)
+          .join("  ");
+        console.log(`  Stock: ${stockLines}`);
+      }
+      if (!found) console.log("[Labs] No owned rooms found");
+    },
+
+    // Queue production of a compound in the specified room (or best available)
+    produce: (compound: string, amount: number, roomName?: string) => {
+      if (!compound || !amount) {
+        console.log("[Labs] Usage: Game.arca.produce('XUHO2', 3000)  or  Game.arca.produce('XUHO2', 3000, 'W1N1')");
+        return;
+      }
+      const candidates = Object.values(Game.rooms).filter(
+        (r) => r.controller?.my && (roomName ? r.name === roomName : r.memory.labSystem?.inputLabIds?.length)
+      );
+      if (candidates.length === 0) {
+        console.log(`[Labs] No room with labs found${roomName ? ` matching ${roomName}` : ""}`);
+        return;
+      }
+      const room = candidates[0];
+      if (!room.memory.labSystem) room.memory.labSystem = { queue: [] };
+      const chain = resolveChain(compound, amount, room.storage ?? null);
+      if (chain.length === 0) {
+        console.log(`[Labs] ${room.name}: Nothing to queue — stock may already be sufficient`);
+        return;
+      }
+      room.memory.labSystem.queue.push(...chain);
+      console.log(
+        `[Labs] ${room.name}: Queued ${chain.length} reaction(s) → ${compound}×${amount}: ` +
+        chain.map((e) => `${e.compound}×${e.amount}`).join(", ")
+      );
+    },
+
+    // Enable or disable auto-production for a room's lab system
+    autoLabs: (roomName: string, enabled: boolean) => {
+      const room = Game.rooms[roomName];
+      if (!room?.controller?.my) {
+        console.log(`[Labs] ${roomName} is not a room you own`);
+        return;
+      }
+      if (!room.memory.labSystem) room.memory.labSystem = { queue: [] };
+      room.memory.labSystem.autoEnabled = enabled;
+      console.log(`[Labs] ${roomName}: Auto-production ${enabled ? "ENABLED" : "DISABLED"}`);
     },
   };
 }
