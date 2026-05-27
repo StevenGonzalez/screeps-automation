@@ -10,6 +10,9 @@ import {
   ROLE_REMOTE_MINER,
   ROLE_REMOTE_HAULER,
   ROLE_RESERVER,
+  ROLE_KNIGHT,
+  ROLE_WIZARD,
+  ROLE_PALADIN,
   normalizeRole,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
@@ -23,6 +26,9 @@ import { runScout } from "../roles/role.scout";
 import { runRemoteMiner } from "../roles/role.remote_miner";
 import { runRemoteHauler } from "../roles/role.remote_hauler";
 import { runReserver } from "../roles/role.reserver";
+import { runKnight } from "../roles/role.knight";
+import { runWizard } from "../roles/role.wizard";
+import { runPaladin } from "../roles/role.paladin";
 
 export function loop() {
   for (const name in Game.creeps) {
@@ -59,5 +65,11 @@ function processCreep(creep: Creep) {
     runRemoteHauler(creep);
   } else if (role === ROLE_RESERVER) {
     runReserver(creep);
+  } else if (role === ROLE_KNIGHT) {
+    runKnight(creep);
+  } else if (role === ROLE_WIZARD) {
+    runWizard(creep);
+  } else if (role === ROLE_PALADIN) {
+    runPaladin(creep);
   }
 }

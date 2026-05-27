@@ -9,6 +9,9 @@ export const ROLE_SCOUT = "ranger";
 export const ROLE_REMOTE_MINER = "wanderer";
 export const ROLE_REMOTE_HAULER = "peddler";
 export const ROLE_RESERVER = "herald";
+export const ROLE_KNIGHT = "knight";
+export const ROLE_WIZARD = "wizard";
+export const ROLE_PALADIN = "paladin";
 
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
   // original code-level names

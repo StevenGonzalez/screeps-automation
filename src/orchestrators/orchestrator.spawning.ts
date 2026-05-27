@@ -10,8 +10,12 @@ import {
   ROLE_REMOTE_MINER,
   ROLE_REMOTE_HAULER,
   ROLE_RESERVER,
+  ROLE_KNIGHT,
+  ROLE_WIZARD,
+  ROLE_PALADIN,
   normalizeRole,
 } from "../config/config.roles";
+import { getThreatInfo } from "../services/services.combat";
 
 import {
   BODY_PATTERNS,
@@ -169,6 +173,15 @@ function processRoomSpawning(room: Room) {
   // Non-essential spawns are suppressed during an energy emergency so that
   // every spare joule goes back into harvesters and miners.
   if (isEnergyEmergency(room)) return;
+
+  // Defenders get priority over economy improvements when threats are active.
+  // Only spawn in developing+ rooms — bootstrap can't afford the body cost.
+  const { score: threatScore } = getThreatInfo(room);
+  if (threatScore > 0 && getRoomPhase(room) !== "bootstrap") {
+    if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
+    if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
+    if (shouldSpawnPaladin(room, threatScore) && spawnPaladin(room, spawn)) return;
+  }
 
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
@@ -644,6 +657,103 @@ function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
       homeRoom: room.name,
       targetRoom: target.roomName,
     },
+  });
+  return res === OK;
+}
+
+// ── Military defender helpers ─────────────────────────────────────────────────
+
+// Knight body: front-loads TOUGH so armor absorbs hits before ATTACK parts die.
+// Cost per trio: TOUGH(10) + MOVE(50) + ATTACK(80) = 140. Min body = 1 trio.
+function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
+  const trioCost = BODYPART_COST[TOUGH] + BODYPART_COST[MOVE] + BODYPART_COST[ATTACK];
+  const maxTrios = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 3),
+    Math.floor(availableEnergy / trioCost)
+  );
+  const trios = Math.max(1, maxTrios);
+  return [
+    ...Array(trios).fill(TOUGH),
+    ...Array(trios).fill(MOVE),
+    ...Array(trios).fill(ATTACK),
+  ] as BodyPartConstant[];
+}
+
+// Wizard body: RANGED_ATTACK first so MOVE dies before combat parts.
+// Cost per pair: MOVE(50) + RANGED_ATTACK(150) = 200.
+function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
+  const pairCost = BODYPART_COST[MOVE] + BODYPART_COST[RANGED_ATTACK];
+  const maxPairs = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 2),
+    Math.floor(availableEnergy / pairCost)
+  );
+  const pairs = Math.max(1, maxPairs);
+  return [
+    ...Array(pairs).fill(RANGED_ATTACK),
+    ...Array(pairs).fill(MOVE),
+  ] as BodyPartConstant[];
+}
+
+// Paladin body: HEAL first so MOVE dies before healing parts.
+// Cost per pair: HEAL(250) + MOVE(50) = 300.
+function buildPaladinBody(availableEnergy: number): BodyPartConstant[] {
+  const pairCost = BODYPART_COST[HEAL] + BODYPART_COST[MOVE];
+  const maxPairs = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 2),
+    Math.floor(availableEnergy / pairCost)
+  );
+  const pairs = Math.max(1, maxPairs);
+  return [
+    ...Array(pairs).fill(HEAL),
+    ...Array(pairs).fill(MOVE),
+  ] as BodyPartConstant[];
+}
+
+function shouldSpawnKnight(room: Room, threatScore: number): boolean {
+  const target = Math.min(3, Math.ceil(threatScore / 40));
+  return getCreepsByRoleInRoom(ROLE_KNIGHT, room).length < target;
+}
+
+function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildKnightBody(allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}${Game.time}`, {
+    memory: { role: ROLE_KNIGHT },
+  });
+  return res === OK;
+}
+
+function shouldSpawnWizard(room: Room, threatScore: number): boolean {
+  const target = Math.min(2, Math.ceil(threatScore / 60));
+  return getCreepsByRoleInRoom(ROLE_WIZARD, room).length < target;
+}
+
+function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildWizardBody(allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_WIZARD}${Game.time}`, {
+    memory: { role: ROLE_WIZARD },
+  });
+  return res === OK;
+}
+
+function shouldSpawnPaladin(room: Room, threatScore: number): boolean {
+  if (threatScore < 100) return false;
+  const fighters =
+    getCreepsByRoleInRoom(ROLE_KNIGHT, room).length +
+    getCreepsByRoleInRoom(ROLE_WIZARD, room).length;
+  if (fighters === 0) return false;
+  return getCreepsByRoleInRoom(ROLE_PALADIN, room).length < 1;
+}
+
+function spawnPaladin(room: Room, spawn: StructureSpawn): boolean {
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildPaladinBody(allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_PALADIN}${Game.time}`, {
+    memory: { role: ROLE_PALADIN },
   });
   return res === OK;
 }
