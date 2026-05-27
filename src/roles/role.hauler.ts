@@ -32,7 +32,17 @@ export function runHauler(creep: Creep) {
       return;
     }
 
-    const minerContainer = findClosestMinerContainerWithEnergy(creep);
+    // Prefer the assigned container; fall back to closest if it's empty.
+    let minerContainer: StructureContainer | null = null;
+    if (creep.memory.assignedContainerId) {
+      const assigned = Game.getObjectById(creep.memory.assignedContainerId as Id<StructureContainer>) as StructureContainer | null;
+      if (assigned && assigned.store[RESOURCE_ENERGY] > 0) {
+        minerContainer = assigned;
+      }
+    }
+    if (!minerContainer) {
+      minerContainer = findClosestMinerContainerWithEnergy(creep);
+    }
     if (minerContainer) {
       if (withdrawFromContainer(creep, minerContainer)) return;
       return;
