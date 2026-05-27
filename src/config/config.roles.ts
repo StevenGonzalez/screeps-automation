@@ -8,6 +8,7 @@ export const ROLE_MINERAL_MINER = "prospector";
 export const ROLE_SCOUT = "outrider";
 export const ROLE_REMOTE_MINER = "delver";
 export const ROLE_REMOTE_HAULER = "courier";
+export const ROLE_RESERVER = "warden";
 
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
   builder: ROLE_BUILDER,

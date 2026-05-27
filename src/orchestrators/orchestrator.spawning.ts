@@ -9,6 +9,7 @@ import {
   ROLE_SCOUT,
   ROLE_REMOTE_MINER,
   ROLE_REMOTE_HAULER,
+  ROLE_RESERVER,
   normalizeRole,
 } from "../config/config.roles";
 
@@ -174,6 +175,7 @@ function processRoomSpawning(room: Room) {
   if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
+  if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
@@ -602,4 +604,46 @@ function buildRemoteHaulerBody(availableEnergy: number): BodyPartConstant[] {
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < repeats; i++) body.push(...pattern);
   return body;
+}
+
+// ── Reserver helpers ──────────────────────────────────────────────────────────
+
+function getReserversForRoom(homeRoom: Room): Creep[] {
+  return getCreepsByRole(ROLE_RESERVER).filter(
+    (c) => c.memory.homeRoom === homeRoom.name
+  );
+}
+
+function shouldSpawnReserver(room: Room): boolean {
+  // Reservation requires at least RCL 3 to be worth the spawn cost
+  if ((room.controller?.level ?? 0) < 3) return false;
+  const activeRooms = getActiveRemoteRooms(room);
+  if (activeRooms.length === 0) return false;
+
+  const reservers = getReserversForRoom(room);
+  const assignedTargets = new Set(reservers.map((c) => c.memory.targetRoom));
+
+  return activeRooms.some((r) => !assignedTargets.has(r.roomName));
+}
+
+function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
+  const activeRooms = getActiveRemoteRooms(room);
+  const reservers = getReserversForRoom(room);
+  const assignedTargets = new Set(reservers.map((c) => c.memory.targetRoom));
+
+  const target = activeRooms.find((r) => !assignedTargets.has(r.roomName));
+  if (!target) return false;
+
+  // 1 CLAIM + 4 MOVE: max speed on plains, reasonable on swamp (800 energy)
+  const body: BodyPartConstant[] = [CLAIM, MOVE, MOVE, MOVE, MOVE];
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+  const res = spawn.spawnCreep(body, `${ROLE_RESERVER}${Game.time}`, {
+    memory: {
+      role: ROLE_RESERVER,
+      homeRoom: room.name,
+      targetRoom: target.roomName,
+    },
+  });
+  return res === OK;
 }
