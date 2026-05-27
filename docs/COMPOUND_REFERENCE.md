@@ -1,4 +1,4 @@
-# Compound Boost Reference
+﻿# Compound Boost Reference
 
 Complete reference of all compounds, their production chains, and boost effects.
 
@@ -245,32 +245,32 @@ Must be obtained through mining or market:
 
 ### Combat Squad (Attack + Heal)
 ```javascript
-Game.kha.produce('XUH2O', 3000)  // Attack boost
-Game.kha.produce('XUHO2', 3000)  // Heal boost
-Game.kha.produce('XZHO2', 2000)  // Movement boost
+Game.arca.produce('XUH2O', 3000)  // Attack boost
+Game.arca.produce('XUHO2', 3000)  // Heal boost
+Game.arca.produce('XZHO2', 2000)  // Movement boost
 ```
 
 ### Builder Squad (Fast Construction)
 ```javascript
-Game.kha.produce('XLH2O', 3000)  // Build boost
-Game.kha.produce('XZHO2', 2000)  // Movement boost
+Game.arca.produce('XLH2O', 3000)  // Build boost
+Game.arca.produce('XZHO2', 2000)  // Movement boost
 ```
 
 ### Upgrader Squad (Fast GCL)
 ```javascript
-Game.kha.produce('XGH2O', 5000)  // Upgrade boost
+Game.arca.produce('XGH2O', 5000)  // Upgrade boost
 ```
 
 ### Dismantler Squad (Structure Destruction)
 ```javascript
-Game.kha.produce('XZH2O', 3000)  // Dismantle boost
-Game.kha.produce('XZHO2', 2000)  // Movement boost
+Game.arca.produce('XZH2O', 3000)  // Dismantle boost
+Game.arca.produce('XZHO2', 2000)  // Movement boost
 ```
 
 ### Defense Squad (Repair + Ranged)
 ```javascript
-Game.kha.produce('XLHO2', 3000)  // Repair boost
-Game.kha.produce('XKHO2', 3000)  // Ranged boost
+Game.arca.produce('XLHO2', 3000)  // Repair boost
+Game.arca.produce('XKHO2', 3000)  // Ranged boost
 ```
 
 ---

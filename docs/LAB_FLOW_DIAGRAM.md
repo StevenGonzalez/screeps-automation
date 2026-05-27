@@ -1,4 +1,4 @@
-# Lab Automation Visual Flow
+﻿# Lab Automation Visual Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -10,7 +10,7 @@
 │  EVERY 100 TICKS - AUTO PRODUCTION PLANNING                         │
 └─────────────────────────────────────────────────────────────────────┘
 
-    LabGateway.run()
+    ChaosSanctum.run()
          │
          ├─ autoProduction enabled? ──────┐
          │                                 │
@@ -80,7 +80,7 @@
 │  EVERY TICK - EXECUTION                                             │
 └─────────────────────────────────────────────────────────────────────┘
 
-    LabGateway.run()
+    ChaosSanctum.run()
          │
          └─> currentReaction?
               │
@@ -121,7 +121,7 @@
 │  INTEGRATION WITH OTHER SYSTEMS                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-    HaulerArbiter                MarketManager              WarCouncil
+    HaulerWarlord                MarketManager              WarCouncil
          │                            │                          │
          ├─> Fill input labs          ├─> Buy missing minerals  ├─> Request boosts
          │    from storage            │    (H, O, X, etc.)      │    for squads
@@ -175,7 +175,7 @@
 │  CONSOLE COMMANDS                                                   │
 └─────────────────────────────────────────────────────────────────────┘
 
-    Game.kha.labs()
+    Game.arca.labs()
          │
          └──> ⚗️ LAB STATUS
               ═══════════════════════════════════════
@@ -193,14 +193,14 @@
                   OH: 8,500
               ═══════════════════════════════════════
 
-    Game.kha.produce('XUH2O', 3000, 'W1N1')
+    Game.arca.produce('XUH2O', 3000, 'W1N1')
          │
          └──> ⚗️ Queued reaction: 3000x OH
               ⚗️ Queued reaction: 3000x UH
               ⚗️ Queued reaction: 3000x UH2O
               ⚗️ Queued reaction: 3000x XUH2O
 
-    Game.kha.autoLabs('W1N1', true)
+    Game.arca.autoLabs('W1N1', true)
          │
          └──> ✅ Enabled auto-production in W1N1
 ```

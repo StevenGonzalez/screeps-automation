@@ -1,309 +1,163 @@
-# 🔱 KHALA Architecture
+# ARCA Architecture
 
-## 🎯 Overview
+## Overview
 
-**"The will of the High Templars guides all"**
+**"From the gates of Lorencia, the empire stretches to the farthest dungeon."**
 
-KHALA is a powerful, Halo-inspired automation system for Screeps that manages colonies through a hierarchical command structure with unique theming and strategic implementation.
+ARCA is the central intelligence of Lorencia, a Screeps automation system built around a medieval fantasy empire theme. Serfs and delvers work the earth, sages and masons build the cities, and knights and wizards defend the realm.
 
 ### Core Philosophy
-- **Distributed Intelligence**: Each Nexus operates autonomously while coordinating with the KHALA
-- **Hierarchical Command**: Arbiters manage specialized Warrior teams for specific objectives
-- **Dynamic Response**: Campaigns allow flag-based strategic intervention
+- **Distributed Intelligence**: Each Stronghold operates autonomously while coordinating with ARCA
+- **Hierarchical Command**: Warlords manage specialized Hero teams for specific objectives
+- **Dynamic Response**: Crusades allow flag-based strategic intervention
 - **Efficient Execution**: Optimized three-phase execution (Build → Init → Run)
-
-## 🏗️ KHALA Architecture
-
-### 🔱 Core Components
-
-#### **KHALA** (`core/KHALA.ts`)
-The central AI coordinator that manages all operations across the entire game world. Responsible for:
-- Managing all Nexuses (colonies)
-- Coordinating Arbiters across rooms
-- Processing Campaigns (flag-based directives)
-- Global statistics and performance monitoring
-
-#### **Nexus** (`core/Nexus.ts`)
-Colony manager for a single owned room. Each Nexus:
-- Manages room structures (spawns, towers, links, storage, etc.)
-- Spawns and coordinates Arbiters
-- Tracks economic and military statistics
-- Determines operational phase (bootstrap, developing, mature, powerhouse)
-
-#### **Arbiter** (`arbiters/Arbiter.ts`)
-Specialized creep controllers that manage teams of Warriors. Types include:
-- **ProbeArbiter** - Harvesting operations at sources
-- **AdeptArbiter** - Energy and resource logistics
-- **EngineerArbiter** - Building and repairing
-- **SentryArbiter** - Controller upgrading optimization
-- **ExcavatorArbiter** - Mineral mining operations (RCL 6+)
-- **TerminalArbiter** - Terminal management and market trading (RCL 6+)
-- **ZealotArbiter** - Defensive melee combat
-- **High TemplarArbiter** - Defensive healing support
-- **ColossusArbiter** - Offensive combat operations
-- **StalkerArbiter** - Remote room defense and clearing
-
-#### **Warrior** (`Warriors/Warrior.ts`)
-Enhanced creep wrapper providing:
-- Smart movement and pathfinding
-- Task management system
-- Boosting and combat utilities
-- Simplified creep control interface
-
-#### **Campaign** (`Campaigns/Campaign.ts`)
-Flag-based directive system for dynamic strategic response:
-- Room claiming and colonization
-- Defense operations
-- Resource extraction
-- Strategic objectives
-
-### 📂 Legacy Systems (Being Migrated)
-
-The following systems are being gradually migrated to KHALA architecture:
-
-- **`room.orchestration.ts`** - Will be replaced by Nexus
-- **`room.spawning.ts`** - Will be replaced by Arbiter spawning logic
-- **`creep.actions.ts`** - Will be replaced by Warrior methods
-- **Structure systems** - Will be replaced by Gateway (HiveCluster) pattern
-
-## 🔄 Execution Flow
-
-KHALA uses a three-phase execution model each tick:
-
-### **Phase 1: Build** 
-Construct the world state and object graph
-- Clean up memory (dead creeps, removed flags)
-- Create Nexus objects for each owned room
-- Build Arbiters for each Nexus
-- Parse flags into Campaigns
-- Refresh structure and creep references
-
-### **Phase 2: Init**
-Initialize all systems for execution
-- Nexuses initialize their Arbiters
-- Arbiters refresh their Warrior teams
-- Arbiters calculate spawning needs
-- Campaigns initialize their objectives
-
-### **Phase 3: Run**
-Execute all operations
-- Nexuses run their operations
-- Arbiters direct their Warriors
-- Campaigns execute their strategies
-- Structures perform automated tasks
-
-### **Phase 4: End of Tick**
-Performance monitoring and stats
-- Update global statistics
-- Generate visuals
-- Report performance metrics
-- Pixel generation
-
-## 🎮 KHALA Terminology
-
-Inspired by StarCraft's KHALA faction:
-
-| Component | Description |
-|-----------|-------------|
-| **KHALA** | Central AI coordinator |
-| **Nexus** | Room/colony manager |
-| **Arbiter** | Creep controller for specific roles |
-| **Warrior** | Enhanced creep wrapper |
-| **Campaign** | Flag-based task system |
-| **Gateway** | Structure group (e.g., MiningGateway, PowerGateway) |
-| **High Templars Will** | Resource distribution network |
-| **War Council** | Combat target scanning and squad management |
-
-### 🏛️ Core Gateways
-
-| Gateway | Purpose | RCL Required |
-|--------|---------|--------------|
-| **MiningGateway** | Energy harvesting operations | 1 |
-| **CommandGateway** | Spawn queue and colony commands | 1 |
-| **IntelligenceGateway** | Remote room scanning | 3+ |
-| **LinkGateway** | Instant energy transfer network | 5+ |
-| **DefenseGateway** | Fortification management | 1 |
-| **LabGateway** | Automated compound production | 6+ |
-| **BoostGateway** | Creep enhancement | 6+ |
-| **PowerGateway** | PowerBank harvesting & processing | 8 |
-
-### 🎨 KHALA Base Layout - Protoss Architecture
-
-Our automatic structure placement uses **distinctive KHALA religious architecture**:
-
-**SACRED CORE** (Cross Pattern):
-- Storage at holy anchor (Nexus's heart) 
-- Terminal, Factory, Power Spawn form cross pattern (religious symbolism)
-
-**HIERARCHS' THRONES** (Triangular Formation):
-- 3 spawns arranged in triangle representing the 3 High Templars
-- North: High Templar of Truth, SW: High Templar of Regret, SE: High Templar of Mercy
-
-**RINGS OF Nexus** (6-Fold Protoss Architecture):
-- Extensions arranged in hexagonal mandala pattern
-- Concentric rings representing tiers of the holy city
-- 6-fold symmetry (ceremonial/religious significance)
-- Inner sanctum → Middle tiers → Outer tiers progression
-
-**GUARDIAN SENTINELS** (Defensive Hexagon):
-- 6 towers form protective ring around core
-- Overlapping fields of fire
-- Positioned at cardinal hexagonal points
-
-**RESEARCH SANCTUM** (Lab Cluster):
-- Labs arranged in tight flower pattern
-- Optimized for reaction chains
-- Central reagent sources with surrounding reaction labs
-
-**Visualization**: Toggle with `Game.kha.showPlan()` to see:
-- Golden cross pattern at sacred core
-- Purple concentric hexagons (Rings of Nexus)
-- Magenta triangle connecting Hierarchs' Thrones
-- Red hexagon connecting Guardian Sentinels
-- Tier-colored extensions showing city layers
-
-### 🏗️ Automated Planning Systems
-
-#### **RoomPlanner** (`planning/RoomPlanner.ts`)
-Generates optimal base layouts using Protoss Architecture patterns and stores them in Memory with version control.
-
-#### **AutoPlanner** (`planning/AutoPlanner.ts`)
-Automatically places construction sites on RCL upgrades:
-- **RCL 6 Automation**: Links (storage/controller/source), Labs (3-cluster), Terminal (next to storage), Extractor + Container
-- Validates terrain and prevents duplicate structures
-- Integrates with EngineerArbiter for automatic construction
-
-#### **RoadBuilder** (`planning/RoadBuilder.ts`)
-Traffic-based intelligent road network:
-- Records creep movement patterns
-- Three-tier system: core roads, high-traffic paths, critical connections
-- Activates at RCL 3+ with CPU budget awareness
-
-### ⚔️ Military Systems
-
-- **War Council**: Scans nearby rooms for attack targets, evaluates threat levels
-- **ColossusArbiter**: Coordinates attack/healer squads for offensive operations
-- **ZealotArbiter**: Defensive melee combat operations
-- **High TemplarArbiter**: Defensive healing support (pairs with Zealots during high-threat scenarios)
-- **PowerHarvesterArbiter**: Manages PowerBank assault and collection operations
-
-## � File Structure Overview
-
-```
-📁 src/
-├── 🎯 main.ts                      # Entry point orchestration
-├── 🌐 global.memory.ts             # Global memory management
-├── 🤖 creep.actions.ts             # Creep behavior system
-├── 🎭 creep.personality.ts         # Entertainment & spawn phrases
-├── 🏰 Room Systems:
-│   ├── room.orchestration.ts       # Room coordination
-│   ├── room.intelligence.ts        # Room analysis & intelligence
-│   ├── room.economy.ts             # Economic planning
-│   ├── room.construction.ts        # Construction prioritization
-│   ├── room.defense.ts             # Defense coordination
-│   ├── room.spawning.ts            # Spawning management
-│   └── room.structures.ts          # Structure orchestration
-└── 🏗️ Structure Systems:
-    ├── structure.tower.ts          # Tower automation
-    ├── structure.link.ts           # Link energy distribution
-    ├── structure.extension.ts      # Extension management
-    └── structure.spawn.ts          # Spawn monitoring
-```
-
-## �🔄 Execution Flow
-
-```
-1. Memory Management (cleanup, initialization, stats)
-2. Room Processing (intelligence → planning → execution)
-3. Global Operations (market, logistics, monitoring)
-4. Performance Monitoring (CPU, bucket, metrics)
-```
-
-## 🎭 Features
-
-### Intelligence System
-
-- Room phase analysis (Early, Developing, Mature, Powerhouse)
-- Economic efficiency scoring
-- Threat assessment and safety scoring
-- Source analysis and harvesting efficiency
-
-### Economic Planning
-
-- Dynamic creep composition based on room state
-- Optimal body part calculations
-- Energy flow analysis and optimization
-- Economic health monitoring
-
-### Construction Planning
-
-- Priority-based construction queues
-- Infrastructure need analysis
-- Critical vs optional structure identification
-
-### Defense System
-
-- Automatic threat detection and response
-- Tower coordination with priority targeting
-- Defense creep spawning on demand
-- Safety score calculation
-
-### Advanced Spawning
-
-- Multi-priority spawn queues (Defense → Emergency → Economy → Construction)
-- Dynamic body optimization based on available energy
-- Role-based memory assignment
-- Spawn announcement system
-
-### Structure Automation
-
-- Intelligent tower targeting (attack, heal, repair)
-- Link energy distribution system
-- Auto-repair with priority structure protection
-- Extension and spawn energy monitoring
-
-### Creep Management
-
-- Enhanced role-based behavior system
-- Source assignment for harvesters
-- Link-aware upgraders
-- Construction priority building
-- Defensive patrol patterns
-
-## 🎨 Code Quality Features
-
-### Modular Design
-
-- Single responsibility per module
-- Clean separation of concerns
-- Testable pure functions
-- TypeScript strict typing
-
-### Performance Optimization
-
-- CPU monitoring and alerting
-- Memory cleanup automation
-- Efficient pathfinding
-- Smart energy distribution
-
-### Entertainment System
-
-- Role-based spawn phrases
-- Celebration messages
-- Status icons and emojis
-- Performance metrics logging
-
-## 🚀 Usage
-
-The system automatically handles everything - just deploy and watch it dominate! The modular architecture makes it easy to extend and customize specific behaviors without affecting the entire system.
-
-## 📈 Scalability
-
-- Handles multiple rooms efficiently
-- CPU-conscious design with performance monitoring
-- Memory-efficient with automatic cleanup
-- Scales from RCL 1 single room to massive multi-room empires
 
 ---
 
-_This automation system represents the pinnacle of Screeps bot architecture - beautiful, efficient, and unstoppable!_
+## Architecture Components
+
+### ARCA _(planned)_
+The central AI coordinator. Manages all Strongholds, coordinates Warlords across rooms, processes Crusades, and monitors global performance.
+
+### Stronghold _(planned)_
+Colony manager for a single owned room. Each Stronghold manages structures, spawns and coordinates Warlords, and determines the room's operational phase (bootstrap → developing → established → powerhouse).
+
+### Warlord _(planned)_
+Specialized creep controllers that manage teams of Heroes. Named after their role in Lorencia:
+
+| Warlord | Responsibility |
+|---------|---------------|
+| **Harvest** | Energy harvesting at sources |
+| **Caravan** | Resource logistics and hauling |
+| **Forge** | Building and repairing structures |
+| **Wizard** | Controller upgrading |
+| **Rage** | Mineral mining (RCL 6+) |
+| **Guild** | Terminal trading (RCL 6+) |
+| **Blade Knight** | Defensive melee combat |
+| **High Elf** | Defensive healing support |
+| **Dark Lord** | Offensive combat operations |
+| **Slayer** | Remote room defense |
+| **Lancer** | Pioneer expansion |
+| **Raider** | PowerBank assault |
+
+### Hero _(planned)_
+Enhanced creep wrapper providing smart movement, task management, boosting, and a unified creep control interface.
+
+### Crusade _(planned)_
+Flag-based directive system for dynamic strategic response: room claiming, defense operations, resource extraction, strategic objectives.
+
+---
+
+## Execution Model
+
+ARCA uses a three-phase execution model each tick:
+
+**Phase 1 — Build**: Construct the world state. Clean memory, create Stronghold objects, build Warlords, parse flags into Crusades.
+
+**Phase 2 — Init**: Initialize systems. Strongholds initialize Warlords, Warlords refresh Hero teams and calculate spawn needs, Crusades initialize objectives.
+
+**Phase 3 — Run**: Execute all operations. Warlords direct Heroes, Crusades execute strategies, structures perform automated tasks.
+
+**Phase 4 — End of Tick**: Update stats, generate visuals, report performance metrics.
+
+---
+
+## Terminology
+
+Lorencia is the seat of power — the first owned room, and the heart from which the empire grows. Frontier colonies are outposts carved from the wilderness: Devias in the frozen wastes, Noria deep in the forest, Atlans beneath the depths. ARCA is the intelligence that binds them all.
+
+| Component | Description |
+|-----------|-------------|
+| **ARCA** | Central AI coordinator |
+| **Stronghold** | Room/colony manager |
+| **Warlord** | Creep team controller |
+| **Hero** | Enhanced individual creep |
+| **Crusade** | Flag-based strategic directive |
+| **Sanctum** | Structure group manager |
+| **War Council** | Combat target scanning and squad management |
+
+---
+
+## Core Sanctums _(planned)_
+
+| Sanctum | Purpose | RCL |
+|---------|---------|-----|
+| **MiningSanctum** | Energy harvesting | 1 |
+| **CommandSanctum** | Spawn queue and commands | 1 |
+| **DefenseSanctum** | Tower coordination | 1 |
+| **IntelSanctum** | Remote room scanning | 3+ |
+| **LinkSanctum** | Instant energy transfer | 5+ |
+| **ChaosSanctum** | Compound production | 6+ |
+| **EnchantSanctum** | Creep boosting | 6+ |
+| **PowerSanctum** | PowerBank harvesting | 8 |
+
+---
+
+## Castle Architecture of Lorencia
+
+Automatic structure placement follows Lorencia's castle district layout:
+
+**THE KEEP** — Storage at the castle heart (treasury). Terminal, Factory, Power Spawn form a cross around it.
+
+**LORDS' BASTIONS** — 3 spawns in a triangle: Lord of the Gate (north), Lord of the Market (SW), Lord of the Dungeon (SE).
+
+**MERCHANT RINGS** — Extensions in concentric hexagonal rings representing the city districts. Inner ring: noble quarter; middle: craftsmen's ward; outer: commoner streets.
+
+**SENTINEL TOWERS** — 6 towers form a protective ring at the six cardinal points of the city wall with overlapping fields of fire.
+
+**ALCHEMIST'S QUARTER** — Labs in a tight cluster optimized for compound reaction chains. Central reagent labs surrounded by reaction labs.
+
+Toggle layout visualization with `Game.arca.showPlan()`.
+
+---
+
+## Current Source Structure
+
+```
+src/
+├── main.ts                         # Entry point, CPU budget management
+├── types.d.ts                      # Global type declarations
+├── config/
+│   ├── config.roles.ts             # Creep role constants and legacy aliases
+│   ├── config.spawning.ts          # Body patterns and spawn energy reserve
+│   └── config.structures.ts       # Structure planner configuration
+├── orchestrators/
+│   ├── orchestrator.creep.ts       # Dispatches creep roles each tick
+│   ├── orchestrator.spawning.ts    # Spawn priority logic per room
+│   ├── orchestrator.structures.ts  # Structure placement and road planning
+│   ├── orchestrator.tower.ts       # Tower targeting
+│   ├── orchestrator.links.ts       # Link energy distribution
+│   ├── orchestrator.terminal.ts    # Mineral selling via market orders
+│   ├── orchestrator.memory.ts      # Memory cleanup and ID caching
+│   ├── orchestrator.visuals.ts     # Room visuals
+│   └── orchestrator.pixels.ts      # Pixel generation
+├── roles/
+│   ├── role.harvester.ts           # serf — early energy gathering
+│   ├── role.miner.ts               # delver — stationary source miner
+│   ├── role.hauler.ts              # squire — energy logistics
+│   ├── role.upgrader.ts            # sage — controller upgrading
+│   ├── role.builder.ts             # mason — construction
+│   ├── role.repairer.ts            # blacksmith — structure repair
+│   ├── role.mineral_miner.ts       # alchemist — mineral extraction
+│   ├── role.scout.ts               # ranger — room scouting
+│   ├── role.remote_miner.ts        # wanderer — remote source mining
+│   ├── role.remote_hauler.ts       # peddler — remote energy hauling
+│   └── role.reserver.ts            # herald — remote room reservation
+├── planning/
+│   ├── planner.stamp.ts            # Castle stamp layout generation
+│   └── planner.room.ts             # Road planning and structure placement
+└── services/
+    ├── services.memory.ts          # Room memory helpers
+    ├── services.creep.ts           # Creep utility functions
+    └── services.structures.ts      # Structure planning helpers
+```
+
+---
+
+## Military Systems _(planned)_
+
+- **War Council**: Scans nearby rooms for attack targets, evaluates threat levels
+- **Dark Lord**: Coordinates attack/healer squads for offensive operations
+- **Blade Knight**: Defensive melee combat operations
+- **High Elf**: Defensive healing support (pairs with Knights during high-threat scenarios)
+- **Raider**: PowerBank assault and collection operations

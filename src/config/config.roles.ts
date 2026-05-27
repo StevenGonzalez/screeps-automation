@@ -1,23 +1,34 @@
 export const ROLE_BUILDER = "mason";
-export const ROLE_HARVESTER = "peasant";
-export const ROLE_UPGRADER = "steward";
+export const ROLE_HARVESTER = "serf";
+export const ROLE_UPGRADER = "sage";
 export const ROLE_REPAIRER = "blacksmith";
-export const ROLE_MINER = "quarryman";
-export const ROLE_HAULER = "carter";
-export const ROLE_MINERAL_MINER = "prospector";
-export const ROLE_SCOUT = "outrider";
-export const ROLE_REMOTE_MINER = "delver";
-export const ROLE_REMOTE_HAULER = "courier";
-export const ROLE_RESERVER = "warden";
+export const ROLE_MINER = "delver";
+export const ROLE_HAULER = "squire";
+export const ROLE_MINERAL_MINER = "alchemist";
+export const ROLE_SCOUT = "ranger";
+export const ROLE_REMOTE_MINER = "wanderer";
+export const ROLE_REMOTE_HAULER = "peddler";
+export const ROLE_RESERVER = "herald";
 
 const LEGACY_ROLE_ALIASES: Record<string, string> = {
+  // original code-level names
   builder: ROLE_BUILDER,
   harvester: ROLE_HARVESTER,
   upgrader: ROLE_UPGRADER,
   repairer: ROLE_REPAIRER,
   miner: ROLE_MINER,
   hauler: ROLE_HAULER,
+  // first-round thematic names (now replaced)
+  peasant: ROLE_HARVESTER,
+  quarryman: ROLE_MINER,
+  carter: ROLE_HAULER,
+  steward: ROLE_UPGRADER,
   prospector: ROLE_MINERAL_MINER,
+  outrider: ROLE_SCOUT,
+  courier: ROLE_REMOTE_HAULER,
+  warden: ROLE_RESERVER,
+  // note: "delver" (old remote miner) is not aliased — ROLE_MINER is now "delver",
+  // so old delver creeps dispatch as stationary miners until they die naturally.
 };
 
 export function normalizeRole(role?: string): string | undefined {

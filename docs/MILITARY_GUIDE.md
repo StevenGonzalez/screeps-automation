@@ -1,7 +1,11 @@
-# 🗡️ Advanced Military System - Quick Reference
+﻿# Military System _(planned)_
+
+> **Status**: Planned. Towers fire automatically via `orchestrator.tower.ts` and safe mode is handled by Screeps. Squad-based offense and organized defense roles (Knight, Wizard, Paladin) are not yet implemented.
+
+---
 
 ## Overview
-The Advanced Military System provides squad-based combat with formation movement, tactical behaviors, and intelligent target prioritization.
+The Advanced Military System will provide squad-based combat with formation movement, tactical behaviors, and intelligent target prioritization.
 
 ## Key Features
 - **Squad Coordinator**: Advanced tactical coordination with 4 formations and 5 tactics
@@ -15,7 +19,7 @@ The Advanced Military System provides squad-based combat with formation movement
 
 ### Launch Attack
 ```javascript
-Game.kha.attack('W2N1', 'box', 'assault');
+Game.arca.attack('W2N1', 'box', 'assault');
 // Parameters:
 //   targetRoom: Room name to attack
 //   formation: 'line', 'box', 'wedge', or 'scatter'
@@ -24,7 +28,7 @@ Game.kha.attack('W2N1', 'box', 'assault');
 
 ### Check Squad Status
 ```javascript
-Game.kha.squads();
+Game.arca.squads();
 // Shows:
 //   - Squad size and composition
 //   - Current formation and tactic
@@ -34,19 +38,19 @@ Game.kha.squads();
 
 ### Change Formation (Mid-Battle)
 ```javascript
-Game.kha.formation('wedge');
+Game.arca.formation('wedge');
 // Available: line, box, wedge, scatter
 ```
 
 ### Change Tactic (Mid-Battle)
 ```javascript
-Game.kha.tactic('siege');
+Game.arca.tactic('siege');
 // Available: assault, siege, raid, defend, retreat
 ```
 
 ### Recall All Units
 ```javascript
-Game.kha.recall();
+Game.arca.recall();
 // Returns all combat units to home
 ```
 
@@ -145,9 +149,9 @@ Game.kha.recall();
 - Focuses on dismantling buildings
 - Body: MOVE + WORK parts
 
-### High Templar (➕)
+### Paladin (➕)
 - Defensive healer specialist
-- Supports Zealots and friendlies during home defense
+- Supports Knights and friendlies during home defense
 - Heals adjacent units and uses rangedHeal at range 3
 - Prioritizes lowest health percentage targets
 - Auto-spawns during high-threat scenarios (>200 threat)
@@ -179,38 +183,38 @@ Game.kha.recall();
 ### Basic Attack
 ```javascript
 // Launch a basic assault on an enemy room
-Game.kha.attack('W2N1');
+Game.arca.attack('W2N1');
 ```
 
 ### Siege Operation
 ```javascript
 // Launch a siege to dismantle structures
-Game.kha.attack('W2N1', 'box', 'siege');
+Game.arca.attack('W2N1', 'box', 'siege');
 ```
 
 ### Hit and Run
 ```javascript
 // Quick raid on enemy spawn
-Game.kha.attack('W2N1', 'scatter', 'raid');
+Game.arca.attack('W2N1', 'scatter', 'raid');
 ```
 
 ### Monitor and Adjust
 ```javascript
 // Check status
-Game.kha.squads();
+Game.arca.squads();
 
 // If taking too much damage, change tactic
-Game.kha.tactic('retreat');
+Game.arca.tactic('retreat');
 
 // Once healed, change formation and resume
-Game.kha.formation('wedge');
-Game.kha.tactic('assault');
+Game.arca.formation('wedge');
+Game.arca.tactic('assault');
 ```
 
 ### Emergency Recall
 ```javascript
 // Abort mission and return home
-Game.kha.recall();
+Game.arca.recall();
 ```
 
 ## Integration with Existing Systems
@@ -223,23 +227,23 @@ Game.kha.recall();
 ### WarCouncil
 - Scans nearby rooms for threats
 - Evaluates room threat levels (0-10 scale)
-- Prioritizes targets for ColossusArbiter
+- Prioritizes targets for Dark Lord
 - Currently auto-launches attacks every 1000 ticks (can be disabled)
 
-### ZealotArbiter
+### Blade Knight
 - Manages defensive melee combat in home room
-- Spawns Zealots on-demand when threats detected
+- Spawns Knights on-demand when threats detected
 - Works with towers for coordinated defense
 - Spawns 1-5 defenders based on threat level (cap at 5)
 
-### High TemplarArbiter
+### High Elf
 - Manages defensive healing support
 - Spawns 1-2 healers during high-threat scenarios (>200 threat)
-- Automatically supports Zealots and injured friendlies
+- Automatically supports Knights and injured friendlies
 - Uses both heal() and rangedHeal() for maximum coverage
 - Integrates with BoostManager for enhanced healing
 
-### ColossusArbiter
+### Dark Lord
 - Manages all offensive combat operations
 - Spawns and tracks combat creeps (4 attackers + 2 healers)
 - Integrates with SquadCoordinator for tactical control
