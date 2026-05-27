@@ -7,6 +7,7 @@ import * as structuresSystem from "./orchestrators/orchestrator.structures";
 import * as towerSystem from "./orchestrators/orchestrator.tower";
 import * as terminalSystem from "./orchestrators/orchestrator.terminal";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
+import { setupConsole } from "./console";
 
 const CPU_WARN_THRESHOLD = 0.85;
 const CPU_REPORT_INTERVAL = 100;
@@ -21,6 +22,7 @@ const CPU_SKIP_VISUALS_THRESHOLD = 0.60;    // skip visuals above 60% of limit
 const CPU_BUCKET_CRITICAL = 2000;
 
 export function loop() {
+  setupConsole();
   const tickStart = Game.cpu.getUsed();
   const limit = Game.cpu.limit;
   const bucketCritical = Game.cpu.bucket < CPU_BUCKET_CRITICAL;

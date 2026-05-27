@@ -1,4 +1,11 @@
 declare global {
+  interface ExpansionData {
+    roomName: string;
+    homeRoom: string;
+    phase: "claiming" | "bootstrapping" | "established";
+    startedAt: number;
+  }
+
   interface RemoteSourceData {
     sourceId: Id<Source>;
     containerId?: Id<StructureContainer>;
@@ -68,6 +75,7 @@ declare global {
     threatNotifyLastTick?: Record<string, number>;
     sources?: Record<string, Id<Source>[]>;
     sourcesLastScan?: Record<string, number>;
+    expansion?: ExpansionData;
   }
 
   var _: _.LoDashStatic;

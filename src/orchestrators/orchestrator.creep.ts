@@ -13,6 +13,8 @@ import {
   ROLE_KNIGHT,
   ROLE_WIZARD,
   ROLE_PALADIN,
+  ROLE_CLAIMER,
+  ROLE_PIONEER,
   normalizeRole,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
@@ -29,6 +31,8 @@ import { runReserver } from "../roles/role.reserver";
 import { runKnight } from "../roles/role.knight";
 import { runWizard } from "../roles/role.wizard";
 import { runPaladin } from "../roles/role.paladin";
+import { runClaimer } from "../roles/role.claimer";
+import { runPioneer } from "../roles/role.pioneer";
 
 export function loop() {
   for (const name in Game.creeps) {
@@ -71,5 +75,9 @@ function processCreep(creep: Creep) {
     runWizard(creep);
   } else if (role === ROLE_PALADIN) {
     runPaladin(creep);
+  } else if (role === ROLE_CLAIMER) {
+    runClaimer(creep);
+  } else if (role === ROLE_PIONEER) {
+    runPioneer(creep);
   }
 }

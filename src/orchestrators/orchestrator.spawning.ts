@@ -13,6 +13,8 @@ import {
   ROLE_KNIGHT,
   ROLE_WIZARD,
   ROLE_PALADIN,
+  ROLE_CLAIMER,
+  ROLE_PIONEER,
   normalizeRole,
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
@@ -181,6 +183,12 @@ function processRoomSpawning(room: Room) {
     if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
     if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
     if (shouldSpawnPaladin(room, threatScore) && spawnPaladin(room, spawn)) return;
+  }
+
+  // Expansion: claimer and pioneers are spawned by the home room only
+  if (Memory.expansion?.homeRoom === room.name) {
+    if (shouldSpawnClaimer() && spawnClaimer(room, spawn)) return;
+    if (shouldSpawnPioneer(room) && spawnPioneer(room, spawn)) return;
   }
 
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
@@ -754,6 +762,68 @@ function spawnPaladin(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const res = spawn.spawnCreep(body, `${ROLE_PALADIN}${Game.time}`, {
     memory: { role: ROLE_PALADIN },
+  });
+  return res === OK;
+}
+
+// ── Expansion helpers ─────────────────────────────────────────────────────────
+
+function shouldSpawnClaimer(): boolean {
+  const exp = Memory.expansion;
+  if (!exp || exp.phase !== "claiming") return false;
+  return !getCreepsByRole(ROLE_CLAIMER).some(
+    (c) => c.memory.targetRoom === exp.roomName
+  );
+}
+
+function spawnClaimer(room: Room, spawn: StructureSpawn): boolean {
+  const exp = Memory.expansion;
+  if (!exp) return false;
+  // [CLAIM, MOVE×4] = 800 energy; moves at full speed even on swamp
+  const body: BodyPartConstant[] = [CLAIM, MOVE, MOVE, MOVE, MOVE];
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_CLAIMER}${Game.time}`, {
+    memory: {
+      role: ROLE_CLAIMER,
+      homeRoom: room.name,
+      targetRoom: exp.roomName,
+    },
+  });
+  return res === OK;
+}
+
+const MAX_PIONEERS = 3;
+
+function shouldSpawnPioneer(room: Room): boolean {
+  const exp = Memory.expansion;
+  if (!exp || exp.phase !== "bootstrapping" || exp.homeRoom !== room.name) return false;
+
+  // Transition to established once the new room's spawn is visible
+  const target = Game.rooms[exp.roomName];
+  if (target && target.find(FIND_MY_SPAWNS).length > 0) {
+    Memory.expansion!.phase = "established";
+    console.log(`[Expansion] ${exp.roomName} is now established!`);
+    return false;
+  }
+
+  const pioneers = getCreepsByRole(ROLE_PIONEER).filter(
+    (c) => c.memory.targetRoom === exp.roomName
+  );
+  return pioneers.length < MAX_PIONEERS;
+}
+
+function spawnPioneer(room: Room, spawn: StructureSpawn): boolean {
+  const exp = Memory.expansion;
+  if (!exp) return false;
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  // Falls back to [WORK, CARRY, MOVE] — enough to harvest and build
+  const body = buildScaledBody(ROLE_PIONEER, allowedEnergy);
+  const res = spawn.spawnCreep(body, `${ROLE_PIONEER}${Game.time}`, {
+    memory: {
+      role: ROLE_PIONEER,
+      homeRoom: room.name,
+      targetRoom: exp.roomName,
+    },
   });
   return res === OK;
 }
