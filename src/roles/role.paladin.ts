@@ -1,6 +1,9 @@
+import { seekBoost } from "../services/services.combat";
+
 const SELF_HEAL_THRESHOLD = 0.5;
 
 export function runPaladin(creep: Creep) {
+  if (creep.memory.boostCompound && seekBoost(creep)) return;
   // Self-preservation: if critically injured, retreat and heal self
   if (creep.hits < creep.hitsMax * SELF_HEAL_THRESHOLD) {
     creep.heal(creep);

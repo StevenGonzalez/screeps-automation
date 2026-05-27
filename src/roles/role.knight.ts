@@ -1,6 +1,9 @@
+import { seekBoost } from "../services/services.combat";
+
 const RETREAT_THRESHOLD = 0.2;
 
 export function runKnight(creep: Creep) {
+  if (creep.memory.boostCompound && seekBoost(creep)) return;
   // Retreat to spawn when critically injured so towers and paladins can heal us
   if (creep.hits < creep.hitsMax * RETREAT_THRESHOLD) {
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];

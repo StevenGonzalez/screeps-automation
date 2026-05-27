@@ -1,6 +1,9 @@
+import { seekBoost } from "../services/services.combat";
+
 const KITE_RANGE = 3;
 
 export function runWizard(creep: Creep) {
+  if (creep.memory.boostCompound && seekBoost(creep)) return;
   const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
   if (!hostile) {
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];

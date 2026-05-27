@@ -19,6 +19,7 @@ import {
   normalizeRole,
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
+import { getStockForCompound } from "../services/services.labs";
 
 import {
   BODY_PATTERNS,
@@ -673,6 +674,25 @@ function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
 
 // ── Military defender helpers ─────────────────────────────────────────────────
 
+// Preferred boost compounds per role (best tier first).
+const BOOST_CANDIDATES: Record<string, string[]> = {
+  knight:  ['XUH2O', 'UH2O', 'UH'],   // attack
+  wizard:  ['XUHO2', 'UHO2', 'UO'],   // ranged attack
+  paladin: ['XLHO2', 'LHO2', 'LO'],   // heal
+};
+
+// Returns the best available boost compound if there's enough stock in storage/terminal.
+// boostParts = number of the relevant body parts being boosted (30 units each).
+function pickBoostCompound(room: Room, roleKey: string, boostParts: number): string | undefined {
+  const candidates = BOOST_CANDIDATES[roleKey];
+  if (!candidates) return undefined;
+  const minRequired = boostParts * 30 + 300; // 300-unit safety buffer
+  for (const compound of candidates) {
+    if (getStockForCompound(compound, room) >= minRequired) return compound;
+  }
+  return undefined;
+}
+
 // Knight body: front-loads TOUGH so armor absorbs hits before ATTACK parts die.
 // Cost per trio: TOUGH(10) + MOVE(50) + ATTACK(80) = 140. Min body = 1 trio.
 function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
@@ -728,8 +748,10 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const attackParts = body.filter((p) => p === ATTACK).length;
+  const boost = pickBoostCompound(room, 'knight', attackParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}${Game.time}`, {
-    memory: { role: ROLE_KNIGHT },
+    memory: { role: ROLE_KNIGHT, ...(boost ? { boostCompound: boost } : {}) },
   });
   return res === OK;
 }
@@ -743,8 +765,10 @@ function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
   const body = buildWizardBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
+  const boost = pickBoostCompound(room, 'wizard', rangedParts);
   const res = spawn.spawnCreep(body, `${ROLE_WIZARD}${Game.time}`, {
-    memory: { role: ROLE_WIZARD },
+    memory: { role: ROLE_WIZARD, ...(boost ? { boostCompound: boost } : {}) },
   });
   return res === OK;
 }
@@ -762,8 +786,10 @@ function spawnPaladin(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
   const body = buildPaladinBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const healParts = body.filter((p) => p === HEAL).length;
+  const boost = pickBoostCompound(room, 'paladin', healParts);
   const res = spawn.spawnCreep(body, `${ROLE_PALADIN}${Game.time}`, {
-    memory: { role: ROLE_PALADIN },
+    memory: { role: ROLE_PALADIN, ...(boost ? { boostCompound: boost } : {}) },
   });
   return res === OK;
 }

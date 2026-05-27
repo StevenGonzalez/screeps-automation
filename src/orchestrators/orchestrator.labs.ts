@@ -21,6 +21,32 @@ export function loop() {
   }
 }
 
+function runBoosts(room: Room) {
+  const ls = room.memory.labSystem;
+  if (!ls?.outputLabIds?.length) return;
+
+  const outputLabs = ls.outputLabIds
+    .map((id) => Game.getObjectById(id) as StructureLab | null)
+    .filter((l): l is StructureLab => l !== null);
+
+  const waitingCreeps = room.find(FIND_MY_CREEPS, {
+    filter: (c) => !!c.memory.boostCompound && !c.memory.boosted,
+  });
+
+  for (const creep of waitingCreeps) {
+    const compound = creep.memory.boostCompound as ResourceConstant;
+    for (const lab of outputLabs) {
+      if ((lab.store.getUsedCapacity(compound) ?? 0) < 30) continue;
+      if (!lab.pos.isNearTo(creep.pos)) continue;
+      if (lab.boostCreep(creep) === OK) {
+        creep.memory.boosted = true;
+        delete creep.memory.boostCompound;
+      }
+      break;
+    }
+  }
+}
+
 function processLabSystem(room: Room) {
   if (!room.memory.labSystem) room.memory.labSystem = { queue: [] };
   const ls = room.memory.labSystem;
@@ -34,6 +60,8 @@ function processLabSystem(room: Room) {
     }
     ls.lastPlanTick = Game.time;
   }
+
+  runBoosts(room);
 
   if (!ls.inputLabIds || !ls.outputLabIds) return;
 

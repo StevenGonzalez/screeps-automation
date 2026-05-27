@@ -50,13 +50,20 @@ export function runChemist(creep: Creep) {
 
   // ── LOADING ─────────────────────────────────────────────────────────────────
 
+  // Build a set of compounds currently being sought for boosts in this room —
+  // the chemist must not drain those from labs or the boost window closes.
+  const pendingBoostCompounds = new Set(
+    creep.room.find(FIND_MY_CREEPS, { filter: (c) => !!c.memory.boostCompound && !c.memory.boosted })
+      .map((c) => c.memory.boostCompound as string)
+  );
+
   // Priority 1: drain output labs that are nearly full so reactions don't stall
   for (const outputLab of outputLabs) {
     const used = outputLab.store.getUsedCapacity() ?? 0;
     const cap = outputLab.store.getCapacity() ?? 0;
     if (used >= cap * 0.75) {
       const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
-        (r) => (outputLab.store.getUsedCapacity(r) ?? 0) > 0
+        (r) => (outputLab.store.getUsedCapacity(r) ?? 0) > 0 && !pendingBoostCompounds.has(r)
       );
       if (resource) {
         if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
@@ -99,10 +106,10 @@ export function runChemist(creep: Creep) {
     }
   }
 
-  // Priority 4: drain any remaining output lab product to storage
+  // Priority 4: drain any remaining output lab product to storage (skip boost-reserved)
   for (const outputLab of outputLabs) {
     const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
-      (r) => (outputLab.store.getUsedCapacity(r) ?? 0) > 0
+      (r) => (outputLab.store.getUsedCapacity(r) ?? 0) > 0 && !pendingBoostCompounds.has(r)
     );
     if (resource) {
       if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {

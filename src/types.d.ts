@@ -53,6 +53,9 @@ declare global {
     fillTargetId?: string;
     constructionSiteId?: Id<ConstructionSite>;
     energySourceId?: Id<AnyStoreStructure>;
+    // Lab boosting
+    boostCompound?: string;
+    boosted?: boolean;
   }
 
   interface RoomMemory {
@@ -84,6 +87,7 @@ declare global {
     controllerLinkScanTick?: number;
     // Lab / compound production
     labSystem?: LabSystemMemory;
+    lastMarketBuyTick?: number;
   }
 
   interface Memory {

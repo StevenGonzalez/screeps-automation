@@ -3,6 +3,45 @@ export interface ThreatInfo {
   score: number;
 }
 
+// Ticks a freshly spawned creep gets to reach a boost lab before giving up.
+const BOOST_TIMEOUT = 50;
+
+// Move a creep toward a lab holding its assigned boost compound.
+// Returns true while still seeking (caller should return early).
+// Returns false (and clears boostCompound) when timed out or no lab found.
+export function seekBoost(creep: Creep): boolean {
+  const compound = creep.memory.boostCompound as ResourceConstant | undefined;
+  if (!compound) return false;
+
+  // Creep starts at CREEP_LIFE_TIME (1500) and counts down.
+  // If more than BOOST_TIMEOUT ticks have passed since spawn, give up.
+  if ((creep.ticksToLive ?? 0) < 1500 - BOOST_TIMEOUT) {
+    delete creep.memory.boostCompound;
+    return false;
+  }
+
+  const ls = creep.room.memory.labSystem;
+  if (!ls?.outputLabIds?.length) {
+    delete creep.memory.boostCompound;
+    return false;
+  }
+
+  const boostLab = ls.outputLabIds
+    .map((id) => Game.getObjectById(id) as StructureLab | null)
+    .filter((l): l is StructureLab => l !== null)
+    .find((l) => (l.store.getUsedCapacity(compound) ?? 0) >= 30);
+
+  if (!boostLab) {
+    delete creep.memory.boostCompound;
+    return false;
+  }
+
+  if (!creep.pos.isNearTo(boostLab)) {
+    creep.moveTo(boostLab, { reusePath: 5 });
+  }
+  return true;
+}
+
 const threatCache: Record<string, { info: ThreatInfo; tick: number }> = {};
 
 // Returns a threat score for the room: 0 = no hostiles.
