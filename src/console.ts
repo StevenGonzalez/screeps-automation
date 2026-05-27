@@ -200,6 +200,36 @@ export function setupConsole() {
       );
     },
 
+    // Show inter-room resource network status
+    network: () => {
+      const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
+      if (ownedRooms.length === 0) { console.log("[Network] No owned rooms"); return; }
+
+      console.log("[Network] === Resource Network Status ===");
+      for (const room of ownedRooms) {
+        const storageEnergy = room.storage?.store[RESOURCE_ENERGY] ?? 0;
+        const terminalEnergy = room.terminal?.store[RESOURCE_ENERGY] ?? 0;
+        const cooldown = room.terminal?.cooldown ?? -1;
+        const pending = room.memory.pendingSend;
+        const pendingStr = pending
+          ? `  PENDING: ${pending.amount} ${pending.resource} → ${pending.to} (loaded ${
+              room.terminal?.store.getUsedCapacity(pending.resource as ResourceConstant) ?? 0
+            }/${pending.loadTarget})`
+          : "";
+        console.log(
+          `  ${room.name}: storage=${storageEnergy}  terminal=${terminalEnergy} (cd=${cooldown})${pendingStr}`
+        );
+
+        // Mineral stocks relevant to lab chains
+        const minerals = ['H','O','Z','K','U','L','X'] as const;
+        const stockParts = minerals.map((m) => {
+          const s = (room.storage?.store.getUsedCapacity(m) ?? 0) + (room.terminal?.store.getUsedCapacity(m) ?? 0);
+          return `${m}=${s}`;
+        });
+        console.log(`    Minerals: ${stockParts.join("  ")}`);
+      }
+    },
+
     // Enable or disable auto-production for a room's lab system
     autoLabs: (roomName: string, enabled: boolean) => {
       const room = Game.rooms[roomName];

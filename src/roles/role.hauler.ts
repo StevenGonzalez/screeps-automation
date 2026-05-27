@@ -79,6 +79,18 @@ export function runHauler(creep: Creep) {
     }
   }
 
+  // Pre-load terminal with energy when a cross-room energy transfer is queued
+  const pending = creep.room.memory.pendingSend;
+  if (pending && pending.resource === RESOURCE_ENERGY) {
+    const termId = creep.room.memory.terminalId;
+    const terminal = termId ? (Game.getObjectById(termId) as StructureTerminal | null) : null;
+    if (terminal && (terminal.store[RESOURCE_ENERGY] ?? 0) < pending.loadTarget) {
+      creep.memory.fillTargetId = terminal.id;
+      transferEnergyTo(creep, terminal);
+      return;
+    }
+  }
+
   const depositTarget = findDepositTargetExcludingMiner(creep, ROLE_HAULER);
   if (depositTarget) {
     creep.memory.fillTargetId = depositTarget.id;

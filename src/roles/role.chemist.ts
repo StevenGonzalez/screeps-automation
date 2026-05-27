@@ -28,6 +28,19 @@ export function runChemist(creep: Creep) {
   if (carrying.length > 0) {
     const resource = carrying[0];
 
+    // If carrying a mineral earmarked for a cross-room transfer, fill the terminal first
+    const pendingSend = room.memory.pendingSend;
+    if (pendingSend && pendingSend.resource === resource && pendingSend.resource !== RESOURCE_ENERGY) {
+      const termId = room.memory.terminalId;
+      const terminal = termId ? (Game.getObjectById(termId) as StructureTerminal | null) : null;
+      if (terminal && (terminal.store.getUsedCapacity(resource) ?? 0) < pendingSend.loadTarget) {
+        if (creep.transfer(terminal, resource) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(terminal, { reusePath: 5 });
+        }
+        return;
+      }
+    }
+
     // If it's an active input reagent, fill the correct input lab
     if (ls.inputCompounds) {
       for (let i = 0; i < 2; i++) {
@@ -56,6 +69,33 @@ export function runChemist(creep: Creep) {
     creep.room.find(FIND_MY_CREEPS, { filter: (c) => !!c.memory.boostCompound && !c.memory.boosted })
       .map((c) => c.memory.boostCompound as string)
   );
+
+  // Priority 0: withdraw mineral from storage to pre-load terminal for a pending cross-room send
+  const pendingSend = room.memory.pendingSend;
+  if (pendingSend && pendingSend.resource !== RESOURCE_ENERGY) {
+    const termId = room.memory.terminalId;
+    const terminal = termId ? (Game.getObjectById(termId) as StructureTerminal | null) : null;
+    if (terminal) {
+      const rc = pendingSend.resource as ResourceConstant;
+      const inTerminal = terminal.store.getUsedCapacity(rc) ?? 0;
+      if (inTerminal < pendingSend.loadTarget) {
+        const inStorage = storage.store.getUsedCapacity(rc) ?? 0;
+        if (inStorage > 0) {
+          const amount = Math.min(
+            creep.store.getFreeCapacity() ?? 0,
+            pendingSend.loadTarget - inTerminal,
+            inStorage
+          );
+          if (amount > 0) {
+            if (creep.withdraw(storage, rc, amount) === ERR_NOT_IN_RANGE) {
+              creep.moveTo(storage, { reusePath: 5 });
+            }
+            return;
+          }
+        }
+      }
+    }
+  }
 
   // Priority 1: drain output labs that are nearly full so reactions don't stall
   for (const outputLab of outputLabs) {

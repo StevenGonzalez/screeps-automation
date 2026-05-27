@@ -1,4 +1,11 @@
 declare global {
+  interface PendingTerminalSend {
+    resource: string;
+    amount: number;     // what the receiver gets
+    loadTarget: number; // how much to pre-load in terminal (amount + fee for energy; just amount for minerals)
+    to: string;         // destination room name
+  }
+
   interface LabQueueEntry {
     compound: string;
     amount: number;
@@ -88,6 +95,8 @@ declare global {
     // Lab / compound production
     labSystem?: LabSystemMemory;
     lastMarketBuyTick?: number;
+    // Inter-room resource transfer
+    pendingSend?: PendingTerminalSend;
   }
 
   interface Memory {
