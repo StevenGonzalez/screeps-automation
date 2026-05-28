@@ -152,32 +152,28 @@ function isEnergyEmergency(room: Room): boolean {
 function getHarvesterPopulationTarget(room: Room): number {
   const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
   const phase = getRoomPhase(room);
-  // Bootstrap rooms need harvesters until miners exist; established rooms phase them out.
-  // During an energy emergency keep at least 2 harvesters to help the room recover.
-  if (phase === "bootstrap" || isEnergyEmergency(room)) return Math.max(2, 2 - minerCount);
+  if (phase === "bootstrap") return Math.max(2, 2 - minerCount);
+  // During an energy emergency with no miners, keep 2 harvesters for direct source coverage.
+  // With miners present the distribution problem (containers full, extensions empty) is
+  // better solved by haulers — one harvester bridge is enough, not two.
+  if (isEnergyEmergency(room)) return minerCount > 0 ? Math.min(1, 2 - minerCount) : 2;
   return Math.max(0, 2 - minerCount);
 }
 
 function getUpgraderPopulationTarget(room: Room): number {
-  // Don't respawn upgraders while the economy is struggling — let them die off naturally.
   if (isEnergyEmergency(room)) return 0;
 
   const phase = getRoomPhase(room);
   const rcl = room.controller?.level ?? 0;
 
-  // RCL 8 is max — one upgrader is enough (diminishing returns)
   if (rcl >= 8) return 1;
 
-  let base = phase === "bootstrap" ? 1 : 2;
-
-  // Extra upgraders only when storage is comfortably stocked — don't drain the room
   const storage = room.storage;
-  if (storage && storage.store[RESOURCE_ENERGY] > 100000) {
-    base += Math.floor(storage.store[RESOURCE_ENERGY] / 100000);
-  }
+  if (!storage) return phase === "bootstrap" ? 1 : 2;
 
+  // Start at 1 and add one upgrader per 50k stored — smooth ramp instead of rigid steps.
   const cap = phase === "powerhouse" ? 4 : 3;
-  return Math.min(base, cap);
+  return Math.min(cap, 1 + Math.floor(storage.store[RESOURCE_ENERGY] / 50000));
 }
 
 function getBuilderPopulationTarget(room: Room): number {
@@ -305,10 +301,7 @@ function shouldSpawnHauler(room: Room): boolean {
     (c) => (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
-  const totalMinerWork = Object.values(Game.creeps)
-    .filter(
-      (c) => normalizeRole(c.memory.role) === ROLE_MINER && c.room?.name === room.name
-    )
+  const totalMinerWork = getCreepsByRoleInRoom(ROLE_MINER, room)
     .reduce((sum, c) => sum + c.body.filter((p) => p.type === WORK).length, 0);
 
   const targetFromWork = Math.ceil(totalMinerWork / HAULER_SPAWN.WORKS_PER_HAULER);
