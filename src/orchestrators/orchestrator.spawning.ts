@@ -36,7 +36,11 @@ import { getSources } from "../services/services.creep";
 export function loop() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
-    processRoomSpawning(room);
+    if (!room.controller?.my) continue;
+    const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
+    for (const spawn of spawns) {
+      if (!spawn.spawning) processRoomSpawning(room, spawn);
+    }
   }
 }
 
@@ -82,6 +86,37 @@ function getCreepsByRole(role: string): Creep[] {
 
 function getCreepsByRoleInRoom(role: string, room: Room): Creep[] {
   return getCreepsByRole(role).filter((creep) => creep.room.name === room.name);
+}
+
+// Per-tick cache: room name → role → count of creeps currently being spawned.
+// Lets multiple idle spawns in the same room avoid double-spawning the same role.
+let spawningCacheTick = -1;
+const spawningCache: Record<string, Record<string, number>> = {};
+
+function getRoomSpawningCount(room: Room, role: string): number {
+  if (spawningCacheTick !== Game.time) {
+    spawningCacheTick = Game.time;
+    for (const k of Object.keys(spawningCache)) delete spawningCache[k];
+  }
+  if (!spawningCache[room.name]) {
+    const counts: Record<string, number> = {};
+    const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
+    for (const s of spawns) {
+      if (!s.spawning) continue;
+      const mem = Memory.creeps[s.spawning.name];
+      if (!mem?.role) continue;
+      const r = normalizeRole(mem.role) ?? mem.role;
+      counts[r] = (counts[r] ?? 0) + 1;
+    }
+    spawningCache[room.name] = counts;
+  }
+  return spawningCache[room.name][role] ?? 0;
+}
+
+// Counts creeps in a room by role, including any currently being spawned
+// (which aren't in Game.creeps yet but are in Memory.creeps).
+function countByRoleInRoom(role: string, room: Room): number {
+  return getCreepsByRoleInRoom(role, room).length + getRoomSpawningCount(room, role);
 }
 
 function getMinerPopulationTarget(room: Room): number {
@@ -160,11 +195,7 @@ function getSpawnForRoom(room: Room): StructureSpawn | null {
   return Game.getObjectById(roomMemory.spawnId) as StructureSpawn | null;
 }
 
-function processRoomSpawning(room: Room) {
-  const spawn = getSpawnForRoom(room);
-  if (!spawn) return;
-  if (spawn.spawning) return;
-
+function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // Emergency recovery: if no energy gatherers exist, bypass energy reserve
   if (!hasEnergyGatherers(room)) {
     spawnEmergencyHarvester(room, spawn);
@@ -298,7 +329,8 @@ function shouldSpawnHauler(room: Room): boolean {
     Math.max(minerContainerCount, targetFromWork + extraLong)
   );
 
-  if (haulers.length < desired) return true;
+  const haulerCount = haulers.length + getRoomSpawningCount(room, ROLE_HAULER);
+  if (haulerCount < desired) return true;
 
   // Allow one extra hauler if the existing ones are collectively undersized —
   // e.g. they were spawned during an energy shortage and have tiny bodies.
@@ -345,25 +377,19 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function shouldSpawnMiner(room: Room): boolean {
-  const miners = getCreepsByRoleInRoom(ROLE_MINER, room);
-  const target = getMinerPopulationTarget(room);
-  return miners.length < target;
+  return countByRoleInRoom(ROLE_MINER, room) < getMinerPopulationTarget(room);
 }
 
 function shouldSpawnHarvester(room: Room): boolean {
-  const harvesters = getCreepsByRoleInRoom(ROLE_HARVESTER, room);
-  const targetPopulation = getHarvesterPopulationTarget(room);
-  return harvesters.length < targetPopulation;
+  return countByRoleInRoom(ROLE_HARVESTER, room) < getHarvesterPopulationTarget(room);
 }
 
 function shouldSpawnUpgrader(room: Room): boolean {
-  const upgraders = getCreepsByRoleInRoom(ROLE_UPGRADER, room);
-  return upgraders.length < getUpgraderPopulationTarget(room);
+  return countByRoleInRoom(ROLE_UPGRADER, room) < getUpgraderPopulationTarget(room);
 }
 
 function shouldSpawnBuilder(room: Room): boolean {
-  const builders = getCreepsByRoleInRoom(ROLE_BUILDER, room);
-  return builders.length < getBuilderPopulationTarget(room);
+  return countByRoleInRoom(ROLE_BUILDER, room) < getBuilderPopulationTarget(room);
 }
 
 const repairerTargetCache: Record<string, { value: number; tick: number }> = {};
@@ -405,9 +431,8 @@ function getRepairerPopulationTarget(room: Room): number {
 }
 
 function shouldSpawnRepairer(room: Room): boolean {
-  const repairers = getCreepsByRoleInRoom(ROLE_REPAIRER, room);
   const target = getRepairerPopulationTarget(room);
-  return repairers.length < target && target > 0;
+  return target > 0 && countByRoleInRoom(ROLE_REPAIRER, room) < target;
 }
 
 function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): boolean {
@@ -443,8 +468,7 @@ function shouldSpawnMineralMiner(room: Room): boolean {
   const extractor = Game.getObjectById(extractorId) as StructureExtractor | null;
   if (!extractor) return false;
 
-  const mineralMiners = getCreepsByRoleInRoom(ROLE_MINERAL_MINER, room);
-  return mineralMiners.length === 0;
+  return countByRoleInRoom(ROLE_MINERAL_MINER, room) === 0;
 }
 
 function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
@@ -806,8 +830,7 @@ function buildPaladinBody(availableEnergy: number): BodyPartConstant[] {
 }
 
 function shouldSpawnKnight(room: Room, threatScore: number): boolean {
-  const target = Math.min(3, Math.ceil(threatScore / 40));
-  return getCreepsByRoleInRoom(ROLE_KNIGHT, room).length < target;
+  return countByRoleInRoom(ROLE_KNIGHT, room) < Math.min(3, Math.ceil(threatScore / 40));
 }
 
 function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
@@ -823,8 +846,7 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function shouldSpawnWizard(room: Room, threatScore: number): boolean {
-  const target = Math.min(2, Math.ceil(threatScore / 60));
-  return getCreepsByRoleInRoom(ROLE_WIZARD, room).length < target;
+  return countByRoleInRoom(ROLE_WIZARD, room) < Math.min(2, Math.ceil(threatScore / 60));
 }
 
 function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
@@ -841,11 +863,9 @@ function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
 
 function shouldSpawnPaladin(room: Room, threatScore: number): boolean {
   if (threatScore < 100) return false;
-  const fighters =
-    getCreepsByRoleInRoom(ROLE_KNIGHT, room).length +
-    getCreepsByRoleInRoom(ROLE_WIZARD, room).length;
+  const fighters = countByRoleInRoom(ROLE_KNIGHT, room) + countByRoleInRoom(ROLE_WIZARD, room);
   if (fighters === 0) return false;
-  return getCreepsByRoleInRoom(ROLE_PALADIN, room).length < 1;
+  return countByRoleInRoom(ROLE_PALADIN, room) < 1;
 }
 
 function spawnPaladin(room: Room, spawn: StructureSpawn): boolean {
@@ -1097,7 +1117,7 @@ function shouldSpawnChemist(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 6) return false;
   // Only spawn when labs have been identified (inputLabIds set by orchestrator)
   if (!room.memory.labSystem?.inputLabIds?.length) return false;
-  return getCreepsByRoleInRoom(ROLE_CHEMIST, room).length < 1;
+  return countByRoleInRoom(ROLE_CHEMIST, room) < 1;
 }
 
 function spawnChemist(room: Room, spawn: StructureSpawn): boolean {
