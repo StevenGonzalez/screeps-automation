@@ -146,7 +146,7 @@ function isEnergyEmergency(room: Room): boolean {
   const cap = room.energyCapacityAvailable;
   if (cap === 0) return false;
   if (!room.storage) return room.energyAvailable / cap < 0.25;
-  return room.energyAvailable / cap < 0.25 && room.storage.store[RESOURCE_ENERGY] < 20000;
+  return room.energyAvailable / cap < 0.25 && room.storage.store[RESOURCE_ENERGY] < 50000;
 }
 
 function getHarvesterPopulationTarget(room: Room): number {
