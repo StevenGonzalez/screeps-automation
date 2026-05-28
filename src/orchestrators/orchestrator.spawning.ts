@@ -186,7 +186,10 @@ function getBuilderPopulationTarget(room: Room): number {
   if (sites.length === 0) return 0;
   const phase = getRoomPhase(room);
   if (phase === "bootstrap") return 1;
-  return sites.length > 5 ? 2 : 1;
+  // Scale with workload: 1 builder per 10 sites.
+  // Cap lower for developing rooms to avoid starving essential roles.
+  const cap = phase === "developing" ? 2 : 5;
+  return Math.min(cap, Math.ceil(sites.length / 10));
 }
 
 function getSpawnForRoom(room: Room): StructureSpawn | null {
