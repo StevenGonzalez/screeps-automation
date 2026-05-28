@@ -252,7 +252,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 }
 
 const HAULER_SPAWN = {
-  WORKS_PER_HAULER: 5,
+  WORKS_PER_HAULER: 4,
   DISTANCE_LONG: 20,
   MAX_HAULERS: 6,
   DISTANCE_CACHE_TTL: 500,

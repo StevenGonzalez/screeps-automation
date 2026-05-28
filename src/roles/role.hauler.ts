@@ -32,11 +32,27 @@ export function runHauler(creep: Creep) {
       return;
     }
 
-    // Prefer the assigned container; fall back to closest if it's empty.
+    // When storage is well-stocked, prefer it over miner containers — the link network
+    // keeps storage replenished and it's usually closer to the spawn/extension cluster.
+    // Only drain miner containers when storage is low or the containers are overflowing.
+    const storage = creep.room.storage;
+    const hasLinks = (creep.room.memory.linkIds?.length ?? 0) >= 2;
+    const minerContainerIds = creep.room.memory.minerContainerIds ?? [];
+    const anyContainerOverflowing = minerContainerIds.some((id) => {
+      const c = Game.getObjectById(id) as StructureContainer | null;
+      return c && c.store[RESOURCE_ENERGY] > 1200;
+    });
+    if (storage && hasLinks && !anyContainerOverflowing && storage.store[RESOURCE_ENERGY] > 5000) {
+      const res = creep.withdraw(storage, RESOURCE_ENERGY);
+      if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 20 });
+      return;
+    }
+
+    // Prefer the assigned container; skip it if nearly empty to avoid wasted movement.
     let minerContainer: StructureContainer | null = null;
     if (creep.memory.assignedContainerId) {
       const assigned = Game.getObjectById(creep.memory.assignedContainerId as Id<StructureContainer>) as StructureContainer | null;
-      if (assigned && assigned.store[RESOURCE_ENERGY] > 0) {
+      if (assigned && assigned.store[RESOURCE_ENERGY] > 200) {
         minerContainer = assigned;
       }
     }
