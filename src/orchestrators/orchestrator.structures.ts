@@ -76,6 +76,7 @@ function cleanupPlannedStructuresGlobal() {
 function applyPlannedConstruction(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
+  const terrain = room.getTerrain();
 
   // Precompute structure and construction-site positions grouped by type.
   // Avoids two lookForAt calls per planned position (which is O(positions) lookForAt calls).
@@ -114,11 +115,12 @@ function applyPlannedConstruction(room: Room) {
         }
         continue; // already built — don't keep in planned list
       }
+      const comma = posStr.indexOf(",");
+      const x = +posStr.slice(0, comma);
+      const y = +posStr.slice(comma + 1);
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       keep.push(posStr);
       if (!sites?.has(posStr)) {
-        const comma = posStr.indexOf(",");
-        const x = +posStr.slice(0, comma);
-        const y = +posStr.slice(comma + 1);
         room.createConstructionSite(x, y, type as BuildableStructureConstant);
       }
     }
