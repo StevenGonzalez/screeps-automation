@@ -298,7 +298,22 @@ function shouldSpawnHauler(room: Room): boolean {
     Math.max(minerContainerCount, targetFromWork + extraLong)
   );
 
-  return haulers.length < desired;
+  if (haulers.length < desired) return true;
+
+  // Allow one extra hauler if the existing ones are collectively undersized —
+  // e.g. they were spawned during an energy shortage and have tiny bodies.
+  // The ideal carry per hauler is based on room capacity, not current energy.
+  if (haulers.length >= HAULER_SPAWN.MAX_HAULERS) return false;
+  const idealRepeats = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 3),
+    Math.floor((room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) / 150)
+  );
+  const carryPerIdealHauler = idealRepeats * 2 * 50;
+  const totalCurrentCarry = haulers.reduce(
+    (sum, h) => sum + h.body.filter((p) => p.type === CARRY).length * 50,
+    0
+  );
+  return totalCurrentCarry < desired * carryPerIdealHauler * 0.5;
 }
 
 function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
