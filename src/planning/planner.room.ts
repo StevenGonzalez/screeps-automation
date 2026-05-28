@@ -222,44 +222,55 @@ export function planCardinalArteries(room: Room): void {
   const { halfSize } = STAMP_PLANNER;
   const tap = halfSize + 1; // first tile outside stamp edge
 
-  planStraightArtery(
-    room,
-    "cardinal_road_north",
-    anchor.x,
-    anchor.y - tap,
-    anchor.x,
-    2,
-    "vertical"
-  );
-  planStraightArtery(
-    room,
-    "cardinal_road_south",
-    anchor.x,
-    anchor.y + tap,
-    anchor.x,
-    47,
-    "vertical"
-  );
-  planStraightArtery(
-    room,
-    "cardinal_road_west",
-    anchor.x - tap,
-    anchor.y,
-    2,
-    anchor.y,
-    "horizontal"
-  );
-  planStraightArtery(
-    room,
-    "cardinal_road_east",
-    anchor.x + tap,
-    anchor.y,
-    47,
-    anchor.y,
-    "horizontal"
-  );
+  const hasNorth = room.find(FIND_EXIT_TOP).length > 0;
+  const hasSouth = room.find(FIND_EXIT_BOTTOM).length > 0;
+  const hasWest  = room.find(FIND_EXIT_LEFT).length > 0;
+  const hasEast  = room.find(FIND_EXIT_RIGHT).length > 0;
 
-  connectEconomicNodesToArteries(room, anchor);
+  const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
+  const meta = (room.memory.plannedStructuresMeta ?? {}) as Record<string, any>;
+
+  // Plan an artery if an exit exists in that direction; otherwise prune any stale entry.
+  // Returns true when an existing entry was pruned (signals connectors need re-planning).
+  function planOrPrune(
+    key: string, has: boolean,
+    sx: number, sy: number, ex: number, ey: number,
+    axis: "vertical" | "horizontal"
+  ): boolean {
+    if (has) {
+      planStraightArtery(room, key, sx, sy, ex, ey, axis);
+      return false;
+    }
+    if (mem[key]) {
+      delete mem[key];
+      delete meta[key];
+      return true;
+    }
+    return false;
+  }
+
+  let pruned = false;
+  pruned = planOrPrune("cardinal_road_north", hasNorth, anchor.x, anchor.y - tap, anchor.x, 2,  "vertical")   || pruned;
+  pruned = planOrPrune("cardinal_road_south", hasSouth, anchor.x, anchor.y + tap, anchor.x, 47, "vertical")   || pruned;
+  pruned = planOrPrune("cardinal_road_west",  hasWest,  anchor.x - tap, anchor.y, 2,  anchor.y, "horizontal") || pruned;
+  pruned = planOrPrune("cardinal_road_east",  hasEast,  anchor.x + tap, anchor.y, 47, anchor.y, "horizontal") || pruned;
+
+  // If an artery was pruned its connectors may point the wrong way — delete them so they re-plan.
+  if (pruned) {
+    for (const k of Object.keys(mem)) {
+      if (k.startsWith("cardinal_connector_")) { delete mem[k]; delete meta[k]; }
+    }
+  }
+
+  // Only offer tap points toward directions that actually have exits.
+  const tapPoints = [
+    hasNorth && { x: anchor.x,               y: anchor.y - halfSize - 1, label: "N" },
+    hasSouth && { x: anchor.x,               y: anchor.y + halfSize + 1, label: "S" },
+    hasWest  && { x: anchor.x - halfSize - 1, y: anchor.y,               label: "W" },
+    hasEast  && { x: anchor.x + halfSize + 1, y: anchor.y,               label: "E" },
+  ].filter(Boolean) as Array<{ x: number; y: number; label: string }>;
+
+  connectEconomicNodesToArteries(room, tapPoints);
 }
 
 function planStraightArtery(
@@ -295,17 +306,9 @@ function planStraightArtery(
 
 function connectEconomicNodesToArteries(
   room: Room,
-  anchor: { x: number; y: number }
+  tapPoints: Array<{ x: number; y: number; label: string }>
 ): void {
-  const { halfSize } = STAMP_PLANNER;
-
-  // Tap points on the 4 artery lines (just outside stamp)
-  const tapPoints = [
-    { x: anchor.x,           y: anchor.y - halfSize - 1, label: "N" },
-    { x: anchor.x,           y: anchor.y + halfSize + 1, label: "S" },
-    { x: anchor.x - halfSize - 1, y: anchor.y,           label: "W" },
-    { x: anchor.x + halfSize + 1, y: anchor.y,           label: "E" },
-  ];
+  if (tapPoints.length === 0) return;
 
   const sources = room.find(FIND_SOURCES);
   for (const source of sources) {
