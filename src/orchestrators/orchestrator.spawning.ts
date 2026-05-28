@@ -303,14 +303,30 @@ function shouldSpawnHauler(room: Room): boolean {
 
 function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_HAULER}${Game.time}`;
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+  const existingHaulers = getCreepsByRole(ROLE_HAULER).filter(
+    (c) => (c.memory.homeRoom ?? c.room.name) === room.name
   );
+
+  // Size the body against capacity so haulers are always large enough to clear
+  // the container backlog. When no haulers exist at all, fall back to current
+  // energy so the room isn't stuck waiting indefinitely during recovery.
+  const energyBasis = existingHaulers.length === 0
+    ? room.energyAvailable
+    : room.energyCapacityAvailable;
+  const allowedEnergy = Math.floor(energyBasis * (1 - SPAWN_ENERGY_RESERVE));
   const body = buildScaledBody(ROLE_HAULER, allowedEnergy);
-  const res = spawn.spawnCreep(body, newName, {
+  const bodyCost = calculateBodyPartCost(body);
+
+  if (room.energyAvailable < bodyCost) {
+    // Can't afford the full-sized body yet. If we have existing haulers covering
+    // us, return true to hold the spawn slot and let energy accumulate rather
+    // than letting lower-priority roles consume it first.
+    return existingHaulers.length > 0;
+  }
+
+  return spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_HAULER, homeRoom: room.name },
-  });
-  return res === OK;
+  }) === OK;
 }
 
 function shouldSpawnMiner(room: Room): boolean {

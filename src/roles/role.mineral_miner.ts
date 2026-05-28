@@ -1,5 +1,3 @@
-import { ROLE_MINERAL_MINER } from "../config/config.roles";
-
 export function runMineralMiner(creep: Creep): void {
   const mineralId = creep.room.memory.mineralId;
   if (!mineralId) return;
@@ -13,19 +11,29 @@ export function runMineralMiner(creep: Creep): void {
   const container = Game.getObjectById(containerId) as StructureContainer | null;
   if (!container) return;
 
-  if (!creep.pos.isEqualTo(container.pos)) {
-    creep.moveTo(container.pos, { reusePath: 50 });
-    return;
-  }
-
+  // Full: carry minerals to storage or terminal — the container has no drainer so we
+  // must not dump there or it fills up and mining deadlocks.
   if (creep.store.getFreeCapacity() === 0) {
+    const terminalId = creep.room.memory.terminalId;
+    const terminal = terminalId
+      ? (Game.getObjectById(terminalId) as StructureTerminal | null)
+      : null;
+    const target = creep.room.storage ?? terminal;
+    if (!target) return;
     for (const resourceType in creep.store) {
       const amount = creep.store[resourceType as ResourceConstant];
       if (amount > 0) {
-        const res = creep.transfer(container, resourceType as ResourceConstant);
-        if (res !== OK && res !== ERR_NOT_ENOUGH_RESOURCES) break;
+        const res = creep.transfer(target, resourceType as ResourceConstant);
+        if (res === ERR_NOT_IN_RANGE) creep.moveTo(target, { reusePath: 20 });
+        break;
       }
     }
+    return;
+  }
+
+  // Empty/partial: position on the container (adjacent to mineral) and harvest.
+  if (!creep.pos.isEqualTo(container.pos)) {
+    creep.moveTo(container.pos, { reusePath: 50 });
     return;
   }
 
