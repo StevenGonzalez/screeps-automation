@@ -19,7 +19,6 @@ import {
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
-  normalizeRole,
 } from "../config/config.roles";
 import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
 import { getStockForCompound } from "../services/services.labs";
@@ -71,7 +70,7 @@ function rebuildCreepCache(): void {
   for (const key of Object.keys(creepsByRoleCache)) delete creepsByRoleCache[key];
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
-    const role = normalizeRole(creep.memory.role) ?? "";
+    const role = creep.memory.role;
     if (role) {
       if (!creepsByRoleCache[role]) creepsByRoleCache[role] = [];
       creepsByRoleCache[role].push(creep);
@@ -105,7 +104,7 @@ function getRoomSpawningCount(room: Room, role: string): number {
       if (!s.spawning) continue;
       const mem = Memory.creeps[s.spawning.name];
       if (!mem?.role) continue;
-      const r = normalizeRole(mem.role) ?? mem.role;
+      const r = mem.role;
       counts[r] = (counts[r] ?? 0) + 1;
     }
     spawningCache[room.name] = counts;

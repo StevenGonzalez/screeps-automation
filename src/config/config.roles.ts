@@ -19,33 +19,6 @@ export const ROLE_POWER_ATTACKER = "breacher";
 export const ROLE_POWER_HEALER = "battlepriest";
 export const ROLE_POWER_CARRIER = "caravan";
 
-const LEGACY_ROLE_ALIASES: Record<string, string> = {
-  // original code-level names
-  builder: ROLE_BUILDER,
-  harvester: ROLE_HARVESTER,
-  upgrader: ROLE_UPGRADER,
-  repairer: ROLE_REPAIRER,
-  miner: ROLE_MINER,
-  hauler: ROLE_HAULER,
-  // first-round thematic names (now replaced)
-  peasant: ROLE_HARVESTER,
-  quarryman: ROLE_MINER,
-  carter: ROLE_HAULER,
-  steward: ROLE_UPGRADER,
-  prospector: ROLE_MINERAL_MINER,
-  outrider: ROLE_SCOUT,
-  courier: ROLE_REMOTE_HAULER,
-  warden: ROLE_RESERVER,
-  // note: "delver" (old remote miner) is not aliased — ROLE_MINER is now "delver",
-  // so old delver creeps dispatch as stationary miners until they die naturally.
-};
-
-export function normalizeRole(role?: string): string | undefined {
-  if (!role) return role;
-  if (LEGACY_ROLE_ALIASES[role]) return LEGACY_ROLE_ALIASES[role];
-  return role;
-}
-
 export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
   [ROLE_HARVESTER]: [
     STRUCTURE_SPAWN,

@@ -2,7 +2,6 @@ import {
   ENERGY_DEPOSIT_PRIORITY,
   ROLE_HAULER,
   ROLE_MINER,
-  normalizeRole,
 } from "../config/config.roles";
 
 let assignmentCacheTick = -1;
@@ -31,7 +30,7 @@ function getAssignedContainerIdsByRole(room: Room, role: string): Set<string> {
     for (const creepName in Game.creeps) {
       const creep = Game.creeps[creepName];
       if (creep.room.name !== room.name) continue;
-      if (normalizeRole(creep.memory.role) !== role) continue;
+      if (creep.memory.role !== role) continue;
       const assigned = creep.memory.assignedContainerId;
       if (assigned) taken.add(assigned.toString());
     }
@@ -97,8 +96,7 @@ export function findEnergyDepositTarget(
   creep: Creep,
   role: string
 ): Structure | null {
-  const canonicalRole = normalizeRole(role) || role;
-  const priorityList = ENERGY_DEPOSIT_PRIORITY[canonicalRole] || [];
+  const priorityList = ENERGY_DEPOSIT_PRIORITY[role] || [];
   if (priorityList.length === 0) return null;
 
   const typeSet = new Set<StructureConstant>(priorityList);
@@ -532,8 +530,7 @@ export function findDepositTargetExcludingMiner(
 ): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
 
-  const canonicalRole = normalizeRole(role) || role;
-  if (canonicalRole === ROLE_HAULER) {
+  if (role === ROLE_HAULER) {
     const upgradeId = creep.room.memory.upgradeContainerId;
 
     // Prioritize controller container so upgraders stay supplied.

@@ -6,7 +6,6 @@ import {
   ROLE_MINERAL_MINER,
   ROLE_REPAIRER,
   ROLE_UPGRADER,
-  normalizeRole,
 } from "../config/config.roles";
 
 const PHASE_LABEL: Record<string, string> = {
@@ -117,7 +116,7 @@ function countCreepsByRole(room: Room): Record<string, number> {
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
     if (creep.room.name !== room.name) continue;
-    const role = normalizeRole(creep.memory.role) ?? creep.memory.role;
+    const role = creep.memory.role;
     counts[role] = (counts[role] ?? 0) + 1;
   }
   return counts;

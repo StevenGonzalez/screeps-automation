@@ -19,7 +19,6 @@ import {
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
-  normalizeRole,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
@@ -50,10 +49,7 @@ export function loop() {
 }
 
 function processCreep(creep: Creep) {
-  const role = normalizeRole(creep.memory.role);
-  if (role && creep.memory.role !== role) {
-    creep.memory.role = role;
-  }
+  const role = creep.memory.role;
 
   if (role === ROLE_HARVESTER) {
     runHarvester(creep);
