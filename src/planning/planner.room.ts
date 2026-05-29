@@ -234,11 +234,10 @@ export function planCardinalArteries(room: Room): void {
   // Returns true when an existing entry was pruned (signals connectors need re-planning).
   function planOrPrune(
     key: string, has: boolean,
-    sx: number, sy: number, ex: number, ey: number,
-    axis: "vertical" | "horizontal"
+    sx: number, sy: number, ex: number, ey: number
   ): boolean {
     if (has) {
-      planStraightArtery(room, key, sx, sy, ex, ey, axis);
+      planStraightArtery(room, key, sx, sy, ex, ey);
       return false;
     }
     if (mem[key]) {
@@ -250,10 +249,10 @@ export function planCardinalArteries(room: Room): void {
   }
 
   let pruned = false;
-  pruned = planOrPrune("cardinal_road_north", hasNorth, anchor.x, anchor.y - tap, anchor.x, 2,  "vertical")   || pruned;
-  pruned = planOrPrune("cardinal_road_south", hasSouth, anchor.x, anchor.y + tap, anchor.x, 47, "vertical")   || pruned;
-  pruned = planOrPrune("cardinal_road_west",  hasWest,  anchor.x - tap, anchor.y, 2,  anchor.y, "horizontal") || pruned;
-  pruned = planOrPrune("cardinal_road_east",  hasEast,  anchor.x + tap, anchor.y, 47, anchor.y, "horizontal") || pruned;
+  pruned = planOrPrune("cardinal_road_north", hasNorth, anchor.x, anchor.y - tap, anchor.x, 2)  || pruned;
+  pruned = planOrPrune("cardinal_road_south", hasSouth, anchor.x, anchor.y + tap, anchor.x, 47) || pruned;
+  pruned = planOrPrune("cardinal_road_west",  hasWest,  anchor.x - tap, anchor.y, 2,  anchor.y) || pruned;
+  pruned = planOrPrune("cardinal_road_east",  hasEast,  anchor.x + tap, anchor.y, 47, anchor.y) || pruned;
 
   // If an artery was pruned its connectors may point the wrong way — delete them so they re-plan.
   if (pruned) {
@@ -279,8 +278,7 @@ function planStraightArtery(
   startX: number,
   startY: number,
   endX: number,
-  endY: number,
-  axis: "vertical" | "horizontal"
+  endY: number
 ): void {
   if (room.memory.plannedStructures) {
     const mem = room.memory.plannedStructures as Record<string, string[]>;
@@ -288,19 +286,36 @@ function planStraightArtery(
   }
 
   const terrain = room.getTerrain();
-  const lo = axis === "vertical"
-    ? Math.min(startY, endY)
-    : Math.min(startX, endX);
-  const hi = axis === "vertical"
-    ? Math.max(startY, endY)
-    : Math.max(startX, endX);
 
-  for (let i = lo; i <= hi; i++) {
-    const x = axis === "vertical" ? startX : i;
-    const y = axis === "vertical" ? i : startY;
-    if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-    if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-    addPlannedStructureToMemory(room, key, new RoomPosition(x, y, room.name));
+  // Route the artery around wall masses instead of drawing a straight line that
+  // would punch through them. Mirrors addArteryConnector's wall-blocking search.
+  const result = PathFinder.search(
+    new RoomPosition(startX, startY, room.name),
+    { pos: new RoomPosition(endX, endY, room.name), range: 1 },
+    {
+      roomCallback: (rn) => {
+        if (rn !== room.name) return false;
+        const cm = new PathFinder.CostMatrix();
+        for (let x = 0; x < 50; x++) {
+          for (let y = 0; y < 50; y++) {
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL) cm.set(x, y, 255);
+          }
+        }
+        return cm;
+      },
+      plainCost: 2,
+      swampCost: 10,
+      maxOps: 4000,
+    }
+  );
+
+  // PathFinder excludes the origin, so add it explicitly to keep the artery
+  // flush against the stamp edge (the tap tile) with no gap.
+  if (terrain.get(startX, startY) !== TERRAIN_MASK_WALL) {
+    addPlannedStructureToMemory(room, key, new RoomPosition(startX, startY, room.name));
+  }
+  for (const step of result.path) {
+    addPlannedStructureToMemory(room, key, new RoomPosition(step.x, step.y, room.name));
   }
 }
 
