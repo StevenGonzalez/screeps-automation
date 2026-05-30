@@ -595,11 +595,13 @@ export function upgradeController(creep: Creep): void {
   const controller = creep.room.controller;
   if (!controller) return;
 
-  if (signControllerIfNeeded(creep, controller)) return;
-
+  // Upgrade (range 3) every tick. Sign (range 1) is cosmetic and a separate
+  // intent, so attempt it in the same tick without ever blocking the upgrade.
   if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
     creep.moveTo(controller, { reusePath: 50 });
   }
+
+  signControllerIfNeeded(creep, controller);
 }
 
 export function signControllerIfNeeded(
@@ -611,22 +613,20 @@ export function signControllerIfNeeded(
   const currentSign = controller.sign;
   const myUsername = controller.owner?.username;
 
-  if (
+  const needsSign =
     !currentSign ||
     currentSign.username !== myUsername ||
-    currentSign.text !== desiredSignature
-  ) {
-    if (creep.pos.getRangeTo(controller.pos) > 1) {
-      creep.moveTo(controller, { reusePath: 50 });
-      return true;
-    } else {
-      creep.signController(controller, desiredSignature);
-      creep.room.memory.lastSigned = Game.time;
-      return true;
-    }
-  }
+    currentSign.text !== desiredSignature;
+  if (!needsSign) return false;
 
-  return false;
+  // Only sign when already adjacent — don't pull the creep off its upgrade
+  // position. Upgraders cluster at the controller, so one will be in range.
+  if (creep.pos.getRangeTo(controller.pos) > 1) return false;
+
+  if (creep.signController(controller, desiredSignature) === OK) {
+    creep.room.memory.lastSigned = Game.time;
+  }
+  return true;
 }
 
 export function buildAtConstructionSite(
