@@ -64,7 +64,7 @@ The system will automatically:
 | **scholar** | Upgrader | Upgrades the controller to advance RCL |
 | **mason** | Builder | Constructs queued construction sites |
 | **blacksmith** | Repairer | Repairs structures below 50% hits |
-| **alchemist** | Mineral miner | Extracts minerals for lab compound production (RCL 6+) |
+| **prospector** | Mineral miner | Extracts minerals for lab compound production (RCL 6+) |
 | **ranger** | Scout | Explores adjacent rooms and records intel |
 | **outrider** | Remote miner | Mines sources in frontier rooms |
 | **peddler** | Remote hauler | Carries remote energy back to the home colony |
@@ -84,7 +84,7 @@ The system will automatically:
 2. **Porters** haul energy to spawns, extensions, towers, and storage
 3. **Scholars** upgrade the controller for RCL progression
 4. **Masons** build structures; **Blacksmiths** repair damage
-5. **Alchemists** mine minerals → storage → labs (RCL 6+)
+5. **Prospectors** mine minerals → storage → labs (RCL 6+)
 6. **Heralds** reserve remote rooms, doubling their source output
 7. **Rangers** scout the wilderness; **Outriders** mine remote sources; **Peddlers** haul it home
 

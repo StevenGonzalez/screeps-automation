@@ -1,12 +1,12 @@
 # Lab System _(planned)_
 
-> **Status**: Fully planned, not yet implemented. Alchemists (`role.mineral_miner.ts`) extract raw minerals to storage, but no lab automation exists yet.
+> **Status**: Fully planned, not yet implemented. Prospectors (`role.mineral_miner.ts`) extract raw minerals to storage, but no lab automation exists yet.
 
 ---
 
 ## What Exists: Mineral Extraction
 
-**Alchemist** creeps (RCL 6+) mine the room's mineral deposit and haul the output to storage. This is the raw material supply chain that the lab system will eventually consume.
+**Prospector** creeps (RCL 6+) mine the room's mineral deposit and haul the output to storage. This is the raw material supply chain that the lab system will eventually consume.
 
 ---
 

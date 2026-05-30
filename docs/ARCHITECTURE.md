@@ -105,7 +105,7 @@ Automatic structure placement follows Lorencia's castle district layout:
 
 **SENTINEL TOWERS** — 6 towers form a protective ring at the six cardinal points of the city wall with overlapping fields of fire.
 
-**ALCHEMIST'S QUARTER** — Labs in a tight cluster optimized for compound reaction chains. Central reagent labs surrounded by reaction labs.
+**APOTHECARY'S QUARTER** — Labs in a tight cluster optimized for compound reaction chains. Central reagent labs surrounded by reaction labs.
 
 Toggle layout visualization with `Game.arca.showPlan()`.
 
@@ -142,7 +142,7 @@ src/
 │   ├── role.upgrader.ts            # scholar — controller upgrading
 │   ├── role.builder.ts             # mason — construction
 │   ├── role.repairer.ts            # blacksmith — structure repair
-│   ├── role.mineral_miner.ts       # alapothecary — mineral extraction
+│   ├── role.mineral_miner.ts       # prospector — mineral extraction
 │   ├── role.apothecary.ts          # apothecary — lab compound logistics
 │   ├── role.scout.ts               # ranger — room scouting
 │   ├── role.remote_miner.ts        # outrider — remote source mining
