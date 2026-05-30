@@ -1,6 +1,6 @@
 # Expansion System _(planned)_
 
-> **Status**: Planned. Remote mining (wanderers + peddlers + heralds) is implemented; autonomous room claiming is not.
+> **Status**: Planned. Remote mining (outriders + peddlers + heralds) is implemented; autonomous room claiming is not.
 
 ---
 
@@ -9,7 +9,7 @@
 ARCA already exploits adjacent rooms without claiming them:
 
 1. **Rangers** survey adjacent rooms and record source positions + hostile status
-2. **Wanderers** travel to remote rooms and mine sources into containers
+2. **Outriders** travel to remote rooms and mine sources into containers
 3. **Peddlers** haul that energy back to the home colony
 4. **Heralds** reserve the remote room controller, doubling source regen (3,000 → 6,000 per source)
 
@@ -27,16 +27,16 @@ When a colony reaches "powerhouse" phase and GCL allows, ARCA will:
 - Require: 2+ sources, no player owner, threat level < 3, within 5 rooms
 
 ### 2. Claiming
-- Spawn a **claimer** creep with `[CLAIM, MOVE, MOVE, MOVE, MOVE]`
-- Claimer travels to the target and calls `claimController()`
+- Spawn a **conqueror** creep with `[CLAIM, MOVE, MOVE, MOVE, MOVE]`
+- Conqueror travels to the target and calls `claimController()`
 
 ### 3. Bootstrapping
-- Spawn 3 **pioneer** creeps (harvester + builder hybrid) to establish the spawn
+- Spawn 3 **settler** creeps (harvester + builder hybrid) to establish the spawn
 - Once spawn is built, colony becomes autonomous and begins its own spawn loop
 
 ### 4. Progress Monitoring
 - Track claiming status in `Memory.expansion`
-- Abort and retry if claimer dies or gets stuck
+- Abort and retry if conqueror dies or gets stuck
 - Notify console when colony reaches self-sufficiency
 
 ---

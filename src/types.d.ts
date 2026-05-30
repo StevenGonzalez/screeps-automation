@@ -44,7 +44,7 @@ declare global {
     startedAt: number;
     requiredKnights: number;
     requiredWizards: number;
-    requiredPaladins: number;
+    requiredClerics: number;
     clearedSince?: number;
   }
 

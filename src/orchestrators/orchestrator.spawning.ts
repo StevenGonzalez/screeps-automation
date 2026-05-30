@@ -12,10 +12,10 @@ import {
   ROLE_RESERVER,
   ROLE_KNIGHT,
   ROLE_WIZARD,
-  ROLE_PALADIN,
-  ROLE_CLAIMER,
-  ROLE_PIONEER,
-  ROLE_CHEMIST,
+  ROLE_CLERIC,
+  ROLE_CONQUEROR,
+  ROLE_SETTLER,
+  ROLE_APOTHECARY,
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
@@ -213,7 +213,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (threatSeverity === "high" && phase !== "bootstrap") {
     if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
     if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
-    if (shouldSpawnPaladin(room, threatScore) && spawnPaladin(room, spawn)) return;
+    if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
   }
 
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
@@ -227,18 +227,18 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (threatScore > 0 && phase !== "bootstrap") {
     if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
     if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
-    if (shouldSpawnPaladin(room, threatScore) && spawnPaladin(room, spawn)) return;
+    if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
   }
 
-  // Expansion: claimer and pioneers are spawned by the home room only
+  // Expansion: conqueror and settlers are spawned by the home room only
   if (Memory.expansion?.homeRoom === room.name) {
-    if (shouldSpawnClaimer() && spawnClaimer(room, spawn)) return;
-    if (shouldSpawnPioneer(room) && spawnPioneer(room, spawn)) return;
+    if (shouldSpawnConqueror() && spawnConqueror(room, spawn)) return;
+    if (shouldSpawnSettler(room) && spawnSettler(room, spawn)) return;
   }
 
   if (shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
   if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
-  if (shouldSpawnChemist(room) && spawnChemist(room, spawn)) return;
+  if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
   if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
@@ -763,7 +763,7 @@ function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
 const BOOST_CANDIDATES: Record<string, string[]> = {
   knight:  ['XUH2O', 'UH2O', 'UH'],   // attack
   wizard:  ['XUHO2', 'UHO2', 'UO'],   // ranged attack
-  paladin: ['XLHO2', 'LHO2', 'LO'],   // heal
+  cleric:  ['XLHO2', 'LHO2', 'LO'],   // heal
 };
 
 // Returns the best available boost compound if there's enough stock in storage/terminal.
@@ -809,9 +809,9 @@ function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
   ] as BodyPartConstant[];
 }
 
-// Paladin body: HEAL first so MOVE dies before healing parts.
+// Cleric body: HEAL first so MOVE dies before healing parts.
 // Cost per pair: HEAL(250) + MOVE(50) = 300.
-function buildPaladinBody(availableEnergy: number): BodyPartConstant[] {
+function buildClericBody(availableEnergy: number): BodyPartConstant[] {
   const pairCost = BODYPART_COST[HEAL] + BODYPART_COST[MOVE];
   const maxPairs = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 2),
@@ -856,44 +856,44 @@ function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-function shouldSpawnPaladin(room: Room, threatScore: number): boolean {
+function shouldSpawnCleric(room: Room, threatScore: number): boolean {
   if (threatScore < 100) return false;
   const fighters = countByRoleInRoom(ROLE_KNIGHT, room) + countByRoleInRoom(ROLE_WIZARD, room);
   if (fighters === 0) return false;
-  return countByRoleInRoom(ROLE_PALADIN, room) < 1;
+  return countByRoleInRoom(ROLE_CLERIC, room) < 1;
 }
 
-function spawnPaladin(room: Room, spawn: StructureSpawn): boolean {
+function spawnCleric(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
-  const body = buildPaladinBody(allowedEnergy);
+  const body = buildClericBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
-  const boost = pickBoostCompound(room, 'paladin', healParts);
-  const res = spawn.spawnCreep(body, `${ROLE_PALADIN}${Game.time}`, {
-    memory: { role: ROLE_PALADIN, ...(boost ? { boostCompound: boost } : {}) },
+  const boost = pickBoostCompound(room, 'cleric', healParts);
+  const res = spawn.spawnCreep(body, `${ROLE_CLERIC}${Game.time}`, {
+    memory: { role: ROLE_CLERIC, ...(boost ? { boostCompound: boost } : {}) },
   });
   return res === OK;
 }
 
 // ── Expansion helpers ─────────────────────────────────────────────────────────
 
-function shouldSpawnClaimer(): boolean {
+function shouldSpawnConqueror(): boolean {
   const exp = Memory.expansion;
   if (!exp || exp.phase !== "claiming") return false;
-  return !getCreepsByRole(ROLE_CLAIMER).some(
+  return !getCreepsByRole(ROLE_CONQUEROR).some(
     (c) => c.memory.targetRoom === exp.roomName
   );
 }
 
-function spawnClaimer(room: Room, spawn: StructureSpawn): boolean {
+function spawnConqueror(room: Room, spawn: StructureSpawn): boolean {
   const exp = Memory.expansion;
   if (!exp) return false;
   // [CLAIM, MOVE×4] = 800 energy; moves at full speed even on swamp
   const body: BodyPartConstant[] = [CLAIM, MOVE, MOVE, MOVE, MOVE];
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = spawn.spawnCreep(body, `${ROLE_CLAIMER}${Game.time}`, {
+  const res = spawn.spawnCreep(body, `${ROLE_CONQUEROR}${Game.time}`, {
     memory: {
-      role: ROLE_CLAIMER,
+      role: ROLE_CONQUEROR,
       homeRoom: room.name,
       targetRoom: exp.roomName,
     },
@@ -901,9 +901,9 @@ function spawnClaimer(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-const MAX_PIONEERS = 3;
+const MAX_SETTLERS = 3;
 
-function shouldSpawnPioneer(room: Room): boolean {
+function shouldSpawnSettler(room: Room): boolean {
   const exp = Memory.expansion;
   if (!exp || exp.phase !== "bootstrapping" || exp.homeRoom !== room.name) return false;
 
@@ -915,21 +915,21 @@ function shouldSpawnPioneer(room: Room): boolean {
     return false;
   }
 
-  const pioneers = getCreepsByRole(ROLE_PIONEER).filter(
+  const settlers = getCreepsByRole(ROLE_SETTLER).filter(
     (c) => c.memory.targetRoom === exp.roomName
   );
-  return pioneers.length < MAX_PIONEERS;
+  return settlers.length < MAX_SETTLERS;
 }
 
-function spawnPioneer(room: Room, spawn: StructureSpawn): boolean {
+function spawnSettler(room: Room, spawn: StructureSpawn): boolean {
   const exp = Memory.expansion;
   if (!exp) return false;
   const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
   // Falls back to [WORK, CARRY, MOVE] — enough to harvest and build
-  const body = buildScaledBody(ROLE_PIONEER, allowedEnergy);
-  const res = spawn.spawnCreep(body, `${ROLE_PIONEER}${Game.time}`, {
+  const body = buildScaledBody(ROLE_SETTLER, allowedEnergy);
+  const res = spawn.spawnCreep(body, `${ROLE_SETTLER}${Game.time}`, {
     memory: {
-      role: ROLE_PIONEER,
+      role: ROLE_SETTLER,
       homeRoom: room.name,
       targetRoom: exp.roomName,
     },
@@ -952,7 +952,7 @@ function shouldSpawnOffensiveCreep(room: Room): boolean {
   return (
     members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredKnights ||
     members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredWizards ||
-    members.filter((c) => c.memory.role === ROLE_PALADIN).length < op.requiredPaladins
+    members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredClerics
   );
 }
 
@@ -963,12 +963,12 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   const members = getOffensiveSquadMembers(op);
   const knights = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
   const wizards = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
-  const paladins = members.filter((c) => c.memory.role === ROLE_PALADIN).length;
+  const clerics = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
 
   let roleToSpawn: string | null = null;
   if (knights < op.requiredKnights) roleToSpawn = ROLE_KNIGHT;
   else if (wizards < op.requiredWizards) roleToSpawn = ROLE_WIZARD;
-  else if (paladins < op.requiredPaladins) roleToSpawn = ROLE_PALADIN;
+  else if (clerics < op.requiredClerics) roleToSpawn = ROLE_CLERIC;
   if (!roleToSpawn) return false;
 
   // Offensive creeps spawn at full capacity — wait for max-strength body
@@ -986,8 +986,8 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
     boostKey = "wizard";
     combatPartType = RANGED_ATTACK;
   } else {
-    body = buildPaladinBody(energy);
-    boostKey = "paladin";
+    body = buildClericBody(energy);
+    boostKey = "cleric";
     combatPartType = HEAL;
   }
 
@@ -1010,7 +1010,7 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-// ── Chemist helpers ───────────────────────────────────────────────────────────
+// ── Apothecary helpers ───────────────────────────────────────────────────────────
 
 // ── Power bank squad helpers ──────────────────────────────────────────────────
 
@@ -1107,20 +1107,20 @@ function buildPowerCarrierBody(): BodyPartConstant[] {
   ] as BodyPartConstant[];
 }
 
-function shouldSpawnChemist(room: Room): boolean {
+function shouldSpawnApothecary(room: Room): boolean {
   // Labs unlock at RCL 6; don't bother before then
   if ((room.controller?.level ?? 0) < 6) return false;
   // Only spawn when labs have been identified (inputLabIds set by orchestrator)
   if (!room.memory.labSystem?.inputLabIds?.length) return false;
-  return countByRoleInRoom(ROLE_CHEMIST, room) < 1;
+  return countByRoleInRoom(ROLE_APOTHECARY, room) < 1;
 }
 
-function spawnChemist(room: Room, spawn: StructureSpawn): boolean {
+function spawnApothecary(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
-  const body = buildScaledBody(ROLE_CHEMIST, allowedEnergy);
+  const body = buildScaledBody(ROLE_APOTHECARY, allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = spawn.spawnCreep(body, `${ROLE_CHEMIST}${Game.time}`, {
-    memory: { role: ROLE_CHEMIST },
+  const res = spawn.spawnCreep(body, `${ROLE_APOTHECARY}${Game.time}`, {
+    memory: { role: ROLE_APOTHECARY },
   });
   return res === OK;
 }

@@ -1,7 +1,7 @@
 // Minimum free capacity in an input lab before bothering to refill it.
 const MIN_REFILL_AMOUNT = 200;
 
-export function runChemist(creep: Creep) {
+export function runApothecary(creep: Creep) {
   const room = creep.room;
   const ls = room.memory.labSystem;
   const storage = room.storage;
@@ -64,7 +64,7 @@ export function runChemist(creep: Creep) {
   // ── LOADING ─────────────────────────────────────────────────────────────────
 
   // Build a set of compounds currently being sought for boosts in this room —
-  // the chemist must not drain those from labs or the boost window closes.
+  // the apothecary must not drain those from labs or the boost window closes.
   const pendingBoostCompounds = new Set(
     creep.room.find(FIND_MY_CREEPS, { filter: (c) => !!c.memory.boostCompound && !c.memory.boosted })
       .map((c) => c.memory.boostCompound as string)

@@ -1,15 +1,15 @@
 import { seekBoost } from "../services/services.combat";
-import { runOffensivePaladin } from "../orchestrators/orchestrator.military";
+import { runOffensiveCleric } from "../orchestrators/orchestrator.military";
 
 const SELF_HEAL_THRESHOLD = 0.5;
 
-export function runPaladin(creep: Creep) {
+export function runCleric(creep: Creep) {
   if (creep.memory.boostCompound && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
     const op = Memory.militaryOp;
     if (op && op.targetRoom === creep.memory.offensiveTarget) {
-      runOffensivePaladin(creep, op);
+      runOffensiveCleric(creep, op);
       return;
     }
     delete creep.memory.offensiveTarget;

@@ -1,4 +1,4 @@
-export function runPioneer(creep: Creep) {
+export function runSettler(creep: Creep) {
   const targetRoom = creep.memory.targetRoom;
   if (!targetRoom) { creep.suicide(); return; }
 

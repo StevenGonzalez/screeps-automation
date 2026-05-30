@@ -1,6 +1,6 @@
 ﻿# Military System _(planned)_
 
-> **Status**: Planned. Towers fire automatically via `orchestrator.tower.ts` and safe mode is handled by Screeps. Squad-based offense and organized defense roles (Knight, Wizard, Paladin) are not yet implemented.
+> **Status**: Planned. Towers fire automatically via `orchestrator.tower.ts` and safe mode is handled by Screeps. Squad-based offense and organized defense roles (Knight, Wizard, Cleric) are not yet implemented.
 
 ---
 
@@ -149,7 +149,7 @@ Game.arca.recall();
 - Focuses on dismantling buildings
 - Body: MOVE + WORK parts
 
-### Paladin (➕)
+### Cleric (➕)
 - Defensive healer specialist
 - Supports Knights and friendlies during home defense
 - Heals adjacent units and uses rangedHeal at range 3

@@ -7,7 +7,7 @@ Welcome to **ARCA** — the intelligence that rules the kingdom of **Lorencia**!
 ARCA is the central AI of Lorencia, a medieval fantasy Screeps empire. It manages
 colonies through a hierarchical command structure: a central intelligence coordinates
 per-room colony managers, which direct specialized creep teams. The creep roster draws
-from the archetypes of a classic fantasy realm — serfs and delvers work the land, sages
+from the archetypes of a classic fantasy realm — peasants and miners work the land, scholars
 and masons build the cities, and knights and wizards defend the kingdom.
 
 ## Architecture Overview
@@ -48,9 +48,9 @@ yarn deploy:sim    # Deploy to simulation
 ### 3. Watch the Realm Come to Life
 
 The system will automatically:
-- Spawn serfs and delvers to gather energy
-- Spawn squires to haul energy to spawns and storage
-- Spawn sages to upgrade the controller
+- Spawn peasants and miners to gather energy
+- Spawn porters to haul energy to spawns and storage
+- Spawn scholars to upgrade the controller
 - Spawn masons to build structures as the realm expands
 - Report CPU and creep counts every 100 ticks
 
@@ -58,15 +58,15 @@ The system will automatically:
 
 | Name | Role | Notes |
 |------|------|-------|
-| **serf** | Early harvester | Gathers directly from sources; phases out once delvers are up |
-| **delver** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
-| **squire** | Hauler | Moves energy from containers to spawns, extensions, storage |
-| **sage** | Upgrader | Upgrades the controller to advance RCL |
+| **peasant** | Early harvester | Gathers directly from sources; phases out once miners are up |
+| **miner** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
+| **porter** | Hauler | Moves energy from containers to spawns, extensions, storage |
+| **scholar** | Upgrader | Upgrades the controller to advance RCL |
 | **mason** | Builder | Constructs queued construction sites |
 | **blacksmith** | Repairer | Repairs structures below 50% hits |
 | **alchemist** | Mineral miner | Extracts minerals for lab compound production (RCL 6+) |
 | **ranger** | Scout | Explores adjacent rooms and records intel |
-| **wanderer** | Remote miner | Mines sources in frontier rooms |
+| **outrider** | Remote miner | Mines sources in frontier rooms |
 | **peddler** | Remote hauler | Carries remote energy back to the home colony |
 | **herald** | Reserver | Reserves remote room controllers, doubling source yield |
 
@@ -75,18 +75,18 @@ The system will automatically:
 |------|------|
 | **knight** | Melee defender |
 | **wizard** | Ranged attacker |
-| **paladin** | Healer / support |
+| **cleric** | Healer / support |
 | **dark knight** | Offensive raider |
 
 ## Core Gameplay Loop
 
-1. **Delvers** mine energy at source containers
-2. **Squires** haul energy to spawns, extensions, towers, and storage
-3. **Sages** upgrade the controller for RCL progression
+1. **Miners** mine energy at source containers
+2. **Porters** haul energy to spawns, extensions, towers, and storage
+3. **Scholars** upgrade the controller for RCL progression
 4. **Masons** build structures; **Blacksmiths** repair damage
 5. **Alchemists** mine minerals → storage → labs (RCL 6+)
 6. **Heralds** reserve remote rooms, doubling their source output
-7. **Rangers** scout the wilderness; **Wanderers** mine remote sources; **Peddlers** haul it home
+7. **Rangers** scout the wilderness; **Outriders** mine remote sources; **Peddlers** haul it home
 
 ## Implemented Systems
 
@@ -94,7 +94,7 @@ The system will automatically:
 - Adaptive spawn priorities: core economy first, remote roles after local stability
 - Scaled creep bodies: bigger bodies when more energy is available
 - Energy emergency detection: shed non-critical spawns to recover
-- Remote mining: scouts identify rooms → wanderers mine → peddlers haul → heralds reserve
+- Remote mining: scouts identify rooms → outriders mine → peddlers haul → heralds reserve
 
 ### RCL 6+ Advanced Systems
 - **LinkSanctum**: Instant energy transfer (source → storage → controller)
@@ -110,7 +110,7 @@ The system will automatically:
 ### Intelligence & Expansion
 - Scout rangers survey adjacent rooms and record source/threat intel
 - Herald reservers stake claim to frontier rooms
-- Autonomous expansion: evaluates targets, spawns claimers and pioneers (planned)
+- Autonomous expansion: evaluates targets, spawns conquerors and settlers (planned)
 
 ## Further Reading
 

@@ -1,4 +1,4 @@
-import { ROLE_KNIGHT, ROLE_WIZARD, ROLE_PALADIN } from "../config/config.roles";
+import { ROLE_KNIGHT, ROLE_WIZARD, ROLE_CLERIC } from "../config/config.roles";
 
 const RETREAT_HP_THRESHOLD = 0.20;
 const RALLY_RANGE = 8;
@@ -122,7 +122,7 @@ function squadMet(op: MilitaryOp, members: Creep[]): boolean {
   return (
     members.filter((c) => c.memory.role === ROLE_KNIGHT).length >= op.requiredKnights &&
     members.filter((c) => c.memory.role === ROLE_WIZARD).length >= op.requiredWizards &&
-    members.filter((c) => c.memory.role === ROLE_PALADIN).length >= op.requiredPaladins
+    members.filter((c) => c.memory.role === ROLE_CLERIC).length >= op.requiredClerics
   );
 }
 
@@ -167,14 +167,14 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
     return;
   }
 
-  // Seek a paladin if critically injured rather than pressing the attack
+  // Seek a cleric if critically injured rather than pressing the attack
   if (creep.hits < creep.hitsMax * RETREAT_HP_THRESHOLD) {
-    const paladin = creep.pos.findClosestByRange(FIND_MY_CREEPS, {
+    const cleric = creep.pos.findClosestByRange(FIND_MY_CREEPS, {
       filter: (c: Creep) =>
-        c.memory.role === ROLE_PALADIN && c.memory.offensiveTarget === op.targetRoom,
+        c.memory.role === ROLE_CLERIC && c.memory.offensiveTarget === op.targetRoom,
     });
-    if (paladin && !creep.pos.isNearTo(paladin)) {
-      creep.moveTo(paladin, { reusePath: 3 });
+    if (cleric && !creep.pos.isNearTo(cleric)) {
+      creep.moveTo(cleric, { reusePath: 3 });
       return;
     }
   }
@@ -229,7 +229,7 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
   }
 }
 
-export function runOffensivePaladin(creep: Creep, op: MilitaryOp): void {
+export function runOffensiveCleric(creep: Creep, op: MilitaryOp): void {
   if (op.phase === "forming" || op.phase === "rallying") {
     parkNearHomeSpawn(creep, op.homeRoom);
     return;

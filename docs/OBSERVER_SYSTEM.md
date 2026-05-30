@@ -20,7 +20,7 @@ A full Observer Network using RCL 8 Observer structures is planned but not yet i
 
 ### Hostile Detection
 
-- **Source Keepers**: flagged but not treated as player-hostile — rangers note them for wanderers to avoid
+- **Source Keepers**: flagged but not treated as player-hostile — rangers note them for outriders to avoid
 - **Player creeps**: any non-Source Keeper, non-Invader creep marks the room hostile for **2,000 ticks** (`hostileUntil`)
 - Hostile rooms are skipped when selecting remote mining targets
 
@@ -53,7 +53,7 @@ Body: `[MOVE]` — minimal cost, just needs to enter the room and read it.
 ```
 pendingScoutRooms[] → ranger surveys → remoteRooms[]
                                               ↓
-                               wanderers mine sources
+                               outriders mine sources
                                peddlers haul energy home
                                heralds reserve the controller
 ```

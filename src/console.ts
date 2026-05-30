@@ -1,6 +1,11 @@
 import { resolveChain, getStockForCompound } from "./services/services.labs";
 import { cancelOp } from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity } from "./services/services.combat";
+import {
+  ROLE_POWER_ATTACKER,
+  ROLE_POWER_HEALER,
+  ROLE_POWER_CARRIER,
+} from "./config/config.roles";
 
 const EXPANSION_CANDIDATE_SOURCES_WEIGHT = 40;
 const EXPANSION_CANDIDATE_DIST_PENALTY = 5;
@@ -233,7 +238,7 @@ export function setupConsole() {
     },
 
     // Launch an offensive military operation against a target room
-    attack: (roomName: string, knights = 2, wizards = 1, paladins = 1) => {
+    attack: (roomName: string, knights = 2, wizards = 1, clerics = 1) => {
       if (!roomName) {
         console.log("[Military] Usage: Game.arca.attack('W2N1')  or  Game.arca.attack('W2N1', 3, 2, 1)");
         return;
@@ -248,7 +253,7 @@ export function setupConsole() {
       }
 
       // Validate squad requirements
-      if (knights < 0 || wizards < 0 || paladins < 0 || knights + wizards + paladins === 0) {
+      if (knights < 0 || wizards < 0 || clerics < 0 || knights + wizards + clerics === 0) {
         console.log("[Military] Squad must have at least 1 member");
         return;
       }
@@ -279,10 +284,10 @@ export function setupConsole() {
         startedAt: Game.time,
         requiredKnights: knights,
         requiredWizards: wizards,
-        requiredPaladins: paladins,
+        requiredClerics: clerics,
       };
       console.log(
-        `[Military] Op launched: ${roomName}  squad=${knights}K/${wizards}W/${paladins}P  home=${homeRoom.name}`
+        `[Military] Op launched: ${roomName}  squad=${knights}K/${wizards}W/${clerics}C  home=${homeRoom.name}`
       );
       console.log(`[Military] Spawning squad... check status with Game.arca.military()`);
     },
@@ -310,7 +315,7 @@ export function setupConsole() {
       console.log(`[Military] Op: ${op.homeRoom} → ${op.targetRoom}`);
       console.log(`  Phase: ${op.phase}  |  Age: ${age} ticks`);
       console.log(
-        `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ${op.requiredPaladins}P`
+        `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ${op.requiredClerics}C`
       );
 
       const members = Object.values(Game.creeps).filter(
@@ -406,9 +411,9 @@ export function setupConsole() {
       for (const op of ops) {
         const age = Game.time - op.startedAt;
         const members = Object.values(Game.creeps).filter((c) => c.memory.powerOpId === op.id);
-        const attackers = members.filter((c) => c.memory.role === "breacher").length;
-        const healers = members.filter((c) => c.memory.role === "battlepriest").length;
-        const carriers = members.filter((c) => c.memory.role === "caravan").length;
+        const attackers = members.filter((c) => c.memory.role === ROLE_POWER_ATTACKER).length;
+        const healers = members.filter((c) => c.memory.role === ROLE_POWER_HEALER).length;
+        const carriers = members.filter((c) => c.memory.role === ROLE_POWER_CARRIER).length;
         console.log(
           `[Power] Op #${op.id}: ${op.homeRoom} → ${op.roomName}` +
           `  phase=${op.phase}  power=${op.power}  age=${age}`

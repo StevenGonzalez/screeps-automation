@@ -4,7 +4,41 @@ import {
   TOWER_COUNT_PER_RCL,
   TOWER_DISTRIBUTION_MODE,
   TOWER_PRIMARY_SPAWN_MEMORY_KEY,
+  MU_TOWN_NAMES,
 } from "../config/config.structures";
+
+// Roman-numeral suffixes for the 2nd/3rd/... spawn sharing one room's town name.
+const SPAWN_SUFFIXES = ["", "-II", "-III", "-IV"];
+
+// Strip a "-II"/"-III"/... suffix to recover a room's base town name.
+function baseTownName(spawnName: string): string {
+  const dash = spawnName.lastIndexOf("-");
+  if (dash > 0 && /^(II|III|IV|\d+)$/.test(spawnName.slice(dash + 1))) {
+    return spawnName.slice(0, dash);
+  }
+  return spawnName;
+}
+
+// Themed, globally-unique name for a spawn about to be built in `room`.
+// A room that already has a spawn keeps its town name and the new spawn gets a
+// Roman-numeral suffix; a brand-new room claims the next unused MU town name.
+export function nextSpawnName(room: Room): string | undefined {
+  const existing = room.find(FIND_MY_SPAWNS);
+  const pendingSites = room.find(FIND_MY_CONSTRUCTION_SITES, {
+    filter: (s) => s.structureType === STRUCTURE_SPAWN,
+  }).length;
+
+  if (existing.length > 0) {
+    const base = baseTownName(existing[0].name);
+    const slot = existing.length + pendingSites; // 0-based slot for the new spawn
+    return `${base}${SPAWN_SUFFIXES[slot] ?? `-${slot + 1}`}`;
+  }
+
+  // New room: first MU town name not already used by any spawn in the empire.
+  const used = new Set<string>();
+  for (const name in Game.spawns) used.add(baseTownName(Game.spawns[name].name));
+  return MU_TOWN_NAMES.find((t) => !used.has(t));
+}
 
 function isWalkable(room: Room, x: number, y: number): boolean {
   const look = room.getTerrain().get(x, y);

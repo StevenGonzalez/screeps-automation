@@ -16,7 +16,7 @@ export function runKnight(creep: Creep) {
     delete creep.memory.offensiveTarget; // stale from a completed/cancelled op
   }
 
-  // Defensive: retreat to spawn when critically injured so towers/paladins can heal
+  // Defensive: retreat to spawn when critically injured so towers/clerics can heal
   if (creep.hits < creep.hitsMax * RETREAT_THRESHOLD) {
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn) {

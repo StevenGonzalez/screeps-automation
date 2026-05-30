@@ -1,3 +1,12 @@
+// MU Online map/town names, in expansion order. A bot-built spawn in a room
+// with no spawn yet claims the first name here not already in use; additional
+// spawns in an already-named room get a Roman-numeral suffix (see nextSpawnName).
+export const MU_TOWN_NAMES = [
+  "Lorencia", "Devias", "Noria", "Atlans", "Tarkan", "Icarus",
+  "Aida", "Kanturu", "Crywolf", "Vulcanus", "Elbeland", "Karutan",
+  "LostTower", "Dungeon", "Kalima",
+];
+
 export const STRUCTURE_PLANNER = {
   containerOffset: 1,
   upgradeContainerOffset: 2,

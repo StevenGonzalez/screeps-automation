@@ -4,7 +4,7 @@
 
 **"From the gates of Lorencia, the empire stretches to the farthest dungeon."**
 
-ARCA is the central intelligence of Lorencia, a Screeps automation system built around a medieval fantasy empire theme. Serfs and delvers work the earth, sages and masons build the cities, and knights and wizards defend the realm.
+ARCA is the central intelligence of Lorencia, a Screeps automation system built around a medieval fantasy empire theme. Peasants and miners work the earth, scholars and masons build the cities, and knights and wizards defend the realm.
 
 ### Core Philosophy
 - **Distributed Intelligence**: Each Stronghold operates autonomously while coordinating with ARCA
@@ -37,7 +37,7 @@ Specialized creep controllers that manage teams of Heroes. Named after their rol
 | **High Elf** | Defensive healing support |
 | **Dark Lord** | Offensive combat operations |
 | **Slayer** | Remote room defense |
-| **Lancer** | Pioneer expansion |
+| **Lancer** | Settler expansion |
 | **Raider** | PowerBank assault |
 
 ### Hero _(planned)_
@@ -132,15 +132,15 @@ src/
 │   ├── orchestrator.visuals.ts     # Room visuals
 │   └── orchestrator.pixels.ts      # Pixel generation
 ├── roles/
-│   ├── role.harvester.ts           # serf — early energy gathering
-│   ├── role.miner.ts               # delver — stationary source miner
-│   ├── role.hauler.ts              # squire — energy logistics
-│   ├── role.upgrader.ts            # sage — controller upgrading
+│   ├── role.harvester.ts           # peasant — early energy gathering
+│   ├── role.miner.ts               # miner — stationary source miner
+│   ├── role.hauler.ts              # porter — energy logistics
+│   ├── role.upgrader.ts            # scholar — controller upgrading
 │   ├── role.builder.ts             # mason — construction
 │   ├── role.repairer.ts            # blacksmith — structure repair
 │   ├── role.mineral_miner.ts       # alchemist — mineral extraction
 │   ├── role.scout.ts               # ranger — room scouting
-│   ├── role.remote_miner.ts        # wanderer — remote source mining
+│   ├── role.remote_miner.ts        # outrider — remote source mining
 │   ├── role.remote_hauler.ts       # peddler — remote energy hauling
 │   └── role.reserver.ts            # herald — remote room reservation
 ├── planning/

@@ -9,6 +9,7 @@ import {
   pruneRoadsUnderStructures,
   connectRoadClusters,
   structureTypeForKey,
+  nextSpawnName,
 } from "../services/services.structures";
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
 import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
@@ -120,7 +121,13 @@ function applyPlannedConstruction(room: Room) {
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       keep.push(posStr);
       if (!sites?.has(posStr)) {
-        room.createConstructionSite(x, y, type as BuildableStructureConstant);
+        if (type === STRUCTURE_SPAWN) {
+          // Give every bot-built spawn an MU-themed name (Lorencia, Devias, …).
+          const name = nextSpawnName(room);
+          if (name) room.createConstructionSite(x, y, STRUCTURE_SPAWN, name);
+        } else {
+          room.createConstructionSite(x, y, type as BuildableStructureConstant);
+        }
       }
     }
     mem[key] = keep;

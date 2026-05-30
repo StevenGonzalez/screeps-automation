@@ -1,5 +1,5 @@
 /**
- * Remote miner (delver): travels to an assigned source in a foreign room, sits on
+ * Remote miner (outrider): travels to an assigned source in a foreign room, sits on
  * or adjacent to it, and harvests. If a container exists next to the source it
  * will fill it; otherwise energy drops for the remote hauler to collect.
  *

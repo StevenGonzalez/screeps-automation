@@ -84,7 +84,7 @@ function processLabSystem(room: Room) {
     ls.inputCompounds = [recipe[0], recipe[1]];
     ls.startStock = getStockForCompound(next.compound, room);
     ls.targetAmount = next.amount;
-    return; // let chemist fill labs this tick before we try to react
+    return; // let apothecary fill labs this tick before we try to react
   }
 
   if (!ls.inputCompounds) return;
@@ -134,7 +134,7 @@ function refreshLabIdentity(room: Room) {
   const refPos = room.storage?.pos ?? room.find(FIND_MY_SPAWNS)[0]?.pos;
   if (!refPos) return;
 
-  // Input labs = 2 closest to storage (easiest for chemist to access)
+  // Input labs = 2 closest to storage (easiest for apothecary to access)
   const sorted = [...labs].sort((a, b) => a.pos.getRangeTo(refPos) - b.pos.getRangeTo(refPos));
   ls.inputLabIds = sorted.slice(0, 2).map((l) => l.id as Id<StructureLab>);
   ls.outputLabIds = sorted.slice(2).map((l) => l.id as Id<StructureLab>);

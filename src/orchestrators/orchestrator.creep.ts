@@ -12,10 +12,10 @@ import {
   ROLE_RESERVER,
   ROLE_KNIGHT,
   ROLE_WIZARD,
-  ROLE_PALADIN,
-  ROLE_CLAIMER,
-  ROLE_PIONEER,
-  ROLE_CHEMIST,
+  ROLE_CLERIC,
+  ROLE_CONQUEROR,
+  ROLE_SETTLER,
+  ROLE_APOTHECARY,
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
@@ -33,10 +33,10 @@ import { runRemoteHauler } from "../roles/role.remote_hauler";
 import { runReserver } from "../roles/role.reserver";
 import { runKnight } from "../roles/role.knight";
 import { runWizard } from "../roles/role.wizard";
-import { runPaladin } from "../roles/role.paladin";
-import { runClaimer } from "../roles/role.claimer";
-import { runPioneer } from "../roles/role.pioneer";
-import { runChemist } from "../roles/role.chemist";
+import { runCleric } from "../roles/role.cleric";
+import { runConqueror } from "../roles/role.conqueror";
+import { runSettler } from "../roles/role.settler";
+import { runApothecary } from "../roles/role.apothecary";
 import { runPowerAttacker } from "../roles/role.powerattacker";
 import { runPowerHealer } from "../roles/role.powerhealer";
 import { runPowerCarrier } from "../roles/role.powercarrier";
@@ -77,14 +77,14 @@ function processCreep(creep: Creep) {
     runKnight(creep);
   } else if (role === ROLE_WIZARD) {
     runWizard(creep);
-  } else if (role === ROLE_PALADIN) {
-    runPaladin(creep);
-  } else if (role === ROLE_CLAIMER) {
-    runClaimer(creep);
-  } else if (role === ROLE_PIONEER) {
-    runPioneer(creep);
-  } else if (role === ROLE_CHEMIST) {
-    runChemist(creep);
+  } else if (role === ROLE_CLERIC) {
+    runCleric(creep);
+  } else if (role === ROLE_CONQUEROR) {
+    runConqueror(creep);
+  } else if (role === ROLE_SETTLER) {
+    runSettler(creep);
+  } else if (role === ROLE_APOTHECARY) {
+    runApothecary(creep);
   } else if (role === ROLE_POWER_ATTACKER) {
     runPowerAttacker(creep);
   } else if (role === ROLE_POWER_HEALER) {
