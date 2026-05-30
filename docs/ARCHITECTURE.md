@@ -4,7 +4,7 @@
 
 **"From the gates of Lorencia, the empire stretches to the farthest dungeon."**
 
-ARCA is the central intelligence of Lorencia, a Screeps automation system built around a medieval fantasy empire theme. Serfs and delvers work the earth, sages and masons build the cities, and knights and wizards defend the realm.
+ARCA is the central intelligence of Lorencia, a Screeps automation system built around a medieval fantasy empire theme. Peasants and miners work the earth, scholars and masons build the cities, and knights and wizards defend the realm.
 
 ### Core Philosophy
 - **Distributed Intelligence**: Each Stronghold operates autonomously while coordinating with ARCA
@@ -37,7 +37,7 @@ Specialized creep controllers that manage teams of Heroes. Named after their rol
 | **High Elf** | Defensive healing support |
 | **Dark Lord** | Offensive combat operations |
 | **Slayer** | Remote room defense |
-| **Lancer** | Pioneer expansion |
+| **Lancer** | Settler expansion |
 | **Raider** | PowerBank assault |
 
 ### Hero _(planned)_
@@ -116,39 +116,55 @@ Toggle layout visualization with `Game.arca.showPlan()`.
 ```
 src/
 ├── main.ts                         # Entry point, CPU budget management
+├── console.ts                      # Game.arca.* console API
 ├── types.d.ts                      # Global type declarations
 ├── config/
-│   ├── config.roles.ts             # Creep role constants and legacy aliases
+│   ├── config.roles.ts             # Creep role constants and deposit priorities
 │   ├── config.spawning.ts          # Body patterns and spawn energy reserve
-│   └── config.structures.ts       # Structure planner configuration
+│   └── config.structures.ts        # Structure planner configuration
 ├── orchestrators/
-│   ├── orchestrator.creep.ts       # Dispatches creep roles each tick
+│   ├── orchestrator.creep.ts       # Dispatches creep roles each tick (lookup map)
 │   ├── orchestrator.spawning.ts    # Spawn priority logic per room
 │   ├── orchestrator.structures.ts  # Structure placement and road planning
-│   ├── orchestrator.tower.ts       # Tower targeting
+│   ├── orchestrator.tower.ts       # Tower targeting + safe-mode triggers
 │   ├── orchestrator.links.ts       # Link energy distribution
+│   ├── orchestrator.labs.ts        # Compound reaction chains
 │   ├── orchestrator.terminal.ts    # Mineral selling via market orders
+│   ├── orchestrator.military.ts    # Offensive squad coordination
+│   ├── orchestrator.observer.ts    # Observer scanning queue
 │   ├── orchestrator.memory.ts      # Memory cleanup and ID caching
 │   ├── orchestrator.visuals.ts     # Room visuals
 │   └── orchestrator.pixels.ts      # Pixel generation
 ├── roles/
-│   ├── role.harvester.ts           # serf — early energy gathering
-│   ├── role.miner.ts               # delver — stationary source miner
-│   ├── role.hauler.ts              # squire — energy logistics
-│   ├── role.upgrader.ts            # sage — controller upgrading
+│   ├── role.harvester.ts           # peasant — early energy gathering
+│   ├── role.miner.ts               # miner — stationary source miner
+│   ├── role.hauler.ts              # porter — energy logistics
+│   ├── role.upgrader.ts            # scholar — controller upgrading
 │   ├── role.builder.ts             # mason — construction
 │   ├── role.repairer.ts            # blacksmith — structure repair
-│   ├── role.mineral_miner.ts       # alchemist — mineral extraction
+│   ├── role.mineral_miner.ts       # alapothecary — mineral extraction
+│   ├── role.apothecary.ts          # apothecary — lab compound logistics
 │   ├── role.scout.ts               # ranger — room scouting
-│   ├── role.remote_miner.ts        # wanderer — remote source mining
+│   ├── role.remote_miner.ts        # outrider — remote source mining
 │   ├── role.remote_hauler.ts       # peddler — remote energy hauling
-│   └── role.reserver.ts            # herald — remote room reservation
+│   ├── role.reserver.ts            # herald — remote room reservation
+│   ├── role.conqueror.ts           # conqueror — room claiming
+│   ├── role.settler.ts             # settler — new-room bootstrap
+│   ├── role.knight.ts              # knight — defensive melee
+│   ├── role.wizard.ts              # wizard — defensive ranged
+│   ├── role.cleric.ts              # cleric — defensive healing
+│   ├── role.tower.ts               # tower targeting + safe-mode helpers
+│   ├── role.powerattacker.ts       # breacher — PowerBank assault
+│   ├── role.powerhealer.ts         # battlepriest — PowerBank squad healing
+│   └── role.powercarrier.ts        # caravan — power collection
 ├── planning/
 │   ├── planner.stamp.ts            # Castle stamp layout generation
 │   └── planner.room.ts             # Road planning and structure placement
 └── services/
     ├── services.memory.ts          # Room memory helpers
-    ├── services.creep.ts           # Creep utility functions
+    ├── services.creep.ts           # Creep utility functions + shared find caches
+    ├── services.combat.ts          # Threat scoring and severity
+    ├── services.labs.ts            # Compound stock helpers
     └── services.structures.ts      # Structure planning helpers
 ```
 
