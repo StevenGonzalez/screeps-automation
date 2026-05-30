@@ -213,191 +213,207 @@ function planStampRampartPerimeter(
   }
 }
 
-// ── Cardinal arteries ─────────────────────────────────────────────────────────
+// ── Arteries + economic connectors ────────────────────────────────────────────
+//
+// Single shared cost matrix used by every artery/connector path in a given run.
+// Walls and planned non-road structures are impassable (255); already-planned
+// road tiles cost 1 so subsequent paths merge onto earlier ones instead of
+// taking parallel routes. plainCost/swampCost keep PathFinder's defaults.
+
+const ROAD_PLANNER_VERSION = 2;
 
 export function planCardinalArteries(room: Room): void {
   const anchor = getOrFindAnchor(room);
   if (!anchor) return;
 
-  const { halfSize } = STAMP_PLANNER;
-  const tap = halfSize + 1; // first tile outside stamp edge
+  migrateRoadPlanner(room);
 
-  const hasNorth = room.find(FIND_EXIT_TOP).length > 0;
-  const hasSouth = room.find(FIND_EXIT_BOTTOM).length > 0;
-  const hasWest  = room.find(FIND_EXIT_LEFT).length > 0;
-  const hasEast  = room.find(FIND_EXIT_RIGHT).length > 0;
+  const cm = buildSharedRoadCostMatrix(room);
 
+  // 1) Economic connectors first — every base needs them.
+  const anchorPos = new RoomPosition(anchor.x, anchor.y, room.name);
+
+  for (const source of room.find(FIND_SOURCES)) {
+    const containerPos = plannedPositionsFromMemory(
+      room,
+      `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`
+    )[0];
+    const target = containerPos ?? source.pos;
+    planRoadKey(room, `cardinal_connector_source_${source.id}`, anchorPos, target, cm);
+  }
+
+  if (room.controller) {
+    const ccPos = plannedPositionsFromMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER)[0];
+    const target = ccPos ?? room.controller.pos;
+    planRoadKey(room, "cardinal_connector_controller", anchorPos, target, cm);
+  }
+
+  const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
+  if (mineral) {
+    const mpos = plannedPositionsFromMemory(
+      room,
+      `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`
+    )[0];
+    const target = mpos ?? mineral.pos;
+    planRoadKey(room, `cardinal_connector_mineral_${mineral.id}`, anchorPos, target, cm);
+  }
+
+  // 2) Cardinal arteries to room edges only when an active remote room lies
+  //    in that direction — otherwise they're long roads to nowhere.
+  planCardinalArteriesToRemotes(room, anchor, cm);
+}
+
+function planCardinalArteriesToRemotes(
+  room: Room,
+  anchor: { x: number; y: number },
+  cm: CostMatrix
+): void {
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
   const meta = (room.memory.plannedStructuresMeta ?? {}) as Record<string, any>;
 
-  // Plan an artery if an exit exists in that direction; otherwise prune any stale entry.
-  // Returns true when an existing entry was pruned (signals connectors need re-planning).
-  function planOrPrune(
-    key: string, has: boolean,
-    sx: number, sy: number, ex: number, ey: number
-  ): boolean {
-    if (has) {
-      planStraightArtery(room, key, sx, sy, ex, ey);
-      return false;
+  const dirsWithRemote = remoteDirectionsFor(room);
+
+  const targets: Record<string, { x: number; y: number } | null> = {
+    cardinal_road_north: dirsWithRemote.has("N") ? { x: anchor.x, y: 2 }  : null,
+    cardinal_road_south: dirsWithRemote.has("S") ? { x: anchor.x, y: 47 } : null,
+    cardinal_road_west:  dirsWithRemote.has("W") ? { x: 2,  y: anchor.y } : null,
+    cardinal_road_east:  dirsWithRemote.has("E") ? { x: 47, y: anchor.y } : null,
+  };
+
+  const anchorPos = new RoomPosition(anchor.x, anchor.y, room.name);
+  for (const [key, target] of Object.entries(targets)) {
+    if (!target) {
+      if (mem[key]) { delete mem[key]; delete meta[key]; }
+      continue;
     }
-    if (mem[key]) {
-      delete mem[key];
-      delete meta[key];
-      return true;
-    }
-    return false;
+    const targetPos = new RoomPosition(target.x, target.y, room.name);
+    planRoadKey(room, key, anchorPos, targetPos, cm);
   }
-
-  let pruned = false;
-  pruned = planOrPrune("cardinal_road_north", hasNorth, anchor.x, anchor.y - tap, anchor.x, 2)  || pruned;
-  pruned = planOrPrune("cardinal_road_south", hasSouth, anchor.x, anchor.y + tap, anchor.x, 47) || pruned;
-  pruned = planOrPrune("cardinal_road_west",  hasWest,  anchor.x - tap, anchor.y, 2,  anchor.y) || pruned;
-  pruned = planOrPrune("cardinal_road_east",  hasEast,  anchor.x + tap, anchor.y, 47, anchor.y) || pruned;
-
-  // If an artery was pruned its connectors may point the wrong way — delete them so they re-plan.
-  if (pruned) {
-    for (const k of Object.keys(mem)) {
-      if (k.startsWith("cardinal_connector_")) { delete mem[k]; delete meta[k]; }
-    }
-  }
-
-  // Only offer tap points toward directions that actually have exits.
-  const tapPoints = [
-    hasNorth && { x: anchor.x,               y: anchor.y - halfSize - 1, label: "N" },
-    hasSouth && { x: anchor.x,               y: anchor.y + halfSize + 1, label: "S" },
-    hasWest  && { x: anchor.x - halfSize - 1, y: anchor.y,               label: "W" },
-    hasEast  && { x: anchor.x + halfSize + 1, y: anchor.y,               label: "E" },
-  ].filter(Boolean) as Array<{ x: number; y: number; label: string }>;
-
-  connectEconomicNodesToArteries(room, tapPoints);
 }
 
-function planStraightArtery(
-  room: Room,
-  key: string,
-  startX: number,
-  startY: number,
-  endX: number,
-  endY: number
-): void {
-  if (room.memory.plannedStructures) {
-    const mem = room.memory.plannedStructures as Record<string, string[]>;
-    if (mem[key] && mem[key].length > 0) return;
+function remoteDirectionsFor(room: Room): Set<"N" | "S" | "E" | "W"> {
+  const out = new Set<"N" | "S" | "E" | "W">();
+  const remotes = room.memory.remoteRooms ?? [];
+  for (const r of remotes) {
+    if (r.hostile) continue;
+    const dir = roomExitDirection(room.name, r.roomName);
+    if (dir) out.add(dir);
   }
+  return out;
+}
 
+// Parses Screeps room coordinates ("W12N7", "E3S4") and returns the cardinal
+// from `from` to `to` when they are direct neighbors. Returns null for
+// diagonals or non-adjacent rooms (those reach the remote via an intermediate).
+function roomExitDirection(
+  from: string,
+  to: string
+): "N" | "S" | "E" | "W" | null {
+  const parse = (name: string) => {
+    const m = /^([WE])(\d+)([NS])(\d+)$/.exec(name);
+    if (!m) return null;
+    const x = (m[1] === "W" ? -1 : 1) * parseInt(m[2], 10);
+    const y = (m[3] === "N" ? -1 : 1) * parseInt(m[4], 10);
+    return { x, y };
+  };
+  const a = parse(from);
+  const b = parse(to);
+  if (!a || !b) return null;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (dx === 0 && dy === -1) return "N";
+  if (dx === 0 && dy ===  1) return "S";
+  if (dx === 1 && dy ===  0) return "E";
+  if (dx === -1 && dy === 0) return "W";
+  return null;
+}
+
+function buildSharedRoadCostMatrix(room: Room): CostMatrix {
+  const cm = new PathFinder.CostMatrix();
   const terrain = room.getTerrain();
 
-  // Route the artery around wall masses instead of drawing a straight line that
-  // would punch through them. Mirrors addArteryConnector's wall-blocking search.
-  const result = PathFinder.search(
-    new RoomPosition(startX, startY, room.name),
-    { pos: new RoomPosition(endX, endY, room.name), range: 1 },
-    {
-      roomCallback: (rn) => {
-        if (rn !== room.name) return false;
-        const cm = new PathFinder.CostMatrix();
-        for (let x = 0; x < 50; x++) {
-          for (let y = 0; y < 50; y++) {
-            if (terrain.get(x, y) === TERRAIN_MASK_WALL) cm.set(x, y, 255);
-          }
+  for (let x = 0; x < 50; x++) {
+    for (let y = 0; y < 50; y++) {
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) cm.set(x, y, 255);
+    }
+  }
+
+  const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
+  if (mem) {
+    for (const key of Object.keys(mem)) {
+      const road = isRoadKey(key);
+      for (const p of mem[key]) {
+        const comma = p.indexOf(",");
+        const px = +p.slice(0, comma);
+        const py = +p.slice(comma + 1);
+        if (px < 0 || px >= 50 || py < 0 || py >= 50) continue;
+        if (road) {
+          if (cm.get(px, py) !== 255) cm.set(px, py, 1);
+        } else {
+          cm.set(px, py, 255);
         }
-        return cm;
-      },
+      }
+    }
+  }
+  return cm;
+}
+
+function planRoadKey(
+  room: Room,
+  key: string,
+  from: RoomPosition,
+  to: RoomPosition,
+  cm: CostMatrix
+): void {
+  const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
+  if (mem && mem[key] && mem[key].length > 0) {
+    // Already planned — fold it into the shared matrix so later paths reuse it.
+    for (const p of mem[key]) {
+      const comma = p.indexOf(",");
+      const px = +p.slice(0, comma);
+      const py = +p.slice(comma + 1);
+      if (cm.get(px, py) !== 255) cm.set(px, py, 1);
+    }
+    return;
+  }
+
+  const result = PathFinder.search(
+    from,
+    { pos: to, range: 1 },
+    {
+      roomCallback: (rn) => (rn === room.name ? cm : false),
       plainCost: 2,
       swampCost: 10,
       maxOps: 4000,
     }
   );
 
-  // PathFinder excludes the origin, so add it explicitly to keep the artery
-  // flush against the stamp edge (the tap tile) with no gap.
-  if (terrain.get(startX, startY) !== TERRAIN_MASK_WALL) {
-    addPlannedStructureToMemory(room, key, new RoomPosition(startX, startY, room.name));
-  }
+  if (result.incomplete || result.path.length === 0) return;
+
   for (const step of result.path) {
     addPlannedStructureToMemory(room, key, new RoomPosition(step.x, step.y, room.name));
+    if (cm.get(step.x, step.y) !== 255) cm.set(step.x, step.y, 1);
   }
 }
 
-function connectEconomicNodesToArteries(
-  room: Room,
-  tapPoints: Array<{ x: number; y: number; label: string }>
-): void {
-  if (tapPoints.length === 0) return;
-
-  const sources = room.find(FIND_SOURCES);
-  for (const source of sources) {
-    const containerKey = `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`;
-    const containerPos = plannedPositionsFromMemory(room, containerKey)[0];
-    const targetPos = containerPos ?? source.pos;
-    const tap = nearestTap(targetPos, tapPoints);
-    const roadKey = `cardinal_connector_source_${source.id}`;
-    addArteryConnector(room, roadKey, tap, targetPos);
-  }
-
-  if (room.controller) {
-    const ccPos = plannedPositionsFromMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER)[0];
-    const targetPos = ccPos ?? room.controller.pos;
-    const tap = nearestTap(targetPos, tapPoints);
-    addArteryConnector(room, "cardinal_connector_controller", tap, targetPos);
-  }
-}
-
-function nearestTap(
-  pos: RoomPosition,
-  tapPoints: Array<{ x: number; y: number; label: string }>
-): { x: number; y: number } {
-  let best = tapPoints[0];
-  let bestDist = Infinity;
-  for (const tap of tapPoints) {
-    const d = Math.abs(pos.x - tap.x) + Math.abs(pos.y - tap.y);
-    if (d < bestDist) {
-      bestDist = d;
-      best = tap;
+// One-time wipe of road planner state laid down by older revisions so the
+// new shared-cost-matrix planner can rebuild from a clean slate.
+function migrateRoadPlanner(room: Room): void {
+  if (room.memory.roadPlannerVersion === ROAD_PLANNER_VERSION) return;
+  const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
+  const meta = room.memory.plannedStructuresMeta as Record<string, any> | undefined;
+  if (mem) {
+    for (const k of Object.keys(mem)) {
+      if (k.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX) ||
+          k.startsWith("cardinal_connector_") ||
+          k.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX) ||
+          k.startsWith(PLANNER_KEYS.ROAD_PREFIX)) {
+        delete mem[k];
+        if (meta) delete meta[k];
+      }
     }
   }
-  return best;
-}
-
-function addArteryConnector(
-  room: Room,
-  key: string,
-  from: { x: number; y: number },
-  to: RoomPosition
-): void {
-  if (room.memory.plannedStructures) {
-    const mem = room.memory.plannedStructures as Record<string, string[]>;
-    if (mem[key] && mem[key].length > 0) return;
-  }
-
-  const result = PathFinder.search(
-    new RoomPosition(from.x, from.y, room.name),
-    { pos: to, range: 1 },
-    {
-      roomCallback: (rn) => {
-        if (rn !== room.name) return false;
-        const cm = new PathFinder.CostMatrix();
-        const terrain = room.getTerrain();
-        for (let x = 0; x < 50; x++) {
-          for (let y = 0; y < 50; y++) {
-            if (terrain.get(x, y) === TERRAIN_MASK_WALL) cm.set(x, y, 255);
-          }
-        }
-        return cm;
-      },
-      plainCost: 2,
-      swampCost: 10,
-      maxOps: 2000,
-    }
-  );
-
-  for (const step of result.path) {
-    addPlannedStructureToMemory(
-      room,
-      key,
-      new RoomPosition(step.x, step.y, room.name)
-    );
-  }
+  room.memory.roadPlannerVersion = ROAD_PLANNER_VERSION;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -118,6 +118,8 @@ declare global {
     // Castle stamp planner
     castleAnchor?: { x: number; y: number };
     lastRcl?: number;
+    // Road planner schema version — bump triggers one-time wipe of legacy artery/connector keys
+    roadPlannerVersion?: number;
     // Cached controller link IDs (refreshed every ~200 ticks)
     controllerLinkIds?: Id<StructureLink>[];
     controllerLinkScanTick?: number;
