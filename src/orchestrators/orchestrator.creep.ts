@@ -41,55 +41,36 @@ import { runPowerAttacker } from "../roles/role.powerattacker";
 import { runPowerHealer } from "../roles/role.powerhealer";
 import { runPowerCarrier } from "../roles/role.powercarrier";
 
+// Role → handler lookup. A single map dispatch per creep replaces a 20-branch
+// if/else chain that, for late-listed roles, re-compared the role string up to
+// 20 times every tick.
+const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
+  [ROLE_HARVESTER]: runHarvester,
+  [ROLE_UPGRADER]: runUpgrader,
+  [ROLE_BUILDER]: runBuilder,
+  [ROLE_REPAIRER]: runRepairer,
+  [ROLE_MINER]: runMiner,
+  [ROLE_HAULER]: runHauler,
+  [ROLE_MINERAL_MINER]: runMineralMiner,
+  [ROLE_SCOUT]: runScout,
+  [ROLE_REMOTE_MINER]: runRemoteMiner,
+  [ROLE_REMOTE_HAULER]: runRemoteHauler,
+  [ROLE_RESERVER]: runReserver,
+  [ROLE_KNIGHT]: runKnight,
+  [ROLE_WIZARD]: runWizard,
+  [ROLE_CLERIC]: runCleric,
+  [ROLE_CONQUEROR]: runConqueror,
+  [ROLE_SETTLER]: runSettler,
+  [ROLE_APOTHECARY]: runApothecary,
+  [ROLE_POWER_ATTACKER]: runPowerAttacker,
+  [ROLE_POWER_HEALER]: runPowerHealer,
+  [ROLE_POWER_CARRIER]: runPowerCarrier,
+};
+
 export function loop() {
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
-    processCreep(creep);
-  }
-}
-
-function processCreep(creep: Creep) {
-  const role = creep.memory.role;
-
-  if (role === ROLE_HARVESTER) {
-    runHarvester(creep);
-  } else if (role === ROLE_UPGRADER) {
-    runUpgrader(creep);
-  } else if (role === ROLE_BUILDER) {
-    runBuilder(creep);
-  } else if (role === ROLE_REPAIRER) {
-    runRepairer(creep);
-  } else if (role === ROLE_MINER) {
-    runMiner(creep);
-  } else if (role === ROLE_HAULER) {
-    runHauler(creep);
-  } else if (role === ROLE_MINERAL_MINER) {
-    runMineralMiner(creep);
-  } else if (role === ROLE_SCOUT) {
-    runScout(creep);
-  } else if (role === ROLE_REMOTE_MINER) {
-    runRemoteMiner(creep);
-  } else if (role === ROLE_REMOTE_HAULER) {
-    runRemoteHauler(creep);
-  } else if (role === ROLE_RESERVER) {
-    runReserver(creep);
-  } else if (role === ROLE_KNIGHT) {
-    runKnight(creep);
-  } else if (role === ROLE_WIZARD) {
-    runWizard(creep);
-  } else if (role === ROLE_CLERIC) {
-    runCleric(creep);
-  } else if (role === ROLE_CONQUEROR) {
-    runConqueror(creep);
-  } else if (role === ROLE_SETTLER) {
-    runSettler(creep);
-  } else if (role === ROLE_APOTHECARY) {
-    runApothecary(creep);
-  } else if (role === ROLE_POWER_ATTACKER) {
-    runPowerAttacker(creep);
-  } else if (role === ROLE_POWER_HEALER) {
-    runPowerHealer(creep);
-  } else if (role === ROLE_POWER_CARRIER) {
-    runPowerCarrier(creep);
+    const handler = ROLE_HANDLERS[creep.memory.role];
+    if (handler) handler(creep);
   }
 }

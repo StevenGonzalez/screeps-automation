@@ -36,10 +36,12 @@ export function runTower(tower: StructureTower, attackTarget: Creep | null): voi
 
 // Selects the highest-priority target for the whole room.
 // All towers should attack the same creep: kill one fast > tickle many.
-export function selectRoomAttackTarget(room: Room): Creep | null {
-  const hostiles = room.find(FIND_HOSTILE_CREEPS, {
-    filter: (c) => c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48,
-  });
+// Takes the room's hostile list (scanned once by the orchestrator) and excludes
+// edge tiles, where towers deal near-zero damage and the creep can flee a step.
+export function selectRoomAttackTarget(roomHostiles: Creep[]): Creep | null {
+  const hostiles = roomHostiles.filter(
+    (c) => c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48
+  );
   if (hostiles.length === 0) return null;
 
   let best = hostiles[0];

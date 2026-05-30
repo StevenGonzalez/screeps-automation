@@ -14,14 +14,19 @@ export function loop() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
-    notifyOnHostiles(room);
-    checkSafeMode(room);
+
+    // One hostile scan per room per tick, shared by notification, safe-mode checks,
+    // and tower targeting — these previously ran three separate FIND_HOSTILE_CREEPS.
+    const hostiles = room.find(FIND_HOSTILE_CREEPS);
+
+    notifyOnHostiles(room, hostiles);
+    checkSafeMode(room, hostiles);
 
     const towerIds = room.memory.towerIds ?? [];
     if (towerIds.length === 0) continue;
 
     // Compute the room-wide attack target once — all towers focus the same creep.
-    const attackTarget = selectRoomAttackTarget(room);
+    const attackTarget = selectRoomAttackTarget(hostiles);
 
     for (const id of towerIds) {
       const tower = Game.getObjectById(id) as StructureTower | null;
@@ -32,18 +37,17 @@ export function loop() {
 
 // ── Safe mode ─────────────────────────────────────────────────────────────────
 
-function checkSafeMode(room: Room): void {
+function checkSafeMode(room: Room, hostiles: Creep[]): void {
   const controller = room.controller;
   if (!controller?.my) return;
   if (controller.safeMode) return;            // already active
   if (!controller.safeModeAvailable) return;  // no charges
 
-  const attackers = room.find(FIND_HOSTILE_CREEPS, {
-    filter: (c) =>
-      c.body.some(
-        (p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK
-      ),
-  });
+  const attackers = hostiles.filter((c) =>
+    c.body.some(
+      (p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK
+    )
+  );
   if (attackers.length === 0) return;
 
   // Trigger 1: any spawn critically damaged
@@ -77,6 +81,11 @@ function checkSafeMode(room: Room): void {
     }
   }
 
+  // Defender count is needed by both remaining triggers — scan once.
+  const myFighters = room.find(FIND_MY_CREEPS, {
+    filter: (c) => c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK),
+  });
+
   // Trigger 4: towers drained + no defenders + sufficient attacker count
   if (towerIds.length > 0) {
     const allTowersDrained = towerIds.every((id) => {
@@ -84,9 +93,6 @@ function checkSafeMode(room: Room): void {
       return !t || t.store[RESOURCE_ENERGY] < SAFEMODE_MIN_TOWER_ENERGY;
     });
     if (allTowersDrained) {
-      const myFighters = room.find(FIND_MY_CREEPS, {
-        filter: (c) => c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK),
-      });
       if (myFighters.length === 0 && attackers.length >= SAFEMODE_OVERWHELMED_COUNT) {
         activateSafeMode(room, controller, "towers drained, no defenders");
         return;
@@ -95,9 +101,6 @@ function checkSafeMode(room: Room): void {
   }
 
   // Trigger 5: overwhelmed with no fighters at all
-  const myFighters = room.find(FIND_MY_CREEPS, {
-    filter: (c) => c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK),
-  });
   if (attackers.length >= SAFEMODE_OVERWHELMED_COUNT && myFighters.length === 0 && towerIds.length === 0) {
     activateSafeMode(room, controller, `overwhelmed by ${attackers.length} attackers, no towers or defenders`);
   }
@@ -118,8 +121,7 @@ function pct(s: { hits: number; hitsMax: number }): number {
 
 // ── Hostile notification ──────────────────────────────────────────────────────
 
-function notifyOnHostiles(room: Room): void {
-  const hostiles = room.find(FIND_HOSTILE_CREEPS);
+function notifyOnHostiles(room: Room, hostiles: Creep[]): void {
   if (hostiles.length === 0) return;
 
   if (!Memory.threatNotifyLastTick) Memory.threatNotifyLastTick = {};

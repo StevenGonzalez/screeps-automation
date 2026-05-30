@@ -39,9 +39,14 @@ function processRoomMemory(room: Room) {
     const minerals = room.find(FIND_MINERALS);
     room.memory.mineralId = minerals.length > 0 ? minerals[0].id : undefined;
 
-    const containers = room.find(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_CONTAINER,
-    }) as StructureContainer[];
+    // One structure scan shared by every structure-type lookup below. In an owned
+    // room every link/observer/power-spawn is ours, so filtering FIND_STRUCTURES by
+    // type is equivalent to the per-type FIND_MY_STRUCTURES calls this replaced.
+    const structures = room.find(FIND_STRUCTURES);
+    const byType = <T extends AnyStructure>(type: StructureConstant): T[] =>
+      structures.filter((s) => s.structureType === type) as T[];
+
+    const containers = byType<StructureContainer>(STRUCTURE_CONTAINER);
     room.memory.containerIds = containers.map((c) => c.id as Id<StructureContainer>);
 
     const minerContainerIds: Id<StructureContainer>[] = [];
@@ -69,25 +74,17 @@ function processRoomMemory(room: Room) {
       }
     }
 
-    const towers = room.find(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_TOWER,
-    });
+    const towers = byType<StructureTower>(STRUCTURE_TOWER);
     room.memory.towerIds = towers.map((t) => t.id as Id<StructureTower>);
 
-    const links = room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_LINK,
-    });
+    const links = byType<StructureLink>(STRUCTURE_LINK);
     room.memory.linkIds = links.map((l) => l.id as Id<StructureLink>);
 
-    const terminals = room.find(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_TERMINAL,
-    });
+    const terminals = byType<StructureTerminal>(STRUCTURE_TERMINAL);
     room.memory.terminalId =
       terminals.length > 0 ? (terminals[0].id as Id<StructureTerminal>) : undefined;
 
-    const extractors = room.find(FIND_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_EXTRACTOR,
-    });
+    const extractors = byType<StructureExtractor>(STRUCTURE_EXTRACTOR);
     room.memory.extractorId =
       extractors.length > 0 ? (extractors[0].id as Id<StructureExtractor>) : undefined;
 
@@ -101,15 +98,11 @@ function processRoomMemory(room: Room) {
           : undefined;
     }
 
-    const observers = room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_OBSERVER,
-    });
+    const observers = byType<StructureObserver>(STRUCTURE_OBSERVER);
     room.memory.observerId =
       observers.length > 0 ? (observers[0].id as Id<StructureObserver>) : undefined;
 
-    const powerSpawns = room.find(FIND_MY_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_POWER_SPAWN,
-    });
+    const powerSpawns = byType<StructurePowerSpawn>(STRUCTURE_POWER_SPAWN);
     room.memory.powerSpawnId =
       powerSpawns.length > 0 ? (powerSpawns[0].id as Id<StructurePowerSpawn>) : undefined;
 

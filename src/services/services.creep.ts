@@ -7,6 +7,9 @@ import {
 let assignmentCacheTick = -1;
 const assignedContainerIdsByRoomAndRole: Record<string, Set<string>> = {};
 
+let roomStructuresCacheTick = -1;
+const roomStructuresCache: Record<string, AnyStructure[]> = {};
+
 let roomContainersCacheTick = -1;
 const roomContainersCache: Record<string, StructureContainer[]> = {};
 
@@ -40,6 +43,25 @@ function getAssignedContainerIdsByRole(room: Room, role: string): Set<string> {
   return assignedContainerIdsByRoomAndRole[cacheKey];
 }
 
+// Single per-tick FIND_STRUCTURES scan shared by every helper below. With dozens
+// of creeps each calling these finders per tick, scanning once per room and
+// filtering the cached array in JS is dramatically cheaper than one room.find
+// per creep. findClosestByPath accepts the filtered arrays unchanged.
+export function getRoomStructures(room: Room): AnyStructure[] {
+  if (roomStructuresCacheTick !== Game.time) {
+    roomStructuresCacheTick = Game.time;
+    for (const key of Object.keys(roomStructuresCache)) {
+      delete roomStructuresCache[key];
+    }
+  }
+
+  if (!roomStructuresCache[room.name]) {
+    roomStructuresCache[room.name] = room.find(FIND_STRUCTURES);
+  }
+
+  return roomStructuresCache[room.name];
+}
+
 function getRoomContainers(room: Room): StructureContainer[] {
   if (roomContainersCacheTick !== Game.time) {
     roomContainersCacheTick = Game.time;
@@ -49,10 +71,9 @@ function getRoomContainers(room: Room): StructureContainer[] {
   }
 
   if (!roomContainersCache[room.name]) {
-    roomContainersCache[room.name] = room.find(FIND_STRUCTURES, {
-      filter: (s): s is StructureContainer =>
-        s.structureType === STRUCTURE_CONTAINER,
-    });
+    roomContainersCache[room.name] = getRoomStructures(room).filter(
+      (s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER
+    );
   }
 
   return roomContainersCache[room.name];
@@ -101,13 +122,13 @@ export function findEnergyDepositTarget(
 
   const typeSet = new Set<StructureConstant>(priorityList);
 
-  // Single room.find instead of one call per priority type
-  const all = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStoreStructure =>
+  // Filter the shared per-tick scan instead of one room.find per priority type.
+  const all = getRoomStructures(creep.room).filter(
+    (s): s is AnyStoreStructure =>
       typeSet.has(s.structureType) &&
       "store" in s &&
-      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-  }) as AnyStoreStructure[];
+      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+  );
 
   if (all.length === 0) return null;
 
@@ -190,13 +211,13 @@ export function acquireEnergy(creep: Creep): boolean {
 
   // Containers and storage — cache the chosen target.
   const upgradeId = creep.room.memory.upgradeContainerId;
-  const storeTargets = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStoreStructure =>
+  const storeTargets = getRoomStructures(creep.room).filter(
+    (s): s is AnyStoreStructure =>
       (s.structureType === STRUCTURE_CONTAINER ||
         s.structureType === STRUCTURE_STORAGE) &&
       "store" in s &&
-      s.store[RESOURCE_ENERGY] > 0,
-  });
+      s.store[RESOURCE_ENERGY] > 0
+  );
 
   const nonUpgrade = upgradeId
     ? storeTargets.filter((s) => s.id !== upgradeId)
@@ -219,11 +240,11 @@ export function acquireEnergy(creep: Creep): boolean {
   }
 
   // Links with energy — cache the chosen one.
-  const links = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is StructureLink =>
+  const links = getRoomStructures(creep.room).filter(
+    (s): s is StructureLink =>
       s.structureType === STRUCTURE_LINK &&
-      (s as StructureLink).store[RESOURCE_ENERGY] > 0,
-  }) as StructureLink[];
+      (s as StructureLink).store[RESOURCE_ENERGY] > 0
+  );
   if (links.length > 0) {
     const link = creep.pos.findClosestByPath(links) as StructureLink | null;
     if (link) {
@@ -291,13 +312,13 @@ export function withdrawFromContainer(
 export function findClosestContainerWithFreeCapacity(
   creep: Creep
 ): Structure | null {
-  const targets = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStoreStructure =>
+  const targets = getRoomStructures(creep.room).filter(
+    (s): s is AnyStoreStructure =>
       (s.structureType === STRUCTURE_CONTAINER ||
         s.structureType === STRUCTURE_STORAGE) &&
       "store" in s &&
-      s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-  });
+      s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+  );
   if (targets.length === 0) return null;
   return creep.pos.findClosestByPath(targets) as Structure | null;
 }
@@ -306,11 +327,9 @@ export function withdrawFromControllerContainer(creep: Creep): boolean {
   const controller = creep.room.controller;
   if (!controller) return false;
 
-  const containers = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is StructureContainer =>
-      s.structureType === STRUCTURE_CONTAINER &&
-      s.pos.getRangeTo(controller.pos) <= 2,
-  }) as StructureContainer[];
+  const containers = getRoomContainers(creep.room).filter(
+    (s) => s.pos.getRangeTo(controller.pos) <= 2
+  );
 
   const containerWithEnergy = containers.find(
     (c) => c.store && c.store[RESOURCE_ENERGY] > 0
@@ -376,12 +395,12 @@ function isDamaged(s: AnyStructure): boolean {
 }
 
 export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
-  const repairTargets = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStructure =>
+  const repairTargets = getRoomStructures(creep.room).filter(
+    (s): s is AnyStructure =>
       s.structureType !== STRUCTURE_WALL &&
       s.structureType !== STRUCTURE_RAMPART &&
-      isDamaged(s as AnyStructure),
-  });
+      isDamaged(s)
+  );
   if (repairTargets.length === 0) return null;
   return creep.pos.findClosestByPath(repairTargets) || null;
 }
@@ -389,10 +408,12 @@ export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
 export function findClosestDamagedRampart(
   creep: Creep
 ): StructureRampart | null {
-  return creep.pos.findClosestByPath(FIND_STRUCTURES, {
-    filter: (s): s is StructureRampart =>
-      s.structureType === STRUCTURE_RAMPART && isDamaged(s as AnyStructure),
-  }) as StructureRampart | null;
+  const ramparts = getRoomStructures(creep.room).filter(
+    (s): s is StructureRampart =>
+      s.structureType === STRUCTURE_RAMPART && isDamaged(s)
+  );
+  if (ramparts.length === 0) return null;
+  return creep.pos.findClosestByPath(ramparts) || null;
 }
 
 export function findMostCriticalRepairTarget(
@@ -408,17 +429,15 @@ export function findMostCriticalRepairTarget(
   const rcl = creep.room.controller?.level ?? 0;
   const wallTarget = getRampartTargetHP(rcl);
 
+  const structures = getRoomStructures(creep.room);
+
   // Priority 1: non-defensive structures below 80% HP (most critical first)
-  const nonDefensive = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStructure => {
-      const st = s as AnyStructure;
-      return (
-        st.structureType !== STRUCTURE_WALL &&
-        st.structureType !== STRUCTURE_RAMPART &&
-        st.hits < st.hitsMax * 0.8
-      );
-    },
-  });
+  const nonDefensive = structures.filter(
+    (st): st is AnyStructure =>
+      st.structureType !== STRUCTURE_WALL &&
+      st.structureType !== STRUCTURE_RAMPART &&
+      st.hits < st.hitsMax * 0.8
+  );
   if (nonDefensive.length > 0) {
     const result = nonDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
     criticalRepairByRoom[rn] = result;
@@ -426,15 +445,11 @@ export function findMostCriticalRepairTarget(
   }
 
   // Priority 2: walls/ramparts below RCL-scaled target HP (most critical first)
-  const belowTarget = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStructure => {
-      const st = s as AnyStructure;
-      return (
-        (st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART) &&
-        st.hits < wallTarget
-      );
-    },
-  });
+  const belowTarget = structures.filter(
+    (st): st is AnyStructure =>
+      (st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART) &&
+      st.hits < wallTarget
+  );
   const result = belowTarget.length > 0
     ? belowTarget.reduce((a, b) => (a.hits < b.hits ? a : b))
     : null;
@@ -454,14 +469,11 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
   // Towers handle emergencies — cap at 50k so they don't burn all energy on healthy walls.
   const towerWallThreshold = Math.min(50_000, Math.max(5_000, getRampartTargetHP(rcl) * 0.05));
 
-  const candidates = room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStructure => {
-      const st = s as AnyStructure;
-      if (st.structureType === STRUCTURE_RAMPART || st.structureType === STRUCTURE_WALL) {
-        return st.hits < towerWallThreshold;
-      }
-      return st.hits < st.hitsMax * 0.1;
-    },
+  const candidates = getRoomStructures(room).filter((st): st is AnyStructure => {
+    if (st.structureType === STRUCTURE_RAMPART || st.structureType === STRUCTURE_WALL) {
+      return st.hits < towerWallThreshold;
+    }
+    return st.hits < st.hitsMax * 0.1;
   });
   const result = candidates.length === 0
     ? null
@@ -471,13 +483,13 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
 }
 
 export function getClosestContainerOrStorage(creep: Creep): Structure | null {
-  const allTargets = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStoreStructure =>
+  const allTargets = getRoomStructures(creep.room).filter(
+    (s): s is AnyStoreStructure =>
       (s.structureType === STRUCTURE_CONTAINER ||
         s.structureType === STRUCTURE_STORAGE) &&
       "store" in s &&
-      s.store[RESOURCE_ENERGY] > 0,
-  });
+      s.store[RESOURCE_ENERGY] > 0
+  );
   if (allTargets.length === 0) return null;
   const upgradeId = creep.room.memory.upgradeContainerId;
   let nonUpgrade = allTargets;
@@ -492,11 +504,8 @@ export function getMinerContainerIds(room: Room): Id<StructureContainer>[] {
     return room.memory.minerContainerIds;
   }
 
-  const sources = room.find(FIND_SOURCES) as Source[];
-  const containers = room.find(FIND_STRUCTURES, {
-    filter: (s): s is StructureContainer =>
-      s.structureType === STRUCTURE_CONTAINER,
-  }) as StructureContainer[];
+  const sources = getSources(room);
+  const containers = getRoomContainers(room);
   const minerIds: Id<StructureContainer>[] = [];
   for (const c of containers) {
     for (const s of sources) {
@@ -570,14 +579,14 @@ export function findDepositTargetExcludingMiner(
     return priorityTarget;
   }
 
-  const targets = creep.room.find(FIND_STRUCTURES, {
-    filter: (s): s is AnyStoreStructure =>
+  const targets = getRoomStructures(creep.room).filter(
+    (s): s is AnyStoreStructure =>
       (s.structureType === STRUCTURE_CONTAINER ||
         s.structureType === STRUCTURE_STORAGE) &&
       "store" in s &&
       s.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-      minerIds.indexOf(s.id as string) === -1,
-  });
+      minerIds.indexOf(s.id as string) === -1
+  );
   if (targets.length === 0) return null;
   return creep.pos.findClosestByPath(targets) as Structure | null;
 }

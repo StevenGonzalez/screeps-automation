@@ -175,16 +175,32 @@ function getUpgraderPopulationTarget(room: Room): number {
   return Math.min(cap, 1 + Math.floor(storage.store[RESOURCE_ENERGY] / 50000));
 }
 
+// Per-tick cache: room name → construction-site count. Multiple idle spawns in
+// the same room would otherwise each run FIND_CONSTRUCTION_SITES.
+let constructionSiteCacheTick = -1;
+const constructionSiteCountByRoom: Record<string, number> = {};
+
+function getConstructionSiteCount(room: Room): number {
+  if (constructionSiteCacheTick !== Game.time) {
+    constructionSiteCacheTick = Game.time;
+    for (const k of Object.keys(constructionSiteCountByRoom)) delete constructionSiteCountByRoom[k];
+  }
+  if (constructionSiteCountByRoom[room.name] === undefined) {
+    constructionSiteCountByRoom[room.name] = room.find(FIND_CONSTRUCTION_SITES).length;
+  }
+  return constructionSiteCountByRoom[room.name];
+}
+
 function getBuilderPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
-  const sites = room.find(FIND_CONSTRUCTION_SITES);
-  if (sites.length === 0) return 0;
+  const siteCount = getConstructionSiteCount(room);
+  if (siteCount === 0) return 0;
   const phase = getRoomPhase(room);
   if (phase === "bootstrap") return 1;
   // Scale with workload: 1 builder per 10 sites.
   // Cap lower for developing rooms to avoid starving essential roles.
   const cap = phase === "developing" ? 2 : 5;
-  return Math.min(cap, Math.ceil(sites.length / 10));
+  return Math.min(cap, Math.ceil(siteCount / 10));
 }
 
 function getSpawnForRoom(room: Room): StructureSpawn | null {

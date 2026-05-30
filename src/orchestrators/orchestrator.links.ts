@@ -45,21 +45,31 @@ function processRoomLinks(room: Room) {
   }
 }
 
-function classifyLinks(
+// Structural role of each link — fixed by position, so it only changes when the
+// link set or storage changes. Cached per room and recomputed on signature change
+// instead of re-running getRangeTo for every link every tick.
+type LinkRole = "source" | "sink" | "neutral";
+const linkRoleCache: Record<
+  string,
+  { signature: string; roles: Record<string, LinkRole> }
+> = {};
+
+function getLinkRoles(
   room: Room,
   links: StructureLink[]
-): { sources: StructureLink[]; sinks: StructureLink[] } {
-  const sources: StructureLink[] = [];
-  const sinks: StructureLink[] = [];
+): Record<string, LinkRole> {
+  const storage = room.storage;
+  const signature = `${links.map((l) => l.id).join(",")}|${storage?.id ?? ""}`;
 
-  const minerContainerIds = room.memory.minerContainerIds ?? [];
-  const minerContainers = minerContainerIds
+  const cached = linkRoleCache[room.name];
+  if (cached && cached.signature === signature) return cached.roles;
+
+  const minerContainers = (room.memory.minerContainerIds ?? [])
     .map((id) => Game.getObjectById(id))
     .filter(Boolean) as StructureContainer[];
-
   const controller = room.controller;
-  const storage = room.storage;
 
+  const roles: Record<string, LinkRole> = {};
   for (const link of links) {
     const nearMiner = minerContainers.some(
       (c) => link.pos.getRangeTo(c.pos) <= 2
@@ -69,11 +79,35 @@ function classifyLinks(
     const nearStorage = storage && link.pos.getRangeTo(storage.pos) <= 2;
 
     if (nearMiner && !nearController && !nearStorage) {
-      sources.push(link);
+      roles[link.id] = "source";
     } else if (nearController || nearStorage) {
+      roles[link.id] = "sink";
+    } else {
+      roles[link.id] = "neutral";
+    }
+  }
+
+  linkRoleCache[room.name] = { signature, roles };
+  return roles;
+}
+
+function classifyLinks(
+  room: Room,
+  links: StructureLink[]
+): { sources: StructureLink[]; sinks: StructureLink[] } {
+  const roles = getLinkRoles(room, links);
+  const sources: StructureLink[] = [];
+  const sinks: StructureLink[] = [];
+
+  for (const link of links) {
+    const role = roles[link.id];
+    if (role === "source") {
+      sources.push(link);
+    } else if (role === "sink") {
       sinks.push(link);
     } else {
-      // Unclassified: treat as source if it has energy, otherwise sink
+      // Unclassified: treat as source if it has energy, otherwise sink.
+      // Energy is dynamic, so this branch stays per-tick (not cached).
       if (link.store[RESOURCE_ENERGY] > LINK_TRANSFER_THRESHOLD) {
         sources.push(link);
       } else {

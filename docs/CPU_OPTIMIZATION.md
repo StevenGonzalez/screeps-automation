@@ -23,9 +23,12 @@ creeps  → always runs
 spawning → always runs
 --- CPU check: if <70% and bucket OK ---
 structures → may skip (pathfinding-heavy)
+labs    → always runs
 links   → always runs
 towers  → always runs
 terminal → always runs
+military → always runs
+observer → always runs
 pixels  → always runs
 --- CPU check: if <60% and bucket OK ---
 visuals → may skip (cosmetic)
@@ -64,3 +67,5 @@ This prevents a single bad orchestrator from taking down the entire loop.
 3. **Visuals are free to skip** — they're cosmetic and have no gameplay effect.
 4. **reusePath** — all creep movement uses `reusePath: 30–50` to avoid recalculating paths every tick.
 5. **Memory caching** — source IDs, container IDs, and remote room data are stored in `Memory.rooms` so live `room.find()` calls are minimized.
+6. **Shared per-tick scans** — `services.creep.getRoomStructures()` runs `room.find(FIND_STRUCTURES)` at most once per room per tick; every deposit/repair/energy helper filters that cached array instead of issuing its own scan. The tower orchestrator likewise scans `FIND_HOSTILE_CREEPS` once per room and shares it across notification, safe-mode, and targeting.
+7. **Target-ID caching** — roles store the chosen target's ID in creep memory (`energySourceId`, `fillTargetId`, `constructionSiteId`) and reuse it while valid, so the expensive `findClosestByPath` only runs when the cached target disappears.

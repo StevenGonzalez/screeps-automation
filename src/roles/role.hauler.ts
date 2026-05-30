@@ -9,6 +9,7 @@ import {
   findClosestContainerWithFreeCapacity,
   findClosestMinerContainerWithEnergy,
   findDepositTargetExcludingMiner,
+  getRoomStructures,
 } from "../services/services.creep";
 import { ROLE_HAULER } from "../config/config.roles";
 
@@ -78,14 +79,14 @@ export function runHauler(creep: Creep) {
     creep.memory.fillTargetId = undefined;
   }
 
-  const targets = creep.room.find(FIND_STRUCTURES, {
-    filter: (s) =>
+  const targets = getRoomStructures(creep.room).filter(
+    (s) =>
       (s.structureType === STRUCTURE_SPAWN ||
         s.structureType === STRUCTURE_EXTENSION ||
         s.structureType === STRUCTURE_TOWER) &&
       "store" in s &&
-      s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
-  });
+      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+  );
   if (targets.length > 0) {
     const target = creep.pos.findClosestByPath(targets);
     if (target) {
