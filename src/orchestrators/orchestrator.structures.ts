@@ -28,8 +28,7 @@ function cleanupPlannedStructuresGlobal() {
       if (
         key === PLANNER_KEYS.CONTAINER_CONTROLLER ||
         key.startsWith(PLANNER_KEYS.CONTAINER_SOURCE_PREFIX) ||
-        key.startsWith(PLANNER_KEYS.CONTAINER_MINERAL_PREFIX) ||
-        (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX) && !key.startsWith("stamp_"))
+        key.startsWith(PLANNER_KEYS.CONTAINER_MINERAL_PREFIX)
       ) {
         mem[key] = [arr[0]];
         if (meta[key]) meta[key].createdAt = Game.time;
@@ -284,20 +283,6 @@ function processRoomStructures(room: Room) {
       }
       if (!anyLive) {
         delete room.memory.plannedStructures![key];
-        if (room.memory.plannedStructuresMeta) delete room.memory.plannedStructuresMeta[key];
-      }
-    }
-  }
-
-  // Migrate: remove old per-spawn extension/tower/storage keys once anchor is set
-  if (room.memory.castleAnchor) {
-    for (const key of Object.keys(mem)) {
-      if (
-        key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX) ||
-        key.startsWith(PLANNER_KEYS.TOWERS_PREFIX) ||
-        key.startsWith(PLANNER_KEYS.STORAGE_PREFIX)
-      ) {
-        delete mem[key];
         if (room.memory.plannedStructuresMeta) delete room.memory.plannedStructuresMeta[key];
       }
     }

@@ -1,4 +1,4 @@
-import { resolveChain, getStockForCompound, REACTIONS } from "../services/services.labs";
+import { resolveChain, getStockForCompound, REACTION_RECIPES } from "../services/services.labs";
 
 const LAB_PLAN_INTERVAL = 100;
 
@@ -78,7 +78,7 @@ function processLabSystem(room: Room) {
   if (!ls.activeCompound) {
     if (ls.queue.length === 0) return;
     const next = ls.queue[0];
-    const recipe = REACTIONS[next.compound];
+    const recipe = REACTION_RECIPES[next.compound];
     if (!recipe) { ls.queue.shift(); return; }
     ls.activeCompound = next.compound;
     ls.inputCompounds = [recipe[0], recipe[1]];

@@ -1,5 +1,7 @@
 // Complete reaction database: output compound → [ingredient1, ingredient2]
-export const REACTIONS: Record<string, [string, string]> = {
+// NB: named REACTION_RECIPES, not REACTIONS, to avoid colliding with the
+// Screeps built-in global REACTIONS once rollup flattens modules.
+export const REACTION_RECIPES: Record<string, [string, string]> = {
   // Tier 1
   OH:    ['O', 'H'],
   ZK:    ['Z', 'K'],
@@ -51,7 +53,7 @@ export function resolveChain(
   const needed = new Map<string, number>();
 
   function collect(c: string, qty: number) {
-    const recipe = REACTIONS[c];
+    const recipe = REACTION_RECIPES[c];
     if (!recipe) return; // base mineral — no reaction, nothing to queue
     const have = storage?.store.getUsedCapacity(c as ResourceConstant) ?? 0;
     const need = Math.max(0, qty - have);
@@ -69,7 +71,7 @@ export function resolveChain(
 
   function addInOrder(c: string) {
     if (added.has(c) || !needed.has(c)) return;
-    const recipe = REACTIONS[c];
+    const recipe = REACTION_RECIPES[c];
     if (recipe) {
       addInOrder(recipe[0]);
       addInOrder(recipe[1]);

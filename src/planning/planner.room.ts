@@ -220,13 +220,9 @@ function planStampRampartPerimeter(
 // road tiles cost 1 so subsequent paths merge onto earlier ones instead of
 // taking parallel routes. plainCost/swampCost keep PathFinder's defaults.
 
-const ROAD_PLANNER_VERSION = 2;
-
 export function planCardinalArteries(room: Room): void {
   const anchor = getOrFindAnchor(room);
   if (!anchor) return;
-
-  migrateRoadPlanner(room);
 
   const cm = buildSharedRoadCostMatrix(room);
 
@@ -394,26 +390,6 @@ function planRoadKey(
     addPlannedStructureToMemory(room, key, new RoomPosition(step.x, step.y, room.name));
     if (cm.get(step.x, step.y) !== 255) cm.set(step.x, step.y, 1);
   }
-}
-
-// One-time wipe of road planner state laid down by older revisions so the
-// new shared-cost-matrix planner can rebuild from a clean slate.
-function migrateRoadPlanner(room: Room): void {
-  if (room.memory.roadPlannerVersion === ROAD_PLANNER_VERSION) return;
-  const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
-  const meta = room.memory.plannedStructuresMeta as Record<string, any> | undefined;
-  if (mem) {
-    for (const k of Object.keys(mem)) {
-      if (k.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX) ||
-          k.startsWith("cardinal_connector_") ||
-          k.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX) ||
-          k.startsWith(PLANNER_KEYS.ROAD_PREFIX)) {
-        delete mem[k];
-        if (meta) delete meta[k];
-      }
-    }
-  }
-  room.memory.roadPlannerVersion = ROAD_PLANNER_VERSION;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

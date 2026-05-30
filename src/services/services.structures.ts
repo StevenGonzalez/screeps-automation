@@ -588,7 +588,6 @@ export function planRoadsAroundStructures(room: Room) {
   for (const key of Object.keys(mem)) {
     if (key.startsWith(PLANNER_KEYS.ROAD_PREFIX)) continue;
     if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) continue;
-    if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)) continue;
 
     for (const posStr of mem[key]) {
       const comma = posStr.indexOf(",");
@@ -816,11 +815,8 @@ export function removePlannedStructureFromMemory(
 
 export function structureTypeForKey(key: string): StructureConstant | null {
   if (key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX)) return STRUCTURE_CONTAINER;
-  if (key.startsWith(PLANNER_KEYS.EXTENSIONS_PREFIX)) return STRUCTURE_EXTENSION;
   if (key.startsWith(PLANNER_KEYS.ROAD_PREFIX)) return STRUCTURE_ROAD;
   if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) return STRUCTURE_ROAD;
-  if (key.startsWith(PLANNER_KEYS.TOWERS_PREFIX)) return STRUCTURE_TOWER;
-  if (key.startsWith(PLANNER_KEYS.STORAGE_PREFIX)) return STRUCTURE_STORAGE;
   if (key === PLANNER_KEYS.RAMPARTS_KEY) return STRUCTURE_RAMPART;
   if (key === PLANNER_KEYS.CONTAINER_CONTROLLER) return STRUCTURE_CONTAINER;
   // Stamp keys
