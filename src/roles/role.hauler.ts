@@ -1,5 +1,4 @@
 import {
-  getClosestContainerOrStorage,
   isCreepEmpty,
   acquireEnergy,
   transferEnergyTo,
@@ -9,6 +8,7 @@ import {
   findClosestContainerWithFreeCapacity,
   findClosestMinerContainerWithEnergy,
   findDepositTargetExcludingMiner,
+  upgradeController,
   getRoomStructures,
 } from "../services/services.creep";
 import { ROLE_HAULER } from "../config/config.roles";
@@ -115,9 +115,7 @@ export function runHauler(creep: Creep) {
     return;
   }
 
-  const idle =
-    getClosestContainerOrStorage(creep) || creep.room.find(FIND_MY_SPAWNS)[0];
-  if (idle && !creep.pos.isNearTo(idle)) {
-    creep.moveTo(idle, { reusePath: 50 });
-  }
+  // Nowhere to deliver (colony full) — spend the carried energy upgrading
+  // the controller rather than idling.
+  upgradeController(creep);
 }
