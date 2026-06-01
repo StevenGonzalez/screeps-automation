@@ -11,7 +11,7 @@ import {
 const SPAWN_SUFFIXES = ["", "-II", "-III", "-IV"];
 
 // Strip a "-II"/"-III"/... suffix to recover a room's base town name.
-function baseTownName(spawnName: string): string {
+export function baseTownName(spawnName: string): string {
   const dash = spawnName.lastIndexOf("-");
   if (dash > 0 && /^(II|III|IV|\d+)$/.test(spawnName.slice(dash + 1))) {
     return spawnName.slice(0, dash);

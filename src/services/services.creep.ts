@@ -3,6 +3,7 @@ import {
   ROLE_HAULER,
   ROLE_MINER,
 } from "../config/config.roles";
+import { baseTownName } from "./services.structures";
 
 let assignmentCacheTick = -1;
 const assignedContainerIdsByRoomAndRole: Record<string, Set<string>> = {};
@@ -606,7 +607,11 @@ export function signControllerIfNeeded(
   creep: Creep,
   controller: StructureController
 ): boolean {
-  const desiredSignature = "By Decree of the Iron Keep";
+  // Sign in ARCA's name, naming the stronghold by its MU town name (the same
+  // name its spawns carry). Falls back to the seat of power before a spawn exists.
+  const firstSpawn = creep.room.find(FIND_MY_SPAWNS)[0];
+  const townName = firstSpawn ? baseTownName(firstSpawn.name) : "Lorencia";
+  const desiredSignature = `Held by decree of ARCA — the stronghold of ${townName}`;
 
   const currentSign = controller.sign;
   const myUsername = controller.owner?.username;
