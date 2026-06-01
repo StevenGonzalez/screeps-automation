@@ -6,6 +6,7 @@ import {
 import {
   CASTLE_STAMP,
   StampCell,
+  MERCHANT_RING_EXTENSION_OFFSETS,
   getStampCellsForRcl,
   stampMemoryKeyFor,
 } from "./planner.stamp";
@@ -101,6 +102,9 @@ export function applyCastleStamp(room: Room): void {
     const mem = room.memory.plannedStructures as Record<string, string[]>;
     for (const key of Object.keys(mem)) {
       if (isRoadKey(key)) continue;
+      // Extensions are regenerated each run by planMerchantRingExtensions, so
+      // don't let the prior ring block the fresh one.
+      if (key === PLANNER_KEYS.STAMP_EXTENSION_KEY) continue;
       for (const p of mem[key]) occupiedSet.add(p);
     }
   }
@@ -144,7 +148,52 @@ export function applyCastleStamp(room: Room): void {
     }
   }
 
+  // Extensions: concentric Merchant Rings around the keep (replaces hand-placed cells).
+  planMerchantRingExtensions(room, anchor, occupiedSet, rcl);
+
   if (rcl >= 5) planStampRampartPerimeter(room, anchor);
+}
+
+// Lays out extensions as the "Merchant Rings" — concentric tiers radiating from
+// the anchor (noble quarter → craftsmen's ward → commoner streets). The ring
+// geometry is canonical (MERCHANT_RING_EXTENSION_OFFSETS); here we anchor it,
+// drop tiles on natural walls, respect any wall-relocated core, and cap the
+// count to what the current RCL allows. The list is rewritten each run so a code
+// change or relocation can't leave stale extension positions behind.
+function planMerchantRingExtensions(
+  room: Room,
+  anchor: { x: number; y: number },
+  occupiedSet: Set<string>,
+  rcl: number
+): void {
+  if (!room.memory.plannedStructures) return;
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+
+  const cap = CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][rcl] ?? 0;
+  if (cap <= 0) {
+    delete mem[PLANNER_KEYS.STAMP_EXTENSION_KEY];
+    return;
+  }
+
+  const terrain = room.getTerrain();
+  const positions: string[] = [];
+  for (const { dx, dy } of MERCHANT_RING_EXTENSION_OFFSETS) {
+    if (positions.length >= cap) break;
+    const x = anchor.x + dx;
+    const y = anchor.y + dy;
+    if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+    if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue; // non-critical: skip walls
+    const key = `${x},${y}`;
+    if (occupiedSet.has(key)) continue; // tile claimed by a wall-relocated core structure
+    positions.push(key);
+  }
+
+  mem[PLANNER_KEYS.STAMP_EXTENSION_KEY] = positions;
+  if (!room.memory.plannedStructuresMeta) room.memory.plannedStructuresMeta = {} as any;
+  const meta = room.memory.plannedStructuresMeta as Record<string, { createdAt: number }>;
+  if (!meta[PLANNER_KEYS.STAMP_EXTENSION_KEY]) {
+    meta[PLANNER_KEYS.STAMP_EXTENSION_KEY] = { createdAt: Game.time };
+  }
 }
 
 function findNearestBuildable(

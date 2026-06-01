@@ -85,73 +85,8 @@ export const CASTLE_STAMP: StampCell[] = [
   { dx: -1, dy: -2, type: "road", minRcl: 1 },
   { dx:  1, dy: -4, type: "road", minRcl: 1 },
   { dx: -1, dy: -4, type: "road", minRcl: 1 },
-  // Extensions — RCL 2 (5 total)
-  { dx: -2, dy:  1, type: "extension", minRcl: 2 },
-  { dx: -2, dy: -1, type: "extension", minRcl: 2 },
-  { dx:  2, dy:  1, type: "extension", minRcl: 2 },
-  { dx:  2, dy: -1, type: "extension", minRcl: 2 },
-  { dx: -1, dy:  3, type: "extension", minRcl: 2 },
-  // RCL 3 (+5 = 10 total)
-  { dx:  1, dy:  3, type: "extension", minRcl: 3 },
-  { dx: -1, dy: -3, type: "extension", minRcl: 3 },
-  { dx:  1, dy: -3, type: "extension", minRcl: 3 },
-  { dx: -3, dy:  1, type: "extension", minRcl: 3 },
-  { dx: -3, dy: -1, type: "extension", minRcl: 3 },
-  // RCL 4 (+10 = 20 total)
-  { dx:  3, dy:  1, type: "extension", minRcl: 4 },
-  { dx:  3, dy: -1, type: "extension", minRcl: 4 },
-  { dx: -4, dy:  1, type: "extension", minRcl: 4 },
-  { dx: -4, dy: -1, type: "extension", minRcl: 4 },
-  { dx:  4, dy:  1, type: "extension", minRcl: 4 },
-  { dx:  4, dy: -1, type: "extension", minRcl: 4 },
-  { dx: -1, dy:  4, type: "extension", minRcl: 4 },
-  { dx:  1, dy:  4, type: "extension", minRcl: 4 },
-  { dx: -2, dy:  3, type: "extension", minRcl: 4 },
-  { dx:  2, dy:  3, type: "extension", minRcl: 4 },
-  // RCL 5 (+10 = 30 total)
-  { dx: -2, dy: -3, type: "extension", minRcl: 5 },
-  { dx:  2, dy: -3, type: "extension", minRcl: 5 },
-  { dx: -3, dy:  2, type: "extension", minRcl: 5 },
-  { dx: -3, dy: -2, type: "extension", minRcl: 5 },
-  { dx:  1, dy: -5, type: "extension", minRcl: 5 },
-  { dx: -1, dy: -5, type: "extension", minRcl: 5 },
-  { dx: -5, dy:  1, type: "extension", minRcl: 5 },
-  { dx: -5, dy: -1, type: "extension", minRcl: 5 },
-  { dx:  5, dy:  1, type: "extension", minRcl: 5 },
-  { dx:  5, dy: -1, type: "extension", minRcl: 5 },
-  // RCL 6 (+10 = 40 total)
-  { dx: -4, dy:  2, type: "extension", minRcl: 6 },
-  { dx: -4, dy: -2, type: "extension", minRcl: 6 },
-  { dx:  4, dy: -2, type: "extension", minRcl: 6 },
-  { dx: -2, dy:  4, type: "extension", minRcl: 6 },
-  { dx:  2, dy:  4, type: "extension", minRcl: 6 },
-  { dx: -1, dy:  5, type: "extension", minRcl: 6 },
-  { dx:  1, dy:  5, type: "extension", minRcl: 6 },
-  { dx: -5, dy:  2, type: "extension", minRcl: 6 },
-  { dx: -5, dy: -2, type: "extension", minRcl: 6 },
-  { dx:  3, dy: -1, type: "extension", minRcl: 6 },
-  // RCL 7 (+10 = 50 total)
-  { dx:  5, dy:  2, type: "extension", minRcl: 7 },
-  { dx:  5, dy: -2, type: "extension", minRcl: 7 },
-  { dx: -3, dy:  4, type: "extension", minRcl: 7 },
-  { dx:  2, dy: -5, type: "extension", minRcl: 7 },
-  { dx: -2, dy: -5, type: "extension", minRcl: 7 },
-  { dx: -3, dy: -4, type: "extension", minRcl: 7 },
-  { dx: -5, dy:  3, type: "extension", minRcl: 7 },
-  { dx:  5, dy:  3, type: "extension", minRcl: 7 },
-  { dx:  5, dy: -3, type: "extension", minRcl: 7 },
-  { dx: -5, dy: -3, type: "extension", minRcl: 7 },
-  // RCL 8 (+10 = 60 total)
-  { dx:  2, dy:  5, type: "extension", minRcl: 8 },
-  { dx: -2, dy:  5, type: "extension", minRcl: 8 },
-  { dx:  3, dy:  5, type: "extension", minRcl: 8 },
-  { dx: -3, dy:  5, type: "extension", minRcl: 8 },
-  { dx:  3, dy: -5, type: "extension", minRcl: 8 },
-  { dx: -3, dy: -5, type: "extension", minRcl: 8 },
-  { dx:  4, dy: -3, type: "extension", minRcl: 8 },
-  { dx: -4, dy: -3, type: "extension", minRcl: 8 },
-  { dx: -4, dy:  3, type: "extension", minRcl: 8 },
-  { dx: -2, dy: -4, type: "extension", minRcl: 8 },
+  // Extensions are placed separately as concentric "Merchant Rings" — see
+  // MERCHANT_RING_EXTENSION_OFFSETS below and planMerchantRingExtensions().
 ];
 
 export function stampMemoryKeyFor(cell: StampCell): string {
@@ -175,3 +110,105 @@ export function stampMemoryKeyFor(cell: StampCell): string {
 export function getStampCellsForRcl(rcl: number): StampCell[] {
   return CASTLE_STAMP.filter((cell) => cell.minRcl <= rcl);
 }
+
+// ── Merchant Rings: concentric extension layout ────────────────────────────────
+//
+// Lorencia's extensions ring the keep in concentric tiers — the "Merchant Rings"
+// of the architecture: noble quarter (inner), craftsmen's ward (middle), commoner
+// streets (outer). Rather than hand-place 60 coordinates (which drifted into
+// collisions with labs/nuker), we generate the rings around the anchor so they
+// can never overlap a core structure or road and never wall themselves in.
+//
+// Cardinal + diagonal spokes and the radius-3 / radius-5 rings are reserved as
+// hauler lanes between tiers, which also guarantees every extension borders a
+// walkable tile. Ring corners are chamfered for a rounded, hex-like silhouette.
+
+const MERCHANT_RING_ROAD_RADII: ReadonlySet<number> = new Set([3, 5]);
+const MERCHANT_RING_MAX_RADIUS = 7;
+const MERCHANT_RING_TARGET = 60;
+
+function chebyshev(dx: number, dy: number): number {
+  return Math.max(Math.abs(dx), Math.abs(dy));
+}
+
+// Tiles reserved as hauler lanes: the cardinal/diagonal spokes and the inter-tier
+// road rings. Extensions never occupy these.
+function isReservedLane(dx: number, dy: number): boolean {
+  if (dx === 0 && dy === 0) return false;
+  const onSpoke = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
+  return onSpoke || MERCHANT_RING_ROAD_RADII.has(chebyshev(dx, dy));
+}
+
+// All offsets occupied by the stamp itself (core structures AND roads). Extensions
+// must avoid every one of them.
+const STAMP_OCCUPIED_OFFSETS: ReadonlySet<string> = new Set(
+  CASTLE_STAMP.map((c) => `${c.dx},${c.dy}`)
+);
+
+// Offsets of core structures only (these block walking — roads/lanes do not).
+const CORE_STRUCTURE_OFFSETS: ReadonlySet<string> = new Set(
+  CASTLE_STAMP.filter((c) => c.type !== "road").map((c) => `${c.dx},${c.dy}`)
+);
+
+// Canonical, room-independent ring layout: an ordered list of relative offsets,
+// innermost ring first. Computed once at module load. Walls are handled per-room
+// at placement time (see planMerchantRingExtensions).
+function computeMerchantRingExtensionOffsets(): Array<{ dx: number; dy: number }> {
+  const offsets: Array<{ dx: number; dy: number }> = [];
+  const selected = new Set<string>();
+
+  // A neighbouring tile is "walkable" if it is not a core structure and not an
+  // already-selected extension. Roads, reserved lanes and empty tiles all count,
+  // so an extension beside a lane is never considered enclosed.
+  const walkableNeighbors = (dx: number, dy: number): number => {
+    let n = 0;
+    for (let ax = -1; ax <= 1; ax++) {
+      for (let ay = -1; ay <= 1; ay++) {
+        if (ax === 0 && ay === 0) continue;
+        const k = `${dx + ax},${dy + ay}`;
+        if (CORE_STRUCTURE_OFFSETS.has(k) || selected.has(k)) continue;
+        n++;
+      }
+    }
+    return n;
+  };
+
+  for (let r = 1; r <= MERCHANT_RING_MAX_RADIUS && offsets.length < MERCHANT_RING_TARGET; r++) {
+    const ring: Array<{ dx: number; dy: number }> = [];
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dy = -r; dy <= r; dy++) {
+        if (chebyshev(dx, dy) !== r) continue;                 // this ring's edge only
+        if (Math.abs(dx) === r && Math.abs(dy) === r) continue; // chamfer corners → hex look
+        if (isReservedLane(dx, dy)) continue;                  // keep hauler lanes clear
+        if (STAMP_OCCUPIED_OFFSETS.has(`${dx},${dy}`)) continue; // never overlap the stamp
+        ring.push({ dx, dy });
+      }
+    }
+    // Fill each ring clockwise for a tidy, symmetric spiral.
+    ring.sort((a, b) => Math.atan2(a.dy, a.dx) - Math.atan2(b.dy, b.dx));
+
+    for (const { dx, dy } of ring) {
+      if (offsets.length >= MERCHANT_RING_TARGET) break;
+      if (walkableNeighbors(dx, dy) < 1) continue; // never wall ourselves in
+      // Don't strand an already-placed neighbour down to zero walkable tiles.
+      let strands = false;
+      for (let ax = -1; ax <= 1 && !strands; ax++) {
+        for (let ay = -1; ay <= 1; ay++) {
+          if (ax === 0 && ay === 0) continue;
+          const nk = `${dx + ax},${dy + ay}`;
+          if (selected.has(nk) && walkableNeighbors(dx + ax, dy + ay) <= 1) {
+            strands = true;
+            break;
+          }
+        }
+      }
+      if (strands) continue;
+      offsets.push({ dx, dy });
+      selected.add(`${dx},${dy}`);
+    }
+  }
+  return offsets;
+}
+
+export const MERCHANT_RING_EXTENSION_OFFSETS: ReadonlyArray<{ dx: number; dy: number }> =
+  computeMerchantRingExtensionOffsets();
