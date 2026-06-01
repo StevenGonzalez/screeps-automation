@@ -82,20 +82,54 @@ function applyPlannedConstruction(room: Room) {
   // Avoids two lookForAt calls per planned position (which is O(positions) lookForAt calls).
   const builtByType = new Map<StructureConstant, Set<string>>();
   const sitesByType = new Map<StructureConstant, Set<string>>();
+  // Roads tracked as objects so leftover roads under planned obstacles can be cleared.
+  const roadByPos = new Map<string, Structure>();
+  const roadSiteByPos = new Map<string, ConstructionSite>();
   for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
     const t = s.structureType as StructureConstant;
     if (!builtByType.has(t)) builtByType.set(t, new Set());
     builtByType.get(t)!.add(`${s.pos.x},${s.pos.y}`);
+    if (t === STRUCTURE_ROAD) roadByPos.set(`${s.pos.x},${s.pos.y}`, s);
   }
   for (const s of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) {
     const t = s.structureType as StructureConstant;
     if (!sitesByType.has(t)) sitesByType.set(t, new Set());
     sitesByType.get(t)!.add(`${s.pos.x},${s.pos.y}`);
+    if (t === STRUCTURE_ROAD) roadSiteByPos.set(`${s.pos.x},${s.pos.y}`, s);
   }
 
   const rampOnTopTypes = new Set<StructureConstant>(
     STRUCTURE_PLANNER.rampartOnTopFor as StructureConstant[]
   );
+
+  // Resolve road↔obstacle tile conflicts. An extension/spawn/tower/etc. cannot
+  // share a tile with a road, so when a planned obstacle lands on a leftover road
+  // (e.g. after a layout change), clear that road — built or site — and drop the
+  // tile from every planned road key so it isn't rebuilt. The obstacle's own
+  // site goes down on a later pass, once the tile is free.
+  const roadCompatible = new Set<StructureConstant>([
+    STRUCTURE_ROAD,
+    STRUCTURE_RAMPART,
+    STRUCTURE_CONTAINER,
+  ]);
+  const roadKeys = Object.keys(mem).filter(
+    (k) => structureTypeForKey(k) === STRUCTURE_ROAD
+  );
+  for (const key of Object.keys(mem)) {
+    const type = structureTypeForKey(key);
+    if (!type || roadCompatible.has(type as StructureConstant)) continue;
+    for (const posStr of mem[key]) {
+      const road = roadByPos.get(posStr);
+      const roadSite = roadSiteByPos.get(posStr);
+      if (!road && !roadSite) continue;
+      if (road) road.destroy();
+      if (roadSite) roadSite.remove();
+      for (const rk of roadKeys) {
+        const idx = mem[rk].indexOf(posStr);
+        if (idx !== -1) mem[rk].splice(idx, 1);
+      }
+    }
+  }
 
   for (const key of Object.keys(mem)) {
     const type = structureTypeForKey(key);
