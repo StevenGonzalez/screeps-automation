@@ -98,6 +98,7 @@ declare global {
     spawnId?: Id<StructureSpawn>;
     lastScan?: number;
     lastSigned?: number;
+    townName?: string;
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];

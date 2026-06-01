@@ -35,13 +35,6 @@ export const STRUCTURE_PLANNER = {
     STRUCTURE_TERMINAL,
     STRUCTURE_FACTORY,
   ] as StructureConstant[],
-  extensionOffsetsFromSpawn: [] as Array<{ x: number; y: number }>,
-  maxExtensionsPerSpawn: 10,
-  extensionSearchRadius: 6,
-  extensionMinDistanceFromSpawn: 4,
-  extensionUseRing: false,
-  extensionRingRadius: 2,
-  extensionRingEntrances: 2,
 };
 
 export const PLANNER_KEYS = {

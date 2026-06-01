@@ -607,10 +607,22 @@ export function signControllerIfNeeded(
   creep: Creep,
   controller: StructureController
 ): boolean {
+  // Only compute the signature when we're actually positioned to sign.
+  if (creep.pos.getRangeTo(controller.pos) > 1) return false;
+
   // Sign in ARCA's name, naming the stronghold by its MU town name (the same
-  // name its spawns carry). Falls back to the seat of power before a spawn exists.
-  const firstSpawn = creep.room.find(FIND_MY_SPAWNS)[0];
-  const townName = firstSpawn ? baseTownName(firstSpawn.name) : "Lorencia";
+  // name its spawns carry). The town name is stable for the room's life, so cache
+  // it on memory; fall back to the seat of power before a spawn exists.
+  let townName = creep.room.memory.townName;
+  if (!townName) {
+    const firstSpawn = creep.room.find(FIND_MY_SPAWNS)[0];
+    if (firstSpawn) {
+      townName = baseTownName(firstSpawn.name);
+      creep.room.memory.townName = townName;
+    } else {
+      townName = "Lorencia";
+    }
+  }
   const desiredSignature = `Held by decree of ARCA — the stronghold of ${townName}`;
 
   const currentSign = controller.sign;
@@ -621,8 +633,6 @@ export function signControllerIfNeeded(
     currentSign.username !== myUsername ||
     currentSign.text !== desiredSignature;
   if (!needsSign) return false;
-
-  if (creep.pos.getRangeTo(controller.pos) > 1) return false;
 
   if (creep.signController(controller, desiredSignature) === OK) {
     creep.room.memory.lastSigned = Game.time;

@@ -1,4 +1,4 @@
-import { PLANNER_KEYS } from "../config/config.structures";
+import { PLANNER_KEYS, STAMP_PLANNER } from "../config/config.structures";
 
 export type StampStructureType =
   | "spawn"
@@ -124,7 +124,10 @@ export function getStampCellsForRcl(rcl: number): StampCell[] {
 // walkable tile. Ring corners are chamfered for a rounded, hex-like silhouette.
 
 const MERCHANT_RING_ROAD_RADII: ReadonlySet<number> = new Set([3, 5]);
-const MERCHANT_RING_MAX_RADIUS = 7;
+// Cap rings at the rampart perimeter (halfSize) so every extension sits inside
+// the walls. In a wall-free room the 60 extensions fill rings 2/4/6 exactly; a
+// wall-heavy room may end up with fewer rather than spilling outside the ramparts.
+const MERCHANT_RING_MAX_RADIUS = STAMP_PLANNER.halfSize;
 const MERCHANT_RING_TARGET = 60;
 
 function chebyshev(dx: number, dy: number): number {

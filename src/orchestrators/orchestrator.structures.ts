@@ -115,6 +115,11 @@ function applyPlannedConstruction(room: Room) {
   const roadKeys = Object.keys(mem).filter(
     (k) => structureTypeForKey(k) === STRUCTURE_ROAD
   );
+  // Road keys that lost a tile to an obstacle. We drop the WHOLE key (not just the
+  // conflicting tile) so the road planners re-derive/re-path it around the obstacle
+  // next pass. Splicing a single tile out of a pathed artery would leave a permanent
+  // gap — planRoadKey only re-paths a key whose list is empty.
+  const conflictedRoadKeys = new Set<string>();
   for (const key of Object.keys(mem)) {
     const type = structureTypeForKey(key);
     if (!type || roadCompatible.has(type as StructureConstant)) continue;
@@ -125,9 +130,14 @@ function applyPlannedConstruction(room: Room) {
       if (road) road.destroy();
       if (roadSite) roadSite.remove();
       for (const rk of roadKeys) {
-        const idx = mem[rk].indexOf(posStr);
-        if (idx !== -1) mem[rk].splice(idx, 1);
+        if (mem[rk].indexOf(posStr) !== -1) conflictedRoadKeys.add(rk);
       }
+    }
+  }
+  for (const rk of conflictedRoadKeys) {
+    delete mem[rk];
+    if (room.memory.plannedStructuresMeta) {
+      delete room.memory.plannedStructuresMeta[rk];
     }
   }
 
@@ -187,9 +197,11 @@ function cleanupUnplannedConstructionSites(room: Room) {
 
   for (const site of sites) {
     const set = plannedByType.get(site.structureType as StructureConstant);
-    if (!set?.has(`${site.pos.x},${site.pos.y}`)) {
-      site.remove();
-    }
+    if (set?.has(`${site.pos.x},${site.pos.y}`)) continue;
+    // Don't scrap a site that already has energy invested (e.g. an extension
+    // relocating during a layout change) — only clear untouched stray sites.
+    if (site.progress > 0) continue;
+    site.remove();
   }
 }
 
