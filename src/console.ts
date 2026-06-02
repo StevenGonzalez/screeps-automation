@@ -22,48 +22,20 @@ import {
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
 } from "./config/config.roles";
+import { rankExpansionCandidates } from "./orchestrators/orchestrator.expansion";
 
 const VALID_FORMATIONS: SquadFormation[] = ["line", "box", "wedge", "scatter"];
 const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "retreat"];
-
-const EXPANSION_CANDIDATE_SOURCES_WEIGHT = 40;
-const EXPANSION_CANDIDATE_DIST_PENALTY = 5;
 
 export function setupConsole() {
   (Game as any).arca = {
     // Show ranked expansion candidates from ranger scout data
     expand: () => {
-      type Candidate = { room: string; homeRoom: string; score: number; sources: number; dist: number };
-      const candidates: Candidate[] = [];
-
-      for (const rn in Game.rooms) {
-        const room = Game.rooms[rn];
-        if (!room.controller?.my) continue;
-        for (const remote of room.memory.remoteRooms ?? []) {
-          if (remote.hostile) continue;
-          const targetRoom = Game.rooms[remote.roomName];
-          if (targetRoom?.controller?.my) continue; // already ours
-          if (targetRoom?.controller?.owner) continue; // someone else's
-          const dist = Game.map.getRoomLinearDistance(rn, remote.roomName);
-          const score =
-            remote.sources.length * EXPANSION_CANDIDATE_SOURCES_WEIGHT -
-            dist * EXPANSION_CANDIDATE_DIST_PENALTY;
-          candidates.push({
-            room: remote.roomName,
-            homeRoom: rn,
-            score,
-            sources: remote.sources.length,
-            dist,
-          });
-        }
-      }
-
+      const candidates = rankExpansionCandidates();
       if (candidates.length === 0) {
         console.log("[ARCA] No expansion candidates in scout data — send rangers first");
         return;
       }
-
-      candidates.sort((a, b) => b.score - a.score);
       console.log("[ARCA] Top expansion candidates:");
       for (const c of candidates.slice(0, 5)) {
         console.log(
@@ -71,6 +43,18 @@ export function setupConsole() {
         );
       }
       console.log("[ARCA] Claim with: Game.arca.claim('ROOM_NAME')");
+    },
+
+    // Toggle / inspect automatic GCL-driven expansion. When ON, the bot claims the
+    // best scouted candidate on its own whenever GCL frees a slot and a healthy
+    // home room can fund it — no manual claim() needed.
+    autoexpand: (enabled?: boolean) => {
+      if (enabled === undefined) {
+        console.log(`[AutoExpand] ${Memory.autoExpand ? "ON" : "OFF"}`);
+        return;
+      }
+      Memory.autoExpand = enabled;
+      console.log(`[AutoExpand] ${enabled ? "ENABLED" : "DISABLED"}`);
     },
 
     // Trigger expansion to a target room

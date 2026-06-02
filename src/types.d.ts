@@ -210,6 +210,8 @@ declare global {
     nextSkOpId?: number;
     // Kill-switch for the traffic manager (set true to fall back to vanilla moveTo)
     trafficDisabled?: boolean;
+    // When true, the expansion orchestrator auto-claims scouted candidates (default off)
+    autoExpand?: boolean;
   }
 
   interface PowerCreepMemory {

@@ -2,6 +2,7 @@ import * as creepRunnerSystem from "./orchestrators/orchestrator.creep";
 import * as labsSystem from "./orchestrators/orchestrator.labs";
 import * as linksSystem from "./orchestrators/orchestrator.links";
 import * as memorySystem from "./orchestrators/orchestrator.memory";
+import * as expansionSystem from "./orchestrators/orchestrator.expansion";
 import * as pixelsSystem from "./orchestrators/orchestrator.pixels";
 import * as spawningSystem from "./orchestrators/orchestrator.spawning";
 import * as structuresSystem from "./orchestrators/orchestrator.structures";
@@ -36,6 +37,7 @@ export function loop() {
   const bucketCritical = Game.cpu.bucket < CPU_BUCKET_CRITICAL;
 
   runSafe("memory", () => memorySystem.loop());
+  runSafe("expansion", () => expansionSystem.loop());
   runSafe("creeps", () => creepRunnerSystem.loop());
   runSafe("spawning", () => spawningSystem.loop());
 
