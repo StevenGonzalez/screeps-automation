@@ -83,6 +83,18 @@ declare global {
     lastAutoAttackTick?: number;
   }
 
+  // A persistent Source Keeper mining operation against one SK room.
+  interface SourceKeeperOp {
+    id: number;
+    roomName: string;       // the SK room being mined
+    homeRoom: string;       // owned room funding/receiving the operation
+    phase: "forming" | "active";
+    startedAt: number;
+    discovered: boolean;    // true once the room's sources have been seen
+    sourceIds: Id<Source>[];
+    lastFailure?: number;   // tick a guardian was lost; throttles re-commitment
+  }
+
   interface ExpansionData {
     roomName: string;
     homeRoom: string;
@@ -127,6 +139,9 @@ declare global {
     offensiveTarget?: string;
     // Power bank ops
     powerOpId?: number;
+    // Source Keeper mining ops
+    skOpId?: number;
+    skSourceId?: Id<Source>;
   }
 
   interface RoomMemory {
@@ -187,6 +202,8 @@ declare global {
     intel?: Record<string, RoomIntelData>;
     powerOps?: PowerBankOp[];
     nextPowerOpId?: number;
+    skOps?: SourceKeeperOp[];
+    nextSkOpId?: number;
   }
 
   var _: _.LoDashStatic;

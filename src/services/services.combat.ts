@@ -255,6 +255,24 @@ export function formationOffset(formation: SquadFormation, slot: number): [numbe
   return [extra % 2 === 0 ? 1 : -1, 3 + Math.floor(extra / 2)];
 }
 
+// ── Source Keeper helpers ───────────────────────────────────────────────────────
+
+// SK rooms occupy the 3×3 cluster (coords 4–6) at the centre of each 10-room sector,
+// minus the exact centre (5,5) which is the sector's central/portal room.
+export function isSourceKeeperRoom(roomName: string): boolean {
+  const m = roomName.match(/^[WE](\d+)[NS](\d+)$/);
+  if (!m) return false;
+  const x = parseInt(m[1], 10) % 10;
+  const y = parseInt(m[2], 10) % 10;
+  const inCluster = x >= 4 && x <= 6 && y >= 4 && y <= 6;
+  const isCentre = x === 5 && y === 5;
+  return inCluster && !isCentre;
+}
+
+export function isSourceKeeper(creep: Creep): boolean {
+  return creep.owner?.username === "Source Keeper";
+}
+
 // ── Room threat evaluation (WarCouncil) ─────────────────────────────────────────
 //
 // Scores a non-owned room 0 (trivial) … 10 (fortress) for offensive target ranking.

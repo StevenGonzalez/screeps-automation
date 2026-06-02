@@ -20,8 +20,12 @@ import {
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
+  ROLE_SK_GUARDIAN,
+  ROLE_SK_MINER,
+  ROLE_SK_HAULER,
 } from "../config/config.roles";
 import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
+import { getSkMembers, isOpPaused } from "./orchestrator.sourcekeeper";
 import { getStockForCompound } from "../services/services.labs";
 import { getRampartTargetHP } from "../services/services.creep";
 
@@ -255,6 +259,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 
   if (shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
   if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
+  if (spawnSkCreeps(room, spawn)) return;
   if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
@@ -1156,6 +1161,101 @@ function buildPowerCarrierBody(): BodyPartConstant[] {
     ...Array(25).fill(CARRY),
     ...Array(25).fill(MOVE),
   ] as BodyPartConstant[];
+}
+
+// ── Source Keeper mining squad helpers ────────────────────────────────────────
+
+// Spawns the next needed creep for any SK op homed here: guardian first (it clears
+// keepers and reveals the sources), then one Delver per source, then one Wain per
+// source. Returns true if a spawn was issued (or held for energy).
+function spawnSkCreeps(room: Room, spawn: StructureSpawn): boolean {
+  const ops = (Memory.skOps ?? []).filter(
+    (o) => o.homeRoom === room.name && !isOpPaused(o)
+  );
+  for (const op of ops) {
+    const members = getSkMembers(op.id);
+    const guardians = members.filter((c) => c.memory.role === ROLE_SK_GUARDIAN).length;
+    if (guardians < 1) return spawnSkGuardian(room, spawn, op);
+
+    if (!op.discovered || op.sourceIds.length === 0) continue; // wait for vision
+
+    const need = op.sourceIds.length;
+    const miners = members.filter((c) => c.memory.role === ROLE_SK_MINER);
+    const taken = new Set(miners.map((m) => m.memory.skSourceId));
+    const freeSource = op.sourceIds.find((id) => !taken.has(id));
+    if (miners.length < need && freeSource) return spawnSkMiner(room, spawn, op, freeSource);
+
+    const haulers = members.filter((c) => c.memory.role === ROLE_SK_HAULER).length;
+    if (haulers < need) return spawnSkHauler(room, spawn, op);
+  }
+  return false;
+}
+
+// Guardian: ranged + heal, MOVE matched to half speed. HEAL-boosted when stock allows
+// so it can out-sustain keeper damage.
+function buildSkGuardianBody(availableEnergy: number): BodyPartConstant[] {
+  // group = RANGED_ATTACK(150) + HEAL(250) + 2×MOVE(100) = 500
+  const groupCost = BODYPART_COST[RANGED_ATTACK] + BODYPART_COST[HEAL] + 2 * BODYPART_COST[MOVE];
+  const maxGroups = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 4),
+    Math.floor(availableEnergy / groupCost)
+  );
+  const groups = Math.max(5, maxGroups);
+  return [
+    ...Array(groups).fill(RANGED_ATTACK),
+    ...Array(groups).fill(HEAL),
+    ...Array(groups * 2).fill(MOVE),
+  ] as BodyPartConstant[];
+}
+
+function spawnSkGuardian(room: Room, spawn: StructureSpawn, op: SourceKeeperOp): boolean {
+  const body = buildSkGuardianBody(room.energyCapacityAvailable);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const healParts = body.filter((p) => p === HEAL).length;
+  const boost = pickBoostCompound(room, "cleric", healParts);
+  const res = spawn.spawnCreep(body, `${ROLE_SK_GUARDIAN}${Game.time}`, {
+    memory: { role: ROLE_SK_GUARDIAN, homeRoom: room.name, skOpId: op.id, ...(boost ? { boostCompound: boost } : {}) },
+  });
+  if (res === OK) console.log(`[SK] Spawning guardian for ${op.roomName}`);
+  return res === OK;
+}
+
+// Delver: WORK-heavy, no CARRY (drops energy for Wains). ~7 WORK saturates a 4000/300t
+// SK source; MOVE at roughly half the WORK count for the long approach.
+function buildSkMinerBody(availableEnergy: number): BodyPartConstant[] {
+  const maxWork = 7;
+  const workCost = BODYPART_COST[WORK];
+  const moveCost = BODYPART_COST[MOVE];
+  let work = Math.min(maxWork, Math.floor(availableEnergy / (workCost + moveCost / 2)));
+  work = Math.max(3, work);
+  const move = Math.max(2, Math.ceil(work / 2));
+  return [...Array(work).fill(WORK), ...Array(move).fill(MOVE)] as BodyPartConstant[];
+}
+
+function spawnSkMiner(
+  room: Room,
+  spawn: StructureSpawn,
+  op: SourceKeeperOp,
+  sourceId: Id<Source>
+): boolean {
+  const body = buildSkMinerBody(room.energyCapacityAvailable);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_SK_MINER}${Game.time}`, {
+    memory: { role: ROLE_SK_MINER, homeRoom: room.name, skOpId: op.id, skSourceId: sourceId },
+  });
+  if (res === OK) console.log(`[SK] Spawning delver for ${op.roomName}`);
+  return res === OK;
+}
+
+function spawnSkHauler(room: Room, spawn: StructureSpawn, op: SourceKeeperOp): boolean {
+  const allowedEnergy = Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildRemoteHaulerBody(allowedEnergy); // CARRY:MOVE 1:1, sized to capacity
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_SK_HAULER}${Game.time}`, {
+    memory: { role: ROLE_SK_HAULER, homeRoom: room.name, skOpId: op.id },
+  });
+  if (res === OK) console.log(`[SK] Spawning wain for ${op.roomName}`);
+  return res === OK;
 }
 
 function shouldSpawnApothecary(room: Room): boolean {

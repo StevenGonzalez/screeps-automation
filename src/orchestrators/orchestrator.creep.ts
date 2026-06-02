@@ -20,6 +20,9 @@ import {
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
+  ROLE_SK_GUARDIAN,
+  ROLE_SK_MINER,
+  ROLE_SK_HAULER,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
@@ -42,6 +45,9 @@ import { runApothecary } from "../roles/role.apothecary";
 import { runPowerAttacker } from "../roles/role.powerattacker";
 import { runPowerHealer } from "../roles/role.powerhealer";
 import { runPowerCarrier } from "../roles/role.powercarrier";
+import { runSkGuardian } from "../roles/role.sk_guardian";
+import { runSkMiner } from "../roles/role.sk_miner";
+import { runSkHauler } from "../roles/role.sk_hauler";
 
 // Role → handler lookup. A single map dispatch per creep replaces a 20-branch
 // if/else chain that, for late-listed roles, re-compared the role string up to
@@ -68,6 +74,9 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_POWER_ATTACKER]: runPowerAttacker,
   [ROLE_POWER_HEALER]: runPowerHealer,
   [ROLE_POWER_CARRIER]: runPowerCarrier,
+  [ROLE_SK_GUARDIAN]: runSkGuardian,
+  [ROLE_SK_MINER]: runSkMiner,
+  [ROLE_SK_HAULER]: runSkHauler,
 };
 
 export function loop() {

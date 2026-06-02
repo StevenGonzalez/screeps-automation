@@ -19,6 +19,9 @@ export const ROLE_APOTHECARY = "apothecary";
 export const ROLE_POWER_ATTACKER = "breacher";
 export const ROLE_POWER_HEALER = "battlepriest";
 export const ROLE_POWER_CARRIER = "caravan";
+export const ROLE_SK_GUARDIAN = "huntsman";
+export const ROLE_SK_MINER = "delver";
+export const ROLE_SK_HAULER = "wain";
 
 export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
   [ROLE_HARVESTER]: [

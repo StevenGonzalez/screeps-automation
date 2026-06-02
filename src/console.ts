@@ -8,6 +8,12 @@ import {
 } from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity } from "./services/services.combat";
 import {
+  launchSkOp,
+  cancelSkOp,
+  getSkMembers,
+  isOpPaused,
+} from "./orchestrators/orchestrator.sourcekeeper";
+import {
   ROLE_KNIGHT,
   ROLE_WIZARD,
   ROLE_CLERIC,
@@ -564,6 +570,44 @@ export function setupConsole() {
         );
       }
       if (!foundPs) console.log("[Power] No PowerSpawn structures found (RCL 8 required)");
+    },
+
+    // Source Keeper mining. No arg → status; with a room → start an op; skstop → cancel.
+    sk: (roomName?: string) => {
+      if (roomName) {
+        const err = launchSkOp(roomName);
+        if (err) console.log(`[SK] Cannot mine ${roomName} — ${err}`);
+        else console.log(`[SK] Operation started against ${roomName}`);
+        return;
+      }
+      const ops = Memory.skOps ?? [];
+      if (ops.length === 0) {
+        console.log("[SK] No active operations. Start one with Game.arca.sk('W5N4')");
+        return;
+      }
+      for (const op of ops) {
+        const members = getSkMembers(op.id);
+        const counts: Record<string, number> = {};
+        let energyHauled = 0;
+        for (const c of members) {
+          counts[c.memory.role] = (counts[c.memory.role] ?? 0) + 1;
+          energyHauled += c.store?.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+        }
+        const paused = isOpPaused(op) ? "  PAUSED(contested)" : "";
+        console.log(
+          `[SK] #${op.id} ${op.homeRoom} → ${op.roomName}  phase=${op.phase}  ` +
+          `sources=${op.sourceIds.length}  squad=${JSON.stringify(counts)}${paused}`
+        );
+      }
+    },
+
+    skstop: (roomName: string) => {
+      if (!roomName) {
+        console.log("[SK] Usage: Game.arca.skstop('W5N4')");
+        return;
+      }
+      if (cancelSkOp(roomName)) console.log(`[SK] Operation against ${roomName} cancelled`);
+      else console.log(`[SK] No operation found for ${roomName}`);
     },
 
     // Enable or disable auto-production for a room's lab system
