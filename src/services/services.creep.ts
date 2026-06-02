@@ -684,6 +684,27 @@ export function repairStructure(creep: Creep, target: AnyStructure): number {
   return res;
 }
 
+/**
+ * Spend a carrier's leftover energy when there's nowhere to deliver it, rather
+ * than idling: build the nearest site, else repair the nearest damaged
+ * structure, else upgrade the controller. Operates on the creep's current room.
+ */
+export function putSurplusEnergyToWork(creep: Creep): void {
+  const site = findClosestConstructionSite(creep);
+  if (site) {
+    buildAtConstructionSite(creep, site);
+    return;
+  }
+
+  const repairTarget = findClosestRepairTarget(creep);
+  if (repairTarget) {
+    repairStructure(creep, repairTarget);
+    return;
+  }
+
+  upgradeController(creep);
+}
+
 export function findContainersForSource(
   room: Room,
   source: Source

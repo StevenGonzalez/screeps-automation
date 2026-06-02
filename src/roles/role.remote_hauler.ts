@@ -7,6 +7,8 @@
  *             creep.memory.targetRoom = remote room to collect from
  */
 
+import { putSurplusEnergyToWork } from "../services/services.creep";
+
 export function runRemoteHauler(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
 
@@ -134,11 +136,9 @@ function depositEnergy(creep: Creep, homeRoom: string) {
     return;
   }
 
-  // Nowhere to deposit — idle near spawn
-  const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
-  if (spawn && !creep.pos.isNearTo(spawn)) {
-    creep.moveTo(spawn, { reusePath: 50 });
-  }
+  // Nowhere to deposit — put the carried energy to work (build, then repair,
+  // then upgrade) rather than idling.
+  putSurplusEnergyToWork(creep);
 }
 
 // ── Pathfinding ───────────────────────────────────────────────────────────────

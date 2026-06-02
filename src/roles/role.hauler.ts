@@ -8,7 +8,7 @@ import {
   findClosestContainerWithFreeCapacity,
   findClosestMinerContainerWithEnergy,
   findDepositTargetExcludingMiner,
-  upgradeController,
+  putSurplusEnergyToWork,
   getRoomStructures,
 } from "../services/services.creep";
 import { ROLE_HAULER } from "../config/config.roles";
@@ -115,7 +115,7 @@ export function runHauler(creep: Creep) {
     return;
   }
 
-  // Nowhere to deliver (colony full) — spend the carried energy upgrading
-  // the controller rather than idling.
-  upgradeController(creep);
+  // Nowhere to deliver (colony full) — put the carried energy to work
+  // (build, then repair, then upgrade) rather than idling.
+  putSurplusEnergyToWork(creep);
 }
