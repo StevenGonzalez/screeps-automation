@@ -206,6 +206,10 @@ declare global {
     nextSkOpId?: number;
   }
 
+  interface PowerCreepMemory {
+    homeRoom?: string;
+  }
+
   var _: _.LoDashStatic;
 }
 

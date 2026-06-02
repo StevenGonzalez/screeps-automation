@@ -10,6 +10,7 @@ import * as terminalSystem from "./orchestrators/orchestrator.terminal";
 import * as militarySystem from "./orchestrators/orchestrator.military";
 import * as nukeSystem from "./orchestrators/orchestrator.nukes";
 import * as sourceKeeperSystem from "./orchestrators/orchestrator.sourcekeeper";
+import * as powerCreepSystem from "./orchestrators/orchestrator.powercreep";
 import * as observerSystem from "./orchestrators/orchestrator.observer";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { setupConsole } from "./console";
@@ -50,6 +51,7 @@ export function loop() {
   runSafe("military", () => militarySystem.loop());
   runSafe("nukes", () => nukeSystem.loop());
   runSafe("sourcekeeper", () => sourceKeeperSystem.loop());
+  runSafe("powercreep", () => powerCreepSystem.loop());
   runSafe("observer", () => observerSystem.loop());
   runSafe("pixels", () => pixelsSystem.loop());
 

@@ -610,6 +610,31 @@ export function setupConsole() {
       else console.log(`[SK] No operation found for ${roomName}`);
     },
 
+    // Show power creep (Operator) status: level, location, ops, and known powers.
+    powercreeps: () => {
+      const names = Object.keys(Game.powerCreeps);
+      if (names.length === 0) {
+        console.log(
+          `[Power] No power creeps. GPL ${Game.gpl.level} — one will be created automatically when GPL >= 1.`
+        );
+        return;
+      }
+      for (const name of names) {
+        const pc = Game.powerCreeps[name];
+        const loc = pc.ticksToLive === undefined
+          ? pc.spawnCooldownTime && Game.time < pc.spawnCooldownTime
+            ? `unspawned (cooldown ${pc.spawnCooldownTime - Game.time}t)`
+            : "unspawned (ready)"
+          : `${pc.room?.name ?? "?"}  ttl=${pc.ticksToLive}`;
+        const ops = pc.store?.getUsedCapacity(RESOURCE_OPS) ?? 0;
+        const powers = Object.keys(pc.powers)
+          .map((p) => `${p}:L${pc.powers[Number(p) as PowerConstant].level}`)
+          .join(" ");
+        console.log(`[Power] ${name}  L${pc.level}  ${loc}  ops=${ops}  powers=[${powers}]`);
+      }
+      console.log(`[Power] GPL ${Game.gpl.level} (${Game.gpl.progress}/${Game.gpl.progressTotal})`);
+    },
+
     // Enable or disable auto-production for a room's lab system
     autoLabs: (roomName: string, enabled: boolean) => {
       const room = Game.rooms[roomName];
