@@ -142,6 +142,10 @@ declare global {
     // Source Keeper mining ops
     skOpId?: number;
     skSourceId?: Id<Source>;
+    // Traffic manager: stuck counter + last position (within-room key + room name)
+    _st?: number;
+    _lp?: number;
+    _lpr?: string;
   }
 
   interface RoomMemory {
@@ -204,6 +208,8 @@ declare global {
     nextPowerOpId?: number;
     skOps?: SourceKeeperOp[];
     nextSkOpId?: number;
+    // Kill-switch for the traffic manager (set true to fall back to vanilla moveTo)
+    trafficDisabled?: boolean;
   }
 
   interface PowerCreepMemory {

@@ -610,6 +610,17 @@ export function setupConsole() {
       else console.log(`[SK] No operation found for ${roomName}`);
     },
 
+    // Toggle the traffic manager (stuck-repath + guarded shove). Kill-switch if it
+    // ever misbehaves — falls back to vanilla moveTo.
+    traffic: (enabled?: boolean) => {
+      if (enabled === undefined) {
+        console.log(`[Traffic] manager is ${Memory.trafficDisabled ? "OFF" : "ON"}`);
+        return;
+      }
+      Memory.trafficDisabled = !enabled;
+      console.log(`[Traffic] manager ${enabled ? "ENABLED" : "DISABLED"}`);
+    },
+
     // Show power creep (Operator) status: level, location, ops, and known powers.
     powercreeps: () => {
       const names = Object.keys(Game.powerCreeps);

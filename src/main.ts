@@ -14,6 +14,8 @@ import * as powerCreepSystem from "./orchestrators/orchestrator.powercreep";
 import * as observerSystem from "./orchestrators/orchestrator.observer";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { setupConsole } from "./console";
+// Side-effect import: installs the traffic-managed moveTo override on Creep.prototype.
+import "./services/services.movement";
 
 const CPU_WARN_THRESHOLD = 0.85;
 const CPU_REPORT_INTERVAL = 100;
