@@ -458,7 +458,10 @@ export function findMostCriticalRepairTarget(
 
   const structures = getRoomStructures(creep.room);
 
-  // Priority 1: non-defensive structures below 80% HP (most critical first)
+  // Priority 1: non-defensive structures below 80% HP. Rank by HP fraction
+  // (hits/hitsMax), not absolute hits — otherwise low-cap structures like roads
+  // (5k max) always beat containers (250k max) and starve their repairs. Within
+  // that, service containers/storage before roads so critical infra never dies.
   const nonDefensive = structures.filter(
     (st): st is AnyStructure =>
       st.structureType !== STRUCTURE_WALL &&
@@ -466,7 +469,12 @@ export function findMostCriticalRepairTarget(
       st.hits < st.hitsMax * 0.8
   );
   if (nonDefensive.length > 0) {
-    const result = nonDefensive.reduce((a, b) => (a.hits < b.hits ? a : b));
+    const isRoad = (st: AnyStructure) => st.structureType === STRUCTURE_ROAD;
+    const lowestFraction = (a: AnyStructure, b: AnyStructure) =>
+      a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b;
+    const nonRoad = nonDefensive.filter((st) => !isRoad(st));
+    const tier = nonRoad.length > 0 ? nonRoad : nonDefensive;
+    const result = tier.reduce(lowestFraction);
     criticalRepairByRoom[rn] = result;
     return result;
   }
