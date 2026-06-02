@@ -1,269 +1,192 @@
-﻿# Military System _(planned)_
+# Military System
 
-> **Status**: Planned. Towers fire automatically via `orchestrator.tower.ts` and safe mode is handled by Screeps. Squad-based offense and organized defense roles (Knight, Wizard, Cleric) are not yet implemented.
+> **Status**: Implemented. Towers fire automatically via `orchestrator.tower.ts` and
+> safe mode is handled automatically. Offensive squad warfare (formations + tactics),
+> organized home defense (Knight, Wizard, Cleric), and the WarCouncil intel/targeting
+> layer are live. Squad coordination lives in `orchestrators/orchestrator.military.ts`;
+> combat targeting and formation geometry live in `services/services.combat.ts`.
 
 ---
 
 ## Overview
-The Advanced Military System will provide squad-based combat with formation movement, tactical behaviors, and intelligent target prioritization.
+The military system provides squad-based combat with formation movement, tactical
+behaviors, intelligent target prioritization, and boosted combat creeps. A single
+offensive operation runs at a time (`Memory.militaryOp`), commanded from the console.
 
 ## Key Features
-- **Squad Coordinator**: Advanced tactical coordination with 4 formations and 5 tactics
-- **Formation Movement**: Units maintain positions relative to squad leader
-- **Intelligent Targeting**: Priority-based target selection (spawns > towers > labs > terminals)
-- **Role-Based Combat**: Attacker, Healer, Ranged, Tank, and Dismantler roles
-- **Dynamic Adaptation**: Auto-retreat at 40% health, ranged units kite automatically
-- **Console Control**: Real-time command and control via console
+- **Squad Coordinator**: 4 formations × 5 tactics, with a leader-led cohesion model
+  so the squad commits as one body instead of trickling in piecemeal.
+- **Formation Movement**: followers hold positions relative to the squad leader; the
+  leader only advances when the squad is together (cohesive), which also stages the
+  group at each room border before pushing in.
+- **Intelligent Targeting**: priority-based selection for both creeps (healers first)
+  and structures (spawns/towers first, then economy), with rampart-shield breaking.
+- **Role-Based Combat**: Knight (melee/tank), Wizard (ranged kiter), Cleric (healer),
+  Sieger (boosted dismantler for breaching).
+- **Dynamic Adaptation**: auto-retreat on sustained casualties (tactic-dependent
+  threshold), heal at home, then resume; wizards kite automatically.
+- **Boost Integration**: combat creeps auto-request the best available boost for their
+  combat part (attack / ranged / heal / dismantle) and are boosted at the labs.
+- **WarCouncil**: scans visible rooms, scores them 0–10, ranks enemy targets, and can
+  optionally auto-launch attacks against soft targets.
+- **Console Control**: real-time command and control via `Game.arca`.
 
 ## Console Commands
 
 ### Launch Attack
 ```javascript
-Game.arca.attack('W2N1', 'box', 'assault');
+Game.arca.attack('W2N1');                       // box / assault, auto-scaled squad
+Game.arca.attack('W2N1', 'wedge', 'siege');     // choose formation + tactic
+Game.arca.attack('W2N1', 'box', 'assault', { knights: 4, clerics: 2, siegers: 1 });
 // Parameters:
-//   targetRoom: Room name to attack
-//   formation: 'line', 'box', 'wedge', or 'scatter'
-//   tactic: 'assault', 'siege', 'raid', 'defend', or 'retreat'
+//   targetRoom:   room to attack
+//   formation:    'line' | 'box' | 'wedge' | 'scatter'   (default 'box')
+//   tactic:       'assault' | 'siege' | 'raid' | 'defend' (default 'assault')
+//   composition:  optional { knights, wizards, clerics, siegers } override.
+//                 Omitted roles fall back to an intel-scaled recommendation.
 ```
+The home room is chosen automatically as the closest owned room to the target.
 
 ### Check Squad Status
 ```javascript
 Game.arca.squads();
-// Shows:
-//   - Squad size and composition
-//   - Current formation and tactic
-//   - Average health percentage
-//   - Whether squad has reached target room
+// Shows phase, formation, tactic, required vs current composition,
+// average HP, how many units have reached the target room, and a per-creep list.
 ```
 
 ### Change Formation (Mid-Battle)
 ```javascript
-Game.arca.formation('wedge');
-// Available: line, box, wedge, scatter
+Game.arca.formation('wedge');   // line | box | wedge | scatter
 ```
 
 ### Change Tactic (Mid-Battle)
 ```javascript
-Game.arca.tactic('siege');
-// Available: assault, siege, raid, defend, retreat
+Game.arca.tactic('siege');      // assault | siege | raid | defend | retreat
 ```
+`tactic('retreat')` falls the squad back home and holds there until you issue a new
+tactic. The safety auto-retreat (on low HP) stays active under every tactic and
+preserves your chosen tactic when the squad re-engages after healing.
 
 ### Recall All Units
 ```javascript
-Game.arca.recall();
-// Returns all combat units to home
+Game.arca.recall();             // abort the op and stand all units down
+// (Game.arca.retreat() and Game.arca.military() remain as aliases.)
+```
+
+### WarCouncil
+```javascript
+Game.arca.warcouncil();         // show ranked enemy rooms + auto-attack status
+Game.arca.warcouncil(true);     // enable auto-attack on soft targets
+Game.arca.warcouncil(false);    // disable (default)
 ```
 
 ## Formations
 
-### Line Formation
-```
-  ◯ ◯ ◯ ◯ ◯
-  ◯ ◯ ◯ ◯ ◯
-```
-- Best for: Corridor fighting, narrow passages
-- Units spread horizontally in lines
+Offsets are relative to the leader (slot 0). Members are slotted front-to-back by role
+— tanks/siegers front, healers center, ranged back — so each formation expresses its
+doctrine. The formation reorients naturally as the leader moves.
 
-### Box Formation (Default)
-```
-  🛡 🛡 🛡    (Tanks front)
-  💚 💚 💚    (Healers center)
-  🏹 🏹 🏹    (Ranged back)
-```
-- Best for: Balanced combat, most situations
-- Protective formation with tanks absorbing damage
+### Line
+Wide single row. Best for corridor fighting and spreading out along a front.
 
-### Wedge Formation
-```
-      ⚔️       (Leader)
-    ⚔️  ⚔️
-  ⚔️  💚  ⚔️
-⚔️  💚  💚  ⚔️
-```
-- Best for: Aggressive pushes, breaking defenses
-- V-shape with leader at point for maximum pressure
+### Box (Default)
+Layered 3-wide block: knights front, clerics center, wizards back. Best balanced
+formation for most engagements.
 
-### Scatter Formation
-```
-  ◯   ◯       ◯
-      ◯   ◯
-  ◯       ◯   ◯
-```
-- Best for: Area control, avoiding splash damage
-- Random spread prevents concentration of fire
+### Wedge
+V-shape with the leader at the point. Best for aggressive pushes and breaking a line.
+
+### Scatter
+Dispersed with gaps between units. Best for blunting tower splash and area fire.
 
 ## Tactics
 
-### Assault
-- **Purpose**: Aggressive push into enemy room
-- **Behavior**: Units advance in formation, engage all hostiles
-- **Best For**: Destroying enemy rooms with spawns
+### Assault (default)
+Advance in formation, engage all hostiles, then raze structures (spawns first, then
+towers and the economy). Best for wiping an enemy room.
 
 ### Siege
-- **Purpose**: Dismantle structures methodically
-- **Behavior**: Dismantlers target buildings, others provide support
-- **Best For**: Breaking heavily fortified positions
+Siegers dismantle structures with towers prioritized first (cut defensive fire),
+while knights screen them and clerics keep them alive. Best for fortified rooms.
 
 ### Raid
-- **Purpose**: Hit and run on specific targets
-- **Behavior**: Lock onto target, strike, pull back to rally point
-- **Best For**: Quick strikes on high-value targets
+Hit-and-run. Same advance, but the auto-retreat threshold is high (55% avg HP) so the
+squad strikes and pulls back to heal before committing again. Completes once spawns
+and towers are gone.
 
 ### Defend
-- **Purpose**: Hold position around rally point
-- **Behavior**: Stay within 3 tiles of rally, engage nearby hostiles
-- **Best For**: Protecting a position or resource
+Hold within 3 tiles of the target room center and engage only nearby hostiles. Does
+not self-complete — recall to end it. Best for holding a position or contested room.
 
 ### Retreat
-- **Purpose**: Fall back to safety
-- **Behavior**: All units return to rally point
-- **Auto-Triggered**: When squad health drops below 40%
+All units fall back to the home spawn. Auto-triggered when average squad HP drops
+below the tactic's threshold (assault 40%, siege 35%, raid 55%, defend 30%); the squad
+heals at home to 85% and then resumes the prior tactic.
 
 ## Combat Roles
 
-### Attacker (⚔️)
-- Melee combat specialist
-- Engages hostiles at close range
-- Body: TOUGH + MOVE + ATTACK parts
+### Knight (⚔️) — `knight`
+Melee tank. TOUGH front-loaded so armor absorbs hits before ATTACK parts die. Usually
+the squad leader. Boosted with the attack line (UH → UH₂O → XUH₂O).
 
-### Healer (💚)
-- Support specialist
-- Heals injured allies within range 3
-- Prioritizes lowest health percentage targets
-- Body: MOVE + HEAL parts
+### Wizard (🏹) — `wizard`
+Ranged kiter. Holds enemies at range 3, uses `rangedMassAttack` when 3+ are close,
+otherwise focuses the squad's priority target. Boosted with the ranged line
+(KO → KHO₂ → XKHO₂).
 
-### Ranged (🏹)
-- Ranged combat specialist
-- Kites enemies (moves back if too close)
-- Uses rangedMassAttack when 3+ enemies nearby
-- Body: MOVE + RANGED_ATTACK parts
+### Cleric (➕) — `cleric`
+Healer. Heals the lowest-HP% squad member (range 1 `heal`, range 3 `rangedHeal`),
+self-heals, and stays in the formation's protected center. Boosted with the heal line
+(LO → LHO₂ → XLHO₂). Also spawns for home defense during high-threat scenarios.
 
-### Tank (🛡️)
-- Damage absorber
-- Draws enemy fire by engaging directly
-- Heavy TOUGH parts for survivability
-- Body: TOUGH + MOVE + ATTACK parts
-
-### Dismantler (🔧)
-- Structure destroyer
-- Focuses on dismantling buildings
-- Body: MOVE + WORK parts
-
-### Cleric (➕)
-- Defensive healer specialist
-- Supports Knights and friendlies during home defense
-- Heals adjacent units and uses rangedHeal at range 3
-- Prioritizes lowest health percentage targets
-- Auto-spawns during high-threat scenarios (>200 threat)
-- Body: HEAL + MOVE parts (max 25 pairs)
-- **Best For**: Power bank defense, SK lair ops, sustained defensive actions
+### Sieger (🔧) — `sapper`
+Boosted dismantler. TOUGH soaks tower fire while WORK parts dismantle ramparts and
+raze structures far faster than melee. Operates only as part of an operation — too
+fragile to act alone. Boosted with the dismantle line (ZH → ZH₂O → XZH₂O).
 
 ## Target Priority System
 
-### Creeps
-1. **Healers** (Priority: -20) - Eliminate support first
-2. **Attackers** (Priority: -15) - Neutralize threats
-3. **Ranged** (Priority: -15) - Remove distance damage
-4. **Weak Creeps** (Priority: -10) - Easy kills
-5. **Close Creeps** (Priority: +range) - Proximity matters
+### Creeps (focus fire, lowest score first)
+1. **Healers** — eliminate support first (they undo your damage)
+2. **Attackers / Ranged** — neutralize what can actually hurt the squad
+3. **Workers / Dismantlers**
+4. **Unarmed** (claimers, haulers, scouts)
 
-### Structures
-1. **Spawns** (Priority: 10) - Stop reinforcements
-2. **Towers** (Priority: 15) - Reduce defensive fire
-3. **Nuker** (Priority: 20) - Prevent nuclear strike
-4. **Terminal** (Priority: 25) - Cut off resources
-5. **Storage** (Priority: 35) - Secondary resource target
-6. **Lab** (Priority: 30) - Disable boosts
-7. **Power Spawn** (Priority: 40)
-8. **Extensions** (Priority: 60)
-9. **Links** (Priority: 70)
+Nearly-dead hostiles are bumped up a tier (finish the kill); ties break by proximity
+then remaining HP, so the whole squad concentrates fire.
 
-## Example Usage
-
-### Basic Attack
-```javascript
-// Launch a basic assault on an enemy room
-Game.arca.attack('W2N1');
-```
-
-### Siege Operation
-```javascript
-// Launch a siege to dismantle structures
-Game.arca.attack('W2N1', 'box', 'siege');
-```
-
-### Hit and Run
-```javascript
-// Quick raid on enemy spawn
-Game.arca.attack('W2N1', 'scatter', 'raid');
-```
-
-### Monitor and Adjust
-```javascript
-// Check status
-Game.arca.squads();
-
-// If taking too much damage, change tactic
-Game.arca.tactic('retreat');
-
-// Once healed, change formation and resume
-Game.arca.formation('wedge');
-Game.arca.tactic('assault');
-```
-
-### Emergency Recall
-```javascript
-// Abort mission and return home
-Game.arca.recall();
-```
+### Structures (lowest number = struck first)
+Spawn (10) → Tower (15) → Nuker (20) → Terminal (25) → Lab (30) → Storage (35) →
+Power Spawn (40) → Observer (45) → Extension (60) → Link (70) → Extractor (80) →
+Container (90). **Siege** flips towers to the top. If the chosen target sits under a
+rampart, the rampart is broken first.
 
 ## Integration with Existing Systems
 
 ### Spawn Queue
-- Military creeps use **Military priority tier (6)**
-- Only spawn when colony has 100% energy (powerhouse phase)
-- 4 attackers + 2 healers for standard assault squads
+- Defensive Knights/Wizards/Clerics jump the economy queue under threat (high-severity
+  raids take priority over miners — a dead miner respawns, a dead spawn does not).
+- Offensive squad creeps spawn at full energy capacity for max-strength bodies, in
+  formation order (knights → siegers → wizards → clerics).
+
+### Home Defense
+- **Knights** engage hostiles and retreat to spawn when critically injured.
+- **Wizards** kite and mass-attack clustered raiders.
+- **Clerics** heal Knights and injured friendlies, scaling up in high-threat scenarios.
+- Towers focus-fire one target room-wide and auto-trigger safe mode when structures
+  are critically damaged.
 
 ### WarCouncil
-- Scans nearby rooms for threats
-- Evaluates room threat levels (0-10 scale)
-- Prioritizes targets for Dark Lord
-- Currently auto-launches attacks every 1000 ticks (can be disabled)
-
-### Blade Knight
-- Manages defensive melee combat in home room
-- Spawns Knights on-demand when threats detected
-- Works with towers for coordinated defense
-- Spawns 1-5 defenders based on threat level (cap at 5)
-
-### High Elf
-- Manages defensive healing support
-- Spawns 1-2 healers during high-threat scenarios (>200 threat)
-- Automatically supports Knights and injured friendlies
-- Uses both heal() and rangedHeal() for maximum coverage
-- Integrates with BoostManager for enhanced healing
-
-### Dark Lord
-- Manages all offensive combat operations
-- Spawns and tracks combat creeps (4 attackers + 2 healers)
-- Integrates with SquadCoordinator for tactical control
-- Fallback to simple coordination if squad not initialized
+- Scans visible non-owned rooms every 50 ticks into `Memory.intel`, scoring threat 0–10.
+- Ranks enemy rooms for targeting (lowest threat first).
+- Optional auto-attack (off by default) launches against soft, nearby enemy rooms,
+  rate-limited to once per 1000 ticks and gated on a capable home (RCL 5+, 50k+ energy).
 
 ## Tips
-
-1. **Start Small**: Begin with box/assault for standard attacks
-2. **Monitor Health**: Watch squad health percentage - auto-retreats at 40%
-3. **Adapt Tactics**: Change formation/tactic mid-battle as needed
-4. **Formation Matters**: Use wedge for offense, box for defense
-5. **Retreat Early**: Don't wait for auto-retreat - recall if losing badly
-6. **Scout First**: Use observer network to assess threats before attacking
-7. **Energy Reserve**: Ensure home has 50k+ energy before launching attacks
-
-## Future Enhancements
-- Boost integration for enhanced combat
-- Siege dismantler squads with WORK parts
-- Scout role for vision and intel
-- Multi-room coordinated attacks
-- Dynamic squad composition based on enemy defenses
-- Rally point selection algorithm
-- Path-finding for squad movement
+1. **Start with box/assault** for standard attacks; the squad auto-scales to defenses.
+2. **Watch HP** with `Game.arca.squads()` — the squad auto-retreats and re-pushes.
+3. **Use wedge for offense, box for defense, scatter against towers.**
+4. **Use siege** (with siegers) against fortified rooms; towers fall first.
+5. **Scout first** — `Game.arca.warcouncil()` shows what intel knows about a target.
+6. **Energy reserve** — keep the home room healthy before launching; offensive bodies
+   are expensive and spawn at full capacity.

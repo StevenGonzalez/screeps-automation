@@ -81,3 +81,198 @@ export function getThreatInfo(room: Room): ThreatInfo {
   threatCache[room.name] = { info, tick: Game.time };
   return info;
 }
+
+// ── Hostile creep target selection ─────────────────────────────────────────────
+//
+// All squad members concentrate fire by scoring hostiles consistently. Lower score
+// = higher priority. Healers die first (they undo our damage), then the things that
+// can actually hurt us, then soft targets. Within a tier we finish off whoever is
+// closest and weakest so a creep dies per tick rather than many bleeding slowly.
+
+function hostileCombatTier(creep: Creep): number {
+  const hasHeal = creep.body.some((p) => p.type === HEAL && p.hits > 0);
+  if (hasHeal) return 0; // healers: eliminate support first
+  const hasRanged = creep.body.some((p) => p.type === RANGED_ATTACK && p.hits > 0);
+  if (hasRanged) return 1; // ranged: dangerous at distance
+  const hasAttack = creep.body.some((p) => p.type === ATTACK && p.hits > 0);
+  if (hasAttack) return 1; // melee: equally a threat once adjacent
+  const hasWork = creep.body.some((p) => p.type === WORK && p.hits > 0);
+  if (hasWork) return 2; // dismantlers/workers
+  return 3; // unarmed (claimers, haulers, scouts)
+}
+
+// Returns the best hostile creep to focus, or null if none worth engaging.
+// `hostiles` should be the shared per-tick scan from getThreatInfo().
+export function selectHostileTarget(fromPos: RoomPosition, hostiles: Creep[]): Creep | null {
+  if (hostiles.length === 0) return null;
+
+  let best: Creep | null = null;
+  let bestScore = Infinity;
+  for (const c of hostiles) {
+    let tier = hostileCombatTier(c);
+    // A nearly-dead threat is worth finishing regardless of class.
+    if (c.hits < c.hitsMax * 0.3) tier = Math.max(0, tier - 1);
+    const range = fromPos.getRangeTo(c);
+    // tier dominates; then proximity (×100); then remaining HP as a fine tie-break.
+    const score = tier * 1_000_000 + range * 1_000 + c.hits;
+    if (score < bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return best;
+}
+
+// ── Hostile structure target selection ─────────────────────────────────────────
+//
+// Priority follows the campaign doctrine: cut reinforcements and defensive fire
+// first, then sever the economy. Lower number = struck first. Siege flips towers
+// ahead of spawns since surviving the approach matters more than stopping respawns.
+
+const STRUCTURE_ATTACK_PRIORITY: Partial<Record<StructureConstant, number>> = {
+  [STRUCTURE_SPAWN]: 10,
+  [STRUCTURE_TOWER]: 15,
+  [STRUCTURE_NUKER]: 20,
+  [STRUCTURE_TERMINAL]: 25,
+  [STRUCTURE_LAB]: 30,
+  [STRUCTURE_STORAGE]: 35,
+  [STRUCTURE_POWER_SPAWN]: 40,
+  [STRUCTURE_OBSERVER]: 45,
+  [STRUCTURE_EXTENSION]: 60,
+  [STRUCTURE_LINK]: 70,
+  [STRUCTURE_EXTRACTOR]: 80,
+  [STRUCTURE_CONTAINER]: 90,
+};
+
+const structureTargetCache: Record<string, { list: AnyStructure[]; tick: number }> = {};
+
+// Hostile + neutral-blocking structures in a room, scanned once per tick and shared.
+function getAttackableStructures(room: Room): AnyStructure[] {
+  const cached = structureTargetCache[room.name];
+  if (cached && cached.tick === Game.time) return cached.list;
+
+  const list = room.find(FIND_STRUCTURES, {
+    filter: (s) => {
+      if (s.structureType === STRUCTURE_CONTROLLER) return false;
+      if (s.structureType === STRUCTURE_KEEPER_LAIR) return false;
+      if (s.structureType === STRUCTURE_POWER_BANK) return false;
+      // Walls and ramparts are obstacles handled separately (only when blocking a target).
+      if (s.structureType === STRUCTURE_WALL) return true;
+      if (s.structureType === STRUCTURE_RAMPART) return (s as StructureRampart).hits > 0;
+      // Owned structures: only enemy ones are targets. Neutral non-barrier structures
+      // (roads, unowned containers) are never worth attacking.
+      const owned = (s as OwnedStructure).owner;
+      if (owned) return !(s as OwnedStructure).my;
+      return false;
+    },
+  }) as AnyStructure[];
+
+  structureTargetCache[room.name] = { list, tick: Game.time };
+  return list;
+}
+
+// Returns the best structure to attack/dismantle, accounting for tactic and for
+// ramparts shielding a high-value target (break the shield first).
+export function selectStructureTarget(
+  room: Room,
+  fromPos: RoomPosition,
+  tactic: SquadTactic
+): AnyStructure | null {
+  const all = getAttackableStructures(room);
+  if (all.length === 0) return null;
+
+  const priorityOf = (s: AnyStructure): number => {
+    if (s.structureType === STRUCTURE_TOWER && tactic === "siege") return 0;
+    return STRUCTURE_ATTACK_PRIORITY[s.structureType] ?? 999;
+  };
+
+  // Pick the highest-priority non-barrier structure; tie-break by proximity.
+  const valuable = all.filter(
+    (s) => s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART
+  );
+
+  let chosen: AnyStructure | null = null;
+  if (valuable.length > 0) {
+    let bestScore = Infinity;
+    for (const s of valuable) {
+      const score = priorityOf(s) * 10_000 + fromPos.getRangeTo(s);
+      if (score < bestScore) {
+        bestScore = score;
+        chosen = s;
+      }
+    }
+  }
+
+  // If the chosen target sits under a rampart, the rampart must fall first.
+  // (`chosen` is never a rampart — barriers are filtered out of `valuable`.)
+  if (chosen) {
+    const shield = chosen.pos
+      .lookFor(LOOK_STRUCTURES)
+      .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
+    if (shield && shield.hits > 0) return shield;
+    return chosen;
+  }
+
+  // No valuable structures exposed — only barriers remain. Break the weakest so
+  // siegers keep making progress instead of idling.
+  const barriers = all.filter(
+    (s) => s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART
+  );
+  if (barriers.length === 0) return null;
+  return barriers.reduce((a, b) => (a.hits < b.hits ? a : b));
+}
+
+// ── Formation geometry ──────────────────────────────────────────────────────────
+//
+// Offsets are relative to the squad leader (slot 0). The squad reorients naturally
+// as the leader advances, so offsets are kept in plain grid space. Members are
+// assigned slots front-to-back by role, so each formation produces its doctrine:
+// box = layered block, line = wide row, wedge = V with the point forward, scatter =
+// dispersed to blunt splash/tower fire.
+
+const FORMATION_LAYOUTS: Record<SquadFormation, Array<[number, number]>> = {
+  box: [
+    [0, 0], [1, 0], [-1, 0],
+    [0, 1], [1, 1], [-1, 1],
+    [0, 2], [1, 2], [-1, 2],
+  ],
+  line: [
+    [0, 0], [1, 0], [-1, 0], [2, 0], [-2, 0], [3, 0], [-3, 0], [4, 0], [-4, 0],
+  ],
+  wedge: [
+    [0, 0], [1, 1], [-1, 1], [2, 2], [-2, 2], [3, 3], [-3, 3], [0, 2], [0, 4],
+  ],
+  scatter: [
+    [0, 0], [2, 0], [-2, 0], [0, 2], [2, 2], [-2, 2], [0, -2], [2, -2], [-2, -2],
+  ],
+};
+
+export function formationOffset(formation: SquadFormation, slot: number): [number, number] {
+  const layout = FORMATION_LAYOUTS[formation] ?? FORMATION_LAYOUTS.box;
+  if (slot < layout.length) return layout[slot];
+  // Beyond the template, stack further back so large squads still cohere.
+  const extra = slot - layout.length;
+  return [extra % 2 === 0 ? 1 : -1, 3 + Math.floor(extra / 2)];
+}
+
+// ── Room threat evaluation (WarCouncil) ─────────────────────────────────────────
+//
+// Scores a non-owned room 0 (trivial) … 10 (fortress) for offensive target ranking.
+export function evaluateRoomThreatLevel(room: Room): number {
+  let level = 0;
+
+  if (room.controller?.safeMode) return 10; // untouchable while safe mode holds
+
+  const towers = room.find(FIND_HOSTILE_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_TOWER,
+  }).length;
+  level += towers * 2;
+
+  const rcl = room.controller?.level ?? 0;
+  if (room.controller?.owner) level += Math.min(3, Math.ceil(rcl / 3));
+
+  const { score } = getThreatInfo(room);
+  level += Math.min(3, Math.floor(score / 100));
+
+  return Math.min(10, level);
+}

@@ -13,6 +13,7 @@ import {
   ROLE_KNIGHT,
   ROLE_WIZARD,
   ROLE_CLERIC,
+  ROLE_SIEGER,
   ROLE_CONQUEROR,
   ROLE_SETTLER,
   ROLE_APOTHECARY,
@@ -778,8 +779,9 @@ function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
 // Preferred boost compounds per role (best tier first).
 const BOOST_CANDIDATES: Record<string, string[]> = {
   knight:  ['XUH2O', 'UH2O', 'UH'],   // attack
-  wizard:  ['XUHO2', 'UHO2', 'UO'],   // ranged attack
+  wizard:  ['XKHO2', 'KHO2', 'KO'],   // ranged attack (K-line; U-line boosts harvest, not ranged)
   cleric:  ['XLHO2', 'LHO2', 'LO'],   // heal
+  sieger:  ['XZH2O', 'ZH2O', 'ZH'],   // dismantle
 };
 
 // Returns the best available boost compound if there's enough stock in storage/terminal.
@@ -837,6 +839,24 @@ function buildClericBody(availableEnergy: number): BodyPartConstant[] {
   return [
     ...Array(pairs).fill(HEAL),
     ...Array(pairs).fill(MOVE),
+  ] as BodyPartConstant[];
+}
+
+// Sieger body: TOUGH soaks tower fire while WORK parts dismantle. MOVE matched to
+// half the parts (1 MOVE per 2 working parts) since siegers travel with the squad on
+// roads/cleared ground and prioritise dismantle throughput over speed.
+// Cost per group: TOUGH(10) + 2×WORK(200) + MOVE(50) = 260.
+function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
+  const groupCost = BODYPART_COST[TOUGH] + 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE];
+  const maxGroups = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 4),
+    Math.floor(availableEnergy / groupCost)
+  );
+  const groups = Math.max(1, maxGroups);
+  return [
+    ...Array(groups).fill(TOUGH),
+    ...Array(groups * 2).fill(WORK),
+    ...Array(groups).fill(MOVE),
   ] as BodyPartConstant[];
 }
 
@@ -968,7 +988,8 @@ function shouldSpawnOffensiveCreep(room: Room): boolean {
   return (
     members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredKnights ||
     members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredWizards ||
-    members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredClerics
+    members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredClerics ||
+    members.filter((c) => c.memory.role === ROLE_SIEGER).length < (op.requiredSiegers ?? 0)
   );
 }
 
@@ -980,9 +1001,13 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   const knights = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
   const wizards = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
   const clerics = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
+  const siegers = members.filter((c) => c.memory.role === ROLE_SIEGER).length;
 
+  // Spawn order mirrors the formation front-to-back: tanks, then siege, then ranged,
+  // then healers — so a half-formed squad already has a screen for its support.
   let roleToSpawn: string | null = null;
   if (knights < op.requiredKnights) roleToSpawn = ROLE_KNIGHT;
+  else if (siegers < (op.requiredSiegers ?? 0)) roleToSpawn = ROLE_SIEGER;
   else if (wizards < op.requiredWizards) roleToSpawn = ROLE_WIZARD;
   else if (clerics < op.requiredClerics) roleToSpawn = ROLE_CLERIC;
   if (!roleToSpawn) return false;
@@ -997,6 +1022,10 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
     body = buildKnightBody(energy);
     boostKey = "knight";
     combatPartType = ATTACK;
+  } else if (roleToSpawn === ROLE_SIEGER) {
+    body = buildSiegerBody(energy);
+    boostKey = "sieger";
+    combatPartType = WORK;
   } else if (roleToSpawn === ROLE_WIZARD) {
     body = buildWizardBody(energy);
     boostKey = "wizard";

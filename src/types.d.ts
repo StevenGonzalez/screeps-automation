@@ -37,15 +37,50 @@ declare global {
     collectingStartedAt?: number;
   }
 
+  // Tactical squad formation: governs how members space themselves around the leader.
+  type SquadFormation = "line" | "box" | "wedge" | "scatter";
+
+  // Tactical doctrine: governs squad behavior during the attacking phase.
+  type SquadTactic = "assault" | "siege" | "raid" | "defend" | "retreat";
+
   interface MilitaryOp {
     targetRoom: string;
     homeRoom: string;
     phase: "forming" | "rallying" | "attacking" | "retreating";
     startedAt: number;
+    formation: SquadFormation;
+    tactic: SquadTactic;
     requiredKnights: number;
     requiredWizards: number;
     requiredClerics: number;
+    requiredSiegers: number;
     clearedSince?: number;
+    // Set while the squad is split across rooms; drives the regroup watchdog.
+    regroupSince?: number;
+  }
+
+  // Intelligence gathered on a non-owned room, used by the WarCouncil to rank targets.
+  interface RoomIntelData {
+    roomName: string;
+    lastSeen: number;
+    owner?: string;
+    reservedBy?: string;
+    rcl: number;
+    towers: number;
+    spawns: number;
+    hostileCreeps: number;
+    hostileCombatParts: number;
+    hostileHealParts: number;
+    safeMode?: number;
+    // 0 (trivial) … 10 (fortress). Drives target ranking.
+    threatLevel: number;
+  }
+
+  interface WarCouncilMemory {
+    // When false (default) the council scans + ranks but never auto-launches attacks.
+    autoAttack: boolean;
+    lastScan?: number;
+    lastAutoAttackTick?: number;
   }
 
   interface ExpansionData {
@@ -144,6 +179,8 @@ declare global {
     sourcesLastScan?: Record<string, number>;
     expansion?: ExpansionData;
     militaryOp?: MilitaryOp;
+    warCouncil?: WarCouncilMemory;
+    intel?: Record<string, RoomIntelData>;
     powerOps?: PowerBankOp[];
     nextPowerOpId?: number;
   }

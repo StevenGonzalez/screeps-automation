@@ -1,11 +1,24 @@
 import { resolveChain, getStockForCompound } from "./services/services.labs";
-import { cancelOp } from "./orchestrators/orchestrator.military";
+import {
+  cancelOp,
+  launchOp,
+  recommendComposition,
+  setFormation,
+  setTactic,
+} from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity } from "./services/services.combat";
 import {
+  ROLE_KNIGHT,
+  ROLE_WIZARD,
+  ROLE_CLERIC,
+  ROLE_SIEGER,
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
 } from "./config/config.roles";
+
+const VALID_FORMATIONS: SquadFormation[] = ["line", "box", "wedge", "scatter"];
+const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "retreat"];
 
 const EXPANSION_CANDIDATE_SOURCES_WEIGHT = 40;
 const EXPANSION_CANDIDATE_DIST_PENALTY = 5;
@@ -237,35 +250,35 @@ export function setupConsole() {
       }
     },
 
-    // Launch an offensive military operation against a target room
-    attack: (roomName: string, knights = 2, wizards = 1, clerics = 1) => {
+    // Launch an offensive military operation against a target room.
+    //   Game.arca.attack('W2N1')                      → box / assault, auto-scaled squad
+    //   Game.arca.attack('W2N1', 'wedge', 'siege')    → pick formation + tactic
+    //   Game.arca.attack('W2N1', 'box', 'assault', { knights: 4, clerics: 2 })  → override squad
+    attack: (
+      roomName: string,
+      formation: SquadFormation = "box",
+      tactic: SquadTactic = "assault",
+      composition?: { knights?: number; wizards?: number; clerics?: number; siegers?: number }
+    ) => {
       if (!roomName) {
-        console.log("[Military] Usage: Game.arca.attack('W2N1')  or  Game.arca.attack('W2N1', 3, 2, 1)");
+        console.log("[Military] Usage: Game.arca.attack('W2N1', 'box', 'assault')");
+        return;
+      }
+      if (!VALID_FORMATIONS.includes(formation)) {
+        console.log(`[Military] Unknown formation '${formation}'. Use: ${VALID_FORMATIONS.join(", ")}`);
+        return;
+      }
+      if (!VALID_TACTICS.includes(tactic) || tactic === "retreat") {
+        console.log(`[Military] Unknown tactic '${tactic}'. Use: assault, siege, raid, defend`);
         return;
       }
 
-      if (Memory.militaryOp) {
-        const op = Memory.militaryOp;
-        console.log(
-          `[Military] Already running op against ${op.targetRoom} (${op.phase}) — cancel first with Game.arca.retreat()`
-        );
-        return;
-      }
-
-      // Validate squad requirements
-      if (knights < 0 || wizards < 0 || clerics < 0 || knights + wizards + clerics === 0) {
-        console.log("[Military] Squad must have at least 1 member");
-        return;
-      }
-
-      // Validate target room isn't already ours
       const targetRoom = Game.rooms[roomName];
       if (targetRoom?.controller?.my) {
         console.log(`[Military] ${roomName} is already yours`);
         return;
       }
 
-      // Pick closest owned room as home base
       const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
       if (ownedRooms.length === 0) {
         console.log("[Military] No owned rooms to launch from");
@@ -277,23 +290,55 @@ export function setupConsole() {
         return d < bd ? r : best;
       });
 
-      Memory.militaryOp = {
-        targetRoom: roomName,
-        homeRoom: homeRoom.name,
-        phase: "forming",
-        startedAt: Game.time,
-        requiredKnights: knights,
-        requiredWizards: wizards,
-        requiredClerics: clerics,
+      // Intelligent default composition scaled to known defenses, overridable per role.
+      const rec = recommendComposition(roomName, tactic);
+      const comp = {
+        knights: composition?.knights ?? rec.knights,
+        wizards: composition?.wizards ?? rec.wizards,
+        clerics: composition?.clerics ?? rec.clerics,
+        siegers: composition?.siegers ?? rec.siegers,
       };
+
+      const err = launchOp(roomName, formation, tactic, comp, homeRoom.name);
+      if (err) {
+        console.log(`[Military] Cannot launch — ${err}`);
+        return;
+      }
       console.log(
-        `[Military] Op launched: ${roomName}  squad=${knights}K/${wizards}W/${clerics}C  home=${homeRoom.name}`
+        `[Military] Op launched: ${homeRoom.name} → ${roomName}  ${formation}/${tactic}  ` +
+        `squad=${comp.knights}K/${comp.wizards}W/${comp.clerics}C/${comp.siegers}S`
       );
-      console.log(`[Military] Spawning squad... check status with Game.arca.military()`);
+      console.log(`[Military] Spawning squad... track with Game.arca.squads()`);
     },
 
-    // Abort the active military operation and stand down all squad members
-    retreat: () => {
+    // Change formation mid-battle: line | box | wedge | scatter
+    formation: (name: SquadFormation) => {
+      if (!VALID_FORMATIONS.includes(name)) {
+        console.log(`[Military] Unknown formation '${name}'. Use: ${VALID_FORMATIONS.join(", ")}`);
+        return;
+      }
+      if (!setFormation(name)) {
+        console.log("[Military] No active operation");
+        return;
+      }
+      console.log(`[Military] Formation → ${name}`);
+    },
+
+    // Change tactic mid-battle: assault | siege | raid | defend | retreat
+    tactic: (name: SquadTactic) => {
+      if (!VALID_TACTICS.includes(name)) {
+        console.log(`[Military] Unknown tactic '${name}'. Use: ${VALID_TACTICS.join(", ")}`);
+        return;
+      }
+      if (!setTactic(name)) {
+        console.log("[Military] No active operation");
+        return;
+      }
+      console.log(`[Military] Tactic → ${name}`);
+    },
+
+    // Recall all units and stand down the operation.
+    recall: () => {
       if (!Memory.militaryOp) {
         console.log("[Military] No active operation");
         return;
@@ -303,8 +348,8 @@ export function setupConsole() {
       console.log(`[Military] Operation against ${room} aborted — squad stood down`);
     },
 
-    // Show current military operation status
-    military: () => {
+    // Show current squad status.
+    squads: () => {
       const op = Memory.militaryOp;
       if (!op) {
         console.log("[Military] No active operation");
@@ -313,19 +358,39 @@ export function setupConsole() {
 
       const age = Game.time - op.startedAt;
       console.log(`[Military] Op: ${op.homeRoom} → ${op.targetRoom}`);
-      console.log(`  Phase: ${op.phase}  |  Age: ${age} ticks`);
       console.log(
-        `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ${op.requiredClerics}C`
+        `  Phase: ${op.phase}  |  Formation: ${op.formation}  |  Tactic: ${op.tactic}  |  Age: ${age}t`
+      );
+      console.log(
+        `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ` +
+        `${op.requiredClerics}C / ${op.requiredSiegers ?? 0}S`
       );
 
       const members = Object.values(Game.creeps).filter(
         (c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom
       );
-
       if (members.length === 0) {
         console.log("  Squad: none yet (still spawning)");
         return;
       }
+
+      const counts = {
+        [ROLE_KNIGHT]: 0,
+        [ROLE_WIZARD]: 0,
+        [ROLE_CLERIC]: 0,
+        [ROLE_SIEGER]: 0,
+      } as Record<string, number>;
+      let hpSum = 0;
+      for (const c of members) {
+        counts[c.memory.role] = (counts[c.memory.role] ?? 0) + 1;
+        hpSum += c.hits / c.hitsMax;
+      }
+      const avgHp = Math.round((hpSum / members.length) * 100);
+      const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
+      console.log(
+        `  Composition: ${counts[ROLE_KNIGHT]}K/${counts[ROLE_WIZARD]}W/` +
+        `${counts[ROLE_CLERIC]}C/${counts[ROLE_SIEGER]}S  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
+      );
 
       for (const c of members) {
         const hpPct = Math.round((c.hits / c.hitsMax) * 100);
@@ -333,11 +398,40 @@ export function setupConsole() {
           `  ${c.name}  role=${c.memory.role}  room=${c.room.name}  hp=${hpPct}%  ttl=${c.ticksToLive ?? "?"}`
         );
       }
+    },
 
-      const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
+    // Aliases retained for backwards compatibility.
+    retreat: () => (Game as any).arca.recall(),
+    military: () => (Game as any).arca.squads(),
+
+    // Toggle / inspect the WarCouncil auto-attack and list ranked targets.
+    warcouncil: (autoAttack?: boolean) => {
+      if (!Memory.warCouncil) Memory.warCouncil = { autoAttack: false };
+      if (autoAttack !== undefined) {
+        Memory.warCouncil.autoAttack = autoAttack;
+        console.log(`[WarCouncil] Auto-attack ${autoAttack ? "ENABLED" : "DISABLED"}`);
+      }
       console.log(
-        `  In target room: ${inTarget}/${members.length}${op.clearedSince ? `  Cleared since: ${Game.time - op.clearedSince} ticks ago` : ""}`
+        `[WarCouncil] auto-attack=${Memory.warCouncil.autoAttack}  ` +
+        `lastScan=${Memory.warCouncil.lastScan ?? "never"}`
       );
+      const intel = Memory.intel ?? {};
+      const targets = Object.values(intel)
+        .filter((i) => i.owner)
+        .sort((a, b) => a.threatLevel - b.threatLevel)
+        .slice(0, 10);
+      if (targets.length === 0) {
+        console.log("[WarCouncil] No enemy rooms in intel yet — scout or use an observer.");
+        return;
+      }
+      console.log("[WarCouncil] Known enemy rooms (lowest threat first):");
+      for (const t of targets) {
+        const age = Game.time - t.lastSeen;
+        console.log(
+          `  ${t.roomName}  threat=${t.threatLevel}  owner=${t.owner}  rcl=${t.rcl}  ` +
+          `towers=${t.towers}  spawns=${t.spawns}${t.safeMode ? "  SAFEMODE" : ""}  seen=${age}t ago`
+        );
+      }
     },
 
     // Show threat status across all owned rooms
