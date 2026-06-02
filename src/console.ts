@@ -467,6 +467,37 @@ export function setupConsole() {
       if (!found) console.log("[Threat] No owned rooms");
     },
 
+    // Show inbound-nuke status and rampart reinforcement progress across owned rooms
+    nukes: () => {
+      let found = false;
+      for (const rn in Game.rooms) {
+        const room = Game.rooms[rn];
+        if (!room.controller?.my) continue;
+        const nukes = room.find(FIND_NUKES);
+        if (nukes.length === 0) continue;
+        found = true;
+        const earliest = nukes.reduce((m, n) => Math.min(m, n.timeToLand), Infinity);
+        console.log(`[Nuke] ${rn}: ${nukes.length} inbound — first impact in ${earliest} ticks`);
+        const def = room.memory.nukeDefense;
+        if (!def) continue;
+        for (const key in def.tiles) {
+          const required = def.tiles[key];
+          const [x, y] = key.split(",").map(Number);
+          const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
+          const rampart = structures.find(
+            (s) => s.structureType === STRUCTURE_RAMPART
+          ) as StructureRampart | undefined;
+          const structAt = structures.find((s) => s.structureType !== STRUCTURE_RAMPART);
+          const have = rampart?.hits ?? 0;
+          const ok = have >= required ? "OK" : `${Math.round((have / required) * 100)}%`;
+          console.log(
+            `  (${x},${y}) ${structAt?.structureType ?? "?"}: ${have}/${required} [${ok}]`
+          );
+        }
+      }
+      if (!found) console.log("[Nuke] No inbound nukes detected");
+    },
+
     // Manually activate safemode in a room
     safemode: (roomName: string) => {
       if (!roomName) {

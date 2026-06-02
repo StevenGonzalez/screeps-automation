@@ -417,9 +417,35 @@ export function findClosestDamagedRampart(
   return creep.pos.findClosestByPath(ramparts) || null;
 }
 
+// When a nuke is inbound, the rampart over a threatened critical structure that is
+// furthest below its survival HP takes top repair priority — over everything else.
+export function getNukeRampartTarget(room: Room): StructureRampart | null {
+  const def = room.memory.nukeDefense;
+  if (!def) return null;
+  let worst: StructureRampart | null = null;
+  let worstDeficit = 0;
+  for (const key in def.tiles) {
+    const required = def.tiles[key];
+    const [x, y] = key.split(",").map(Number);
+    const rampart = room
+      .lookForAt(LOOK_STRUCTURES, x, y)
+      .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
+    if (!rampart) continue;
+    const deficit = required - rampart.hits;
+    if (deficit > worstDeficit) {
+      worstDeficit = deficit;
+      worst = rampart;
+    }
+  }
+  return worst;
+}
+
 export function findMostCriticalRepairTarget(
   creep: Creep
 ): AnyStructure | null {
+  const nukeTarget = getNukeRampartTarget(creep.room);
+  if (nukeTarget) return nukeTarget;
+
   if (criticalRepairCacheTick !== Game.time) {
     criticalRepairCacheTick = Game.time;
     for (const k in criticalRepairByRoom) delete criticalRepairByRoom[k];
@@ -460,6 +486,9 @@ export function findMostCriticalRepairTarget(
 }
 
 export function findTowerRepairTarget(room: Room): AnyStructure | null {
+  const nukeTarget = getNukeRampartTarget(room);
+  if (nukeTarget) return nukeTarget;
+
   if (towerRepairCacheTick !== Game.time) {
     towerRepairCacheTick = Game.time;
     for (const k in towerRepairByRoom) delete towerRepairByRoom[k];

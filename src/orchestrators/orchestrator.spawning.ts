@@ -438,6 +438,12 @@ function getRepairerPopulationTarget(room: Room): number {
     }
   }
 
+  // Under an inbound nuke, throw extra repair throughput at the threatened ramparts.
+  const nukeDef = room.memory.nukeDefense;
+  if (nukeDef && Object.keys(nukeDef.tiles).length > 0) {
+    value = Math.max(value, 3);
+  }
+
   repairerTargetCache[room.name] = { value, tick: Game.time };
   return value;
 }

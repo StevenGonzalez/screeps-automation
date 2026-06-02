@@ -166,6 +166,10 @@ declare global {
     observerId?: Id<StructureObserver>;
     powerSpawnId?: Id<StructurePowerSpawn>;
     observerScanQueue?: string[];
+    // Nuke defense: tiles ("x,y") of critical structures in a blast → required rampart HP
+    nukeDefense?: { tiles: Record<string, number>; updatedAt: number };
+    // Dedup state for incoming-nuke notifications
+    nukeAlert?: { count: number; land: number };
   }
 
   interface Memory {
