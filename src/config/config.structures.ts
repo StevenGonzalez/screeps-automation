@@ -19,6 +19,11 @@ export const STRUCTURE_PLANNER = {
     { x: 0, y: -2 },
   ],
   planInterval: 50,
+  // Screeps caps total construction sites per player at MAX_CONSTRUCTION_SITES (100).
+  // Roads outnumber every other planned structure, so bound how many road sites a
+  // room may have pending at once — this leaves headroom under the global cap for
+  // economy structures (extensions especially) to get a site.
+  maxRoadConstructionSites: 15,
   plannedCleanupInterval: 1000,
   plannedCleanupUnseenAge: 10000,
   plannedRoadPruneTicks: 5000,

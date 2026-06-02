@@ -14,6 +14,31 @@ import {
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
 import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
 
+// Lower number = placed first. The global construction-site cap (100) is scarce
+// and roads vastly outnumber everything else, so economy structures must claim
+// site slots before roads/ramparts or they starve. Anything unlisted defaults to
+// road-tier priority.
+const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
+  [STRUCTURE_SPAWN]: 0,
+  [STRUCTURE_EXTENSION]: 1,
+  [STRUCTURE_TOWER]: 2,
+  [STRUCTURE_STORAGE]: 3,
+  [STRUCTURE_CONTAINER]: 4,
+  [STRUCTURE_TERMINAL]: 5,
+  [STRUCTURE_LINK]: 6,
+  [STRUCTURE_LAB]: 7,
+  [STRUCTURE_FACTORY]: 8,
+  [STRUCTURE_NUKER]: 9,
+  [STRUCTURE_POWER_SPAWN]: 9,
+  [STRUCTURE_OBSERVER]: 9,
+  [STRUCTURE_RAMPART]: 10,
+  [STRUCTURE_ROAD]: 11,
+};
+
+function buildPriority(type: StructureConstant | null): number {
+  return type ? BUILD_PRIORITY[type] ?? 11 : 11;
+}
+
 function cleanupPlannedStructuresGlobal() {
   const interval = (STRUCTURE_PLANNER as any).plannedCleanupInterval || 0;
   if (!interval || Game.time % interval !== 0) return;
@@ -141,9 +166,34 @@ function applyPlannedConstruction(room: Room) {
     }
   }
 
-  for (const key of Object.keys(mem)) {
+  // Trim untouched road sites that exceed the per-room cap so they stop hogging
+  // the global construction-site limit (MAX_CONSTRUCTION_SITES). Roads with energy
+  // already invested are left alone; trimmed ones get re-placed once structures are
+  // down. This is what lets an already-saturated room recover and start placing
+  // extensions again.
+  const roadCap = STRUCTURE_PLANNER.maxRoadConstructionSites;
+  let roadSiteCount = roadSiteByPos.size;
+  if (roadSiteCount > roadCap) {
+    for (const [pos, site] of roadSiteByPos) {
+      if (roadSiteCount <= roadCap) break;
+      if (site.progress > 0) continue;
+      site.remove();
+      roadSiteByPos.delete(pos);
+      roadSiteCount--;
+    }
+  }
+
+  // Global site budget: never exceed the player-wide cap, and place economy
+  // structures before roads/ramparts so roads can't monopolise the slots.
+  let budget = MAX_CONSTRUCTION_SITES - Object.keys(Game.constructionSites).length;
+  const keys = Object.keys(mem).sort(
+    (a, b) => buildPriority(structureTypeForKey(a)) - buildPriority(structureTypeForKey(b))
+  );
+
+  for (const key of keys) {
     const type = structureTypeForKey(key);
     if (!type) continue;
+    const isRoad = type === STRUCTURE_ROAD;
     const built = builtByType.get(type as StructureConstant);
     const sites = sitesByType.get(type as StructureConstant);
     const arr = mem[key];
@@ -163,15 +213,23 @@ function applyPlannedConstruction(room: Room) {
       const x = +posStr.slice(0, comma);
       const y = +posStr.slice(comma + 1);
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-      keep.push(posStr);
-      if (!sites?.has(posStr)) {
-        if (type === STRUCTURE_SPAWN) {
-          // Give every bot-built spawn an MU-themed name (Lorencia, Devias, …).
-          const name = nextSpawnName(room);
-          if (name) room.createConstructionSite(x, y, STRUCTURE_SPAWN, name);
-        } else {
-          room.createConstructionSite(x, y, type as BuildableStructureConstant);
-        }
+      keep.push(posStr); // retain the position even if no site is placed this tick
+      if (sites?.has(posStr)) continue;
+      if (budget <= 0) continue; // global cap reached — try again next pass
+      if (isRoad && roadSiteCount >= roadCap) continue; // roads leave headroom
+      let result: ScreepsReturnCode;
+      if (type === STRUCTURE_SPAWN) {
+        // Give every bot-built spawn an MU-themed name (Lorencia, Devias, …).
+        const name = nextSpawnName(room);
+        result = name
+          ? room.createConstructionSite(x, y, STRUCTURE_SPAWN, name)
+          : ERR_NAME_EXISTS;
+      } else {
+        result = room.createConstructionSite(x, y, type as BuildableStructureConstant);
+      }
+      if (result === OK) {
+        budget--;
+        if (isRoad) roadSiteCount++;
       }
     }
     mem[key] = keep;
