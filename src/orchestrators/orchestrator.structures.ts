@@ -200,8 +200,6 @@ function applyPlannedConstruction(room: Room) {
     (a, b) => buildPriority(a) - buildPriority(b)
   );
 
-  // Throttle the defensive perimeter (NOT the high-priority on-top ramparts, which
-  // are keyed separately) so the ring builds incrementally — see config comment.
   const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
   const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
   const rampartSites = sitesByType.get(STRUCTURE_RAMPART);

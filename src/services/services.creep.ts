@@ -376,9 +376,6 @@ export function findClosestConstructionSite(
   return creep.pos.findClosestByPath(sites) || null;
 }
 
-// Builder focus order by structure type. Mirrors the placement order in
-// orchestrator.structures.ts BUILD_PRIORITY (kept local so services don't depend on
-// an orchestrator). Lower number = built first.
 const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_SPAWN]: 0,
   [STRUCTURE_EXTENSION]: 1,
@@ -400,8 +397,6 @@ function sitePriority(s: ConstructionSite): number {
   return SITE_BUILD_PRIORITY[s.structureType] ?? 11;
 }
 
-// a outranks b when it's a more important structure type, or (same type) is closer
-// to completion, with id as a stable final tiebreak.
 function isHigherBuildPriority(a: ConstructionSite, b: ConstructionSite): boolean {
   const pa = sitePriority(a);
   const pb = sitePriority(b);
@@ -412,17 +407,13 @@ function isHigherBuildPriority(a: ConstructionSite, b: ConstructionSite): boolea
   return a.id < b.id;
 }
 
-// Per-tick cache of the single site each room's builders should focus on.
 let buildTargetTick = -1;
 const buildTargetByRoom: Record<string, Id<ConstructionSite> | null> = {};
 
 /**
- * The one construction site the whole room should build right now, so every builder
- * converges on it (focus-fire) instead of each picking the nearest site and leaving
- * a field of half-finished structures. Ranks by structure-type priority, then by
- * most-progressed (finish what's nearly done first), then id for stability. Because
- * progress only grows, the chosen site stays the target until it completes — builders
- * return to it after refilling rather than re-picking whatever is now closest.
+ * The single construction site the whole room should focus on, so builders converge
+ * on one structure instead of half-finishing many. Ranked by structure-type priority,
+ * then most-progressed, then id; cached per tick.
  */
 export function getRoomBuildTarget(room: Room): ConstructionSite | null {
   if (buildTargetTick !== Game.time) {
@@ -459,17 +450,15 @@ function isDamaged(s: AnyStructure): boolean {
   return s.hits < s.hitsMax;
 }
 
-// Roads, containers and ramparts DECAY and are removed at 0 hits — a removed
-// structure can't be repaired at all. Below these floors a structure is close
-// enough to vanishing that rescuing it must preempt all routine maintenance.
-// This is what stops roads/ramparts being "removed due to no repair": without it,
-// constantly-decaying roads keep the maintenance tier busy forever and ramparts
-// (which are built at just 1 hit) never get touched. Non-decaying structures
-// return 0 and are left to the normal maintenance tiers.
+/**
+ * Hits below which a decaying structure is close enough to being removed that
+ * rescuing it should preempt routine maintenance. Returns 0 for structures that
+ * do not decay.
+ */
 function decayRescueFloor(s: AnyStructure): number {
   switch (s.structureType) {
     case STRUCTURE_RAMPART:
-      return 2000; // decays 300/100t; a freshly built rampart starts at 1 hit
+      return 2000;
     case STRUCTURE_ROAD:
       return s.hitsMax * 0.35;
     case STRUCTURE_CONTAINER:
@@ -542,9 +531,6 @@ export function findMostCriticalRepairTarget(
 
   const structures = getRoomStructures(creep.room);
 
-  // Priority 0 — RESCUE: any decaying structure (road, container, rampart) close to
-  // being removed, regardless of type. A vanished structure can't be repaired, so
-  // saving the closest-to-death one preempts all routine maintenance below.
   const dying = structures.filter(
     (st): st is AnyStructure => {
       const floor = decayRescueFloor(st);

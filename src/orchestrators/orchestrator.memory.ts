@@ -1,4 +1,6 @@
-const REMOTE_RESCAN_INTERVAL = 3000;  // re-queue a remote room for scouting this often
+const REMOTE_RESCAN_INTERVAL = 3000;
+const DEVELOPING_SCAN_INTERVAL = 10;
+const ESTABLISHED_SCAN_INTERVAL = 100;
 const REMOTE_HOSTILE_EXPIRY = 2000;   // re-consider hostile remote rooms after this many ticks
 const MAX_REMOTE_ROOMS = 3;           // max adjacent rooms to mine per owned room
 
@@ -27,9 +29,16 @@ function initializeMemory() {
   }
 }
 
+/**
+ * Refreshes a room's cached structure, source and mineral IDs. Scans frequently
+ * while the room is developing (these IDs gate miner/hauler spawning) and lazily
+ * once established.
+ */
 function processRoomMemory(room: Room) {
   if (!room.controller || !room.controller.my) return;
-  if (!room.memory.lastScan || Game.time - room.memory.lastScan > 100) {
+  const scanInterval =
+    room.controller.level <= 3 ? DEVELOPING_SCAN_INTERVAL : ESTABLISHED_SCAN_INTERVAL;
+  if (!room.memory.lastScan || Game.time - room.memory.lastScan > scanInterval) {
     const spawns = room.find(FIND_MY_SPAWNS);
     room.memory.spawnId = spawns.length > 0 ? spawns[0].id : undefined;
 

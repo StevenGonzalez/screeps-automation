@@ -25,9 +25,6 @@ export function runBuilder(creep: Creep) {
     return;
   }
 
-  // Every builder in the room focuses the same site (highest priority, most
-  // progressed) so sites get completed instead of each builder dribbling energy
-  // into whatever is nearest and leaving everything half-built.
   const site = getRoomBuildTarget(creep.room);
   if (site) {
     const res = buildAtConstructionSite(creep, site);
