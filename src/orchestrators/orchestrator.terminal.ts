@@ -3,6 +3,8 @@
  * Handles mineral sales, base-mineral buying, and inter-room resource balancing.
  */
 
+import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
+
 // ── Sell config ───────────────────────────────────────────────────────────────
 
 const TERMINAL_CONFIG = {
@@ -21,6 +23,21 @@ const BUY_CONFIG = {
   TARGET_STOCK: 3000,
   MAX_PRICE: 50,
   MAX_AMOUNT: 1000,
+};
+
+// ── Ghodium (nuker) config ────────────────────────────────────────────────────
+//
+// Ghodium (G) loads our offensive nukers (see orchestrator.nuker.ts). We keep one
+// NUKER_GHODIUM_RESERVE worth available per room that has a nuker. G is also a lab/boost
+// reagent, so the reserve is kept SEPARATE from the lab buy logic: lab chains still buy G
+// to TARGET_STOCK via the normal mineral path, and the nuker reserve sits on top of that —
+// we only buy/transfer to cover (reserve + lab target), never cannibalizing lab ghodium.
+
+const GHODIUM_CONFIG = {
+  INTERVAL: 500,      // throttle market buys (matches BUY_CONFIG.INTERVAL cadence)
+  MAX_PRICE: 8,       // G is cheap-ish; cap to avoid overpaying on a thin order book
+  MAX_AMOUNT: 1000,   // per market deal
+  TRANSFER_AMOUNT: 1000, // G per inter-room transfer
 };
 
 // ── Network balancing config ──────────────────────────────────────────────────
@@ -96,6 +113,76 @@ function processTerminal(room: Room): void {
       }
     }
   }
+
+  // Acquire ghodium to keep this room's nuker reserve stocked (RCL 8 rooms with a nuker).
+  const lastGBuy = room.memory.lastGhodiumBuyTick ?? 0;
+  if (Game.time - lastGBuy >= GHODIUM_CONFIG.INTERVAL) {
+    if (buyMissingGhodium(room, terminal)) {
+      room.memory.lastGhodiumBuyTick = Game.time;
+    }
+  }
+}
+
+// ── Ghodium (nuker reserve) ─────────────────────────────────────────────────────
+
+// How much G this room should hold in total (storage + terminal): the lab target stock
+// (so lab/boost ghodium isn't cannibalized) PLUS the nuker reserve when a nuker exists.
+function ghodiumTarget(room: Room): number {
+  let target = 0;
+  // Lab rooms already keep TARGET_STOCK of every base mineral incl. G; mirror that so the
+  // nuker reserve sits strictly on top and never eats into lab ghodium.
+  if (room.memory.labSystem?.inputLabIds?.length) target += BUY_CONFIG.TARGET_STOCK;
+  if (roomHasNuker(room)) target += NUKER_GHODIUM_RESERVE;
+  return target;
+}
+
+function roomHasNuker(room: Room): boolean {
+  const ns = room.memory.nukerSystem;
+  if (ns?.nukerId && Game.getObjectById(ns.nukerId)) return true;
+  return (
+    room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_NUKER,
+    }).length > 0
+  );
+}
+
+function ghodiumStock(room: Room): number {
+  return (
+    (room.storage?.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0) +
+    (room.terminal?.store.getUsedCapacity(RESOURCE_GHODIUM) ?? 0)
+  );
+}
+
+// Buy ghodium from the market when this room is below its target. Returns true on a deal.
+function buyMissingGhodium(room: Room, terminal: StructureTerminal): boolean {
+  const target = ghodiumTarget(room);
+  if (target <= 0) return false;
+
+  const stock = ghodiumStock(room);
+  if (stock >= target) return false;
+
+  const needed = target - stock;
+  const orders = Game.market.getAllOrders(
+    (o) =>
+      o.type === ORDER_SELL &&
+      o.resourceType === RESOURCE_GHODIUM &&
+      o.price <= GHODIUM_CONFIG.MAX_PRICE
+  );
+  if (orders.length === 0) return false;
+
+  orders.sort((a, b) => a.price - b.price);
+  const best = orders[0];
+  const amount = Math.min(needed, best.amount, GHODIUM_CONFIG.MAX_AMOUNT);
+  if (amount <= 0) return false;
+
+  const result = Game.market.deal(best.id, amount, room.name);
+  if (result === OK) {
+    console.log(
+      `[Terminal] ${room.name}: Bought ${amount} G @ ${best.price.toFixed(2)} for nuker reserve (stock was ${stock}/${target})`
+    );
+    return true;
+  }
+  return false;
 }
 
 // ── Inter-room send execution ─────────────────────────────────────────────────
@@ -151,6 +238,7 @@ function planNetworkBalancing(): void {
 
   planEnergyTransfers(infos);
   planMineralTransfers(infos);
+  planGhodiumTransfers(infos);
 }
 
 function planEnergyTransfers(infos: Array<{ room: Room; terminal: StructureTerminal; storageEnergy: number }>) {
@@ -221,6 +309,45 @@ function planMineralTransfers(infos: Array<{ room: Room; terminal: StructureTerm
       console.log(`[Network] Planned: ${amount} ${mineral} ${donor.room.name}→${receiver.room.name}`);
       break; // one mineral per receiver per plan cycle
     }
+  }
+}
+
+// Balance ghodium toward rooms whose nuker reserve is short, pulling from rooms that hold
+// G above their own target (surplus). Mirrors planMineralTransfers but keyed on the
+// per-room ghodium target (lab target + nuker reserve) so we never strip a donor below
+// what its own labs/nuker need.
+function planGhodiumTransfers(
+  infos: Array<{ room: Room; terminal: StructureTerminal; storageEnergy: number }>
+) {
+  for (const receiver of infos) {
+    if (receiver.room.memory.pendingSend) continue;
+    const target = ghodiumTarget(receiver.room);
+    if (target <= 0) continue; // no nuker / no lab need here
+
+    const receiverStock = ghodiumStock(receiver.room);
+    if (receiverStock >= target) continue;
+
+    const amount = Math.min(target - receiverStock, GHODIUM_CONFIG.TRANSFER_AMOUNT);
+    if (amount <= 0) continue;
+
+    const donor = infos.find((d) => {
+      if (d.room.name === receiver.room.name || d.room.memory.pendingSend) return false;
+      const dist = Game.map.getRoomLinearDistance(d.room.name, receiver.room.name);
+      if (dist > NETWORK_CONFIG.MAX_DISTANCE) return false;
+      // Donor must keep its own target intact and still have `amount` to spare.
+      const surplus = ghodiumStock(d.room) - ghodiumTarget(d.room);
+      return surplus >= amount;
+    });
+    if (!donor) continue;
+
+    donor.room.memory.pendingSend = {
+      resource: RESOURCE_GHODIUM,
+      amount,
+      loadTarget: amount,
+      to: receiver.room.name,
+    };
+    console.log(`[Network] Planned: ${amount} G ${donor.room.name}→${receiver.room.name} (nuker reserve)`);
+    break; // one ghodium transfer per planning pass
   }
 }
 

@@ -25,6 +25,7 @@ import {
   ROLE_SK_HAULER,
 } from "../config/config.roles";
 import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
+import { getDefenseOp, getDefenders } from "./orchestrator.military";
 import { getSkMembers, isOpPaused } from "./orchestrator.sourcekeeper";
 import { getStockForCompound } from "../services/services.labs";
 import { getRampartTargetHP } from "../services/services.creep";
@@ -228,6 +229,12 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 
   // Core economy — harvesters always first: cheapest path back from energy collapse.
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
+
+  // Standing defense — highest non-survival priority. An auto-declared DefenseOp
+  // (orchestrator.military) means a serious raid is in the room; a structured defensive
+  // squad outranks miners/haulers and all economy below, because a lost spawn doesn't
+  // respawn. A bootstrapping child room needing a defender is handled here too.
+  if (shouldSpawnDefender(room) && spawnNextDefender(room, spawn)) return;
 
   // Under a serious raid (healer-backed squad), defenders take the next spawn slot
   // before stationary miners and haulers — a dead miner respawns, a dead spawn does not.
@@ -954,13 +961,10 @@ function shouldSpawnSettler(room: Room): boolean {
   const exp = Memory.expansion;
   if (!exp || exp.phase !== "bootstrapping" || exp.homeRoom !== room.name) return false;
 
-  // Transition to established once the new room's spawn is visible
-  const target = Game.rooms[exp.roomName];
-  if (target && target.find(FIND_MY_SPAWNS).length > 0) {
-    Memory.expansion!.phase = "established";
-    console.log(`[Expansion] ${exp.roomName} is now established!`);
-    return false;
-  }
+  // orchestrator.expansion is the sole authority on the bootstrapping -> established
+  // transition (it runs every tick and checks true self-sufficiency). Do not flip the
+  // phase here. Pause settler production while the child room is contested.
+  if (exp.pausedUntil && exp.pausedUntil > Game.time) return false;
 
   const settlers = getCreepsByRole(ROLE_SETTLER).filter(
     (c) => c.memory.targetRoom === exp.roomName
@@ -992,9 +996,14 @@ function getOffensiveSquadMembers(op: MilitaryOp): Creep[] {
   );
 }
 
+// The offensive op funded by THIS room, if any (concurrency: one op per home room).
+function getOffensiveOpForRoom(room: Room): MilitaryOp | undefined {
+  return Memory.militaryOps?.[room.name];
+}
+
 function shouldSpawnOffensiveCreep(room: Room): boolean {
-  const op = Memory.militaryOp;
-  if (!op || op.homeRoom !== room.name || op.phase !== "forming") return false;
+  const op = getOffensiveOpForRoom(room);
+  if (!op || op.phase !== "forming") return false;
   const members = getOffensiveSquadMembers(op);
   return (
     members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredKnights ||
@@ -1005,7 +1014,7 @@ function shouldSpawnOffensiveCreep(room: Room): boolean {
 }
 
 function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
-  const op = Memory.militaryOp;
+  const op = getOffensiveOpForRoom(room);
   if (!op) return false;
 
   const members = getOffensiveSquadMembers(op);
@@ -1062,6 +1071,123 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   });
   if (res === OK) {
     console.log(`[Military] Spawning offensive ${roleToSpawn} for ${op.targetRoom}`);
+  }
+  return res === OK;
+}
+
+// ── Standing-defense squad helpers ─────────────────────────────────────────────
+//
+// Driven by the auto-declared DefenseOp for this room (orchestrator.military). Mirrors
+// the offensive squad spawn path — full-capacity bodies, role-ordered front-to-back,
+// reusing the shared body builders and boost requests — but tags creeps with
+// `defensiveTarget` so they run the in-room defensive behavior instead of an attack.
+// Also covers the bootstrapping child-room defender handed down by the expansion
+// feature (Memory.expansion.needsDefender).
+
+// Counts current + spawning defenders of a role assigned to defend `targetRoom`.
+function countDefendersByRole(targetRoom: string, role: string, homeRoom: Room): number {
+  const live = getDefenders(targetRoom).filter((c) => c.memory.role === role).length;
+  return live + getRoomSpawningCount(homeRoom, role);
+}
+
+// True when the home room (Memory.expansion.homeRoom) must raise a single bootstrap
+// defender to clear a contested child room. Bounded to one in-flight defender.
+function needsChildRoomDefender(room: Room): boolean {
+  const exp = Memory.expansion;
+  if (!exp?.needsDefender || exp.homeRoom !== room.name) return false;
+  const existing = getCreepsByRole(ROLE_KNIGHT).filter(
+    (c) => c.memory.targetRoom === exp.roomName && c.memory.homeRoom === room.name
+  );
+  return existing.length + getRoomSpawningCount(room, ROLE_KNIGHT) === 0;
+}
+
+function shouldSpawnDefender(room: Room): boolean {
+  if (needsChildRoomDefender(room)) return true;
+
+  const op = getDefenseOp(room.name);
+  if (!op) return false;
+  return (
+    countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredKnights ||
+    countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredWizards ||
+    countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredClerics
+  );
+}
+
+function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
+  // Child-room bootstrap defender: a single knight sent to clear the contested child
+  // room (bounded to one in-flight) rather than to defend this room.
+  if (needsChildRoomDefender(room)) {
+    return spawnChildRoomDefender(room, spawn);
+  }
+
+  const op = getDefenseOp(room.name);
+  if (!op) return false;
+
+  // Spawn order front-to-back: knights screen first, then wizards, then clerics.
+  let roleToSpawn: string | null = null;
+  let combatPartType: BodyPartConstant = ATTACK;
+  let boostKey = "knight";
+  let body: BodyPartConstant[];
+
+  // Defenders are urgent — size to currently-available energy so the room isn't left
+  // undefended waiting for full capacity while a raid chews the spawn.
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+
+  if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredKnights) {
+    roleToSpawn = ROLE_KNIGHT;
+    combatPartType = ATTACK;
+    boostKey = "knight";
+    body = buildKnightBody(allowedEnergy);
+  } else if (countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredWizards) {
+    roleToSpawn = ROLE_WIZARD;
+    combatPartType = RANGED_ATTACK;
+    boostKey = "wizard";
+    body = buildWizardBody(allowedEnergy);
+  } else if (countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredClerics) {
+    roleToSpawn = ROLE_CLERIC;
+    combatPartType = HEAL;
+    boostKey = "cleric";
+    body = buildClericBody(allowedEnergy);
+  } else {
+    return false;
+  }
+
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+  const combatParts = body.filter((p) => p === combatPartType).length;
+  const boost = pickBoostCompound(room, boostKey, combatParts);
+  const res = spawn.spawnCreep(body, `${roleToSpawn}_def${Game.time}`, {
+    memory: {
+      role: roleToSpawn,
+      homeRoom: room.name,
+      defensiveTarget: room.name,
+      ...(boost ? { boostCompound: boost } : {}),
+    },
+  });
+  if (res === OK) {
+    console.log(`[Defense] Spawning defensive ${roleToSpawn} for ${room.name}`);
+  }
+  return res === OK;
+}
+
+function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
+  const exp = Memory.expansion;
+  if (!exp) return false;
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildKnightBody(allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const attackParts = body.filter((p) => p === ATTACK).length;
+  const boost = pickBoostCompound(room, "knight", attackParts);
+  const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_child${Game.time}`, {
+    memory: {
+      role: ROLE_KNIGHT,
+      homeRoom: room.name,
+      targetRoom: exp.roomName,
+      ...(boost ? { boostCompound: boost } : {}),
+    },
+  });
+  if (res === OK) {
+    console.log(`[Defense] Spawning child-room defender for ${exp.roomName}`);
   }
   return res === OK;
 }

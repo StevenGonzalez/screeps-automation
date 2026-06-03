@@ -2,6 +2,10 @@ import { resolveChain, getStockForCompound } from "./services/services.labs";
 import {
   cancelOp,
   launchOp,
+  enqueueOp,
+  dequeueOp,
+  getMilitaryQueue,
+  getOffensiveOps,
   recommendComposition,
   setFormation,
   setTactic,
@@ -22,7 +26,18 @@ import {
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
 } from "./config/config.roles";
-import { rankExpansionCandidates } from "./orchestrators/orchestrator.expansion";
+import {
+  rankExpansionCandidates,
+  enqueueExpansion,
+  dequeueExpansion,
+  getExpansionQueue,
+} from "./orchestrators/orchestrator.expansion";
+import {
+  describeFactories,
+  forceCommodity,
+  setAuto as setFactoryAuto,
+} from "./orchestrators/orchestrator.factory";
+import { describeNukers, launchNukeFrom } from "./orchestrators/orchestrator.nuker";
 
 const VALID_FORMATIONS: SquadFormation[] = ["line", "box", "wedge", "scatter"];
 const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "retreat"];
@@ -42,7 +57,34 @@ export function setupConsole() {
           `  ${c.room}  score=${c.score}  sources=${c.sources}  dist=${c.dist}  fundedBy=${c.homeRoom}`
         );
       }
-      console.log("[ARCA] Claim with: Game.arca.claim('ROOM_NAME')");
+      console.log("[ARCA] Claim now with Game.arca.claim('ROOM_NAME') or line up with Game.arca.queueExpand('ROOM_NAME')");
+    },
+
+    // Add a target to the expansion PIPELINE. Only one expansion runs at a time; the
+    // queue auto-advances to the next target when the active one completes/aborts.
+    //   Game.arca.queueExpand('W5N5')            → closest healthy home funds it at pop time
+    //   Game.arca.queueExpand('W5N5', 'W1N1')    → prefer a specific funding home
+    queueExpand: (roomName: string, homeRoom?: string) => {
+      if (!roomName) {
+        console.log("[ARCA] Usage: Game.arca.queueExpand('W5N5')  or  Game.arca.queueExpand('W5N5', 'W1N1')");
+        return;
+      }
+      const err = enqueueExpansion(roomName, homeRoom);
+      if (err) {
+        console.log(`[ARCA] Cannot queue ${roomName} — ${err}`);
+        return;
+      }
+      console.log(`[ARCA] Queued expansion to ${roomName}${homeRoom ? ` (prefer ${homeRoom})` : ""} — ${getExpansionQueue().length} queued`);
+    },
+
+    // Remove a target from the expansion queue.
+    dequeueExpand: (roomName: string) => {
+      if (!roomName) {
+        console.log("[ARCA] Usage: Game.arca.dequeueExpand('W5N5')");
+        return;
+      }
+      if (dequeueExpansion(roomName)) console.log(`[ARCA] Removed ${roomName} from the expansion queue`);
+      else console.log(`[ARCA] ${roomName} was not in the expansion queue`);
     },
 
     // Toggle / inspect automatic GCL-driven expansion. When ON, the bot claims the
@@ -122,17 +164,26 @@ export function setupConsole() {
       );
     },
 
-    // Show current expansion status
+    // Show current expansion status + the queued pipeline.
     status: () => {
       const e = Memory.expansion;
-      if (!e) {
+      if (e) {
+        const age = Game.time - e.startedAt;
+        console.log(
+          `[ARCA] ACTIVE: ${e.roomName} | Phase: ${e.phase} | Home: ${e.homeRoom} | Age: ${age} ticks`
+        );
+      } else {
         console.log("[ARCA] No active expansion");
+      }
+      const queue = getExpansionQueue();
+      if (queue.length === 0) {
+        console.log("[ARCA] Expansion queue is empty");
         return;
       }
-      const age = Game.time - e.startedAt;
-      console.log(
-        `[ARCA] ${e.roomName} | Phase: ${e.phase} | Home: ${e.homeRoom} | Age: ${age} ticks`
-      );
+      console.log(`[ARCA] Expansion queue (${queue.length}):`);
+      queue.forEach((q, i) => {
+        console.log(`  ${i + 1}. ${q.roomName}${q.homeRoom ? ` (prefer ${q.homeRoom})` : ""}  queuedAt=${q.queuedAt}`);
+      });
     },
 
     // Abort an active expansion
@@ -240,15 +291,19 @@ export function setupConsole() {
       }
     },
 
-    // Launch an offensive military operation against a target room.
+    // Launch an offensive military operation against a target room. Concurrency is one
+    // op per home room: if the closest capable home is already busy, the op is QUEUED
+    // and auto-starts when a home frees up. Pass an explicit homeRoom to force one.
     //   Game.arca.attack('W2N1')                      → box / assault, auto-scaled squad
     //   Game.arca.attack('W2N1', 'wedge', 'siege')    → pick formation + tactic
     //   Game.arca.attack('W2N1', 'box', 'assault', { knights: 4, clerics: 2 })  → override squad
+    //   Game.arca.attack('W2N1', 'box', 'assault', undefined, 'W1N1')  → force funding home
     attack: (
       roomName: string,
       formation: SquadFormation = "box",
       tactic: SquadTactic = "assault",
-      composition?: { knights?: number; wizards?: number; clerics?: number; siegers?: number }
+      composition?: { knights?: number; wizards?: number; clerics?: number; siegers?: number },
+      homeRoomName?: string
     ) => {
       if (!roomName) {
         console.log("[Military] Usage: Game.arca.attack('W2N1', 'box', 'assault')");
@@ -274,11 +329,23 @@ export function setupConsole() {
         console.log("[Military] No owned rooms to launch from");
         return;
       }
-      const homeRoom = ownedRooms.reduce((best, r) => {
-        const d = Game.map.getRoomLinearDistance(r.name, roomName);
-        const bd = Game.map.getRoomLinearDistance(best.name, roomName);
-        return d < bd ? r : best;
-      });
+
+      // Resolve the funding home: explicit if given, else the closest owned room.
+      let homeRoom: Room;
+      if (homeRoomName) {
+        const r = Game.rooms[homeRoomName];
+        if (!r?.controller?.my) {
+          console.log(`[Military] ${homeRoomName} is not a room you own`);
+          return;
+        }
+        homeRoom = r;
+      } else {
+        homeRoom = ownedRooms.reduce((best, r) => {
+          const d = Game.map.getRoomLinearDistance(r.name, roomName);
+          const bd = Game.map.getRoomLinearDistance(best.name, roomName);
+          return d < bd ? r : best;
+        });
+      }
 
       // Intelligent default composition scaled to known defenses, overridable per role.
       const rec = recommendComposition(roomName, tactic);
@@ -291,7 +358,13 @@ export function setupConsole() {
 
       const err = launchOp(roomName, formation, tactic, comp, homeRoom.name);
       if (err) {
-        console.log(`[Military] Cannot launch — ${err}`);
+        // Home busy (or otherwise unavailable) → queue it to auto-start later.
+        const qErr = enqueueOp(roomName, formation, tactic, comp, homeRoomName);
+        if (qErr) {
+          console.log(`[Military] Cannot launch or queue — ${err}; ${qErr}`);
+          return;
+        }
+        console.log(`[Military] ${err} — queued ${roomName} to auto-start when a home frees up`);
         return;
       }
       console.log(
@@ -301,98 +374,158 @@ export function setupConsole() {
       console.log(`[Military] Spawning squad... track with Game.arca.squads()`);
     },
 
-    // Change formation mid-battle: line | box | wedge | scatter
-    formation: (name: SquadFormation) => {
+    // Remove a queued offensive target.
+    dequeueAttack: (roomName: string) => {
+      if (!roomName) {
+        console.log("[Military] Usage: Game.arca.dequeueAttack('W2N1')");
+        return;
+      }
+      if (dequeueOp(roomName)) console.log(`[Military] Removed ${roomName} from the offensive queue`);
+      else console.log(`[Military] ${roomName} was not in the offensive queue`);
+    },
+
+    // Change formation mid-battle: line | box | wedge | scatter. Applies to all active
+    // ops, or just the op funded by `homeRoom` if given.
+    formation: (name: SquadFormation, homeRoom?: string) => {
       if (!VALID_FORMATIONS.includes(name)) {
         console.log(`[Military] Unknown formation '${name}'. Use: ${VALID_FORMATIONS.join(", ")}`);
         return;
       }
-      if (!setFormation(name)) {
-        console.log("[Military] No active operation");
+      const n = setFormation(name, homeRoom);
+      if (n === 0) {
+        console.log("[Military] No matching active operation");
         return;
       }
-      console.log(`[Military] Formation → ${name}`);
+      console.log(`[Military] Formation → ${name} (${n} op${n !== 1 ? "s" : ""})`);
     },
 
-    // Change tactic mid-battle: assault | siege | raid | defend | retreat
-    tactic: (name: SquadTactic) => {
+    // Change tactic mid-battle: assault | siege | raid | defend | retreat. Applies to
+    // all active ops, or just the op funded by `homeRoom` if given.
+    tactic: (name: SquadTactic, homeRoom?: string) => {
       if (!VALID_TACTICS.includes(name)) {
         console.log(`[Military] Unknown tactic '${name}'. Use: ${VALID_TACTICS.join(", ")}`);
         return;
       }
-      if (!setTactic(name)) {
-        console.log("[Military] No active operation");
+      const n = setTactic(name, homeRoom);
+      if (n === 0) {
+        console.log("[Military] No matching active operation");
         return;
       }
-      console.log(`[Military] Tactic → ${name}`);
+      console.log(`[Military] Tactic → ${name} (${n} op${n !== 1 ? "s" : ""})`);
     },
 
-    // Recall all units and stand down the operation.
-    recall: () => {
-      if (!Memory.militaryOp) {
-        console.log("[Military] No active operation");
+    // Recall and stand down operations. No arg → all ops; a home room → just that one.
+    recall: (homeRoom?: string) => {
+      const n = cancelOp(homeRoom);
+      if (n === 0) {
+        console.log(homeRoom ? `[Military] No active operation for ${homeRoom}` : "[Military] No active operations");
         return;
       }
-      const room = Memory.militaryOp.targetRoom;
-      cancelOp();
-      console.log(`[Military] Operation against ${room} aborted — squad stood down`);
+      console.log(`[Military] Stood down ${n} operation${n !== 1 ? "s" : ""}${homeRoom ? ` (${homeRoom})` : ""}`);
     },
 
-    // Show current squad status.
+    // Show all active offensive ops + the offensive queue.
     squads: () => {
-      const op = Memory.militaryOp;
-      if (!op) {
-        console.log("[Military] No active operation");
+      const ops = getOffensiveOps();
+      const queue = getMilitaryQueue();
+      if (ops.length === 0 && queue.length === 0) {
+        console.log("[Military] No active operations or queued targets");
         return;
       }
 
-      const age = Game.time - op.startedAt;
-      console.log(`[Military] Op: ${op.homeRoom} → ${op.targetRoom}`);
-      console.log(
-        `  Phase: ${op.phase}  |  Formation: ${op.formation}  |  Tactic: ${op.tactic}  |  Age: ${age}t`
-      );
-      console.log(
-        `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ` +
-        `${op.requiredClerics}C / ${op.requiredSiegers ?? 0}S`
-      );
-
-      const members = Object.values(Game.creeps).filter(
-        (c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom
-      );
-      if (members.length === 0) {
-        console.log("  Squad: none yet (still spawning)");
-        return;
-      }
-
-      const counts = {
-        [ROLE_KNIGHT]: 0,
-        [ROLE_WIZARD]: 0,
-        [ROLE_CLERIC]: 0,
-        [ROLE_SIEGER]: 0,
-      } as Record<string, number>;
-      let hpSum = 0;
-      for (const c of members) {
-        counts[c.memory.role] = (counts[c.memory.role] ?? 0) + 1;
-        hpSum += c.hits / c.hitsMax;
-      }
-      const avgHp = Math.round((hpSum / members.length) * 100);
-      const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
-      console.log(
-        `  Composition: ${counts[ROLE_KNIGHT]}K/${counts[ROLE_WIZARD]}W/` +
-        `${counts[ROLE_CLERIC]}C/${counts[ROLE_SIEGER]}S  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
-      );
-
-      for (const c of members) {
-        const hpPct = Math.round((c.hits / c.hitsMax) * 100);
+      for (const op of ops) {
+        const age = Game.time - op.startedAt;
+        console.log(`[Military] Op: ${op.homeRoom} → ${op.targetRoom}`);
         console.log(
-          `  ${c.name}  role=${c.memory.role}  room=${c.room.name}  hp=${hpPct}%  ttl=${c.ticksToLive ?? "?"}`
+          `  Phase: ${op.phase}  |  Formation: ${op.formation}  |  Tactic: ${op.tactic}  |  Age: ${age}t`
         );
+        console.log(
+          `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ` +
+          `${op.requiredClerics}C / ${op.requiredSiegers ?? 0}S`
+        );
+
+        const members = Object.values(Game.creeps).filter(
+          (c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom
+        );
+        if (members.length === 0) {
+          console.log("  Squad: none yet (still spawning)");
+          continue;
+        }
+
+        const counts = {
+          [ROLE_KNIGHT]: 0,
+          [ROLE_WIZARD]: 0,
+          [ROLE_CLERIC]: 0,
+          [ROLE_SIEGER]: 0,
+        } as Record<string, number>;
+        let hpSum = 0;
+        for (const c of members) {
+          counts[c.memory.role] = (counts[c.memory.role] ?? 0) + 1;
+          hpSum += c.hits / c.hitsMax;
+        }
+        const avgHp = Math.round((hpSum / members.length) * 100);
+        const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
+        console.log(
+          `  Composition: ${counts[ROLE_KNIGHT]}K/${counts[ROLE_WIZARD]}W/` +
+          `${counts[ROLE_CLERIC]}C/${counts[ROLE_SIEGER]}S  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
+        );
+
+        for (const c of members) {
+          const hpPct = Math.round((c.hits / c.hitsMax) * 100);
+          console.log(
+            `  ${c.name}  role=${c.memory.role}  room=${c.room.name}  hp=${hpPct}%  ttl=${c.ticksToLive ?? "?"}`
+          );
+        }
+      }
+
+      if (queue.length > 0) {
+        console.log(`[Military] Offensive queue (${queue.length}):`);
+        queue.forEach((q, i) => {
+          console.log(
+            `  ${i + 1}. ${q.targetRoom}${q.homeRoom ? ` (prefer ${q.homeRoom})` : ""}  ${q.formation}/${q.tactic}  ` +
+            `${q.requiredKnights}K/${q.requiredWizards}W/${q.requiredClerics}C/${q.requiredSiegers}S`
+          );
+        });
       }
     },
 
     // Aliases retained for backwards compatibility.
     retreat: () => (Game as any).arca.recall(),
     military: () => (Game as any).arca.squads(),
+
+    // One-shot overview of all multi-op pipelines: expansion, offensive, SK.
+    ops: () => {
+      // Expansion
+      const exp = Memory.expansion;
+      const expQueue = getExpansionQueue();
+      console.log("[ARCA] === Operations Overview ===");
+      if (exp) {
+        console.log(`  Expansion ACTIVE: ${exp.roomName} (${exp.phase}) ← ${exp.homeRoom}`);
+      } else {
+        console.log("  Expansion: idle");
+      }
+      if (expQueue.length > 0) {
+        console.log(`    queue (${expQueue.length}): ${expQueue.map((q) => q.roomName).join(", ")}`);
+      }
+
+      // Offensive
+      const mOps = getOffensiveOps();
+      const mQueue = getMilitaryQueue();
+      if (mOps.length === 0) console.log("  Offensive: none active");
+      for (const op of mOps) {
+        console.log(`  Offensive: ${op.homeRoom} → ${op.targetRoom} (${op.phase}, ${op.tactic})`);
+      }
+      if (mQueue.length > 0) {
+        console.log(`    queue (${mQueue.length}): ${mQueue.map((q) => q.targetRoom).join(", ")}`);
+      }
+
+      // Source Keeper
+      const skOps = Memory.skOps ?? [];
+      if (skOps.length === 0) console.log("  Source Keeper: none active");
+      for (const op of skOps) {
+        console.log(`  Source Keeper: #${op.id} ${op.homeRoom} → ${op.roomName} (${op.phase})`);
+      }
+    },
 
     // Toggle / inspect the WarCouncil auto-attack and list ranked targets.
     warcouncil: (autoAttack?: boolean) => {
@@ -486,6 +619,65 @@ export function setupConsole() {
         }
       }
       if (!found) console.log("[Nuke] No inbound nukes detected");
+    },
+
+    // Show OFFENSIVE nuker load status per owned room (energy %, ghodium %, cooldown, ready).
+    nuker: () => {
+      const statuses = describeNukers();
+      if (statuses.length === 0) {
+        console.log("[Nuker] No nukers found (built at RCL 8)");
+        return;
+      }
+      for (const s of statuses) {
+        const ePct = Math.round((s.energy / s.energyCapacity) * 100);
+        const gPct = Math.round((s.ghodium / s.ghodiumCapacity) * 100);
+        const cd = s.cooldown > 0 ? `cooldown=${s.cooldown}t` : "cooldown=0";
+        const state = s.ready ? "READY" : "loading";
+        console.log(
+          `[Nuker] ${s.room}: energy=${s.energy}/${s.energyCapacity} (${ePct}%)  ` +
+          `ghodium=${s.ghodium}/${s.ghodiumCapacity} (${gPct}%)  ${cd}  [${state}]`
+        );
+      }
+      console.log("[Nuker] Launch with: Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)  or  Game.arca.launchNuke('W1N1', 'FLAG_NAME')");
+    },
+
+    // Launch a nuke from `fromRoom` at a target. Target is either an (x,y) in a room name,
+    // or the name of a flag (its position is used). DESTRUCTIVE and MANUAL ONLY — never auto.
+    //   Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)
+    //   Game.arca.launchNuke('W1N1', 'NUKE_HERE')   // target a flag by name
+    launchNuke: (fromRoom: string, target: string, x?: number, y?: number) => {
+      if (!fromRoom || !target) {
+        console.log("[Nuker] Usage: Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)  or  Game.arca.launchNuke('W1N1', 'FLAG_NAME')");
+        return;
+      }
+
+      // Resolve the target position: a flag name, or (roomName, x, y).
+      let pos: RoomPosition;
+      const flag = Game.flags[target];
+      if (flag) {
+        pos = flag.pos;
+      } else {
+        if (x === undefined || y === undefined) {
+          console.log(`[Nuker] '${target}' is not a flag — provide x and y: Game.arca.launchNuke('${fromRoom}', '${target}', 25, 25)`);
+          return;
+        }
+        if (x < 0 || x > 49 || y < 0 || y > 49) {
+          console.log(`[Nuker] Invalid coordinates (${x},${y}) — must be 0..49`);
+          return;
+        }
+        pos = new RoomPosition(x, y, target);
+      }
+
+      const err = launchNukeFrom(fromRoom, pos);
+      if (err) {
+        console.log(`[Nuker] Launch ABORTED — ${err}`);
+        return;
+      }
+      const msg =
+        `[Nuker] LAUNCHED from ${fromRoom} → ${pos.roomName} (${pos.x},${pos.y}) — ` +
+        `impact in ${NUKE_LAND_TIME} ticks`;
+      console.log(msg);
+      Game.notify(msg, 0);
     },
 
     // Manually activate safemode in a room
@@ -640,6 +832,45 @@ export function setupConsole() {
       if (!room.memory.labSystem) room.memory.labSystem = { queue: [] };
       room.memory.labSystem.autoEnabled = enabled;
       console.log(`[Labs] ${roomName}: Auto-production ${enabled ? "ENABLED" : "DISABLED"}`);
+    },
+
+    // Show factory / commodity production status for all owned rooms with a factory.
+    factory: () => {
+      const lines = describeFactories();
+      if (lines.length === 0) {
+        console.log("[Factory] No factories found (need RCL 7+ and a built factory)");
+        return;
+      }
+      for (const line of lines) console.log(line);
+    },
+
+    // Force a room's factory to produce a specific commodity until the next auto-plan.
+    //   Game.arca.produceCommodity('W1N1', 'battery')
+    produceCommodity: (roomName: string, commodity: string) => {
+      if (!roomName || !commodity) {
+        console.log("[Factory] Usage: Game.arca.produceCommodity('W1N1', 'battery')");
+        return;
+      }
+      const err = forceCommodity(roomName, commodity);
+      if (err) {
+        console.log(`[Factory] ${err}`);
+        return;
+      }
+      console.log(`[Factory] ${roomName}: now producing ${commodity}`);
+    },
+
+    // Enable or disable auto-production for a room's factory.
+    autoFactory: (roomName: string, enabled: boolean) => {
+      if (!roomName || enabled === undefined) {
+        console.log("[Factory] Usage: Game.arca.autoFactory('W1N1', true)");
+        return;
+      }
+      const err = setFactoryAuto(roomName, enabled);
+      if (err) {
+        console.log(`[Factory] ${err}`);
+        return;
+      }
+      console.log(`[Factory] ${roomName}: Auto-production ${enabled ? "ENABLED" : "DISABLED"}`);
     },
   };
 }

@@ -376,6 +376,70 @@ export function findClosestConstructionSite(
   return creep.pos.findClosestByPath(sites) || null;
 }
 
+// Builder focus order by structure type. Mirrors the placement order in
+// orchestrator.structures.ts BUILD_PRIORITY (kept local so services don't depend on
+// an orchestrator). Lower number = built first.
+const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
+  [STRUCTURE_SPAWN]: 0,
+  [STRUCTURE_EXTENSION]: 1,
+  [STRUCTURE_TOWER]: 2,
+  [STRUCTURE_STORAGE]: 3,
+  [STRUCTURE_CONTAINER]: 4,
+  [STRUCTURE_TERMINAL]: 5,
+  [STRUCTURE_LINK]: 6,
+  [STRUCTURE_LAB]: 7,
+  [STRUCTURE_FACTORY]: 8,
+  [STRUCTURE_NUKER]: 9,
+  [STRUCTURE_POWER_SPAWN]: 9,
+  [STRUCTURE_OBSERVER]: 9,
+  [STRUCTURE_RAMPART]: 10,
+  [STRUCTURE_ROAD]: 11,
+};
+
+function sitePriority(s: ConstructionSite): number {
+  return SITE_BUILD_PRIORITY[s.structureType] ?? 11;
+}
+
+// a outranks b when it's a more important structure type, or (same type) is closer
+// to completion, with id as a stable final tiebreak.
+function isHigherBuildPriority(a: ConstructionSite, b: ConstructionSite): boolean {
+  const pa = sitePriority(a);
+  const pb = sitePriority(b);
+  if (pa !== pb) return pa < pb;
+  const ra = a.progress / a.progressTotal;
+  const rb = b.progress / b.progressTotal;
+  if (ra !== rb) return ra > rb;
+  return a.id < b.id;
+}
+
+// Per-tick cache of the single site each room's builders should focus on.
+let buildTargetTick = -1;
+const buildTargetByRoom: Record<string, Id<ConstructionSite> | null> = {};
+
+/**
+ * The one construction site the whole room should build right now, so every builder
+ * converges on it (focus-fire) instead of each picking the nearest site and leaving
+ * a field of half-finished structures. Ranks by structure-type priority, then by
+ * most-progressed (finish what's nearly done first), then id for stability. Because
+ * progress only grows, the chosen site stays the target until it completes — builders
+ * return to it after refilling rather than re-picking whatever is now closest.
+ */
+export function getRoomBuildTarget(room: Room): ConstructionSite | null {
+  if (buildTargetTick !== Game.time) {
+    buildTargetTick = Game.time;
+    for (const k of Object.keys(buildTargetByRoom)) delete buildTargetByRoom[k];
+  }
+  if (buildTargetByRoom[room.name] === undefined) {
+    let best: ConstructionSite | null = null;
+    for (const s of room.find(FIND_MY_CONSTRUCTION_SITES) as ConstructionSite[]) {
+      if (!best || isHigherBuildPriority(s, best)) best = s;
+    }
+    buildTargetByRoom[room.name] = best ? best.id : null;
+  }
+  const id = buildTargetByRoom[room.name];
+  return id ? Game.getObjectById(id) : null;
+}
+
 // HP targets for ramparts/walls by RCL — creeps repair up to this level.
 const RAMPART_TARGET_HP: Record<number, number> = {
   2:        10_000,
@@ -698,7 +762,7 @@ export function repairStructure(creep: Creep, target: AnyStructure): number {
  * structure, else upgrade the controller. Operates on the creep's current room.
  */
 export function putSurplusEnergyToWork(creep: Creep): void {
-  const site = findClosestConstructionSite(creep);
+  const site = getRoomBuildTarget(creep.room);
   if (site) {
     buildAtConstructionSite(creep, site);
     return;

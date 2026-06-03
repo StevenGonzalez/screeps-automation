@@ -1,34 +1,63 @@
-# Terminal Network _(planned)_
+# Terminal Network
 
-> **Status**: The full cross-colony Terminal Network is planned. What currently exists is single-room mineral selling via the market.
-
----
-
-## What Exists: Mineral Selling (`orchestrator.terminal.ts`)
-
-Each owned room with a terminal automatically sells excess minerals to nearby buy orders on the market.
-
-### Rules
-- Sells when terminal holds **≥ 1,000** units of the room's mineral type
-- Sells up to **1,000 units per transaction**
-- Only fills orders within **10 rooms** of the seller
-- Requires **≥ 1,000 energy** in the terminal to cover transfer cost
-- Only fills orders priced above **0.5 credits/unit**
-
-### Output
-```
-[W1N1] Sold 1000 H @ 1.23 = 1230 credits
-```
+> **Status**: Implemented. `orchestrators/orchestrator.terminal.ts` handles market
+> mineral selling, base-mineral buying for lab chains, ghodium acquisition for
+> nukers, and inter-room balancing of energy, minerals, and ghodium.
 
 ---
 
-## Planned: Multi-Colony Resource Network _(RCL 6+)_
+## Market Trading (per room)
 
-When multiple colonies each have terminals, a network layer will coordinate automatic resource sharing:
+Each owned room with a terminal:
 
-- **Energy sharing**: Bootstrap and under-attack colonies receive emergency transfers
-- **Mineral distribution**: Colonies share raw minerals to supply lab chains
-- **Compound distribution**: Boost compounds produced by one lab colony shared to all
-- **Console commands**: `Game.arca.network()`, `Game.arca.sendEnergy(room, amount)`
+- **Sells** excess minerals to nearby buy orders: when terminal stock of the room's
+  mineral type is ≥ 1,000, up to 1,000/transaction, within 10 rooms, priced above
+  0.5 credits/unit. Requires ≥ 1,000 energy in the terminal to cover the fee.
+- **Buys** base minerals for lab chains (rooms with active labs) when stock runs
+  low: every 500 ticks, tops up toward 3,000 each (`H O Z K U L X`), capped at
+  1,000/deal and a max price of 50.
+
+---
+
+## Ghodium for Nukers
+
+Ghodium (G) loads the offensive nukers (see [NUKER_SYSTEM.md](NUKER_SYSTEM.md)).
+The terminal keeps a per-room G reserve so a nuker can always be topped off:
+
+- Each room's **ghodium target** = the lab base-mineral target (3,000, for lab
+  rooms) **plus** one `NUKER_GHODIUM_RESERVE` (5,000) when the room has a nuker.
+  The nuker reserve sits strictly on top of the lab target, so lab/boost ghodium is
+  never cannibalized.
+- **Buys** G from the market (every 500 ticks, max price 8, up to 1,000/deal) when
+  the room is below its target.
+
+---
+
+## Inter-Room Balancing
+
+Re-planned every 100 ticks across all owned rooms with terminals. Each pass queues
+at most one transfer per category by writing a `room.memory.pendingSend`, which the
+owning room's terminal executes once loaded and off cooldown (and, for non-energy,
+once it has the energy to pay the fee).
+
+- **Energy** — donors (storage > 200k) send 30k to the poorest receivers
+  (storage < 50k). One energy transfer queued per pass.
+- **Minerals** — lab rooms short on a base mineral (< 500 combined) pull up to
+  1,000 from a donor with a genuine surplus (≥ 2,000 + the amount).
+- **Ghodium** — rooms below their ghodium target pull up to 1,000 from a donor that
+  can spare it without dropping below its own target (lab target + nuker reserve).
+
+All transfers skip pairs more than 10 rooms apart.
+
+---
+
+## Console Command
+
+```javascript
+Game.arca.network()   // per-room storage/terminal energy, pending sends, and mineral stocks
+```
+
+(There is no `Game.arca.sendEnergy()` — inter-room energy moves are planned
+automatically by the balancing pass, not commanded manually.)
 
 The wealth of Lorencia flows to every corner of the empire.

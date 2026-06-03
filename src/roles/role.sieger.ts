@@ -1,5 +1,5 @@
 import { seekBoost } from "../services/services.combat";
-import { runOffensiveSieger } from "../orchestrators/orchestrator.military";
+import { getOffensiveOp, runOffensiveSieger } from "../orchestrators/orchestrator.military";
 
 /**
  * Sieger (sapper): the squad's siege engineer. Boosted WORK parts dismantle enemy
@@ -11,8 +11,8 @@ export function runSieger(creep: Creep) {
   if (creep.memory.boostCompound && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
-    const op = Memory.militaryOp;
-    if (op && op.targetRoom === creep.memory.offensiveTarget) {
+    const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);
+    if (op) {
       runOffensiveSieger(creep, op);
       return;
     }

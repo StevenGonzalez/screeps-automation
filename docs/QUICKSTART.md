@@ -1,34 +1,21 @@
-﻿# ARCA Quick Start Guide
+# Quick Start Guide
 
-Welcome to **ARCA** — the intelligence that rules the kingdom of **Lorencia**!
+Welcome to **Lorencia** — a medieval-themed Screeps bot. The flavor is a fantasy
+empire (peasants and miners work the land, scholars and masons build, knights and
+wizards defend), but the architecture is plain: a set of per-system `loop()`
+modules run in order from `main.ts`. There's no central AI object or class
+hierarchy. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
 
-## What is ARCA?
-
-ARCA is the central AI of Lorencia, a medieval fantasy Screeps empire. It manages
-colonies through a hierarchical command structure: a central intelligence coordinates
-per-room colony managers, which direct specialized creep teams. The creep roster draws
-from the archetypes of a classic fantasy realm — peasants and miners work the land, scholars
-and masons build the cities, and knights and wizards defend the kingdom.
-
-## Architecture Overview
+## How It's Organized
 
 ```
-ARCA (Central AI)
-    ├── Stronghold (Colony 1)
-    │   ├── Warlords (creep team controllers)
-    │   └── Sanctums (structure managers)
-    └── Stronghold (Colony 2)
-        └── ...
+main.ts  →  runs each orchestrator in order, wrapped in try/catch (runSafe)
+   ├── orchestrators/  per-system loops (spawning, structures, labs, military, …)
+   ├── roles/          per-creep behavior (one file per role)
+   ├── services/       shared helpers (combat, labs, movement, structures)
+   ├── planning/       stamp / road / rampart planners
+   └── config/         role names, spawn bodies, structure + factory config
 ```
-
-### Core Components
-
-- **ARCA** — Central AI that coordinates all colonies
-- **Stronghold** — Manages a single room/colony
-- **Warlord** — Controls a team of creeps for a specific role
-- **Hero** — Enhanced creep wrapper with smart movement
-- **Crusade** — Flag-based strategic directives
-- **Sanctum** — Structure group manager (links, labs, towers, etc.)
 
 ## Getting Started
 
@@ -47,12 +34,9 @@ yarn deploy:sim    # Deploy to simulation
 
 ### 3. Watch the Realm Come to Life
 
-The system will automatically:
-- Spawn peasants and miners to gather energy
-- Spawn porters to haul energy to spawns and storage
-- Spawn scholars to upgrade the controller
-- Spawn masons to build structures as the realm expands
-- Report CPU and creep counts every 100 ticks
+The bot automatically spawns peasants and miners to gather energy, porters to haul
+it, scholars to upgrade the controller, and masons to build as the realm expands. It
+reports CPU and creep counts every 100 ticks.
 
 ## Creep Roster
 
@@ -60,67 +44,132 @@ The system will automatically:
 |------|------|-------|
 | **peasant** | Early harvester | Gathers directly from sources; phases out once miners are up |
 | **miner** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
-| **porter** | Hauler | Moves energy from containers to spawns, extensions, storage |
+| **porter** | Hauler | Moves energy to spawns/extensions/storage; also borrowed by the factory and nuker as a courier |
 | **scholar** | Upgrader | Upgrades the controller to advance RCL |
 | **mason** | Builder | Constructs queued construction sites |
-| **blacksmith** | Repairer | Repairs structures below 50% hits |
-| **prospector** | Mineral miner | Extracts minerals for lab compound production (RCL 6+) |
-| **ranger** | Scout | Explores adjacent rooms and records intel |
+| **blacksmith** | Repairer | Repairs damaged structures |
+| **prospector** | Mineral miner | Extracts minerals for lab chains (RCL 6+) |
+| **apothecary** | Lab logistics | Loads lab reagents, drains product, boosts creeps |
+| **ranger** | Scout | Surveys adjacent rooms and records intel |
 | **outrider** | Remote miner | Mines sources in frontier rooms |
-| **peddler** | Remote hauler | Carries remote energy back to the home colony |
-| **herald** | Reserver | Reserves remote room controllers, doubling source yield |
-
-**Planned military roles:**
-| Name | Role |
-|------|------|
-| **knight** | Melee defender |
-| **wizard** | Ranged attacker |
-| **cleric** | Healer / support |
-| **dark knight** | Offensive raider |
-
-## Core Gameplay Loop
-
-1. **Miners** mine energy at source containers
-2. **Porters** haul energy to spawns, extensions, towers, and storage
-3. **Scholars** upgrade the controller for RCL progression
-4. **Masons** build structures; **Blacksmiths** repair damage
-5. **Prospectors** mine minerals → storage → labs (RCL 6+)
-6. **Heralds** reserve remote rooms, doubling their source output
-7. **Rangers** scout the wilderness; **Outriders** mine remote sources; **Peddlers** haul it home
+| **peddler** | Remote hauler | Carries remote energy back home |
+| **herald** | Reserver | Reserves remote controllers, doubling source yield |
+| **conqueror** | Claimer | Claims new room controllers |
+| **settler** | Bootstrapper | Establishes a freshly claimed room |
+| **knight** | Melee | Offensive squads + home defense |
+| **wizard** | Ranged | Offensive squads + home defense |
+| **cleric** | Healer | Offensive squads + home defense |
+| **sapper** | Dismantler | Boosted breacher for fortified rooms |
+| **breacher / battlepriest / caravan** | PowerBank squad | Crack and collect power banks |
 
 ## Implemented Systems
 
 ### Economy & Logistics
 - Adaptive spawn priorities: core economy first, remote roles after local stability
 - Scaled creep bodies: bigger bodies when more energy is available
-- Energy emergency detection: shed non-critical spawns to recover
-- Remote mining: scouts identify rooms → outriders mine → peddlers haul → heralds reserve
+- Energy-emergency detection: shed non-critical spawns to recover
+- Remote mining: rangers scout → outriders mine → peddlers haul → heralds reserve
+- Traffic manager: stuck-repath + guarded shove (toggle with `Game.arca.traffic`)
 
-### RCL 6+ Advanced Systems
-- **LinkSanctum**: Instant energy transfer (source → storage → controller)
-- **ChaosSanctum**: Automatic compound production with multi-tier reaction chains
-- **TerminalNetwork**: Empire-wide resource balancing across colonies
+### RCL 6+ / 7+ / 8 Systems
+- **Links**: instant energy transfer (source → storage → controller)
+- **Labs**: automatic compound production, multi-tier reaction chains, and boosting
+- **Terminal network**: market trades + inter-room energy/mineral/ghodium balancing
+- **Factory** (RCL 7+): commodity production with factory-level gating
+- **Power**: power-bank hunting (via observer), power creeps, power-spawn processing
+- **Nuker** (RCL 8): kept loaded automatically; manual launch only
 
 ### Military & Defense
-- Tower coordination with priority targeting
-- Safe mode automatic activation
-- War Council: threat scanning and squad management (planned)
-- Knight/Wizard squads with formation tactics (planned)
+- Offensive squads with 4 formations × 5 tactics, run concurrently (one per home room)
+  plus an offensive queue
+- WarCouncil: threat scanning + optional auto-attack on soft targets
+- DefenseCouncil: auto-raises a standing defensive squad when an owned room is threatened
+- Towers with priority targeting and automatic safe-mode activation
+- Defensive rampart perimeter (RCL 4+) and incoming-nuke rampart reinforcement
 
 ### Intelligence & Expansion
-- Scout rangers survey adjacent rooms and record source/threat intel
-- Herald reservers stake claim to frontier rooms
-- Autonomous expansion: evaluates targets, spawns conquerors and settlers (planned)
+- Rangers survey adjacent rooms; heralds reserve frontier rooms
+- Autonomous, GCL-driven expansion: ranks candidates, claims, bootstraps, and runs a
+  multi-target expansion queue
+
+## Console Commands (`Game.arca.*`)
+
+### Expansion
+```javascript
+Game.arca.expand()                  // ranked expansion candidates from scout data
+Game.arca.claim('W5N5')             // claim now
+Game.arca.queueExpand('W5N5')       // add to the expansion pipeline
+Game.arca.dequeueExpand('W5N5')     // remove a queued target
+Game.arca.autoexpand(true)          // toggle auto-expansion
+Game.arca.status()                  // active expansion + queue
+Game.arca.cancel()                  // abort the active expansion
+Game.arca.ops()                     // overview of all pipelines
+```
+
+### Labs & Factory
+```javascript
+Game.arca.labs()                    // lab status per room
+Game.arca.produce('XUHO2', 3000)    // queue a compound
+Game.arca.autoLabs('W1N1', true)    // toggle lab auto-production
+Game.arca.factory()                 // factory status per room
+Game.arca.produceCommodity('W1N1', 'battery')
+Game.arca.autoFactory('W1N1', true) // toggle factory auto-production
+```
+
+### Terminal
+```javascript
+Game.arca.network()                 // per-room energy/mineral/pending-send status
+```
+
+### Military
+```javascript
+Game.arca.attack('W2N1')            // launch an offensive op (queues if home busy)
+Game.arca.dequeueAttack('W2N1')     // remove a queued offensive target
+Game.arca.squads()                  // active ops + offensive queue (alias: military())
+Game.arca.formation('wedge')        // change formation (optionally per home room)
+Game.arca.tactic('siege')           // change tactic (optionally per home room)
+Game.arca.recall()                  // stand down ops (optionally per home room)
+Game.arca.warcouncil(true)          // ranked enemy rooms + toggle auto-attack
+```
+
+### Defense & threats
+```javascript
+Game.arca.threat()                  // per-room threat severity, hostiles, safemode
+Game.arca.safemode('W1N1')          // manually activate safe mode
+Game.arca.nukes()                   // incoming-nuke status + rampart reinforcement
+```
+
+### Nuker (offensive)
+```javascript
+Game.arca.nuker()                   // nuker load status
+Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)   // manual launch (also accepts a flag name)
+```
+
+### Source Keeper & Power
+```javascript
+Game.arca.sk('W5N4')                // start SK mining (no arg = status)
+Game.arca.skstop('W5N4')            // cancel an SK op
+Game.arca.power()                   // power-bank ops + power-spawn status
+Game.arca.powercreeps()             // power creep (Operator) status
+```
+
+### Misc
+```javascript
+Game.arca.traffic(true)             // toggle the traffic manager
+```
 
 ## Further Reading
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Detailed system architecture
-- [LAB_SYSTEM.md](LAB_SYSTEM.md) — Lab automation and compound production
-- [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md) — Resource sharing and trading
-- [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md) — Autonomous expansion system
-- [MILITARY_GUIDE.md](MILITARY_GUIDE.md) — Combat and defense
-- [CPU_OPTIMIZATION.md](CPU_OPTIMIZATION.md) — Performance tuning
-- [Screeps API Docs](https://docs.screeps.com/) — Game mechanics
+- [ARCHITECTURE.md](ARCHITECTURE.md) — system architecture + source tree
+- [LAB_SYSTEM.md](LAB_SYSTEM.md) — lab automation and compound production
+- [FACTORY_SYSTEM.md](FACTORY_SYSTEM.md) — commodity production
+- [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md) — trading + inter-room balancing
+- [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md) — autonomous expansion
+- [MILITARY_GUIDE.md](MILITARY_GUIDE.md) — combat, defense, WarCouncil/DefenseCouncil
+- [NUKER_SYSTEM.md](NUKER_SYSTEM.md) — offensive nuker
+- [OBSERVER_SYSTEM.md](OBSERVER_SYSTEM.md) — scouting + observer
+- [CPU_OPTIMIZATION.md](CPU_OPTIMIZATION.md) — performance tuning
+- [Screeps API Docs](https://docs.screeps.com/) — game mechanics
 
 ---
 

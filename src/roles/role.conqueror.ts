@@ -1,3 +1,9 @@
+import { getThreatInfo } from "../services/services.combat";
+
+// Conqueror: travels to the expansion target and claims its controller, flipping
+// Memory.expansion to "bootstrapping" on success. Aborts cleanly if the target
+// turns out to be contested (claimed by another player) or invaded.
+
 export function runConqueror(creep: Creep) {
   const targetRoom = creep.memory.targetRoom;
   if (!targetRoom) { creep.suicide(); return; }
@@ -16,11 +22,33 @@ export function runConqueror(creep: Creep) {
   const controller = creep.room.controller;
   if (!controller) { creep.suicide(); return; }
 
+  // Already ours — kick off bootstrapping and retire.
   if (controller.my) {
     if (Memory.expansion?.roomName === targetRoom) {
       Memory.expansion.phase = "bootstrapping";
     }
     creep.suicide();
+    return;
+  }
+
+  // Contested: another player beat us to ownership. Abort and clear the expansion
+  // so the orchestrator can pick a different target (it also checks this, but
+  // bailing here stops us wasting the CLAIM body on a lost cause).
+  if (controller.owner) {
+    console.log(
+      `[Expansion] Aborting claim of ${targetRoom} — owned by ${controller.owner.username}.`
+    );
+    if (Memory.expansion?.roomName === targetRoom) delete Memory.expansion;
+    creep.suicide();
+    return;
+  }
+
+  // Invaded: don't sit on the controller getting shot. Retreat toward an exit and
+  // wait for the room to clear (the orchestrator pauses the op via scout hostility).
+  if (getThreatInfo(creep.room).score > 0) {
+    const exits = creep.room.find(FIND_EXIT);
+    const exit = creep.pos.findClosestByRange(exits);
+    if (exit) creep.moveTo(exit, { reusePath: 5 });
     return;
   }
 

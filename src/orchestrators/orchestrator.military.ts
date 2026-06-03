@@ -1,6 +1,7 @@
 import { ROLE_KNIGHT, ROLE_WIZARD, ROLE_CLERIC, ROLE_SIEGER } from "../config/config.roles";
 import {
   getThreatInfo,
+  getThreatSeverity,
   selectHostileTarget,
   selectStructureTarget,
   formationOffset,
@@ -18,6 +19,21 @@ const DEFEND_RADIUS = 3;           // defend tactic holds within this of the ral
 const CRITICAL_HP = 0.2;           // members below this break off to find a cleric
 const WARCOUNCIL_SCAN_INTERVAL = 50;
 const AUTO_ATTACK_INTERVAL = 1000; // min ticks between auto-launched attacks
+
+// ── Standing defense tunables ────────────────────────────────────────────────────
+// A defensive op is declared when a home room's threat score crosses this. The score
+// is 10/creep + 5/ATTACK + 5/RANGED_ATTACK + 8/HEAL part, so this corresponds to a
+// healer-backed raid that towers alone can't comfortably out-damage (SEVERITY_HIGH=150).
+const DEFENSE_THREAT_SCORE = 150;
+// Heavy threat re-evaluation is throttled; cheap per-creep behavior still runs each tick.
+const DEFENSE_SCAN_INTERVAL = 5;
+// Once the room has been clear of meaningful threats for this long, stand the squad down.
+const DEFENSE_CLEAR_TICKS = 25;
+// Defenders hold within this range of the threatened room's spawn cluster / rally point
+// so they don't suicidally chase hostiles onto exit tiles.
+const DEFENSE_HOLD_RADIUS = 6;
+// Don't drift past this distance from the rally point chasing a fleeing hostile.
+const DEFENSE_CHASE_RADIUS = 12;
 const AUTO_ATTACK_MAX_THREAT = 4;  // auto-attack only rooms at or below this threat level
 const AUTO_ATTACK_MAX_RANGE = 6;   // and within this map distance of an owned room
 
@@ -35,25 +51,51 @@ const RETREAT_THRESHOLD: Record<SquadTactic, number> = {
 
 export function loop(): void {
   runWarCouncil();
+  runDefenseCouncil();
 
-  const op = Memory.militaryOp;
-  if (!op) return;
+  migrateMilitaryOps();
 
-  // Normalize ops created before these fields existed (live-memory migration).
-  op.formation = op.formation ?? "box";
-  op.tactic = op.tactic ?? "assault";
-  op.requiredSiegers = op.requiredSiegers ?? 0;
+  const ops = Memory.militaryOps;
+  if (!ops) return;
 
-  const homeRoom = Game.rooms[op.homeRoom];
-  if (!homeRoom?.controller?.my) return;
+  // Drive every concurrent offensive op (one per home room). Each is wholly
+  // independent: its own squad, phase, formation, and tactic.
+  for (const homeRoomName in ops) {
+    const op = ops[homeRoomName];
 
-  const members = getSquadMembers(op);
+    // Normalize ops created before these fields existed (live-memory migration).
+    op.formation = op.formation ?? "box";
+    op.tactic = op.tactic ?? "assault";
+    op.requiredSiegers = op.requiredSiegers ?? 0;
 
-  switch (op.phase) {
-    case "forming":    runForming(op, members); break;
-    case "rallying":   runRallying(op, homeRoom, members); break;
-    case "attacking":  runAttacking(op, members); break;
-    case "retreating": runRetreating(op, members); break;
+    const homeRoom = Game.rooms[op.homeRoom];
+    if (!homeRoom?.controller?.my) continue;
+
+    const members = getSquadMembers(op);
+
+    switch (op.phase) {
+      case "forming":    runForming(op, members); break;
+      case "rallying":   runRallying(op, homeRoom, members); break;
+      case "attacking":  runAttacking(op, members); break;
+      case "retreating": runRetreating(op, members); break;
+    }
+  }
+
+  // After driving the active ops, fill any free home room from the queue.
+  advanceMilitaryQueue();
+}
+
+// Fold a legacy singular Memory.militaryOp (deployed before concurrency) into the
+// keyed Memory.militaryOps map, then drop it. Safe to run every tick.
+function migrateMilitaryOps(): void {
+  if (!Memory.militaryOps) Memory.militaryOps = {};
+  const legacy = Memory.militaryOp;
+  if (legacy) {
+    // Only adopt it if that home room isn't already running an op.
+    if (!Memory.militaryOps[legacy.homeRoom]) {
+      Memory.militaryOps[legacy.homeRoom] = legacy;
+    }
+    delete Memory.militaryOp;
   }
 }
 
@@ -62,7 +104,7 @@ export function loop(): void {
 function runForming(op: MilitaryOp, members: Creep[]): void {
   if (Game.time - op.startedAt > FORMING_TIMEOUT) {
     console.log(`[Military] ${op.targetRoom}: Forming timeout — squad could not be assembled, aborting`);
-    cancelOp();
+    removeOp(op);
     return;
   }
 
@@ -207,7 +249,8 @@ const SLOT_ORDER: Record<string, number> = {
 };
 
 export function getSquadContext(op: MilitaryOp): SquadContext {
-  if (squadContextTick === Game.time && squadContextKey === op.targetRoom && squadContextValue) {
+  const key = `${op.homeRoom}>${op.targetRoom}`;
+  if (squadContextTick === Game.time && squadContextKey === key && squadContextValue) {
     return squadContextValue;
   }
 
@@ -241,7 +284,7 @@ export function getSquadContext(op: MilitaryOp): SquadContext {
 
   squadContextValue = { members, leader, slotById, avgHpPct, minHpPct: minHp, cohesive };
   squadContextTick = Game.time;
-  squadContextKey = op.targetRoom;
+  squadContextKey = key;
   return squadContextValue;
 }
 
@@ -262,14 +305,23 @@ function squadMet(op: MilitaryOp, members: Creep[]): boolean {
   );
 }
 
+// An op finished its objective: release its squad, remove it, and pull the next
+// queued target for the freed home room (the pipeline advances here).
 function completeOp(op: MilitaryOp): void {
-  clearSquadTargets(op.targetRoom);
-  delete Memory.militaryOp;
+  removeOp(op);
 }
 
-function clearSquadTargets(targetRoom: string): void {
+// Tear down an op (completion OR abort): release its squad and remove the record.
+// Squad release is filtered by BOTH target and home room so a sibling op against the
+// same room (different home) keeps its creeps.
+function removeOp(op: MilitaryOp): void {
+  clearSquadTargets(op.targetRoom, op.homeRoom);
+  if (Memory.militaryOps) delete Memory.militaryOps[op.homeRoom];
+}
+
+function clearSquadTargets(targetRoom: string, homeRoom: string): void {
   for (const creep of Object.values(Game.creeps)) {
-    if (creep.memory.offensiveTarget === targetRoom) {
+    if (creep.memory.offensiveTarget === targetRoom && creep.memory.homeRoom === homeRoom) {
       delete creep.memory.offensiveTarget;
     }
   }
@@ -277,11 +329,31 @@ function clearSquadTargets(targetRoom: string): void {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function cancelOp(): void {
-  const op = Memory.militaryOp;
-  if (!op) return;
-  clearSquadTargets(op.targetRoom);
-  delete Memory.militaryOp;
+// Look up the active offensive op a creep belongs to. Roles match by targetRoom +
+// homeRoom (the creep's memory carries both), which uniquely identifies an op.
+export function getOffensiveOp(targetRoom: string, homeRoom: string | undefined): MilitaryOp | undefined {
+  if (!homeRoom) return undefined;
+  const op = Memory.militaryOps?.[homeRoom];
+  return op && op.targetRoom === targetRoom ? op : undefined;
+}
+
+// Cancel the offensive op funded by `homeRoom` (or, when omitted, every op). Returns
+// the number of ops stood down.
+export function cancelOp(homeRoom?: string): number {
+  const ops = Memory.militaryOps;
+  if (!ops) return 0;
+  if (homeRoom) {
+    const op = ops[homeRoom];
+    if (!op) return 0;
+    removeOp(op);
+    return 1;
+  }
+  let count = 0;
+  for (const hr of Object.keys(ops)) {
+    removeOp(ops[hr]);
+    count++;
+  }
+  return count;
 }
 
 // Builds a default squad composition scaled to the target's known defenses.
@@ -309,7 +381,9 @@ export function recommendComposition(
   return { knights, wizards, clerics, siegers };
 }
 
-// Launches an operation. Returns an error string, or null on success.
+// Launches an operation. Returns an error string, or null on success. Concurrency is
+// keyed by home room: a given home room runs at most one offensive op at a time (it
+// can't fund two squads), but different home rooms can each run their own.
 export function launchOp(
   targetRoom: string,
   formation: SquadFormation,
@@ -317,14 +391,16 @@ export function launchOp(
   composition: { knights: number; wizards: number; clerics: number; siegers: number },
   homeRoom: string
 ): string | null {
-  if (Memory.militaryOp) {
-    return `already running op against ${Memory.militaryOp.targetRoom} (${Memory.militaryOp.phase})`;
+  if (!Memory.militaryOps) Memory.militaryOps = {};
+  const existing = Memory.militaryOps[homeRoom];
+  if (existing) {
+    return `${homeRoom} already running op against ${existing.targetRoom} (${existing.phase})`;
   }
   const total =
     composition.knights + composition.wizards + composition.clerics + composition.siegers;
   if (total <= 0) return "squad must have at least one member";
 
-  Memory.militaryOp = {
+  Memory.militaryOps[homeRoom] = {
     targetRoom,
     homeRoom,
     phase: "forming",
@@ -339,24 +415,143 @@ export function launchOp(
   return null;
 }
 
-// Mid-battle formation/tactic changes from the console.
-export function setFormation(formation: SquadFormation): boolean {
-  const op = Memory.militaryOp;
-  if (!op) return false;
-  op.formation = formation;
+// ── Offensive target queue ──────────────────────────────────────────────────────
+//
+// Targets queued here auto-start against the next free home room once one is idle and
+// can afford a squad. This pipelines manual offensives the same way the expansion
+// queue does: line up several targets, and they run one-after-another per home room.
+
+// Enqueue an offensive target. Returns an error string, or null on success.
+export function enqueueOp(
+  targetRoom: string,
+  formation: SquadFormation,
+  tactic: SquadTactic,
+  composition: { knights: number; wizards: number; clerics: number; siegers: number },
+  homeRoom?: string
+): string | null {
+  const total =
+    composition.knights + composition.wizards + composition.clerics + composition.siegers;
+  if (total <= 0) return "squad must have at least one member";
+  if (!Memory.militaryQueue) Memory.militaryQueue = [];
+  if (Memory.militaryQueue.some((q) => q.targetRoom === targetRoom)) {
+    return `${targetRoom} is already queued`;
+  }
+  Memory.militaryQueue.push({
+    targetRoom,
+    homeRoom,
+    formation,
+    tactic,
+    requiredKnights: composition.knights,
+    requiredWizards: composition.wizards,
+    requiredClerics: composition.clerics,
+    requiredSiegers: composition.siegers,
+    queuedAt: Game.time,
+  });
+  return null;
+}
+
+export function dequeueOp(targetRoom: string): boolean {
+  const queue = Memory.militaryQueue;
+  if (!queue) return false;
+  const before = queue.length;
+  Memory.militaryQueue = queue.filter((q) => q.targetRoom !== targetRoom);
+  return Memory.militaryQueue.length !== before;
+}
+
+export function getMilitaryQueue(): QueuedMilitaryOp[] {
+  return Memory.militaryQueue ?? [];
+}
+
+// A home room that can fund a squad: owned, RCL 5+, decent storage, and not already
+// running an offensive op. Mirrors the auto-attack capability bar.
+function isCapableOffensiveHome(room: Room): boolean {
+  if (!room.controller?.my) return false;
+  if ((room.controller.level ?? 0) < 5) return false;
+  if ((room.storage?.store[RESOURCE_ENERGY] ?? 0) < 50_000) return false;
+  if (Memory.militaryOps?.[room.name]) return false; // already busy
   return true;
 }
 
-export function setTactic(tactic: SquadTactic): boolean {
-  const op = Memory.militaryOp;
-  if (!op) return false;
-  op.tactic = tactic;
-  if (tactic === "retreat") {
-    op.phase = "retreating"; // fall back and hold until new orders
-  } else if (op.phase === "retreating") {
-    op.phase = "attacking"; // resume the offensive immediately
+// Start queued targets against any free, capable home rooms. Honours an explicit
+// homeRoom only when it's free + capable; otherwise picks the closest capable home.
+function advanceMilitaryQueue(): void {
+  const queue = Memory.militaryQueue;
+  if (!queue || queue.length === 0) return;
+
+  for (let i = 0; i < queue.length; ) {
+    const q = queue[i];
+
+    // Already ours? Drop it.
+    const target = Game.rooms[q.targetRoom];
+    if (target?.controller?.my) {
+      queue.splice(i, 1);
+      continue;
+    }
+
+    let home: string | undefined;
+    if (q.homeRoom) {
+      const room = Game.rooms[q.homeRoom];
+      if (room && isCapableOffensiveHome(room)) home = q.homeRoom;
+    } else {
+      let best: Room | undefined;
+      let bestDist = Infinity;
+      for (const rn in Game.rooms) {
+        const room = Game.rooms[rn];
+        if (!isCapableOffensiveHome(room)) continue;
+        const d = Game.map.getRoomLinearDistance(rn, q.targetRoom);
+        if (d < bestDist) { bestDist = d; best = room; }
+      }
+      home = best?.name;
+    }
+
+    if (!home) { i++; continue; } // no free home for this one yet — leave it queued
+
+    const err = launchOp(
+      q.targetRoom, q.formation, q.tactic,
+      {
+        knights: q.requiredKnights, wizards: q.requiredWizards,
+        clerics: q.requiredClerics, siegers: q.requiredSiegers,
+      },
+      home
+    );
+    if (err) { i++; continue; }
+    queue.splice(i, 1);
+    console.log(`[Military] Queue advanced → ${home} attacking ${q.targetRoom} (${queue.length} still queued)`);
   }
-  return true;
+}
+
+// Resolve which active ops a console command applies to: a specific home room, or —
+// when omitted — all active ops (the common single-op case targets the only one).
+function resolveOps(homeRoom?: string): MilitaryOp[] {
+  const ops = Memory.militaryOps;
+  if (!ops) return [];
+  if (homeRoom) return ops[homeRoom] ? [ops[homeRoom]] : [];
+  return Object.values(ops);
+}
+
+// Mid-battle formation/tactic changes from the console. Returns ops affected.
+export function setFormation(formation: SquadFormation, homeRoom?: string): number {
+  const ops = resolveOps(homeRoom);
+  for (const op of ops) op.formation = formation;
+  return ops.length;
+}
+
+export function setTactic(tactic: SquadTactic, homeRoom?: string): number {
+  const ops = resolveOps(homeRoom);
+  for (const op of ops) {
+    op.tactic = tactic;
+    if (tactic === "retreat") {
+      op.phase = "retreating"; // fall back and hold until new orders
+    } else if (op.phase === "retreating") {
+      op.phase = "attacking"; // resume the offensive immediately
+    }
+  }
+  return ops.length;
+}
+
+// Active offensive ops as a flat list (for console status).
+export function getOffensiveOps(): MilitaryOp[] {
+  return Memory.militaryOps ? Object.values(Memory.militaryOps) : [];
 }
 
 // ── WarCouncil: intel gathering + target ranking + optional auto-attack ─────────
@@ -370,7 +565,7 @@ function runWarCouncil(): void {
     wc.lastScan = Game.time;
   }
 
-  if (wc.autoAttack && !Memory.militaryOp) {
+  if (wc.autoAttack) {
     considerAutoAttack(wc);
   }
 }
@@ -421,11 +616,19 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
   const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
   if (ownedRooms.length === 0) return;
 
-  // Only attack from a room with the economy to sustain a squad.
+  // Only attack from a room with the economy to sustain a squad AND not already
+  // running an offensive op (concurrency is one op per home room).
   const capableHome = ownedRooms.find(
-    (r) => (r.controller?.level ?? 0) >= 5 && (r.storage?.store[RESOURCE_ENERGY] ?? 0) >= 50_000
+    (r) =>
+      (r.controller?.level ?? 0) >= 5 &&
+      (r.storage?.store[RESOURCE_ENERGY] ?? 0) >= 50_000 &&
+      !Memory.militaryOps?.[r.name]
   );
   if (!capableHome) return;
+
+  // Only free, capable homes are valid launch points (one offensive op per home).
+  const freeHomes = ownedRooms.filter((r) => isCapableOffensiveHome(r));
+  if (freeHomes.length === 0) return;
 
   let best: RoomIntelData | null = null;
   let bestHome = capableHome.name;
@@ -436,7 +639,7 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
     if (intel.safeMode) continue;
     if (intel.threatLevel > AUTO_ATTACK_MAX_THREAT) continue;
 
-    const home = ownedRooms.reduce((b, r) =>
+    const home = freeHomes.reduce((b, r) =>
       Game.map.getRoomLinearDistance(r.name, rn) < Game.map.getRoomLinearDistance(b.name, rn) ? r : b
     );
     const dist = Game.map.getRoomLinearDistance(home.name, rn);
@@ -457,6 +660,236 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
     wc.lastAutoAttackTick = Game.time;
     console.log(`[WarCouncil] Auto-launch: ${bestHome} → ${best.roomName} (threat ${best.threatLevel})`);
   }
+}
+
+// ── DefenseCouncil: automatic threat-driven standing defense ───────────────────
+//
+// Runs alongside the WarCouncil but is wholly separate from the manual offensive
+// Memory.militaryOp. Each owned room is its own theatre: when a meaningful hostile
+// threat appears (one towers + safe-mode can't comfortably handle), a DefenseOp is
+// declared and the spawn orchestrator raises knights/clerics/wizards (see
+// shouldSpawnDefender / spawnNextDefender). Those defenders rally in-room and fight
+// here via runDefensive*. The op stands down once the room stays clear.
+//
+// Interaction with safe-mode: this layer fights BEFORE and ALONGSIDE safe mode. Towers
+// (orchestrator.tower.ts) still trigger safe mode as a last resort if the spawn is in
+// danger; a standing squad buys time and may end the fight outright so safe mode never
+// has to be burned. We never trigger or cancel safe mode here.
+
+function runDefenseCouncil(): void {
+  if (Game.time % DEFENSE_SCAN_INTERVAL !== 0) return;
+  if (!Memory.defenseOps) Memory.defenseOps = {};
+  const ops = Memory.defenseOps;
+
+  for (const roomName in Game.rooms) {
+    const room = Game.rooms[roomName];
+    if (!room.controller?.my) continue;
+
+    const { score } = getThreatInfo(room);
+    const severity = getThreatSeverity(room);
+    const existing = ops[roomName];
+
+    // A meaningful threat is one that warrants a standing squad: a high-severity raid
+    // (healer-backed / out-damages towers). Lower threats are left to towers alone.
+    const meaningful = severity === "high" || score >= DEFENSE_THREAT_SCORE;
+
+    if (meaningful) {
+      if (existing) {
+        existing.lastThreatTick = Game.time;
+        existing.threatScore = score;
+        Object.assign(existing, recommendDefense(score));
+      } else {
+        ops[roomName] = {
+          room: roomName,
+          startedAt: Game.time,
+          lastThreatTick: Game.time,
+          threatScore: score,
+          ...recommendDefense(score),
+        };
+        console.log(`[Defense] ${roomName}: threat detected (score ${score}) — raising defenders`);
+      }
+    } else if (existing && Game.time - existing.lastThreatTick >= DEFENSE_CLEAR_TICKS) {
+      console.log(`[Defense] ${roomName}: threat cleared — standing down defenders`);
+      clearDefenseOp(roomName);
+    }
+  }
+
+  // Drop ops for rooms we've lost vision of for a long time or that are no longer ours.
+  for (const roomName in ops) {
+    const room = Game.rooms[roomName];
+    if (room?.controller?.my) continue;
+    if (!room && Game.time - ops[roomName].lastThreatTick < DEFENSE_CLEAR_TICKS) continue;
+    clearDefenseOp(roomName);
+  }
+}
+
+// Scales defender composition to the threat score. Knights are the backbone; clerics
+// scale with the fight's intensity; a wizard is added to counter ranged-heavy raids.
+function recommendDefense(score: number): {
+  requiredKnights: number;
+  requiredWizards: number;
+  requiredClerics: number;
+} {
+  const requiredKnights = Math.min(4, 2 + Math.floor((score - DEFENSE_THREAT_SCORE) / 80));
+  const requiredClerics = Math.min(2, 1 + Math.floor((score - DEFENSE_THREAT_SCORE) / 120));
+  const requiredWizards = score >= DEFENSE_THREAT_SCORE + 60 ? 1 : 0;
+  return { requiredKnights, requiredWizards, requiredClerics };
+}
+
+function clearDefenseOp(roomName: string): void {
+  for (const creep of Object.values(Game.creeps)) {
+    if (creep.memory.defensiveTarget === roomName) delete creep.memory.defensiveTarget;
+  }
+  if (Memory.defenseOps) delete Memory.defenseOps[roomName];
+}
+
+// ── Public API for the spawn orchestrator ──────────────────────────────────────
+
+export function getDefenseOp(roomName: string): DefenseOp | undefined {
+  return Memory.defenseOps?.[roomName];
+}
+
+// Defenders assigned to a room's standing-defense op (filtered by creep memory).
+export function getDefenders(roomName: string): Creep[] {
+  return Object.values(Game.creeps).filter((c) => c.memory.defensiveTarget === roomName);
+}
+
+// ── Per-creep defensive behavior (called from role files) ──────────────────────
+//
+// Defenders fight only inside their own threatened room. They focus-fire with the same
+// selectHostileTarget priority as the offensive squad (healers first), clerics keep the
+// line alive, and crucially they refuse to chase hostiles onto room-edge exit tiles —
+// holding near the rally point instead so a kiting raider can't peel them off the room.
+
+function defenseRallyPoint(roomName: string): RoomPosition {
+  const room = Game.rooms[roomName];
+  const spawn = room?.find(FIND_MY_SPAWNS)[0];
+  if (spawn) return spawn.pos;
+  return new RoomPosition(25, 25, roomName);
+}
+
+// True when a position is on (or one tile from) a room exit — chasing onto these tiles
+// risks being pulled out of the room, so defenders never engage there.
+function isNearEdge(pos: RoomPosition): boolean {
+  return pos.x <= 1 || pos.x >= 48 || pos.y <= 1 || pos.y >= 48;
+}
+
+// Returns the best hostile to engage that won't drag the defender to the room edge,
+// preferring the standard focus-fire priority. Hostiles loitering on exit tiles are
+// ignored unless they're the only threat and already adjacent.
+function selectDefenseTarget(creep: Creep, rally: RoomPosition, hostiles: Creep[]): Creep | null {
+  const engageable = hostiles.filter(
+    (h) => !isNearEdge(h.pos) && rally.getRangeTo(h) <= DEFENSE_CHASE_RADIUS
+  );
+  const target = selectHostileTarget(creep.pos, engageable);
+  if (target) return target;
+  // Fall back to finishing an adjacent edge-hugger rather than ignoring it entirely.
+  return creep.pos.findInRange(hostiles, 1)[0] ?? null;
+}
+
+// Moves to engage `target` at `range` without straying past the chase radius or onto a
+// room edge; otherwise drifts back toward the rally point.
+function defenseMoveToward(creep: Creep, rally: RoomPosition, target: Creep, range: number): void {
+  const toTarget = creep.pos.getRangeTo(target);
+  if (toTarget <= range) {
+    // Already in range — only reposition off an edge tile.
+    if (isNearEdge(creep.pos)) creep.moveTo(rally, { range: DEFENSE_HOLD_RADIUS, reusePath: 5 });
+    return;
+  }
+  if (rally.getRangeTo(target) > DEFENSE_CHASE_RADIUS) {
+    defenseHold(creep, rally);
+    return;
+  }
+  creep.moveTo(target, { range, reusePath: 1 });
+}
+
+// Hold a loose ring around the rally point when there's nothing safe to chase.
+function defenseHold(creep: Creep, rally: RoomPosition): void {
+  if (creep.pos.getRangeTo(rally) > DEFENSE_HOLD_RADIUS || isNearEdge(creep.pos)) {
+    creep.moveTo(rally, { range: DEFENSE_HOLD_RADIUS, reusePath: 5 });
+  }
+}
+
+export function runDefensiveKnight(creep: Creep, roomName: string): void {
+  const rally = defenseRallyPoint(roomName);
+  if (creep.room.name !== roomName) {
+    creep.moveTo(rally, { range: DEFENSE_HOLD_RADIUS, reusePath: 10 });
+    return;
+  }
+
+  const { hostiles } = getThreatInfo(creep.room);
+  const target = selectDefenseTarget(creep, rally, hostiles);
+  if (target) {
+    if (creep.pos.isNearTo(target)) creep.attack(target);
+    defenseMoveToward(creep, rally, target, 1);
+    return;
+  }
+  defenseHold(creep, rally);
+}
+
+export function runDefensiveWizard(creep: Creep, roomName: string): void {
+  const rally = defenseRallyPoint(roomName);
+  if (creep.room.name !== roomName) {
+    creep.moveTo(rally, { range: DEFENSE_HOLD_RADIUS, reusePath: 10 });
+    return;
+  }
+
+  const { hostiles } = getThreatInfo(creep.room);
+
+  // Fire: mass-attack a cluster, else focus the priority target within range.
+  const inMass = creep.pos.findInRange(hostiles, KITE_RANGE);
+  if (inMass.length >= 3) {
+    creep.rangedMassAttack();
+  } else {
+    const target = selectDefenseTarget(creep, rally, hostiles);
+    if (target && creep.pos.getRangeTo(target) <= 3) creep.rangedAttack(target);
+  }
+
+  // Movement: kite the nearest non-edge hostile to hold it at range; else hold the rally.
+  const nearest = creep.pos.findClosestByRange(
+    hostiles.filter((h) => !isNearEdge(h.pos) && rally.getRangeTo(h) <= DEFENSE_CHASE_RADIUS)
+  );
+  if (nearest) {
+    const range = creep.pos.getRangeTo(nearest);
+    if (range < KITE_RANGE) {
+      fleeFrom(creep, nearest.pos);
+    } else if (range > KITE_RANGE + 1) {
+      defenseMoveToward(creep, rally, nearest, KITE_RANGE);
+    } else if (isNearEdge(creep.pos)) {
+      defenseHold(creep, rally);
+    }
+    return;
+  }
+  defenseHold(creep, rally);
+}
+
+export function runDefensiveCleric(creep: Creep, roomName: string): void {
+  const rally = defenseRallyPoint(roomName);
+
+  // Heal the most wounded defender (self included) wherever the squad is.
+  const allies = getDefenders(roomName).filter((c) => c.room.name === creep.room.name);
+  const wounded = allies.filter((c) => c.hits < c.hitsMax);
+  let healTarget: Creep | null = null;
+  if (wounded.length > 0) {
+    healTarget = wounded.reduce((a, b) => (a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b));
+    const range = creep.pos.getRangeTo(healTarget);
+    if (range <= 1) creep.heal(healTarget);
+    else if (range <= 3) creep.rangedHeal(healTarget);
+  } else if (creep.hits < creep.hitsMax) {
+    creep.heal(creep);
+  }
+
+  if (creep.room.name !== roomName) {
+    creep.moveTo(rally, { range: DEFENSE_HOLD_RADIUS, reusePath: 10 });
+    return;
+  }
+
+  // Close on a wounded ally just out of reach (but never onto an edge), else hold.
+  if (healTarget && creep.pos.getRangeTo(healTarget) > 1 && !isNearEdge(healTarget.pos)) {
+    creep.moveTo(healTarget, { range: 1, reusePath: 1 });
+    return;
+  }
+  defenseHold(creep, rally);
 }
 
 // ── Per-creep offensive behavior (called from role files) ─────────────────────

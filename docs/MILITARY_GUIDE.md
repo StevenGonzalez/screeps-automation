@@ -10,8 +10,12 @@
 
 ## Overview
 The military system provides squad-based combat with formation movement, tactical
-behaviors, intelligent target prioritization, and boosted combat creeps. A single
-offensive operation runs at a time (`Memory.militaryOp`), commanded from the console.
+behaviors, intelligent target prioritization, and boosted combat creeps. Offensive
+operations run **concurrently — one per home room** (`Memory.militaryOps`, keyed by
+home room), with extra targets lined up in an offensive **queue**
+(`Memory.militaryQueue`). A separate **DefenseCouncil** auto-raises a standing
+defensive squad whenever an owned room is meaningfully threatened
+(`Memory.defenseOps`). All of this is live, not planned.
 
 ## Key Features
 - **Squad Coordinator**: 4 formations × 5 tactics, with a leader-led cohesion model
@@ -29,6 +33,11 @@ offensive operation runs at a time (`Memory.militaryOp`), commanded from the con
   combat part (attack / ranged / heal / dismantle) and are boosted at the labs.
 - **WarCouncil**: scans visible rooms, scores them 0–10, ranks enemy targets, and can
   optionally auto-launch attacks against soft targets.
+- **DefenseCouncil**: automatically raises a standing defensive squad when an owned
+  room is under a meaningful (healer-backed / tower-overwhelming) threat, and stands
+  it down once the room stays clear.
+- **Concurrent ops + queue**: one offensive op per home room runs independently;
+  further targets auto-start against free home rooms from a queue.
 - **Console Control**: real-time command and control via `Game.arca`.
 
 ## Console Commands
@@ -38,39 +47,49 @@ offensive operation runs at a time (`Memory.militaryOp`), commanded from the con
 Game.arca.attack('W2N1');                       // box / assault, auto-scaled squad
 Game.arca.attack('W2N1', 'wedge', 'siege');     // choose formation + tactic
 Game.arca.attack('W2N1', 'box', 'assault', { knights: 4, clerics: 2, siegers: 1 });
+Game.arca.attack('W2N1', 'box', 'assault', undefined, 'W1N1'); // force funding home
 // Parameters:
 //   targetRoom:   room to attack
 //   formation:    'line' | 'box' | 'wedge' | 'scatter'   (default 'box')
 //   tactic:       'assault' | 'siege' | 'raid' | 'defend' (default 'assault')
 //   composition:  optional { knights, wizards, clerics, siegers } override.
 //                 Omitted roles fall back to an intel-scaled recommendation.
+//   homeRoom:     optional funding home; default is the closest owned room.
 ```
-The home room is chosen automatically as the closest owned room to the target.
+**Concurrency is one op per home room.** If the chosen home is already running an
+op, the target is automatically **queued** and auto-starts when that home (or
+another free, capable home) frees up. A capable home is RCL 5+ with ≥ 50k storage
+energy. Remove a queued target with `Game.arca.dequeueAttack('W2N1')`.
 
 ### Check Squad Status
 ```javascript
 Game.arca.squads();
-// Shows phase, formation, tactic, required vs current composition,
-// average HP, how many units have reached the target room, and a per-creep list.
+// Shows every active op (one per home room): phase, formation, tactic, required vs
+// current composition, average HP, how many units reached the target, a per-creep
+// list, plus the offensive queue. (Game.arca.military() is an alias.)
+Game.arca.ops();      // one-line overview of ALL pipelines (expansion, offensive, SK)
 ```
 
 ### Change Formation (Mid-Battle)
 ```javascript
-Game.arca.formation('wedge');   // line | box | wedge | scatter
+Game.arca.formation('wedge');          // applies to ALL active ops
+Game.arca.formation('wedge', 'W1N1');  // ...or just the op funded by W1N1
 ```
 
 ### Change Tactic (Mid-Battle)
 ```javascript
-Game.arca.tactic('siege');      // assault | siege | raid | defend | retreat
+Game.arca.tactic('siege');             // applies to ALL active ops
+Game.arca.tactic('siege', 'W1N1');     // ...or just the op funded by W1N1
 ```
 `tactic('retreat')` falls the squad back home and holds there until you issue a new
 tactic. The safety auto-retreat (on low HP) stays active under every tactic and
 preserves your chosen tactic when the squad re-engages after healing.
 
-### Recall All Units
+### Recall Units
 ```javascript
-Game.arca.recall();             // abort the op and stand all units down
-// (Game.arca.retreat() and Game.arca.military() remain as aliases.)
+Game.arca.recall();             // abort every op and stand all units down
+Game.arca.recall('W1N1');       // ...or just the op funded by W1N1
+// (Game.arca.retreat() is an alias for recall() with no argument.)
 ```
 
 ### WarCouncil
@@ -78,6 +97,12 @@ Game.arca.recall();             // abort the op and stand all units down
 Game.arca.warcouncil();         // show ranked enemy rooms + auto-attack status
 Game.arca.warcouncil(true);     // enable auto-attack on soft targets
 Game.arca.warcouncil(false);    // disable (default)
+```
+
+### Defense status
+```javascript
+Game.arca.threat();             // per-room threat severity/score, hostiles, towers, safemode
+Game.arca.safemode('W1N1');     // manually activate safe mode in a room
 ```
 
 ## Formations
@@ -169,18 +194,39 @@ rampart, the rampart is broken first.
 - Offensive squad creeps spawn at full energy capacity for max-strength bodies, in
   formation order (knights → siegers → wizards → clerics).
 
-### Home Defense
-- **Knights** engage hostiles and retreat to spawn when critically injured.
-- **Wizards** kite and mass-attack clustered raiders.
-- **Clerics** heal Knights and injured friendlies, scaling up in high-threat scenarios.
-- Towers focus-fire one target room-wide and auto-trigger safe mode when structures
-  are critically damaged.
+### DefenseCouncil (automatic standing defense)
+Runs every 5 ticks inside `orchestrator.military.ts`, separate from the manual
+offensive ops. Each owned room is its own theatre:
 
-### WarCouncil
+- **Trigger**: a room whose threat is high-severity, or whose threat score ≥ 150
+  (≈ a healer-backed raid towers can't comfortably out-damage), gets a `DefenseOp`
+  declared in `Memory.defenseOps[roomName]`.
+- **Spawning**: the spawn orchestrator reads `getDefenseOp(room)` and raises the
+  needed knights/clerics/wizards, jumping the economy queue. Composition scales with
+  the threat score (up to 4 knights, 2 clerics, +1 wizard for ranged-heavy raids).
+- **Behavior**: defenders rally and fight **inside** the threatened room only. They
+  focus-fire with the same healers-first priority as offensive squads, hold near the
+  rally point, and refuse to chase hostiles onto room-edge exit tiles (so a kiting
+  raider can't peel them out of the room).
+- **Stand-down**: once the room stays clear for 25 ticks the op is cleared and the
+  defenders are released.
+- **Safe mode**: the DefenseCouncil never triggers or cancels safe mode. It fights
+  before and alongside it; towers still trigger safe mode as a last resort.
+
+> Bootstrapping child rooms get a related hook: when an in-progress expansion's child
+> room is invaded, `Memory.expansion.needsDefender` is set and the funding home spawns
+> a defender (see [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md)).
+
+### Towers
+Towers focus-fire one target room-wide and auto-trigger safe mode when structures are
+critically damaged (`orchestrator.tower.ts`).
+
+### WarCouncil (offensive intel)
 - Scans visible non-owned rooms every 50 ticks into `Memory.intel`, scoring threat 0–10.
 - Ranks enemy rooms for targeting (lowest threat first).
 - Optional auto-attack (off by default) launches against soft, nearby enemy rooms,
-  rate-limited to once per 1000 ticks and gated on a capable home (RCL 5+, 50k+ energy).
+  rate-limited to once per 1000 ticks. It only uses a **free, capable** home (RCL 5+,
+  50k+ energy, not already running an op) and respects the per-home concurrency limit.
 
 ## Tips
 1. **Start with box/assault** for standard attacks; the squad auto-scales to defenses.

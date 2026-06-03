@@ -150,8 +150,6 @@ export function applyCastleStamp(room: Room): void {
 
   // Extensions: concentric Merchant Rings around the keep (replaces hand-placed cells).
   planMerchantRingExtensions(room, anchor, occupiedSet, rcl);
-
-  if (rcl >= 5) planStampRampartPerimeter(room, anchor);
 }
 
 // Lays out extensions as the "Merchant Rings" — concentric tiers radiating from
@@ -237,29 +235,6 @@ function findNearestBuildable(
     }
   }
   return null;
-}
-
-function planStampRampartPerimeter(
-  room: Room,
-  anchor: { x: number; y: number }
-): void {
-  const { halfSize } = STAMP_PLANNER;
-  const terrain = room.getTerrain();
-
-  for (let dx = -halfSize; dx <= halfSize; dx++) {
-    for (let dy = -halfSize; dy <= halfSize; dy++) {
-      if (Math.abs(dx) !== halfSize && Math.abs(dy) !== halfSize) continue;
-      const ax = anchor.x + dx;
-      const ay = anchor.y + dy;
-      if (ax < 1 || ax > 48 || ay < 1 || ay > 48) continue;
-      if (terrain.get(ax, ay) === TERRAIN_MASK_WALL) continue;
-      addPlannedStructureToMemory(
-        room,
-        PLANNER_KEYS.STAMP_RAMPART_KEY,
-        new RoomPosition(ax, ay, room.name)
-      );
-    }
-  }
 }
 
 // ── Arteries + economic connectors ────────────────────────────────────────────

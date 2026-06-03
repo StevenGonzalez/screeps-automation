@@ -2,7 +2,7 @@
 
 ## Overview
 
-ARCA manages CPU budget in `src/main.ts` using a simple threshold system. There are no external caching or profiling utilities — the orchestrators handle their own efficiency.
+The bot manages its CPU budget in `src/main.ts` using a simple threshold system. There are no external caching or profiling utilities — the orchestrators handle their own efficiency.
 
 ## Tick Budget System
 
@@ -18,21 +18,31 @@ CPU_BUCKET_CRITICAL           = 2000  — skip non-core when bucket is depleted
 ### Execution Order
 
 ```
-memory  → always runs
-creeps  → always runs
-spawning → always runs
---- CPU check: if <70% and bucket OK ---
+memory    → always runs
+expansion → always runs
+creeps    → always runs
+spawning  → always runs
+--- CPU check: if <70% of limit and bucket OK ---
 structures → may skip (pathfinding-heavy)
-labs    → always runs
-links   → always runs
-towers  → always runs
-terminal → always runs
-military → always runs
-observer → always runs
-pixels  → always runs
---- CPU check: if <60% and bucket OK ---
-visuals → may skip (cosmetic)
+labs      → always runs
+factory   → always runs
+links     → always runs
+towers    → always runs
+terminal  → always runs
+military  → always runs
+nukes     → always runs   (incoming-nuke defense)
+nuker     → always runs   (offensive nuker loading)
+sourcekeeper → always runs
+powercreep → always runs
+observer  → always runs
+pixels    → always runs
+--- CPU check: if <60% of limit and bucket OK ---
+visuals   → may skip (cosmetic)
 ```
+
+Run order matters: `factory` and `nuker` run after `creeps` so the idle hauler
+they borrow as a courier obeys their intents for the tick, and `nuker` runs after
+`terminal` so just-transferred ghodium is loadable the same tick.
 
 ### High-CPU Warning
 

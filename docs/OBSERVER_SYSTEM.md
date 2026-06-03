@@ -1,10 +1,19 @@
-# Intelligence System
+# Intelligence & Observer System
 
 ## Overview
 
-ARCA gathers room intelligence through **ranger scouts** — lightweight creeps dispatched to survey adjacent rooms. Rangers record source positions and hostile status in the home room's memory, then return home.
+Two separate things gather information here:
 
-A full Observer Network using RCL 8 Observer structures is planned but not yet implemented.
+- **Ranger scouts** (`role.scout.ts`) survey adjacent rooms and record source
+  positions + hostile status — the data the expansion and remote-mining systems
+  rank candidates from.
+- The **Observer** (`orchestrator.observer.ts`), at RCL 8, scans distant **highway**
+  rooms looking for **power banks**, and also drives power-spawn processing.
+
+Enemy-room threat scoring (`Memory.intel`, used for offensive targeting) is **not**
+done here — it's gathered by the WarCouncil in `orchestrator.military.ts` from
+rooms the bot can currently see (including rooms an observer just scanned). See
+[MILITARY_GUIDE.md](MILITARY_GUIDE.md).
 
 ---
 
@@ -12,17 +21,19 @@ A full Observer Network using RCL 8 Observer structures is planned but not yet i
 
 ### What They Do
 
-1. Travel to `creep.memory.targetRoom`
-2. Survey the room: count sources, detect hostiles and Source Keepers
-3. Write results into `Memory.rooms[homeRoom].remoteRooms`
-4. Remove the room from `homeRoomMemory.pendingScoutRooms`
-5. Return home (or suicide if no path back)
+1. Travel to `creep.memory.targetRoom`.
+2. Survey the room: count sources, detect hostiles and Source Keepers.
+3. Write results into `Memory.rooms[homeRoom].remoteRooms`.
+4. Remove the room from `homeRoomMemory.pendingScoutRooms`.
+5. Return home (or suicide if no path back).
 
 ### Hostile Detection
 
-- **Source Keepers**: flagged but not treated as player-hostile — rangers note them for outriders to avoid
-- **Player creeps**: any non-Source Keeper, non-Invader creep marks the room hostile for **2,000 ticks** (`hostileUntil`)
-- Hostile rooms are skipped when selecting remote mining targets
+- **Source Keepers**: flagged but recorded so outriders avoid them.
+- **Player creeps**: any non-Source-Keeper, non-Invader creep marks the room hostile
+  for **2,000 ticks** (`hostileUntil`).
+- Hostile rooms are skipped both when selecting remote-mining targets and when
+  ranking expansion candidates.
 
 ### Memory Structure
 
@@ -38,13 +49,7 @@ Memory.rooms[homeRoom].remoteRooms = [
 ]
 ```
 
-### Spawn Conditions
-
-Rangers are spawned by `orchestrator.spawning.ts` when:
-- A room is in `pendingScoutRooms` with no ranger already assigned to it
-- The room is not already in `remoteRooms` (or hasn't been seen recently)
-
-Body: `[MOVE]` — minimal cost, just needs to enter the room and read it.
+Body: `[MOVE]` — minimal cost, just needs to enter and read the room.
 
 ---
 
@@ -56,17 +61,25 @@ pendingScoutRooms[] → ranger surveys → remoteRooms[]
                                outriders mine sources
                                peddlers haul energy home
                                heralds reserve the controller
+                               (expander ranks them as colony candidates)
 ```
 
 ---
 
-## Planned: Observer Network _(RCL 8)_
+## Observer (`orchestrator.observer.ts`, RCL 8)
 
-When an Observer structure is available, ARCA will scan rooms automatically without dispatching creeps:
+When a room has an observer, each tick it scans the next highway room in a shuffled
+queue (built within ~10 rooms of home). It also opportunistically checks any highway
+room already in vision. The goal is **power banks**:
 
-- Scan adjacent and in-range rooms every 1,000 ticks
-- Collect owner, RCL, tower count, hostile creeps, source count, mineral type
-- Calculate expansion score and threat level
-- Expose results via `Game.arca.intel()`, `Game.arca.expand()`, `Game.arca.threats()`
+- A bank with ≥ 2,000 power and ≥ 3,000 ticks-to-decay spawns a `PowerBankOp`
+  (`Memory.powerOps`), funded by the closest owned room, with a scaled squad
+  (2 attackers / 3 healers / up to 6 carriers).
+- The op runs through `forming → cracking → collecting → done` (see
+  `Game.arca.power()` for status).
 
-This replaces the ranger scouting pipeline for rooms within observer range (10 rooms).
+The same orchestrator also runs each room's **power spawn**: it calls
+`processPower()` whenever the spawn holds power and ≥ 50 energy.
+
+Highway-room detection is purely positional (a room whose X or Y coordinate is a
+multiple of 10).

@@ -1,5 +1,5 @@
 import { seekBoost } from "../services/services.combat";
-import { runOffensiveWizard } from "../orchestrators/orchestrator.military";
+import { getDefenseOp, getOffensiveOp, runDefensiveWizard, runOffensiveWizard } from "../orchestrators/orchestrator.military";
 
 const KITE_RANGE = 3;
 
@@ -7,12 +7,20 @@ export function runWizard(creep: Creep) {
   if (creep.memory.boostCompound && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
-    const op = Memory.militaryOp;
-    if (op && op.targetRoom === creep.memory.offensiveTarget) {
+    const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);
+    if (op) {
       runOffensiveWizard(creep, op);
       return;
     }
     delete creep.memory.offensiveTarget;
+  }
+
+  if (creep.memory.defensiveTarget) {
+    if (getDefenseOp(creep.memory.defensiveTarget)) {
+      runDefensiveWizard(creep, creep.memory.defensiveTarget);
+      return;
+    }
+    delete creep.memory.defensiveTarget;
   }
 
   const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);

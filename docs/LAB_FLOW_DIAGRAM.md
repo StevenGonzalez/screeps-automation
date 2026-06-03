@@ -10,9 +10,9 @@
 │  EVERY 100 TICKS - AUTO PRODUCTION PLANNING                         │
 └─────────────────────────────────────────────────────────────────────┘
 
-    ChaosSanctum.run()
+    orchestrator.labs: processLabSystem(room)
          │
-         ├─ autoProduction enabled? ──────┐
+         ├─ queue empty AND autoEnabled? ─┐
          │                                 │
          │                          [YES]  │  [NO]
          │                                 │   │
@@ -20,45 +20,38 @@
          │                      planAutoProduction()
          │                                 │
          │                                 ▼
-         │                   ReactionPlanner.planProduction()
-         │                                 │
+         │              Walk AUTO_PRODUCTION_TARGETS in order:
          │                    ┌────────────┴────────────┐
-         │                    │  Check all compounds    │
-         │                    │  - XUH2O: need 2500     │
-         │                    │  - XUHO2: need 4000     │
-         │                    │  - OH: need 8000        │
-         │                    └────────────┬────────────┘
-         │                                 │
-         │                    ┌────────────┴────────────┐
-         │                    │  Calculate priorities   │
-         │                    │  - XUHO2: 90 × 0.8 = 72 │
-         │                    │  - XUH2O: 100 × 0.83 = 83│
-         │                    │  - OH: 30 × 0.8 = 24    │
+         │                    │  First under-stocked    │
+         │                    │  compound (have < target)│
+         │                    │  - XUH2O: 3000          │
+         │                    │  - XUHO2: 3000          │
+         │                    │  - OH:    10000         │
          │                    └────────────┬────────────┘
          │                                 │
          │                                 ▼
-         │                      [XUH2O, XUHO2, OH, ...]
+         │             Queue ONE compound's chain per cycle
          │                                 │
          ├─────────────────────────────────┘
          │
          ▼
-    For each priority compound:
+    resolveChain() expands the chosen compound:
          │
-         ├─> getReactionChain(XUH2O)
+         ├─> resolveChain(XUH2O)
          │        │
          │        ├─> Ingredient 1: UH2O (compound!)
          │        │    │
-         │        │    ├─> getReactionChain(UH2O)
+         │        │    ├─> resolveChain(UH2O)
          │        │    │    │
          │        │    │    ├─> Ingredient 1: UH (compound!)
          │        │    │    │    │
-         │        │    │    │    └─> getReactionChain(UH)
+         │        │    │    │    └─> resolveChain(UH)
          │        │    │    │         │
          │        │    │    │         └─> [U + H] ──> [UH]
          │        │    │    │
          │        │    │    └─> Ingredient 2: OH (compound!)
          │        │    │         │
-         │        │    │         └─> getReactionChain(OH)
+         │        │    │         └─> resolveChain(OH)
          │        │    │              │
          │        │    │              └─> [O + H] ──> [OH]
          │        │    │
@@ -68,7 +61,7 @@
          │             │
          │             └─> Full chain: [OH, UH, UH2O, XUH2O]
          │
-         └─> queueReaction() for each step
+         └─> push each step onto labSystem.queue
               │
               ├─> Queue OH (3000 units)
               ├─> Queue UH (3000 units)
@@ -80,13 +73,13 @@
 │  EVERY TICK - EXECUTION                                             │
 └─────────────────────────────────────────────────────────────────────┘
 
-    ChaosSanctum.run()
+    orchestrator.labs: processLabSystem(room)
          │
-         └─> currentReaction?
+         └─> activeCompound?
               │
               ├─[NO]──> Pop next from queue ──> currentReaction
               │
-              └─[YES]─> executeReaction()
+              └─[YES]─> run reactions for activeCompound
                          │
                          ├─> Check input labs
                          │    │
@@ -112,7 +105,7 @@
                               (Later)
                               │
                               ├─> Produced: 3000 OH ✓
-                              └─> Clear currentReaction
+                              └─> Clear activeCompound + shift queue
                                    │
                                    └─> Pop next reaction (UH)
 
@@ -121,13 +114,13 @@
 │  INTEGRATION WITH OTHER SYSTEMS                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-    HaulerWarlord                MarketManager              WarCouncil
+    apothecary (role)            orchestrator.terminal       military system
          │                            │                          │
          ├─> Fill input labs          ├─> Buy missing minerals  ├─> Request boosts
-         │    from storage            │    (H, O, X, etc.)      │    for squads
+         │    from storage            │    (H, O, X, etc.)      │    for combat creeps
          │                             │                          │
          ├─> Empty output labs        └─> Sell excess           └─> XUH2O for attack
-         │    to storage                   compounds                 XUHO2 for heal
+         │    to storage                   minerals                  XUHO2 for heal
          │                                                            XKHO2 for ranged
          └─> Transport between
               labs efficiently
@@ -137,32 +130,36 @@
 │  REACTION TIER PYRAMID                                              │
 └─────────────────────────────────────────────────────────────────────┘
 
+ Auto-production targets the T4 boosts (+ OH, G); lower tiers are made
+ only as chain intermediates. The planner walks AUTO_PRODUCTION_TARGETS
+ in list order and tops up the first under-stocked compound.
+
                          TIER 4 (Catalyzed)
                     ┌──────────────────────┐
-                    │ XUH2O, XUHO2, XKHO2  │  Target: 3k each
-                    │ XLH2O, XLHO2, etc.   │  Priority: 50-100
+                    │ XUH2O, XUHO2, XKHO2  │  Auto target: 3k each
+                    │ XZHO2, XGH2O         │  (XZHO2 2k)
                     └──────────┬───────────┘
                                │
                     ┌──────────┴──────────────────┐
                     │   TIER 3 (Boosted)          │
               ┌─────┴──────┐           ┌──────────┴─────┐
-              │ UH2O, UHO2 │           │ KH2O, KHO2     │  Target: 5k
-              │ LH2O, LHO2 │           │ ZH2O, ZHO2     │  Priority: 36-45
+              │ UH2O, UHO2 │           │ KH2O, KHO2     │  intermediate
+              │ LH2O, LHO2 │           │ ZH2O, ZHO2     │  (made as needed)
               └─────┬──────┘           └──────────┬─────┘
                     │                             │
          ┌──────────┴────────────┬────────────────┴──────────┐
          │  TIER 2 (Advanced)    │                           │
     ┌────┴────┐            ┌─────┴─────┐            ┌───────┴──────┐
-    │ UH, UO  │            │ KH, KO    │            │ LH, LO       │  Target: 2k
-    │ ZH, ZO  │            │ GH, GO    │            │              │  Priority: 11-20
+    │ UH, UO  │            │ KH, KO    │            │ LH, LO       │  intermediate
+    │ ZH, ZO  │            │ GH, GO    │            │              │  (made as needed)
     └────┬────┘            └─────┬─────┘            └───────┬──────┘
          │                       │                          │
          └───────────────────────┴──────────────────────────┘
                                  │
                     ┌────────────┴────────────┐
                     │   TIER 1 (Base)         │
-                    │   OH, G, ZK, UL         │  Target: 10k
-                    │                         │  Priority: 4-30
+                    │   OH, G, ZK, UL         │  OH auto 10k, G auto 5k
+                    │                         │
                     └────────────┬────────────┘
                                  │
                     ┌────────────┴────────────┐

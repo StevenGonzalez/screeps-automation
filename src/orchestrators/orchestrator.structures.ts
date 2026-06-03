@@ -13,6 +13,7 @@ import {
 } from "../services/services.structures";
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
 import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
+import { planDefensivePerimeter } from "../planning/planner.rampart";
 
 // Lower number = placed first. The global construction-site cap (100) is scarce
 // and roads vastly outnumber everything else, so economy structures must claim
@@ -35,7 +36,16 @@ const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_ROAD]: 11,
 };
 
-function buildPriority(type: StructureConstant | null): number {
+// Priority for the build queue, keyed on the planner key (not just the structure
+// type) so the defensive PERIMETER (STAMP_RAMPART_KEY) can sit BELOW roads while
+// the on-top ramparts protecting critical structures (RAMPARTS_KEY) stay high.
+// The perimeter is a large, purely-defensive ring; it must never out-compete the
+// economy or roads for the scarce global site cap. 12 = after everything listed.
+const PERIMETER_PRIORITY = 12;
+
+function buildPriority(key: string): number {
+  if (key === PLANNER_KEYS.STAMP_RAMPART_KEY) return PERIMETER_PRIORITY;
+  const type = structureTypeForKey(key);
   return type ? BUILD_PRIORITY[type] ?? 11 : 11;
 }
 
@@ -187,7 +197,7 @@ function applyPlannedConstruction(room: Room) {
   // structures before roads/ramparts so roads can't monopolise the slots.
   let budget = MAX_CONSTRUCTION_SITES - Object.keys(Game.constructionSites).length;
   const keys = Object.keys(mem).sort(
-    (a, b) => buildPriority(structureTypeForKey(a)) - buildPriority(structureTypeForKey(b))
+    (a, b) => buildPriority(a) - buildPriority(b)
   );
 
   for (const key of keys) {
@@ -401,6 +411,12 @@ function processRoomStructures(room: Room) {
 
   // Castle stamp: place RCL-appropriate structures
   applyCastleStamp(room);
+
+  // Seal the base behind a defensive rampart curtain enclosing the stamp + the
+  // freshly-planned extension rings. Self-gates on RCL and throttles its own
+  // recompute; its tiles share STAMP_RAMPART_KEY so they inherit the low build
+  // priority and existing rampart repair handling.
+  planDefensivePerimeter(room);
 
   // Source containers
   const sources = room.find(FIND_SOURCES);

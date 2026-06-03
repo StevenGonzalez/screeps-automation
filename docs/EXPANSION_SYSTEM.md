@@ -1,53 +1,109 @@
-# Expansion System _(planned)_
+# Expansion System
 
-> **Status**: Planned. Remote mining (outriders + peddlers + heralds) is implemented; autonomous room claiming is not.
+> **Status**: Implemented. `orchestrators/orchestrator.expansion.ts` does GCL-driven
+> autonomous claiming, drives the full bootstrap lifecycle, runs safety checks for
+> contested rooms, and manages a multi-target expansion **queue**. Remote mining
+> (outriders + peddlers + heralds) feeds the candidate data.
 
 ---
 
-## What Exists: Remote Mining Pipeline
+## Remote Mining Pipeline (the foundation)
 
-ARCA already exploits adjacent rooms without claiming them:
+The bot exploits adjacent rooms without claiming them, and the scout data this
+produces is exactly what the expander ranks candidates from:
 
 1. **Rangers** survey adjacent rooms and record source positions + hostile status
-2. **Outriders** travel to remote rooms and mine sources into containers
-3. **Peddlers** haul that energy back to the home colony
-4. **Heralds** reserve the remote room controller, doubling source regen (3,000 → 6,000 per source)
-
-This is the foundation the expansion system will build on.
-
----
-
-## Planned: Autonomous Claiming
-
-When a colony reaches "powerhouse" phase and GCL allows, ARCA will:
-
-### 1. Target Selection
-- Pull candidate rooms from the ranger scouting record
-- Score rooms by: sources (weight 40), mineral presence (weight 20), proximity (weight 20), low threat (weight 20)
-- Require: 2+ sources, no player owner, threat level < 3, within 5 rooms
-
-### 2. Claiming
-- Spawn a **conqueror** creep with `[CLAIM, MOVE, MOVE, MOVE, MOVE]`
-- Conqueror travels to the target and calls `claimController()`
-
-### 3. Bootstrapping
-- Spawn 3 **settler** creeps (harvester + builder hybrid) to establish the spawn
-- Once spawn is built, colony becomes autonomous and begins its own spawn loop
-
-### 4. Progress Monitoring
-- Track claiming status in `Memory.expansion`
-- Abort and retry if conqueror dies or gets stuck
-- Notify console when colony reaches self-sufficiency
+   into `Memory.rooms[home].remoteRooms`.
+2. **Outriders** travel to remote rooms and mine sources into containers.
+3. **Peddlers** haul that energy back to the home colony.
+4. **Heralds** reserve the remote controller, doubling source regen.
 
 ---
 
-## Planned: Console Commands _(planned)_
+## Autonomous Claiming
 
-```javascript
-Game.arca.expand()          // Show top expansion candidates from scout data
-Game.arca.claim('W3N2')    // Manually trigger claim operation on a room
+Two ways an expansion starts:
+- **Auto** (`Memory.autoExpand`, toggled by `Game.arca.autoexpand(true)`,
+  **off by default**): every 50 ticks the orchestrator ranks scouted candidates and
+  enqueues the best ones whose funding room is healthy, up to GCL headroom and a
+  max queue depth of 3.
+- **Manual**: `Game.arca.claim('W5N5')` sets the active expansion directly, or
+  `Game.arca.queueExpand('W5N5')` lines one up in the queue.
+
+Either way the lifecycle below runs every tick, so a manual claim finishes
+correctly too.
+
+### Candidate ranking
+
+`rankExpansionCandidates()` scores each non-owned, non-contested scouted remote:
+
+```
+score = sources × 40 − distance × 5
 ```
 
+Contested rooms are skipped — both from scout data (`hostile` / `hostileUntil`
+flags) and from a live check (owned/reserved by another player, or hostiles
+present right now).
+
+### Funding-home gate
+
+A room may only seed a colony when it is healthy:
+- RCL ≥ 4 (storage + ≥1300 energy capacity),
+- storage energy ≥ 50,000,
+- not itself under threat.
+
+The CPU bucket must also be ≥ 5,000 before a multi-hundred-tick op starts.
+
+### Phases (`Memory.expansion`)
+
+`claiming → bootstrapping → established`
+
+1. **Claiming** — a **conqueror** travels to the target and claims the controller.
+   Aborts cleanly if the room turns out to be owned by another player or fresh
+   scout intel flags it hostile.
+2. **Bootstrapping** — **settlers** establish the spawn and economy. During this
+   phase the orchestrator:
+   - **Pauses** settler spawning for ~200 ticks and flags `needsDefender` if the
+     child room is invaded (settlers retreat; a home spawn rule raises a defender).
+   - **Times out** after 6,000 ticks if the bootstrap never completes.
+3. **Established** — declared self-sufficient (see completion criteria), kept around
+   ~1,000 ticks for inspection, then cleared so the next queued target can start.
+
+### Bootstrap-completion criteria
+
+A child room becomes **established** only when **all** of these hold (checked while
+the room is visible):
+
+1. We own its controller.
+2. It has at least one **built** own spawn (not just a construction site).
+3. Controller RCL ≥ 3.
+4. Its economy can sustain itself: a working miner + hauler pair native to the
+   room, **or** its own storage holds ≥ 10,000 energy.
+
 ---
+
+## Expansion Queue (multi-target pipeline)
+
+Only **one** expansion is active at a time. The queue (`Memory.expansionQueue`)
+holds further targets and auto-advances: when the active expansion completes or
+aborts, the next viable queued target begins claiming — no further console input
+needed. The advance step skips already-owned or contested entries and any target
+with no healthy funding room (re-queuing it to try later).
+
+---
+
+## Console Commands
+
+```javascript
+Game.arca.expand()                  // show ranked candidates from scout data
+Game.arca.claim('W5N5')             // claim now (closest healthy home funds it)
+Game.arca.queueExpand('W5N5')       // add to the expansion pipeline
+Game.arca.queueExpand('W5N5','W1N1')// ...preferring a specific funding home
+Game.arca.dequeueExpand('W5N5')     // remove a queued target
+Game.arca.autoexpand(true)          // toggle / inspect auto-expansion
+Game.arca.status()                  // active expansion + the queued pipeline
+Game.arca.cancel()                  // abort the active expansion
+Game.arca.ops()                     // overview of all pipelines (expansion + offensive + SK)
+```
 
 The kingdom of Lorencia expands — dungeon by dungeon, room by room.

@@ -20,6 +20,13 @@ const SK_DISCOVERY_TIMEOUT = 3000;
 const SK_MIN_HOME_RCL = 7;
 const SK_MIN_HOME_ENERGY = 40_000;
 
+// Concurrency bounds. SK ops are funded per home room and never conflict across
+// different homes, so multiple run in parallel — but each op spawns a guardian +
+// a delver/wain per source, so we cap the total empire-wide (CPU/spawn pressure)
+// and per home room (one home can't sustain three SK squads at once).
+export const SK_MAX_CONCURRENT = 4;       // empire-wide ceiling
+export const SK_MAX_PER_HOME = 2;         // ceiling per funding home room
+
 export function loop(): void {
   const ops = Memory.skOps;
   if (!ops || ops.length === 0) return;
@@ -92,14 +99,24 @@ export function launchSkOp(roomName: string): string | null {
     return `already mining ${roomName}`;
   }
 
+  // Empire-wide concurrency ceiling.
+  if (Memory.skOps.length >= SK_MAX_CONCURRENT) {
+    return `at the empire-wide SK op limit (${SK_MAX_CONCURRENT}) — cancel one first`;
+  }
+
+  // Count active ops per home room so we can skip homes already at their cap.
+  const opsPerHome: Record<string, number> = {};
+  for (const o of Memory.skOps) opsPerHome[o.homeRoom] = (opsPerHome[o.homeRoom] ?? 0) + 1;
+
   const candidates = Object.values(Game.rooms).filter(
     (r) =>
       r.controller?.my &&
       (r.controller.level ?? 0) >= SK_MIN_HOME_RCL &&
-      (r.storage?.store[RESOURCE_ENERGY] ?? 0) >= SK_MIN_HOME_ENERGY
+      (r.storage?.store[RESOURCE_ENERGY] ?? 0) >= SK_MIN_HOME_ENERGY &&
+      (opsPerHome[r.name] ?? 0) < SK_MAX_PER_HOME
   );
   if (candidates.length === 0) {
-    return `no owned room at RCL ${SK_MIN_HOME_RCL}+ with ${SK_MIN_HOME_ENERGY}+ stored energy to fund it`;
+    return `no owned room at RCL ${SK_MIN_HOME_RCL}+ with ${SK_MIN_HOME_ENERGY}+ stored energy and free SK capacity to fund it`;
   }
 
   const home = candidates.reduce((best, r) =>
@@ -109,7 +126,7 @@ export function launchSkOp(roomName: string): string | null {
       : best
   );
   if (Game.map.getRoomLinearDistance(home.name, roomName) > 2) {
-    return `nearest capable home (${home.name}) is too far from ${roomName}`;
+    return `nearest capable home with free SK capacity (${home.name}) is too far from ${roomName}`;
   }
 
   if (!Memory.nextSkOpId) Memory.nextSkOpId = 1;

@@ -73,6 +73,25 @@ export const STAMP_PLANNER = {
   bfsMaxRadius: 5,
 };
 
+// Defensive perimeter: a sealed ring of ramparts enclosing the whole base core
+// (stamp structures + the Merchant Ring extensions), not just the stamp box.
+export const PERIMETER_PLANNER = {
+  // Don't wall off the base until it's worth defending (storage exists at RCL 4).
+  minRcl: 4,
+  // Tiles of breathing room added around the bounding box of all core structures,
+  // so the wall doesn't sit flush against extensions/towers and creeps can still
+  // path along the inside edge.
+  margin: 2,
+  // Keep the ring off the room border (creeps standing on edge tiles can leave the
+  // room) — exit tiles are 0 and 49; clamp the box to a usable interior.
+  minEdge: 2,
+  maxEdge: 47,
+  // Recompute the perimeter only this often. The base footprint grows slowly (a
+  // ring of extensions per RCL), so a wide interval keeps CPU near zero while still
+  // expanding the wall as the base does.
+  replanInterval: 1500,
+};
+
 export const TOWER_COUNT_PER_RCL: Record<number, number> = {
   0: 0,
   1: 0,

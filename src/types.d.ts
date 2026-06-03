@@ -59,6 +59,20 @@ declare global {
     regroupSince?: number;
   }
 
+  // An automatic, threat-driven defensive operation on an OWNED room. Kept separate
+  // from the manual offensive Memory.militaryOp so the two never collide: a home room
+  // can host a defensive squad while an offensive op runs elsewhere. Keyed by room name
+  // in Memory.defenseOps. The squad rallies and fights inside its own room only.
+  interface DefenseOp {
+    room: string;            // the owned room under threat (also the squad's home)
+    startedAt: number;
+    lastThreatTick: number;  // last tick a meaningful threat was seen; drives stand-down
+    threatScore: number;     // most recent threat score (scales squad composition)
+    requiredKnights: number;
+    requiredWizards: number;
+    requiredClerics: number;
+  }
+
   // Intelligence gathered on a non-owned room, used by the WarCouncil to rank targets.
   interface RoomIntelData {
     roomName: string;
@@ -101,6 +115,33 @@ declare global {
     phase: "claiming" | "bootstrapping" | "established";
     startedAt: number;
     establishedAt?: number;
+    pausedUntil?: number;     // bootstrap paused (child room contested) until this tick
+    needsDefender?: boolean;  // home room should spawn a defender for the child room
+    abortReason?: string;     // why an expansion was aborted (diagnostics)
+  }
+
+  // A pending expansion target waiting in the queue. homeRoom is optional: when
+  // omitted the expansion orchestrator picks the closest healthy funding room at
+  // pop time (so a manually queued target doesn't commit to a home that may not be
+  // healthy by the time its turn comes).
+  interface QueuedExpansion {
+    roomName: string;
+    homeRoom?: string;
+    queuedAt: number;
+  }
+
+  // A pending offensive target waiting for a free home room. Mirrors the launch
+  // arguments so the queue can start an identical op when a home room frees up.
+  interface QueuedMilitaryOp {
+    targetRoom: string;
+    homeRoom?: string;        // preferred funding room; closest capable picked if absent
+    formation: SquadFormation;
+    tactic: SquadTactic;
+    requiredKnights: number;
+    requiredWizards: number;
+    requiredClerics: number;
+    requiredSiegers: number;
+    queuedAt: number;
   }
 
   interface RemoteSourceData {
@@ -137,6 +178,8 @@ declare global {
     boosted?: boolean;
     // Military offense
     offensiveTarget?: string;
+    // Military defense (auto threat response): the owned room this creep defends
+    defensiveTarget?: string;
     // Power bank ops
     powerOpId?: number;
     // Source Keeper mining ops
@@ -179,6 +222,8 @@ declare global {
     // Lab / compound production
     labSystem?: LabSystemMemory;
     lastMarketBuyTick?: number;
+    // Throttle for nuker-reserve ghodium market buys (orchestrator.terminal.ts)
+    lastGhodiumBuyTick?: number;
     // Inter-room resource transfer
     pendingSend?: PendingTerminalSend;
     // Observer + PowerSpawn
@@ -201,7 +246,19 @@ declare global {
     sources?: Record<string, Id<Source>[]>;
     sourcesLastScan?: Record<string, number>;
     expansion?: ExpansionData;
+    // Pending expansion targets. Only ONE expansion runs at a time (Memory.expansion);
+    // when it clears, the orchestrator pops the head of this queue and starts it.
+    expansionQueue?: QueuedExpansion[];
+    // Legacy singular offensive op. Retained ONLY for live-memory migration — the
+    // orchestrator folds any existing value into Memory.militaryOps on first run.
     militaryOp?: MilitaryOp;
+    // Concurrent offensive ops, keyed by funding home room (mirrors defenseOps). At
+    // most one offensive op per home room; different strong rooms can each run one.
+    militaryOps?: Record<string, MilitaryOp>;
+    // Pending offensive targets. Auto-started against the next free home room.
+    militaryQueue?: QueuedMilitaryOp[];
+    // Automatic threat-driven defensive ops, keyed by the owned room under threat.
+    defenseOps?: Record<string, DefenseOp>;
     warCouncil?: WarCouncilMemory;
     intel?: Record<string, RoomIntelData>;
     powerOps?: PowerBankOp[];

@@ -1,5 +1,5 @@
 import { seekBoost } from "../services/services.combat";
-import { runOffensiveCleric } from "../orchestrators/orchestrator.military";
+import { getDefenseOp, getOffensiveOp, runDefensiveCleric, runOffensiveCleric } from "../orchestrators/orchestrator.military";
 
 const SELF_HEAL_THRESHOLD = 0.5;
 
@@ -7,12 +7,20 @@ export function runCleric(creep: Creep) {
   if (creep.memory.boostCompound && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
-    const op = Memory.militaryOp;
-    if (op && op.targetRoom === creep.memory.offensiveTarget) {
+    const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);
+    if (op) {
       runOffensiveCleric(creep, op);
       return;
     }
     delete creep.memory.offensiveTarget;
+  }
+
+  if (creep.memory.defensiveTarget) {
+    if (getDefenseOp(creep.memory.defensiveTarget)) {
+      runDefensiveCleric(creep, creep.memory.defensiveTarget);
+      return;
+    }
+    delete creep.memory.defensiveTarget;
   }
 
   // Defensive: self-preservation when critically injured
