@@ -459,6 +459,26 @@ function isDamaged(s: AnyStructure): boolean {
   return s.hits < s.hitsMax;
 }
 
+// Roads, containers and ramparts DECAY and are removed at 0 hits — a removed
+// structure can't be repaired at all. Below these floors a structure is close
+// enough to vanishing that rescuing it must preempt all routine maintenance.
+// This is what stops roads/ramparts being "removed due to no repair": without it,
+// constantly-decaying roads keep the maintenance tier busy forever and ramparts
+// (which are built at just 1 hit) never get touched. Non-decaying structures
+// return 0 and are left to the normal maintenance tiers.
+function decayRescueFloor(s: AnyStructure): number {
+  switch (s.structureType) {
+    case STRUCTURE_RAMPART:
+      return 2000; // decays 300/100t; a freshly built rampart starts at 1 hit
+    case STRUCTURE_ROAD:
+      return s.hitsMax * 0.35;
+    case STRUCTURE_CONTAINER:
+      return s.hitsMax * 0.1;
+    default:
+      return 0;
+  }
+}
+
 export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
   const repairTargets = getRoomStructures(creep.room).filter(
     (s): s is AnyStructure =>
@@ -521,6 +541,21 @@ export function findMostCriticalRepairTarget(
   const wallTarget = getRampartTargetHP(rcl);
 
   const structures = getRoomStructures(creep.room);
+
+  // Priority 0 — RESCUE: any decaying structure (road, container, rampart) close to
+  // being removed, regardless of type. A vanished structure can't be repaired, so
+  // saving the closest-to-death one preempts all routine maintenance below.
+  const dying = structures.filter(
+    (st): st is AnyStructure => {
+      const floor = decayRescueFloor(st);
+      return floor > 0 && st.hits < floor;
+    }
+  );
+  if (dying.length > 0) {
+    const result = dying.reduce((a, b) => (a.hits < b.hits ? a : b));
+    criticalRepairByRoom[rn] = result;
+    return result;
+  }
 
   // Priority 1: non-defensive structures below 80% HP. Rank by HP fraction
   // (hits/hitsMax), not absolute hits — otherwise low-cap structures like roads

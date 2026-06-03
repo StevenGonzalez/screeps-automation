@@ -200,6 +200,16 @@ function applyPlannedConstruction(room: Room) {
     (a, b) => buildPriority(a) - buildPriority(b)
   );
 
+  // Throttle the defensive perimeter (NOT the high-priority on-top ramparts, which
+  // are keyed separately) so the ring builds incrementally — see config comment.
+  const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
+  const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
+  const rampartSites = sitesByType.get(STRUCTURE_RAMPART);
+  let perimeterSiteCount = 0;
+  if (rampartSites && mem[perimeterKey]) {
+    for (const p of mem[perimeterKey]) if (rampartSites.has(p)) perimeterSiteCount++;
+  }
+
   for (const key of keys) {
     const type = structureTypeForKey(key);
     if (!type) continue;
@@ -227,6 +237,7 @@ function applyPlannedConstruction(room: Room) {
       if (sites?.has(posStr)) continue;
       if (budget <= 0) continue; // global cap reached — try again next pass
       if (isRoad && roadSiteCount >= roadCap) continue; // roads leave headroom
+      if (key === perimeterKey && perimeterSiteCount >= perimeterCap) continue;
       let result: ScreepsReturnCode;
       if (type === STRUCTURE_SPAWN) {
         // Give every bot-built spawn an MU-themed name (Lorencia, Devias, …).
@@ -240,6 +251,7 @@ function applyPlannedConstruction(room: Room) {
       if (result === OK) {
         budget--;
         if (isRoad) roadSiteCount++;
+        if (key === perimeterKey) perimeterSiteCount++;
       }
     }
     mem[key] = keep;

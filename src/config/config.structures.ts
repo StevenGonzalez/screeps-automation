@@ -24,6 +24,12 @@ export const STRUCTURE_PLANNER = {
   // room may have pending at once — this leaves headroom under the global cap for
   // economy structures (extensions especially) to get a site.
   maxRoadConstructionSites: 15,
+  // A rampart costs only 1 energy to "build", so a builder converts a whole batch of
+  // perimeter sites into 1-hit ramparts almost instantly — and a 1-hit rampart decays
+  // out of existence in ~100 ticks. Cap how many perimeter ramparts are in flight at
+  // once so they trickle in at a rate repairers/towers can actually pump up and keep
+  // alive, instead of the whole ring appearing at 1 hit and decaying away.
+  maxPerimeterConstructionSites: 4,
   plannedCleanupInterval: 1000,
   plannedCleanupUnseenAge: 10000,
   plannedRoadPruneTicks: 5000,
