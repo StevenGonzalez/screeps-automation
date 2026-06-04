@@ -6,6 +6,7 @@ import {
   ROLE_BUILDER,
   ROLE_REPAIRER,
 } from "../config/config.roles";
+import { getRoomBuildTarget } from "../services/services.creep";
 
 const TELEMETRY_INTERVAL = 25;
 const MILESTONE_ROLES = [ROLE_MINER, ROLE_HAULER, ROLE_UPGRADER, ROLE_BUILDER, ROLE_REPAIRER];
@@ -71,7 +72,10 @@ function reportRoom(room: Room): void {
     .find(FIND_DROPPED_RESOURCES)
     .filter((r) => r.resourceType === RESOURCE_ENERGY)
     .reduce((sum, r) => sum + r.amount, 0);
-  const sites = room.find(FIND_CONSTRUCTION_SITES).length;
+  const constructionSites = room.find(FIND_CONSTRUCTION_SITES);
+  const sites = constructionSites.length;
+  const buildProgress = constructionSites.reduce((sum, c) => sum + c.progress, 0);
+  const buildTarget = getRoomBuildTarget(room)?.structureType ?? "none";
   const progressPct = controller.progressTotal
     ? Math.floor((controller.progress / controller.progressTotal) * 100)
     : 0;
@@ -81,6 +85,7 @@ function reportRoom(room: Room): void {
   console.log(
     `[BOOT ${room.name}] t=${Game.time} rcl=${rcl}(${progressPct}%) ` +
       `e=${room.energyAvailable}/${room.energyCapacityAvailable} store=${store} | ` +
-      `${roleSummary} | sites=${sites} dropped=${droppedEnergy} spawn=${spawnState}`
+      `${roleSummary} | sites=${sites} prog=${buildProgress} target=${buildTarget} ` +
+      `dropped=${droppedEnergy} spawn=${spawnState}`
   );
 }

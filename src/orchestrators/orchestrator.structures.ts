@@ -21,10 +21,10 @@ import { planDefensivePerimeter } from "../planning/planner.rampart";
 // road-tier priority.
 const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_SPAWN]: 0,
-  [STRUCTURE_EXTENSION]: 1,
-  [STRUCTURE_TOWER]: 2,
-  [STRUCTURE_STORAGE]: 3,
-  [STRUCTURE_CONTAINER]: 4,
+  [STRUCTURE_CONTAINER]: 1,
+  [STRUCTURE_EXTENSION]: 2,
+  [STRUCTURE_TOWER]: 3,
+  [STRUCTURE_STORAGE]: 4,
   [STRUCTURE_TERMINAL]: 5,
   [STRUCTURE_LINK]: 6,
   [STRUCTURE_LAB]: 7,
