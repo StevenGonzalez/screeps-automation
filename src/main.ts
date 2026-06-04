@@ -15,6 +15,7 @@ import * as nukerSystem from "./orchestrators/orchestrator.nuker";
 import * as sourceKeeperSystem from "./orchestrators/orchestrator.sourcekeeper";
 import * as powerCreepSystem from "./orchestrators/orchestrator.powercreep";
 import * as observerSystem from "./orchestrators/orchestrator.observer";
+import * as telemetrySystem from "./orchestrators/orchestrator.telemetry";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { setupConsole } from "./console";
 // Side-effect import: installs the traffic-managed moveTo override on Creep.prototype.
@@ -65,6 +66,7 @@ export function loop() {
   runSafe("sourcekeeper", () => sourceKeeperSystem.loop());
   runSafe("powercreep", () => powerCreepSystem.loop());
   runSafe("observer", () => observerSystem.loop());
+  runSafe("telemetry", () => telemetrySystem.loop());
   runSafe("pixels", () => pixelsSystem.loop());
 
   // Visuals are purely cosmetic — first thing to drop under load.

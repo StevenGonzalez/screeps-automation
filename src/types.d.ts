@@ -243,6 +243,7 @@ declare global {
     creeps: Record<string, CreepMemory>;
     rooms: Record<string, RoomMemory>;
     threatNotifyLastTick?: Record<string, number>;
+    bootstrapTelemetry?: boolean;
     sources?: Record<string, Id<Source>[]>;
     sourcesLastScan?: Record<string, number>;
     expansion?: ExpansionData;

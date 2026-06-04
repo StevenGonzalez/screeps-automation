@@ -797,6 +797,16 @@ export function setupConsole() {
       console.log(`[Traffic] manager ${enabled ? "ENABLED" : "DISABLED"}`);
     },
 
+    bootstrap: (enabled?: boolean) => {
+      if (enabled === undefined) {
+        const on = Memory.bootstrapTelemetry ?? Game.shard?.name === "sim";
+        console.log(`[Boot] telemetry is ${on ? "ON" : "OFF"}`);
+        return;
+      }
+      Memory.bootstrapTelemetry = enabled;
+      console.log(`[Boot] telemetry ${enabled ? "ENABLED" : "DISABLED"}`);
+    },
+
     // Show power creep (Operator) status: level, location, ops, and known powers.
     powercreeps: () => {
       const names = Object.keys(Game.powerCreeps);
