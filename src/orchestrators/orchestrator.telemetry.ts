@@ -18,9 +18,6 @@ const LINE_ROLES = [
   ROLE_REPAIRER,
 ];
 
-const lastRclByRoom: Record<string, number> = {};
-const seenRolesByRoom: Record<string, Set<string>> = {};
-
 function isEnabled(): boolean {
   if (Memory.bootstrapTelemetry !== undefined) return Memory.bootstrapTelemetry;
   return Game.shard?.name === "sim";
@@ -48,18 +45,20 @@ function reportRoom(room: Room): void {
   const controller = room.controller!;
   const rcl = controller.level;
 
-  const prevRcl = lastRclByRoom[room.name];
+  const lastRcl = (Memory.bootstrapRcl ??= {});
+  const prevRcl = lastRcl[room.name];
   if (prevRcl !== undefined && rcl !== prevRcl) {
     console.log(`[BOOT ${room.name}] t=${Game.time} RCL ${prevRcl}->${rcl}`);
   }
-  lastRclByRoom[room.name] = rcl;
+  lastRcl[room.name] = rcl;
 
   const counts = countRolesInRoom(room);
 
-  const seen = (seenRolesByRoom[room.name] ??= new Set());
+  const seenByRoom = (Memory.bootstrapSeen ??= {});
+  const seen = (seenByRoom[room.name] ??= []);
   for (const role of MILESTONE_ROLES) {
-    if ((counts[role] ?? 0) > 0 && !seen.has(role)) {
-      seen.add(role);
+    if ((counts[role] ?? 0) > 0 && !seen.includes(role)) {
+      seen.push(role);
       console.log(`[BOOT ${room.name}] t=${Game.time} first ${role}`);
     }
   }

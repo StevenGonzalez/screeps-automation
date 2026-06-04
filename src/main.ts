@@ -37,7 +37,9 @@ export function loop() {
   setupConsole();
   const tickStart = Game.cpu.getUsed();
   const limit = Game.cpu.limit;
-  const bucketCritical = Game.cpu.bucket < CPU_BUCKET_CRITICAL;
+  const bucketCritical =
+    typeof Game.cpu.bucket === "number" && Game.cpu.bucket < CPU_BUCKET_CRITICAL;
+  const cpuFraction = (used: number): number => (limit ? used / limit : 0);
 
   runSafe("memory", () => memorySystem.loop());
   runSafe("expansion", () => expansionSystem.loop());
@@ -47,7 +49,7 @@ export function loop() {
   // Structure planning includes pathfinding — skip when CPU is already consumed
   // or the bucket is critically low.
   const cpuAfterCore = Game.cpu.getUsed() - tickStart;
-  if (!bucketCritical && cpuAfterCore / limit < CPU_SKIP_STRUCTURES_THRESHOLD) {
+  if (!bucketCritical && cpuFraction(cpuAfterCore) < CPU_SKIP_STRUCTURES_THRESHOLD) {
     runSafe("structures", () => structuresSystem.loop());
   }
 
@@ -71,13 +73,13 @@ export function loop() {
 
   // Visuals are purely cosmetic — first thing to drop under load.
   const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
-  if (!bucketCritical && cpuBeforeVisuals / limit < CPU_SKIP_VISUALS_THRESHOLD) {
+  if (!bucketCritical && cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD) {
     runSafe("visuals", () => visualsSystem.loop());
   }
 
   const used = Game.cpu.getUsed() - tickStart;
 
-  if (used / limit > CPU_WARN_THRESHOLD) {
+  if (limit && used / limit > CPU_WARN_THRESHOLD) {
     console.log(
       `[CPU] High usage: ${used.toFixed(1)}/${limit} (${((used / limit) * 100).toFixed(0)}%) bucket=${Game.cpu.bucket}`
     );

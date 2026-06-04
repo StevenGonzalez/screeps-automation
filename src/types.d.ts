@@ -244,6 +244,8 @@ declare global {
     rooms: Record<string, RoomMemory>;
     threatNotifyLastTick?: Record<string, number>;
     bootstrapTelemetry?: boolean;
+    bootstrapSeen?: Record<string, string[]>;
+    bootstrapRcl?: Record<string, number>;
     sources?: Record<string, Id<Source>[]>;
     sourcesLastScan?: Record<string, number>;
     expansion?: ExpansionData;
