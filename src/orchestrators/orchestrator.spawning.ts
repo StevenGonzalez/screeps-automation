@@ -440,6 +440,7 @@ function getRepairerPopulationTarget(room: Room): number {
     const hasEnergyBuffer =
       !room.storage || room.storage.store[RESOURCE_ENERGY] > 20_000;
     if (hasEnergyBuffer) {
+      value = Math.max(value, 1);
       const wallTarget = getRampartTargetHP(rcl);
       const wallsNeedRepair = room.find(FIND_STRUCTURES, {
         filter: (s): s is AnyStructure =>
@@ -567,14 +568,16 @@ function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
   // One MOVE is enough since the miner sits on a container.
   const workCost = BODYPART_COST[WORK];
   const moveCost = BODYPART_COST[MOVE];
+  const carryCost = BODYPART_COST[CARRY];
   const maxWork = 5;
   const workParts = Math.min(
     maxWork,
-    Math.floor((availableEnergy - moveCost) / workCost)
+    Math.floor((availableEnergy - moveCost - carryCost) / workCost)
   );
   if (workParts <= 0) return [WORK, MOVE];
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < workParts; i++) body.push(WORK);
+  body.push(CARRY);
   body.push(MOVE);
   return body;
 }

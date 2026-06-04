@@ -4,6 +4,8 @@ import {
   findUnclaimedMinerAssignment,
 } from "../services/services.creep";
 
+const CONTAINER_REPAIR_THRESHOLD = 0.9;
+
 export function runMiner(creep: Creep) {
   if (!creep.memory.assignedSourceId || !creep.memory.assignedContainerId) {
     const assignment = findUnclaimedMinerAssignment(creep.room);
@@ -20,6 +22,14 @@ export function runMiner(creep: Creep) {
     if (source && container) {
       if (!creep.pos.isEqualTo(container.pos)) {
         creep.moveTo(container.pos, { reusePath: 50 });
+        return;
+      }
+
+      if (
+        container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD &&
+        creep.store[RESOURCE_ENERGY] > 0
+      ) {
+        creep.repair(container);
         return;
       }
 
