@@ -92,7 +92,6 @@ function processLabSystem(room: Room) {
   // Check completion
   const produced = getStockForCompound(ls.activeCompound, room) - (ls.startStock ?? 0);
   if (produced >= (ls.targetAmount ?? 0)) {
-    console.log(`[Labs] ${room.name}: Finished ${ls.activeCompound} (produced ${produced})`);
     ls.queue.shift();
     delete ls.activeCompound;
     delete ls.inputCompounds;
@@ -148,9 +147,6 @@ function planAutoProduction(room: Room) {
       const chain = resolveChain(compound, target, room.storage ?? null);
       if (chain.length > 0) {
         ls.queue.push(...chain);
-        console.log(
-          `[Labs] ${room.name}: Auto-queued ${chain.length} reaction(s) → ${compound} (have ${stock}/${target})`
-        );
         return; // one compound per planning cycle
       }
     }

@@ -475,9 +475,6 @@ function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): boolean {
   const res = spawn.spawnCreep(body, `${ROLE_HARVESTER}_emrg${Game.time}`, {
     memory: { role: ROLE_HARVESTER },
   });
-  if (res === OK) {
-    console.log(`[Spawn] Emergency harvester spawned in ${room.name}`);
-  }
   return res === OK;
 }
 
