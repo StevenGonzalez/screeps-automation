@@ -47,6 +47,9 @@ const RETREAT_THRESHOLD: Record<SquadTactic, number> = {
   retreat: 1.1, // always "retreating"
 };
 
+let rampartCacheTick = -1;
+const defensiveRampartCache: Record<string, StructureRampart[]> = {};
+
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
 export function loop(): void {
@@ -810,6 +813,65 @@ function defenseHold(creep: Creep, rally: RoomPosition): void {
   }
 }
 
+function getDefensiveRamparts(room: Room): StructureRampart[] {
+  if (rampartCacheTick !== Game.time) {
+    rampartCacheTick = Game.time;
+    for (const k in defensiveRampartCache) delete defensiveRampartCache[k];
+  }
+  if (!defensiveRampartCache[room.name]) {
+    const terrain = room.getTerrain();
+    defensiveRampartCache[room.name] = room.find(FIND_MY_STRUCTURES, {
+      filter: (s): s is StructureRampart =>
+        s.structureType === STRUCTURE_RAMPART &&
+        !isNearEdge(s.pos) &&
+        terrain.get(s.pos.x, s.pos.y) !== TERRAIN_MASK_WALL,
+    }) as StructureRampart[];
+  }
+  return defensiveRampartCache[room.name];
+}
+
+function rampartIsStandable(rampart: StructureRampart, self: Creep): boolean {
+  const blocked = rampart.pos
+    .lookFor(LOOK_STRUCTURES)
+    .some(
+      (s) =>
+        s.structureType !== STRUCTURE_RAMPART &&
+        (OBSTACLE_OBJECT_TYPES as string[]).includes(s.structureType)
+    );
+  if (blocked) return false;
+  return !rampart.pos.lookFor(LOOK_CREEPS).some((c) => c.name !== self.name);
+}
+
+function isOnRampart(creep: Creep): boolean {
+  return creep.pos
+    .lookFor(LOOK_STRUCTURES)
+    .some((s) => s.structureType === STRUCTURE_RAMPART);
+}
+
+// Stand on the rampart nearest `anchorPos` (within `range` if possible) so the defender
+// fights from cover. Returns false when the room has no usable rampart, letting the
+// caller fall back to open-field positioning at low RCL.
+function anchorOnRampart(creep: Creep, anchorPos: RoomPosition, range: number): boolean {
+  const ramparts = getDefensiveRamparts(creep.room);
+  if (ramparts.length === 0) return false;
+
+  if (isOnRampart(creep) && creep.pos.getRangeTo(anchorPos) <= range) return true;
+
+  let best: StructureRampart | null = null;
+  let bestDist = Infinity;
+  for (const r of ramparts) {
+    if (!rampartIsStandable(r, creep)) continue;
+    const d = r.pos.getRangeTo(anchorPos);
+    if (d < bestDist) {
+      bestDist = d;
+      best = r;
+    }
+  }
+  if (!best) return isOnRampart(creep);
+  if (!creep.pos.isEqualTo(best.pos)) creep.moveTo(best, { range: 0, reusePath: 5 });
+  return true;
+}
+
 export function runDefensiveKnight(creep: Creep, roomName: string): void {
   const rally = defenseRallyPoint(roomName);
   if (creep.room.name !== roomName) {
@@ -821,10 +883,13 @@ export function runDefensiveKnight(creep: Creep, roomName: string): void {
   const target = selectDefenseTarget(creep, rally, hostiles);
   if (target) {
     if (creep.pos.isNearTo(target)) creep.attack(target);
-    defenseMoveToward(creep, rally, target, 1);
+    // Fight from a rampart adjacent to the target; open-field advance if no ramparts.
+    if (!anchorOnRampart(creep, target.pos, 1)) {
+      defenseMoveToward(creep, rally, target, 1);
+    }
     return;
   }
-  defenseHold(creep, rally);
+  if (!anchorOnRampart(creep, rally, 0)) defenseHold(creep, rally);
 }
 
 export function runDefensiveWizard(creep: Creep, roomName: string): void {
@@ -845,11 +910,13 @@ export function runDefensiveWizard(creep: Creep, roomName: string): void {
     if (target && creep.pos.getRangeTo(target) <= 3) creep.rangedAttack(target);
   }
 
-  // Movement: kite the nearest non-edge hostile to hold it at range; else hold the rally.
+  // Movement: fire from a rampart within range of the threat; if the room has no
+  // ramparts, kite the nearest hostile in the open instead.
   const nearest = creep.pos.findClosestByRange(
     hostiles.filter((h) => !isNearEdge(h.pos) && rally.getRangeTo(h) <= DEFENSE_CHASE_RADIUS)
   );
   if (nearest) {
+    if (anchorOnRampart(creep, nearest.pos, 3)) return;
     const range = creep.pos.getRangeTo(nearest);
     if (range < KITE_RANGE) {
       fleeFrom(creep, nearest.pos);
@@ -860,7 +927,7 @@ export function runDefensiveWizard(creep: Creep, roomName: string): void {
     }
     return;
   }
-  defenseHold(creep, rally);
+  if (!anchorOnRampart(creep, rally, 0)) defenseHold(creep, rally);
 }
 
 export function runDefensiveCleric(creep: Creep, roomName: string): void {
@@ -884,7 +951,9 @@ export function runDefensiveCleric(creep: Creep, roomName: string): void {
     return;
   }
 
-  // Close on a wounded ally just out of reach (but never onto an edge), else hold.
+  // Position: heal from a rampart near the squad; if no ramparts, close on the wounded.
+  const anchorPos = healTarget ? healTarget.pos : rally;
+  if (anchorOnRampart(creep, anchorPos, 3)) return;
   if (healTarget && creep.pos.getRangeTo(healTarget) > 1 && !isNearEdge(healTarget.pos)) {
     creep.moveTo(healTarget, { range: 1, reusePath: 1 });
     return;
