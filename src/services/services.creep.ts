@@ -85,7 +85,7 @@ export function findClosestSource(creep: Creep): Source | null {
 }
 
 export function findBalancedSource(creep: Creep): Source | null {
-  const sources = getSources(creep.room);
+  const sources = getSafeSources(creep.room);
   if (sources.length === 0) return null;
 
   const harvestersPerSource: Record<string, number> = {};
@@ -177,6 +177,43 @@ export function harvestFromSource(creep: Creep, source: Source): void {
   if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
     creep.moveTo(source, { reusePath: 50 });
   }
+}
+
+const SOURCE_DANGER_RANGE = 5;
+
+/**
+ * A source is unsafe to harvest when a hostile creep is nearby or a Source Keeper
+ * lair sits next to it — economy creeps that approach get killed. Avoid it and use
+ * another source instead.
+ */
+export function isSourceSafe(source: Source): boolean {
+  if (source.pos.findInRange(FIND_HOSTILE_CREEPS, SOURCE_DANGER_RANGE).length > 0) {
+    return false;
+  }
+  const lairs = source.pos.findInRange(FIND_STRUCTURES, SOURCE_DANGER_RANGE, {
+    filter: (s) => s.structureType === STRUCTURE_KEEPER_LAIR,
+  });
+  return lairs.length === 0;
+}
+
+let safeSourceTick = -1;
+const safeSourceCache: Record<string, Source[]> = {};
+
+/**
+ * The room's sources that are safe to harvest, cached per tick. Falls back to all
+ * sources when none are safe, so a creep still has somewhere to go.
+ */
+export function getSafeSources(room: Room): Source[] {
+  if (safeSourceTick !== Game.time) {
+    safeSourceTick = Game.time;
+    for (const k in safeSourceCache) delete safeSourceCache[k];
+  }
+  if (!safeSourceCache[room.name]) {
+    const sources = getSources(room);
+    const safe = sources.filter(isSourceSafe);
+    safeSourceCache[room.name] = safe.length > 0 ? safe : sources;
+  }
+  return safeSourceCache[room.name];
 }
 
 export function acquireEnergy(creep: Creep): boolean {
@@ -272,8 +309,9 @@ export function acquireEnergy(creep: Creep): boolean {
     return res === OK;
   }
 
-  // Last resort: harvest directly from a source.
-  const source = creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE) as Source | null;
+  // Last resort: harvest directly from a safe active source (avoid Source Keepers).
+  const activeSafe = getSafeSources(creep.room).filter((s) => s.energy > 0);
+  const source = creep.pos.findClosestByPath(activeSafe) as Source | null;
   if (source) {
     const res = creep.harvest(source);
     if (res === ERR_NOT_IN_RANGE) {
@@ -809,7 +847,7 @@ export function findContainersForSource(
 export function findUnclaimedMinerAssignment(
   room: Room
 ): { source: Source; container: StructureContainer } | null {
-  const sources = getSources(room);
+  const sources = getSafeSources(room);
   const takenContainerIds = getAssignedContainerIdsByRole(room, ROLE_MINER);
   for (const source of sources) {
     const containers = findContainersForSource(room, source);

@@ -6,6 +6,7 @@ import {
   upgradeController,
   findBalancedSource,
   harvestFromSource,
+  isSourceSafe,
 } from "../services/services.creep";
 import { ROLE_HARVESTER } from "../config/config.roles";
 
@@ -32,7 +33,7 @@ export function runHarvester(creep: Creep) {
   // Persist source assignment across ticks to avoid thrashing
   if (creep.memory.assignedSourceId) {
     const source = Game.getObjectById(creep.memory.assignedSourceId) as Source | null;
-    if (source) {
+    if (source && isSourceSafe(source)) {
       harvestFromSource(creep, source);
       return;
     }

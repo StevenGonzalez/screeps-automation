@@ -1,7 +1,8 @@
 import {
-  getSources,
+  getSafeSources,
   harvestFromSource,
   findUnclaimedMinerAssignment,
+  isSourceSafe,
 } from "../services/services.creep";
 
 const CONTAINER_REPAIR_THRESHOLD = 0.9;
@@ -18,6 +19,12 @@ export function runMiner(creep: Creep) {
   if (creep.memory.assignedSourceId && creep.memory.assignedContainerId) {
     const source = Game.getObjectById(creep.memory.assignedSourceId) as Source | null;
     const container = Game.getObjectById(creep.memory.assignedContainerId) as StructureContainer | null;
+
+    if (source && !isSourceSafe(source)) {
+      creep.memory.assignedSourceId = undefined;
+      creep.memory.assignedContainerId = undefined;
+      return;
+    }
 
     if (source && container) {
       if (!creep.pos.isEqualTo(container.pos)) {
@@ -50,8 +57,8 @@ export function runMiner(creep: Creep) {
     }
   }
 
-  // Fallback: find any source with a container
-  const sources = getSources(creep.room);
+  // Fallback: find any safe source with a container
+  const sources = getSafeSources(creep.room);
   for (const source of sources) {
     const containers = creep.room.find(FIND_STRUCTURES, {
       filter: (s): s is StructureContainer =>
