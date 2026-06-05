@@ -17,11 +17,45 @@
 import { ROLE_UPGRADER } from "../config/config.roles";
 
 const STUCK_THRESHOLD = 3; // ticks without moving (fatigue-free) before intervening
+const COSTMATRIX_TTL = 100;
 
 const originalMoveTo = Creep.prototype.moveTo as (
   this: Creep,
   ...args: unknown[]
 ) => ScreepsReturnCode;
+
+const costMatrixCache: Record<string, { cm: CostMatrix; tick: number }> = {};
+
+/**
+ * A road-aware structure cost matrix for a room, cached for COSTMATRIX_TTL ticks
+ * (structures change slowly). Roads cost 1 so creeps prefer them, blocking
+ * structures and enemy ramparts are impassable, and walkable structures keep the
+ * default cost. Reused across every creep's pathing in the room.
+ */
+function getRoomCostMatrix(roomName: string): CostMatrix {
+  const cached = costMatrixCache[roomName];
+  if (cached && Game.time - cached.tick < COSTMATRIX_TTL) return cached.cm;
+
+  const room = Game.rooms[roomName];
+  if (!room) return new PathFinder.CostMatrix();
+
+  const cm = new PathFinder.CostMatrix();
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_ROAD) {
+      if (cm.get(s.pos.x, s.pos.y) === 0) cm.set(s.pos.x, s.pos.y, 1);
+    } else if (s.structureType === STRUCTURE_RAMPART) {
+      if (!(s as StructureRampart).my) cm.set(s.pos.x, s.pos.y, 255);
+    } else if ((OBSTACLE_OBJECT_TYPES as string[]).includes(s.structureType)) {
+      cm.set(s.pos.x, s.pos.y, 255);
+    }
+  }
+  costMatrixCache[roomName] = { cm, tick: Game.time };
+  return cm;
+}
+
+function roadCostCallback(roomName: string): CostMatrix {
+  return getRoomCostMatrix(roomName);
+}
 
 (Creep.prototype as { moveTo: unknown }).moveTo = function (
   this: Creep,
@@ -38,10 +72,13 @@ const originalMoveTo = Creep.prototype.moveTo as (
   const sameRoom = tpos instanceof RoomPosition && tpos.roomName === this.pos.roomName;
   const range = (opts?.range as number | undefined) ?? 1;
 
+  const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
+  if (!effectiveOpts.costCallback) effectiveOpts.costCallback = roadCostCallback;
+
   // Already parked within range — the creep isn't travelling, so it isn't "stuck".
   if (sameRoom && this.pos.getRangeTo(tpos) <= range) {
     this.memory._st = 0;
-    return originalMoveTo.apply(this, args);
+    return originalMoveTo.call(this, target as never, effectiveOpts as never);
   }
 
   const mem = this.memory;
@@ -58,11 +95,11 @@ const originalMoveTo = Creep.prototype.moveTo as (
     mem._st = 0;
     if (sameRoom) tryShove(this, tpos);
     // Force a fresh path (reusePath: 0) that routes around the jam.
-    const merged = { ...(opts ?? {}), reusePath: 0 };
-    return originalMoveTo.call(this, target as never, merged as never);
+    effectiveOpts.reusePath = 0;
+    return originalMoveTo.call(this, target as never, effectiveOpts as never);
   }
 
-  return originalMoveTo.apply(this, args);
+  return originalMoveTo.call(this, target as never, effectiveOpts as never);
 };
 
 // Nudge a non-working friendly creep off the next step toward the target.
