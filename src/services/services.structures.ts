@@ -48,10 +48,14 @@ function isWalkable(room: Room, x: number, y: number): boolean {
 function isBuildableTile(room: Room, x: number, y: number): boolean {
   if (x < 0 || x >= 50 || y < 0 || y >= 50) return false;
   if (!isWalkable(room, x, y)) return false;
-  const structures = room.lookForAt(LOOK_STRUCTURES, x, y);
-  if (structures.length > 0) return false;
-  const sites = room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y);
-  if (sites.length > 0) return false;
+  const coexists = (type: StructureConstant) =>
+    type === STRUCTURE_ROAD || type === STRUCTURE_RAMPART;
+  if (room.lookForAt(LOOK_STRUCTURES, x, y).some((s) => !coexists(s.structureType))) {
+    return false;
+  }
+  if (room.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).some((s) => !coexists(s.structureType))) {
+    return false;
+  }
   return true;
 }
 
