@@ -181,19 +181,41 @@ export function harvestFromSource(creep: Creep, source: Source): void {
 
 const SOURCE_DANGER_RANGE = 5;
 
-/**
- * A source is unsafe to harvest when a hostile creep is nearby or a Source Keeper
- * lair sits next to it — economy creeps that approach get killed. Avoid it and use
- * another source instead.
- */
-export function isSourceSafe(source: Source): boolean {
-  if (source.pos.findInRange(FIND_HOSTILE_CREEPS, SOURCE_DANGER_RANGE).length > 0) {
-    return false;
+let dangerTick = -1;
+const dangerByRoom: Record<string, RoomPosition[]> = {};
+
+function getDangerPositions(room: Room): RoomPosition[] {
+  if (dangerTick !== Game.time) {
+    dangerTick = Game.time;
+    for (const k in dangerByRoom) delete dangerByRoom[k];
   }
-  const lairs = source.pos.findInRange(FIND_STRUCTURES, SOURCE_DANGER_RANGE, {
-    filter: (s) => s.structureType === STRUCTURE_KEEPER_LAIR,
-  });
-  return lairs.length === 0;
+  if (!dangerByRoom[room.name]) {
+    const positions: RoomPosition[] = [];
+    for (const c of room.find(FIND_HOSTILE_CREEPS)) positions.push(c.pos);
+    for (const s of room.find(FIND_STRUCTURES)) {
+      if (s.structureType === STRUCTURE_KEEPER_LAIR) positions.push(s.pos);
+    }
+    dangerByRoom[room.name] = positions;
+  }
+  return dangerByRoom[room.name];
+}
+
+/**
+ * Whether a tile is clear of nearby hostiles and Source Keeper lairs. Economy creeps
+ * that approach a dangerous tile (to harvest or to build) get killed, so they must
+ * stay away from it.
+ */
+export function isPositionSafe(room: Room, pos: RoomPosition): boolean {
+  const dangers = getDangerPositions(room);
+  if (dangers.length === 0) return true;
+  for (const d of dangers) {
+    if (pos.getRangeTo(d) <= SOURCE_DANGER_RANGE) return false;
+  }
+  return true;
+}
+
+export function isSourceSafe(source: Source): boolean {
+  return isPositionSafe(source.room, source.pos);
 }
 
 let safeSourceTick = -1;
@@ -461,6 +483,7 @@ export function getRoomBuildTarget(room: Room): ConstructionSite | null {
   if (buildTargetByRoom[room.name] === undefined) {
     let best: ConstructionSite | null = null;
     for (const s of room.find(FIND_MY_CONSTRUCTION_SITES) as ConstructionSite[]) {
+      if (!isPositionSafe(room, s.pos)) continue;
       if (!best || isHigherBuildPriority(s, best)) best = s;
     }
     buildTargetByRoom[room.name] = best ? best.id : null;

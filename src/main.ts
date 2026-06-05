@@ -21,7 +21,7 @@ import { setupConsole } from "./console";
 // Side-effect import: installs the traffic-managed moveTo override on Creep.prototype.
 import "./services/services.movement";
 
-const CODE_VERSION = "boot3-sk";
+const CODE_VERSION = "boot4-safebuild";
 const CPU_WARN_THRESHOLD = 0.85;
 const CPU_REPORT_INTERVAL = 100;
 

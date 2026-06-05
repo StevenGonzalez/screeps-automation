@@ -14,6 +14,7 @@ import {
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
 import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
 import { planDefensivePerimeter } from "../planning/planner.rampart";
+import { isSourceSafe } from "../services/services.creep";
 
 // Lower number = placed first. The global construction-site cap (100) is scarce
 // and roads vastly outnumber everything else, so economy structures must claim
@@ -431,6 +432,7 @@ function processRoomStructures(room: Room) {
   // Source containers
   const sources = room.find(FIND_SOURCES);
   for (const source of sources) {
+    if (!isSourceSafe(source)) continue;
     const planned = plannedPositionsFromMemory(
       room,
       `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`
