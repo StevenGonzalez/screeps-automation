@@ -21,6 +21,7 @@ import { setupConsole } from "./console";
 // Side-effect import: installs the traffic-managed moveTo override on Creep.prototype.
 import "./services/services.movement";
 
+const CODE_VERSION = "boot3-sk";
 const CPU_WARN_THRESHOLD = 0.85;
 const CPU_REPORT_INTERVAL = 100;
 
@@ -87,7 +88,7 @@ export function loop() {
 
   if (Game.time % CPU_REPORT_INTERVAL === 0) {
     console.log(
-      `[CPU] tick=${Game.time} used=${used.toFixed(1)} limit=${limit} bucket=${Game.cpu.bucket} creeps=${Object.keys(Game.creeps).length}`
+      `[CPU] ver=${CODE_VERSION} tick=${Game.time} used=${used.toFixed(1)} limit=${limit} bucket=${Game.cpu.bucket} creeps=${Object.keys(Game.creeps).length}`
     );
   }
 }

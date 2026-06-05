@@ -202,7 +202,7 @@ function getBuilderPopulationTarget(room: Room): number {
   const siteCount = getConstructionSiteCount(room);
   if (siteCount === 0) return 0;
   const phase = getRoomPhase(room);
-  if (phase === "bootstrap") return 1;
+  if (phase === "bootstrap") return Math.min(3, siteCount);
   // Scale with workload: 1 builder per 10 sites.
   // Cap lower for developing rooms to avoid starving essential roles.
   const cap = phase === "developing" ? 2 : 5;
@@ -440,7 +440,7 @@ function getRepairerPopulationTarget(room: Room): number {
     const hasEnergyBuffer =
       !room.storage || room.storage.store[RESOURCE_ENERGY] > 20_000;
     if (hasEnergyBuffer) {
-      value = Math.max(value, 1);
+      if (rcl >= 3) value = Math.max(value, 1);
       const wallTarget = getRampartTargetHP(rcl);
       const wallsNeedRepair = room.find(FIND_STRUCTURES, {
         filter: (s): s is AnyStructure =>
