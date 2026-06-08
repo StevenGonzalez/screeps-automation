@@ -33,17 +33,21 @@ export function runHauler(creep: Creep) {
       return;
     }
 
-    // When storage is well-stocked, prefer it over miner containers — the link network
-    // keeps storage replenished and it's usually closer to the spawn/extension cluster.
-    // Only drain miner containers when storage is low or the containers are overflowing.
+    // Distribute stored energy to keep spawn + extensions filled. Drain miner containers
+    // instead when they're overflowing or the base is already topped up.
     const storage = creep.room.storage;
-    const hasLinks = (creep.room.memory.linkIds?.length ?? 0) >= 2;
     const minerContainerIds = creep.room.memory.minerContainerIds ?? [];
     const anyContainerOverflowing = minerContainerIds.some((id) => {
       const c = Game.getObjectById(id) as StructureContainer | null;
       return c && c.store[RESOURCE_ENERGY] > 1200;
     });
-    if (storage && hasLinks && !anyContainerOverflowing && storage.store[RESOURCE_ENERGY] > 5000) {
+    const baseNeedsEnergy = creep.room.energyAvailable < creep.room.energyCapacityAvailable;
+    if (
+      storage &&
+      baseNeedsEnergy &&
+      !anyContainerOverflowing &&
+      storage.store[RESOURCE_ENERGY] > 5000
+    ) {
       const res = creep.withdraw(storage, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 20 });
       return;
