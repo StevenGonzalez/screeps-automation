@@ -17,6 +17,7 @@ import * as powerCreepSystem from "./orchestrators/orchestrator.powercreep";
 import * as observerSystem from "./orchestrators/orchestrator.observer";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { setupConsole } from "./console";
+import { recordCpu } from "./services/services.profiler";
 // Side-effect import: installs the traffic-managed moveTo override on Creep.prototype.
 import "./services/services.movement";
 
@@ -84,10 +85,13 @@ export function loop() {
 }
 
 function runSafe(name: string, fn: () => void): void {
+  const start = Game.cpu.getUsed();
   try {
     fn();
   } catch (e: unknown) {
     const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
     console.log(`[ERROR] System "${name}" threw: ${msg}`);
+  } finally {
+    recordCpu(name, Game.cpu.getUsed() - start);
   }
 }

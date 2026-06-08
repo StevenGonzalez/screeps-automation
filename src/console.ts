@@ -11,6 +11,7 @@ import {
   setTactic,
 } from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity } from "./services/services.combat";
+import { getCpuStats } from "./services/services.profiler";
 import {
   launchSkOp,
   cancelSkOp,
@@ -795,6 +796,21 @@ export function setupConsole() {
       }
       Memory.trafficDisabled = !enabled;
       console.log(`[Traffic] manager ${enabled ? "ENABLED" : "DISABLED"}`);
+    },
+
+    // Per-subsystem CPU breakdown (rolling average, last tick, peak), highest first.
+    cpu: () => {
+      const stats = getCpuStats();
+      const rows = Object.entries(stats).sort((a, b) => b[1].ema - a[1].ema);
+      const total = rows.reduce((sum, [, s]) => sum + s.ema, 0);
+      console.log(
+        `[CPU] limit=${Game.cpu.limit} bucket=${Game.cpu.bucket} avgTotal=${total.toFixed(2)}`
+      );
+      for (const [name, s] of rows) {
+        console.log(
+          `  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`
+        );
+      }
     },
 
     // Show power creep (Operator) status: level, location, ops, and known powers.
