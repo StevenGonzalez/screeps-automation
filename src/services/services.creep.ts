@@ -657,7 +657,7 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
     if (st.structureType === STRUCTURE_RAMPART || st.structureType === STRUCTURE_WALL) {
       return st.hits < towerWallThreshold;
     }
-    return st.hits < st.hitsMax * 0.1;
+    return st.hits < st.hitsMax * 0.4;
   });
   const result = candidates.length === 0
     ? null

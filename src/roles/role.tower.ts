@@ -1,6 +1,6 @@
 import { findTowerRepairTarget } from "../services/services.creep";
 
-const TOWER_REPAIR_ENERGY_THRESHOLD = 0.5;
+const TOWER_REPAIR_ENERGY_THRESHOLD = 0.25;
 
 // attackTarget is computed once per room by the orchestrator so all towers concentrate fire.
 // healTarget is computed per-tower so each heals the closest friendly (no over-healing one creep).
