@@ -162,6 +162,12 @@ function getHarvesterPopulationTarget(room: Room): number {
   // With miners present the distribution problem (containers full, extensions empty) is
   // better solved by haulers — one harvester bridge is enough, not two.
   if (isEnergyEmergency(room)) return minerCount > 0 ? Math.min(1, 2 - minerCount) : 2;
+  // Past bootstrap, miners + haulers run the economy. A storage buffer lets haulers
+  // bridge a transient miner death (its replacement spawns within ~150t) by feeding the
+  // base from storage, so spawning a harvester would only camp the source and block the
+  // haulers. Only fall back to harvesters when there's no buffer to ride out the gap;
+  // a genuine drain is caught by the isEnergyEmergency branch above.
+  if (room.storage && room.storage.store[RESOURCE_ENERGY] > 10000) return 0;
   return Math.max(0, 2 - minerCount);
 }
 
