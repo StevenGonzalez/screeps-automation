@@ -425,58 +425,36 @@ export function getOrPlanRoad(
   return path;
 }
 
-export function planRoadsAroundStructures(room: Room) {
-  const roadKey = `${PLANNER_KEYS.ROAD_PREFIX}around`;
+// Tear down the legacy "wrap a road around every structure" carpet. That scheme
+// laid a road on every orthogonal neighbour of every structure, which is redundant
+// with the merchant-ring spokes/rings (those already give creeps lane access) and
+// a perpetual decay/repair tax. Destroys any built road and removes any pending
+// road site on a former wrap tile, then drops the key so it never regenerates.
+// Self-noops once the key is gone, so it is cheap to leave in the plan pass.
+export function removeRoadsAroundStructures(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
+  const roadKey = `${PLANNER_KEYS.ROAD_PREFIX}around`;
+  const tiles = mem[roadKey];
+  if (!tiles) return;
 
-  // Build coordinate sets once — O(1) lookups replace the original O(keys×positions) scans.
-  // This function mutates mem during its run, so it manages its own local sets.
-  const roadSet = new Set<string>();
-  const nonRoadSet = new Set<string>();
-  for (const key of Object.keys(mem)) {
-    const isRoad =
-      key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
-      key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX);
-    for (const p of mem[key]) {
-      if (isRoad) roadSet.add(p);
-      else nonRoadSet.add(p);
-    }
-  }
-
-  // Precompute occupied tiles using Screeps-cached find results — avoids lookForAt per position.
-  const terrain = room.getTerrain();
-  const occupiedSet = new Set<string>();
-  for (const s of room.find(FIND_STRUCTURES)) {
-    occupiedSet.add(`${s.pos.x},${s.pos.y}`);
-  }
-  for (const s of room.find(FIND_CONSTRUCTION_SITES)) {
-    occupiedSet.add(`${s.pos.x},${s.pos.y}`);
-  }
-
-  const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]] as const;
-
-  for (const key of Object.keys(mem)) {
-    if (key.startsWith(PLANNER_KEYS.ROAD_PREFIX)) continue;
-    if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) continue;
-
-    for (const posStr of mem[key]) {
-      const comma = posStr.indexOf(",");
-      const sx = +posStr.slice(0, comma);
-      const sy = +posStr.slice(comma + 1);
-      for (const [dx, dy] of DIRS) {
-        const x = sx + dx;
-        const y = sy + dy;
-        if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
-        if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-        const posKey = `${x},${y}`;
-        if (occupiedSet.has(posKey)) continue;
-        if (roadSet.has(posKey)) continue;
-        if (nonRoadSet.has(posKey)) continue;
-        roadSet.add(posKey); // prevent duplicate additions in this same run
-        addPlannedStructureToMemory(room, roadKey, new RoomPosition(x, y, room.name));
+  if (tiles.length > 0) {
+    const wrapPos = new Set(tiles);
+    for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
+      if (s.structureType !== STRUCTURE_ROAD) continue;
+      if (wrapPos.has(`${s.pos.x},${s.pos.y}`)) {
+        try { (s as any).destroy(); } catch (e) {}
       }
     }
+    for (const site of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) {
+      if (site.structureType !== STRUCTURE_ROAD) continue;
+      if (wrapPos.has(`${site.pos.x},${site.pos.y}`)) site.remove();
+    }
+  }
+
+  delete mem[roadKey];
+  if (room.memory.plannedStructuresMeta) {
+    delete room.memory.plannedStructuresMeta[roadKey];
   }
 }
 

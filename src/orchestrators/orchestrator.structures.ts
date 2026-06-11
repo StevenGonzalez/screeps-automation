@@ -5,7 +5,7 @@ import {
   addPlannedStructureToMemory,
   ensureMemoryRoomStructures,
   plannedPositionsFromMemory,
-  planRoadsAroundStructures,
+  removeRoadsAroundStructures,
   pruneRoadsUnderStructures,
   connectRoadClusters,
   structureTypeForKey,
@@ -512,7 +512,7 @@ function processRoomStructures(room: Room) {
   // Cardinal arteries + economic connectors
   planCardinalArteries(room);
 
-  planRoadsAroundStructures(room);
+  removeRoadsAroundStructures(room);
   pruneRoadsUnderStructures(room);
   connectRoadClusters(room);
 
