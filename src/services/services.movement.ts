@@ -14,7 +14,7 @@
  * (a neighbour that runs its own logic later may override it). Set
  * `Memory.trafficDisabled = true` to fall back to vanilla moveTo instantly.
  */
-import { ROLE_UPGRADER } from "../config/config.roles";
+import { ROLE_UPGRADER, ROLE_HAULER, ROLE_REMOTE_HAULER } from "../config/config.roles";
 
 const STUCK_THRESHOLD = 3; // ticks without moving (fatigue-free) before intervening
 const COSTMATRIX_TTL = 100;
@@ -123,7 +123,14 @@ function isOnWorkingPost(creep: Creep): boolean {
     .lookFor(LOOK_STRUCTURES)
     .some((s) => s.structureType === STRUCTURE_CONTAINER);
   if (onContainer) return true;
-  if (creep.pos.findInRange(FIND_SOURCES, 1).length > 0) return true;
+  // Adjacency to a source pins the miner and harvesting peasants who actually work
+  // there — but NOT haulers, which only transit through to withdraw. Protecting
+  // haulers here gridlocks the single-file road to the source: a full hauler trying
+  // to leave can't shove the empty hauler queued behind it, so the line freezes and
+  // the container overflows onto the ground.
+  const isHauler =
+    creep.memory.role === ROLE_HAULER || creep.memory.role === ROLE_REMOTE_HAULER;
+  if (!isHauler && creep.pos.findInRange(FIND_SOURCES, 1).length > 0) return true;
   const ctrl = creep.room.controller;
   if (creep.memory.role === ROLE_UPGRADER && ctrl && creep.pos.inRangeTo(ctrl, 3)) return true;
   return false;
