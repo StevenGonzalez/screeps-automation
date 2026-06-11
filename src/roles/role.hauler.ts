@@ -23,37 +23,22 @@ export function runHauler(creep: Creep) {
   if (isCreepEmpty(creep)) {
     creep.memory.fillTargetId = undefined;
 
-    // findInRange is O(local area) vs findClosestByPath which scans the whole room.
-    const nearbyDropped = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 10, {
+    // Dropped energy decays every tick, so collect it before anything else. Search the
+    // whole room — not just locally — and head for the closest worthwhile pile, or
+    // overflow at a far source rots before a hauler happens to pass within range.
+    // findClosestByRange (not ByPath) keeps this cheap; only empty haulers run it.
+    const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
       filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 50,
     }) as Resource[];
-    if (nearbyDropped.length > 0) {
-      const best = nearbyDropped.reduce((a, b) => (a.amount > b.amount ? a : b));
-      pickupDroppedResource(creep, best);
+    if (dropped.length > 0) {
+      const target = creep.pos.findClosestByRange(dropped) as Resource;
+      pickupDroppedResource(creep, target);
       return;
     }
 
-    // Distribute stored energy to keep spawn + extensions filled. Drain miner containers
-    // instead when they're overflowing or the base is already topped up.
-    const storage = creep.room.storage;
-    const minerContainerIds = creep.room.memory.minerContainerIds ?? [];
-    const anyContainerOverflowing = minerContainerIds.some((id) => {
-      const c = Game.getObjectById(id) as StructureContainer | null;
-      return c && c.store[RESOURCE_ENERGY] > 1200;
-    });
-    const baseNeedsEnergy = creep.room.energyAvailable < creep.room.energyCapacityAvailable;
-    if (
-      storage &&
-      baseNeedsEnergy &&
-      !anyContainerOverflowing &&
-      storage.store[RESOURCE_ENERGY] > 5000
-    ) {
-      const res = creep.withdraw(storage, RESOURCE_ENERGY);
-      if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 20 });
-      return;
-    }
-
-    // Prefer the assigned container; skip it if nearly empty to avoid wasted movement.
+    // Drain miner containers FIRST — they are the live producers and spill onto the
+    // ground if neglected. Prefer the assigned container; skip it if nearly empty to
+    // avoid wasted movement.
     let minerContainer: StructureContainer | null = null;
     if (creep.memory.assignedContainerId) {
       const assigned = Game.getObjectById(creep.memory.assignedContainerId as Id<StructureContainer>) as StructureContainer | null;
@@ -66,6 +51,17 @@ export function runHauler(creep: Creep) {
     }
     if (minerContainer) {
       if (withdrawFromContainer(creep, minerContainer)) return;
+      return;
+    }
+
+    // Source containers are dry — fall back to storage to keep spawn + extensions
+    // filled when the base actually needs it. Storage is the buffer, not the primary
+    // pickup, so it is only tapped once the live producers have nothing left.
+    const storage = creep.room.storage;
+    const baseNeedsEnergy = creep.room.energyAvailable < creep.room.energyCapacityAvailable;
+    if (storage && baseNeedsEnergy && storage.store[RESOURCE_ENERGY] > 0) {
+      const res = creep.withdraw(storage, RESOURCE_ENERGY);
+      if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 20 });
       return;
     }
 
