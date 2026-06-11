@@ -501,111 +501,44 @@ export function pruneRoadsUnderStructures(room: Room) {
   }
 }
 
-type XY = { x: number; y: number };
-
-function getAllPlannedRoadTiles(room: Room): XY[] {
-  if (!room.memory.plannedStructures) return [];
-  const mem = room.memory.plannedStructures as Record<string, string[]>;
-  const out: XY[] = [];
-  for (const key of Object.keys(mem)) {
-    if (
-      !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
-      !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
-    )
-      continue;
-    for (const p of mem[key]) {
-      const comma = p.indexOf(",");
-      out.push({ x: +p.slice(0, comma), y: +p.slice(comma + 1) });
-    }
-  }
-  return out;
-}
-
-function clusterTiles(tiles: XY[]): XY[][] {
-  const idxMap = new Map<string, number>();
-  tiles.forEach((t, i) => idxMap.set(`${t.x},${t.y}`, i));
-  const visited = new Array(tiles.length).fill(false);
-  const clusters: XY[][] = [];
-  for (let i = 0; i < tiles.length; i++) {
-    if (visited[i]) continue;
-    const stack = [i];
-    const cluster: XY[] = [];
-    visited[i] = true;
-    while (stack.length > 0) {
-      const cur = stack.pop()!;
-      const p = tiles[cur];
-      cluster.push(p);
-      for (const n of [
-        `${p.x + 1},${p.y}`,
-        `${p.x - 1},${p.y}`,
-        `${p.x},${p.y + 1}`,
-        `${p.x},${p.y - 1}`,
-      ]) {
-        const j = idxMap.get(n);
-        if (j !== undefined && !visited[j]) {
-          visited[j] = true;
-          stack.push(j);
-        }
-      }
-    }
-    clusters.push(cluster);
-  }
-  return clusters;
-}
-
-export function connectRoadClusters(
-  room: Room,
-  maxConnectorLength = 32,
-  maxConnectorsPerTick = 3,
-  maxPassesPerTick = 1
-) {
+// Tear down the legacy cluster-connector road web. connectRoadClusters used to link
+// every pair of nearby road fragments (all-pairs, not a spanning tree) under unstable
+// index-based keys that accumulated across passes — a redundant mesh of roads sprawling
+// over open terrain outside the base. The cardinal arteries already connect the base to
+// its sources/controller/remotes, so these connectors are pure overhead. Destroys any
+// built connector road, removes any pending connector site, and drops the keys so they
+// never regenerate. Self-noops once the keys are gone.
+export function removeConnectorRoads(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
+  const connectorKeys = Object.keys(mem).filter((k) =>
+    k.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
+  );
+  if (connectorKeys.length === 0) return;
 
-  let createdThisTick = 0;
-  let passes = 0;
+  const connectorPos = new Set<string>();
+  for (const key of connectorKeys) {
+    for (const p of mem[key]) connectorPos.add(p);
+  }
 
-  while (true) {
-    if (createdThisTick >= maxConnectorsPerTick) return;
-    if (passes >= maxPassesPerTick) return;
-    passes++;
-
-    const tiles = getAllPlannedRoadTiles(room);
-    if (tiles.length === 0) return;
-    const clusters = clusterTiles(tiles);
-    if (clusters.length <= 1) return;
-
-    let addedThisPass = false;
-    for (let a = 0; a < clusters.length; a++) {
-      for (let b = a + 1; b < clusters.length; b++) {
-        if (createdThisTick >= maxConnectorsPerTick) return;
-
-        const ca = clusters[a];
-        const cb = clusters[b];
-        let best: { da: XY; db: XY; dist: number } | null = null;
-        for (const pa of ca) {
-          for (const pb of cb) {
-            const d = Math.abs(pa.x - pb.x) + Math.abs(pa.y - pb.y);
-            if (best === null || d < best.dist)
-              best = { da: pa, db: pb, dist: d };
-          }
-        }
-        if (!best) continue;
-        if (best.dist > maxConnectorLength) continue;
-        const key = `${PLANNER_KEYS.CONNECTOR_PREFIX}${a}_${b}`;
-        if (mem[key] && mem[key].length > 0) continue;
-        // Create RoomPositions only here where PathFinder actually needs them.
-        getOrPlanRoad(
-          room, key,
-          new RoomPosition(best.da.x, best.da.y, room.name),
-          new RoomPosition(best.db.x, best.db.y, room.name)
-        );
-        createdThisTick++;
-        addedThisPass = true;
+  if (connectorPos.size > 0) {
+    for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
+      if (s.structureType !== STRUCTURE_ROAD) continue;
+      if (connectorPos.has(`${s.pos.x},${s.pos.y}`)) {
+        try { (s as any).destroy(); } catch (e) {}
       }
     }
+    for (const site of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) {
+      if (site.structureType !== STRUCTURE_ROAD) continue;
+      if (connectorPos.has(`${site.pos.x},${site.pos.y}`)) site.remove();
+    }
+  }
 
-    if (!addedThisPass) return;
+  for (const key of connectorKeys) {
+    delete mem[key];
+    if (room.memory.plannedStructuresMeta) {
+      delete room.memory.plannedStructuresMeta[key];
+    }
   }
 }
 
