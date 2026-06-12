@@ -395,10 +395,25 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
   const bodyCost = calculateBodyPartCost(body);
 
   if (room.energyAvailable < bodyCost) {
-    // Can't afford the full-sized body yet. If we have existing haulers covering
-    // us, return true to hold the spawn slot and let energy accumulate rather
-    // than letting lower-priority roles consume it first.
-    return existingHaulers.length > 0;
+    // The capacity-sized body is unaffordable right now. Holding the spawn slot to
+    // wait for energy deadlocks the colony: a single overloaded hauler can't fill the
+    // extensions fast enough, so energyAvailable never climbs to the target and the
+    // slot stays held forever — starving builders, upgraders and repairers. Instead,
+    // build the largest hauler the room can afford this tick. A smaller hauler still
+    // clears the container backlog and lets energy accumulate for full-sized
+    // replacements later.
+    const affordableEnergy = Math.floor(
+      room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
+    );
+    const affordableBody = buildScaledBody(ROLE_HAULER, affordableEnergy);
+    if (room.energyAvailable < calculateBodyPartCost(affordableBody)) {
+      // Can't even afford the minimum body — hold the slot only if other haulers
+      // are already covering the base.
+      return existingHaulers.length > 0;
+    }
+    return spawn.spawnCreep(affordableBody, newName, {
+      memory: { role: ROLE_HAULER, homeRoom: room.name },
+    }) === OK;
   }
 
   return spawn.spawnCreep(body, newName, {
