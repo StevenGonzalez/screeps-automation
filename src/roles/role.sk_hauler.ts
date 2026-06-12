@@ -62,6 +62,7 @@ function collect(creep: Creep, op: SourceKeeperOp): void {
 
   // Containers near sources first, then dropped piles.
   const container = creep.pos.findClosestByPath(FIND_STRUCTURES, {
+    ignoreCreeps: true,
     filter: (s): s is StructureContainer =>
       s.structureType === STRUCTURE_CONTAINER &&
       (s as StructureContainer).store[RESOURCE_ENERGY] > 0,
@@ -74,6 +75,7 @@ function collect(creep: Creep, op: SourceKeeperOp): void {
   }
 
   const dropped = creep.pos.findClosestByPath(FIND_DROPPED_RESOURCES, {
+    ignoreCreeps: true,
     filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount >= 50,
   }) as Resource | null;
   if (dropped) {
@@ -96,6 +98,7 @@ function deposit(creep: Creep, homeRoom: string): void {
     storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0
       ? storage
       : (creep.pos.findClosestByPath(FIND_STRUCTURES, {
+          ignoreCreeps: true,
           filter: (s): s is AnyStoreStructure =>
             (s.structureType === STRUCTURE_CONTAINER ||
               s.structureType === STRUCTURE_STORAGE) &&

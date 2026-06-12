@@ -88,7 +88,7 @@ export function runHauler(creep: Creep) {
       (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
   );
   if (targets.length > 0) {
-    const target = creep.pos.findClosestByPath(targets);
+    const target = creep.pos.findClosestByPath(targets, { ignoreCreeps: true });
     if (target) {
       creep.memory.fillTargetId = target.id;
       transferEnergyTo(creep, target);

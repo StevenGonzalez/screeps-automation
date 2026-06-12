@@ -44,6 +44,18 @@ function getAssignedContainerIdsByRole(room: Room, role: string): Set<string> {
   return assignedContainerIdsByRoomAndRole[cacheKey];
 }
 
+// Closest target by PATH, ignoring creeps. Target selection MUST ignore creeps: with
+// the default (ignoreCreeps:false) a creep boxed in by its neighbours gets null from
+// findClosestByPath and gives up — idling instead of moving. We pick the target by
+// terrain distance and let the traffic manager (services.movement) squeeze the creep
+// through congestion on the way there. Used by every "nearest target" finder below.
+function closestByPath<T extends RoomObject>(
+  pos: RoomPosition,
+  targets: T[]
+): T | null {
+  return (pos.findClosestByPath(targets, { ignoreCreeps: true }) as T | null) ?? null;
+}
+
 // Single per-tick FIND_STRUCTURES scan shared by every helper below. With dozens
 // of creeps each calling these finders per tick, scanning once per room and
 // filtering the cached array in JS is dramatically cheaper than one room.find
@@ -81,7 +93,7 @@ function getRoomContainers(room: Room): StructureContainer[] {
 }
 
 export function findClosestSource(creep: Creep): Source | null {
-  return creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE);
+  return creep.pos.findClosestByPath(FIND_SOURCES_ACTIVE, { ignoreCreeps: true });
 }
 
 export function findBalancedSource(creep: Creep): Source | null {
@@ -143,7 +155,7 @@ export function findEnergyDepositTarget(
   for (const structureType of priorityList) {
     const bucket = byType.get(structureType);
     if (bucket && bucket.length > 0) {
-      return creep.pos.findClosestByPath(bucket) as Structure | null;
+      return closestByPath(creep.pos, bucket) as Structure | null;
     }
   }
 
@@ -156,7 +168,7 @@ export function getClosestSpawn(
 ): StructureSpawn | null {
   const spawns = room.find(FIND_MY_SPAWNS);
   if (spawns.length === 0) return null;
-  return pos.findClosestByPath(spawns);
+  return closestByPath(pos, spawns);
 }
 
 export function getSources(room: Room, ttl: number = 100): Source[] {
@@ -284,9 +296,9 @@ export function acquireEnergy(creep: Creep): boolean {
     : storeTargets;
 
   const storeTarget = nonUpgrade.length > 0
-    ? creep.pos.findClosestByPath(nonUpgrade) as AnyStoreStructure | null
+    ? closestByPath(creep.pos, nonUpgrade) as AnyStoreStructure | null
     : storeTargets.length > 0
-      ? creep.pos.findClosestByPath(storeTargets) as AnyStoreStructure | null
+      ? closestByPath(creep.pos, storeTargets) as AnyStoreStructure | null
       : null;
 
   if (storeTarget) {
@@ -306,7 +318,7 @@ export function acquireEnergy(creep: Creep): boolean {
       (s as StructureLink).store[RESOURCE_ENERGY] > 0
   );
   if (links.length > 0) {
-    const link = creep.pos.findClosestByPath(links) as StructureLink | null;
+    const link = closestByPath(creep.pos, links) as StructureLink | null;
     if (link) {
       creep.memory.energySourceId = link.id as unknown as Id<AnyStoreStructure>;
       const res = creep.withdraw(link, RESOURCE_ENERGY);
@@ -320,6 +332,7 @@ export function acquireEnergy(creep: Creep): boolean {
 
   // Tombstones — ephemeral, not cached.
   const tomb = creep.pos.findClosestByPath(FIND_TOMBSTONES, {
+    ignoreCreeps: true,
     filter: (t) => t.store && t.store[RESOURCE_ENERGY] > 0,
   }) as Tombstone | null;
   if (tomb) {
@@ -333,7 +346,7 @@ export function acquireEnergy(creep: Creep): boolean {
 
   // Last resort: harvest directly from a safe active source (avoid Source Keepers).
   const activeSafe = getSafeSources(creep.room).filter((s) => s.energy > 0);
-  const source = creep.pos.findClosestByPath(activeSafe) as Source | null;
+  const source = closestByPath(creep.pos, activeSafe) as Source | null;
   if (source) {
     const res = creep.harvest(source);
     if (res === ERR_NOT_IN_RANGE) {
@@ -381,7 +394,7 @@ export function findClosestContainerWithFreeCapacity(
       s.store.getFreeCapacity(RESOURCE_ENERGY) > 0
   );
   if (targets.length === 0) return null;
-  return creep.pos.findClosestByPath(targets) as Structure | null;
+  return closestByPath(creep.pos, targets) as Structure | null;
 }
 
 export function withdrawFromControllerContainer(creep: Creep): boolean {
@@ -430,10 +443,10 @@ export function findClosestConstructionSite(
 
   const nonRoadSites = sites.filter((s) => s.structureType !== STRUCTURE_ROAD);
   if (nonRoadSites.length > 0) {
-    return creep.pos.findClosestByPath(nonRoadSites) || null;
+    return closestByPath(creep.pos, nonRoadSites) || null;
   }
 
-  return creep.pos.findClosestByPath(sites) || null;
+  return closestByPath(creep.pos, sites) || null;
 }
 
 const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
@@ -537,7 +550,7 @@ export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
       isDamaged(s)
   );
   if (repairTargets.length === 0) return null;
-  return creep.pos.findClosestByPath(repairTargets) || null;
+  return closestByPath(creep.pos, repairTargets) || null;
 }
 
 export function findClosestDamagedRampart(
@@ -548,7 +561,7 @@ export function findClosestDamagedRampart(
       s.structureType === STRUCTURE_RAMPART && isDamaged(s)
   );
   if (ramparts.length === 0) return null;
-  return creep.pos.findClosestByPath(ramparts) || null;
+  return closestByPath(creep.pos, ramparts) || null;
 }
 
 // When a nuke is inbound, the rampart over a threatened critical structure that is
@@ -679,8 +692,8 @@ export function getClosestContainerOrStorage(creep: Creep): Structure | null {
   let nonUpgrade = allTargets;
   if (upgradeId) nonUpgrade = allTargets.filter((s) => s.id !== upgradeId);
   if (nonUpgrade.length > 0)
-    return creep.pos.findClosestByPath(nonUpgrade) as Structure | null;
-  return creep.pos.findClosestByPath(allTargets) as Structure | null;
+    return closestByPath(creep.pos, nonUpgrade) as Structure | null;
+  return closestByPath(creep.pos, allTargets) as Structure | null;
 }
 
 export function getMinerContainerIds(room: Room): Id<StructureContainer>[] {
@@ -714,7 +727,7 @@ export function findClosestMinerContainerWithEnergy(
     (c) => c.store && c.store[RESOURCE_ENERGY] > 0
   );
   if (withEnergy.length === 0) return null;
-  return creep.pos.findClosestByPath(withEnergy) || null;
+  return closestByPath(creep.pos, withEnergy) || null;
 }
 
 export function findDepositTargetExcludingMiner(
@@ -752,7 +765,7 @@ export function findDepositTargetExcludingMiner(
         container.store.getFreeCapacity(RESOURCE_ENERGY) > 0
     );
     if (nonMinerContainers.length > 0) {
-      return creep.pos.findClosestByPath(nonMinerContainers) || null;
+      return closestByPath(creep.pos, nonMinerContainers) || null;
     }
 
     return null;
@@ -772,7 +785,7 @@ export function findDepositTargetExcludingMiner(
       minerIds.indexOf(s.id as string) === -1
   );
   if (targets.length === 0) return null;
-  return creep.pos.findClosestByPath(targets) as Structure | null;
+  return closestByPath(creep.pos, targets) as Structure | null;
 }
 
 export function upgradeController(creep: Creep): void {
