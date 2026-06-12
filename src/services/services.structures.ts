@@ -564,26 +564,12 @@ export function removeOrphanRoads(room: Room): number {
     for (const p of mem[key]) planned.add(p);
   }
 
-  // Base footprint: a bounding box over the rampart perimeter (the stamp's internal
-  // roads aren't tracked, so protect everything inside the walls by position). Fall
-  // back to a box around the spawn if the perimeter isn't planned yet.
-  let minX = 50, minY = 50, maxX = -1, maxY = -1;
-  for (const p of mem[PLANNER_KEYS.STAMP_RAMPART_KEY] ?? []) {
-    const comma = p.indexOf(",");
-    const x = +p.slice(0, comma);
-    const y = +p.slice(comma + 1);
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  if (maxX < 0) {
-    const spawn = room.find(FIND_MY_SPAWNS)[0];
-    if (spawn) {
-      minX = spawn.pos.x - 9; maxX = spawn.pos.x + 9;
-      minY = spawn.pos.y - 9; maxY = spawn.pos.y + 9;
-    }
-  }
+  // Base footprint: the stamp's internal lanes aren't all tracked in plannedStructures,
+  // so protect every road near the base core by position. A generous radius around each
+  // spawn keeps the whole base (stamp + merchant rings sit within ~8 of the anchor) and
+  // ensures the reaper only ever reaches the open-terrain field well outside the walls.
+  const BASE_RADIUS = 12;
+  const spawns = room.find(FIND_MY_SPAWNS);
 
   let destroyed = 0;
   for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
@@ -591,7 +577,10 @@ export function removeOrphanRoads(room: Room): number {
     const x = s.pos.x;
     const y = s.pos.y;
     if (planned.has(`${x},${y}`)) continue;
-    if (x >= minX && x <= maxX && y >= minY && y <= maxY) continue; // inside base footprint
+    const nearBase = spawns.some(
+      (sp) => Math.max(Math.abs(sp.pos.x - x), Math.abs(sp.pos.y - y)) <= BASE_RADIUS
+    );
+    if (nearBase) continue;
     try { (s as any).destroy(); } catch (e) {}
     if (++destroyed >= MAX_ORPHAN_ROAD_DESTROYS_PER_PASS) break;
   }
