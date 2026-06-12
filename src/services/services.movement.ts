@@ -118,7 +118,12 @@ function tryShove(creep: Creep, targetPos: RoomPosition): void {
 
 // True if the creep is standing somewhere it is presumably working and must not move.
 function isOnWorkingPost(creep: Creep): boolean {
-  if (creep.memory.working) return true; // mid-action (builder/repairer/etc.)
+  // NOTE: do NOT pin on `creep.memory.working` alone. That flag stays true for the
+  // whole time a builder/upgrader/repairer carries energy — including while merely
+  // walking to its target — so pinning on it makes every full worker an immovable
+  // obstacle. A line of them then mutually blocks a single-file road and gridlocks
+  // until one dies. The genuine stationary posts (miner on a container, harvester at a
+  // source, upgrader at the controller) are pinned by the specific checks below.
   const onContainer = creep.pos
     .lookFor(LOOK_STRUCTURES)
     .some((s) => s.structureType === STRUCTURE_CONTAINER);
