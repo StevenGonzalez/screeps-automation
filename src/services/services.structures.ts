@@ -542,6 +542,62 @@ export function removeConnectorRoads(room: Room) {
   }
 }
 
+// Reap orphan roads: built roads with no entry in any current plan. Earlier planner
+// versions (the structure-wrap carpet, the cluster-connector web) laid hundreds of
+// roads whose keys were later pruned away — leaving the built roads on the map with
+// nothing to drive a key-based teardown, and the towers/repairers maintaining them
+// forever. This is the only sweep that works on them: it scans actual structures, not
+// keys. A road is kept if it is in the current plan OR inside the base footprint (the
+// stamp's internal lanes aren't tracked in plannedStructures, so they're protected by
+// position). Everything else outside the walls is destroyed. Capped per pass so tearing
+// down a large backlog doesn't spike CPU in a single tick.
+const MAX_ORPHAN_ROAD_DESTROYS_PER_PASS = 120;
+
+export function removeOrphanRoads(room: Room): number {
+  if (!room.memory.plannedStructures) return 0;
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+
+  // Positions the planner currently intends to be a road — always kept.
+  const planned = new Set<string>();
+  for (const key of Object.keys(mem)) {
+    if (structureTypeForKey(key) !== STRUCTURE_ROAD) continue;
+    for (const p of mem[key]) planned.add(p);
+  }
+
+  // Base footprint: a bounding box over the rampart perimeter (the stamp's internal
+  // roads aren't tracked, so protect everything inside the walls by position). Fall
+  // back to a box around the spawn if the perimeter isn't planned yet.
+  let minX = 50, minY = 50, maxX = -1, maxY = -1;
+  for (const p of mem[PLANNER_KEYS.STAMP_RAMPART_KEY] ?? []) {
+    const comma = p.indexOf(",");
+    const x = +p.slice(0, comma);
+    const y = +p.slice(comma + 1);
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+  if (maxX < 0) {
+    const spawn = room.find(FIND_MY_SPAWNS)[0];
+    if (spawn) {
+      minX = spawn.pos.x - 9; maxX = spawn.pos.x + 9;
+      minY = spawn.pos.y - 9; maxY = spawn.pos.y + 9;
+    }
+  }
+
+  let destroyed = 0;
+  for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
+    if (s.structureType !== STRUCTURE_ROAD) continue;
+    const x = s.pos.x;
+    const y = s.pos.y;
+    if (planned.has(`${x},${y}`)) continue;
+    if (x >= minX && x <= maxX && y >= minY && y <= maxY) continue; // inside base footprint
+    try { (s as any).destroy(); } catch (e) {}
+    if (++destroyed >= MAX_ORPHAN_ROAD_DESTROYS_PER_PASS) break;
+  }
+  return destroyed;
+}
+
 export function removePlannedStructureFromMemory(
   room: Room,
   type: string,

@@ -8,6 +8,7 @@ import {
   removeRoadsAroundStructures,
   pruneRoadsUnderStructures,
   removeConnectorRoads,
+  removeOrphanRoads,
   structureTypeForKey,
   nextSpawnName,
 } from "../services/services.structures";
@@ -515,6 +516,7 @@ function processRoomStructures(room: Room) {
   removeRoadsAroundStructures(room);
   pruneRoadsUnderStructures(room);
   removeConnectorRoads(room);
+  removeOrphanRoads(room);
 
   room.memory.lastStructurePlanTick = Game.time;
   // Ramparts for existing structures are handled by ensureRampartsForExistingStructures (runs every 5t).
