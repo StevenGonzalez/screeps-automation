@@ -93,8 +93,10 @@ function roadCostCallback(roomName: string): CostMatrix {
 
   if ((mem._st ?? 0) >= STUCK_THRESHOLD) {
     mem._st = 0;
-    if (sameRoom) tryShove(this, tpos);
-    // Force a fresh path (reusePath: 0) that routes around the jam.
+    // Register a shove against whoever blocks our next step, resolved authoritatively
+    // at end of tick (see resolveTraffic). We still force a fresh path here so we route
+    // around the jam if an alternative exists.
+    if (sameRoom) registerShove(this, tpos);
     effectiveOpts.reusePath = 0;
     return originalMoveTo.call(this, target as never, effectiveOpts as never);
   }
@@ -102,18 +104,57 @@ function roadCostCallback(roomName: string): CostMatrix {
   return originalMoveTo.call(this, target as never, effectiveOpts as never);
 };
 
-// Nudge a non-working friendly creep off the next step toward the target.
-function tryShove(creep: Creep, targetPos: RoomPosition): void {
+// Shove intents collected this tick: a stuck creep paired with the creep directly
+// blocking its next step. Resolved once, after every role has run, so our move()
+// calls win the tick (a move issued mid-role gets overridden by the blocker's own
+// later move). Reset lazily per tick.
+interface ShoveReq {
+  stuck: Creep;
+  blocker: Creep;
+}
+let shoveTick = -1;
+let pendingShoves: ShoveReq[] = [];
+
+function registerShove(creep: Creep, targetPos: RoomPosition): void {
   const dir = creep.pos.getDirectionTo(targetPos);
   const next = stepInDirection(creep.pos, dir);
   if (!next) return;
-
   const blocker = next.lookFor(LOOK_CREEPS).find((c) => c.my);
-  if (!blocker || blocker.fatigue > 0) return;
-  if (isOnWorkingPost(blocker)) return;
+  if (!blocker) return;
 
-  // Step the blocker onto our tile; we take its tile via the repath that follows.
-  originalMoveToDir(blocker, blocker.pos.getDirectionTo(creep.pos));
+  if (shoveTick !== Game.time) {
+    shoveTick = Game.time;
+    pendingShoves = [];
+  }
+  pendingShoves.push({ stuck: creep, blocker });
+}
+
+/**
+ * Resolve this tick's shove intents. Called once at the end of the creep loop, after
+ * every role has issued its own moves, so the swaps here are the final intent and win.
+ *
+ * Each shove swaps the stuck creep with its blocker: the stuck creep is already moving
+ * into the blocker's tile (its own moveTo this tick), so pushing the blocker onto the
+ * stuck creep's tile exchanges the two in a single tick — exactly what unjams a
+ * single-file road where the blocker would otherwise never move (idle, or queued behind
+ * its own obstruction). Genuine working posts are left alone.
+ */
+export function resolveTraffic(): void {
+  if (Memory.trafficDisabled) return;
+  if (shoveTick !== Game.time) return;
+
+  const moved = new Set<string>();
+  for (const { stuck, blocker } of pendingShoves) {
+    if (moved.has(blocker.name)) continue;
+    if (blocker.fatigue > 0) continue;
+    if (isOnWorkingPost(blocker)) continue;
+    // Don't fight a blocker that is itself already leaving toward a different tile.
+    const dir = blocker.pos.getDirectionTo(stuck.pos);
+    if (!dir) continue;
+    blocker.move(dir);
+    moved.add(blocker.name);
+  }
+  pendingShoves = [];
 }
 
 // True if the creep is standing somewhere it is presumably working and must not move.
@@ -157,10 +198,4 @@ function stepInDirection(pos: RoomPosition, dir: DirectionConstant): RoomPositio
   const y = pos.y + dy;
   if (x < 0 || x > 49 || y < 0 || y > 49) return null;
   return new RoomPosition(x, y, pos.roomName);
-}
-
-// Issue the blocker's swap move via the original (non-wrapped) move so it isn't
-// re-intercepted as a moveTo.
-function originalMoveToDir(creep: Creep, dir: DirectionConstant): void {
-  creep.move(dir);
 }

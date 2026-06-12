@@ -48,6 +48,7 @@ import { runPowerCarrier } from "../roles/role.powercarrier";
 import { runSkGuardian } from "../roles/role.sk_guardian";
 import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
+import { resolveTraffic } from "../services/services.movement";
 
 // Role → handler lookup. A single map dispatch per creep replaces a 20-branch
 // if/else chain that, for late-listed roles, re-compared the role string up to
@@ -85,4 +86,7 @@ export function loop() {
     const handler = ROLE_HANDLERS[creep.memory.role];
     if (handler) handler(creep);
   }
+  // After every role has issued its moves, resolve queued shoves authoritatively so
+  // stuck creeps and their blockers swap places instead of gridlocking the lane.
+  resolveTraffic();
 }
