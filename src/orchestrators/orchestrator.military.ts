@@ -72,7 +72,14 @@ export function loop(): void {
     op.requiredSiegers = op.requiredSiegers ?? 0;
 
     const homeRoom = Game.rooms[op.homeRoom];
-    if (!homeRoom?.controller?.my) continue;
+    if (!homeRoom?.controller?.my) {
+      // Home room lost (downgraded/conquered) — tear the op down. Owned rooms always have
+      // vision, so a missing/not-ours home means it's genuinely gone; leaving the op in
+      // Memory.militaryOps would leak forever and permanently mark this home "busy",
+      // blocking any future op or auto-attack if we ever re-acquire it.
+      removeOp(op);
+      continue;
+    }
 
     const members = getSquadMembers(op);
 
@@ -120,6 +127,7 @@ function runForming(op: MilitaryOp, members: Creep[]): void {
 function runRallying(op: MilitaryOp, homeRoom: Room, members: Creep[]): void {
   if (!squadMet(op, members)) {
     op.phase = "forming";
+    op.startedAt = Game.time; // restart the forming clock so a long-lived op doesn't instantly hit FORMING_TIMEOUT on reform
     console.log(`[Military] ${op.targetRoom}: Squad incomplete during rally — reforming`);
     return;
   }
@@ -140,6 +148,7 @@ function runRallying(op: MilitaryOp, homeRoom: Room, members: Creep[]): void {
 function runAttacking(op: MilitaryOp, members: Creep[]): void {
   if (members.length === 0) {
     op.phase = "forming";
+    op.startedAt = Game.time; // restart the forming clock so a long-lived op doesn't instantly hit FORMING_TIMEOUT on reform
     op.clearedSince = undefined;
     op.regroupSince = undefined;
     console.log(`[Military] ${op.targetRoom}: All squad members lost — reforming`);
@@ -207,6 +216,7 @@ function runAttacking(op: MilitaryOp, members: Creep[]): void {
 function runRetreating(op: MilitaryOp, members: Creep[]): void {
   if (members.length === 0) {
     op.phase = "forming";
+    op.startedAt = Game.time; // restart the forming clock so a long-lived op doesn't instantly hit FORMING_TIMEOUT on reform
     return;
   }
 
@@ -224,6 +234,7 @@ function runRetreating(op: MilitaryOp, members: Creep[]): void {
     console.log(`[Military] ${op.targetRoom}: Regrouped — re-rallying for another push (${op.tactic})`);
   } else {
     op.phase = "forming";
+    op.startedAt = Game.time; // restart the forming clock so a long-lived op doesn't instantly hit FORMING_TIMEOUT on reform
     console.log(`[Military] ${op.targetRoom}: Squad depleted after retreat — reforming`);
   }
 }
@@ -1215,7 +1226,13 @@ function moveToSlot(creep: Creep, op: MilitaryOp, ctx: SquadContext): void {
 
 // Melee follower: engage a nearby hostile directly, else fall back into formation.
 function moveKnightFollower(creep: Creep, op: MilitaryOp, ctx: SquadContext, hostiles: Creep[]): void {
-  const nearest = creep.pos.findClosestByRange(hostiles);
+  // Don't chase a hostile sitting on a room-edge tile — moving to range 1 of it would put
+  // the follower on the exit and warp it out of the room, breaking squad cohesion. Ignore
+  // such a kiter and hold formation until it commits to a non-edge tile.
+  const engageable = hostiles.filter(
+    (h) => h.pos.x > 1 && h.pos.x < 48 && h.pos.y > 1 && h.pos.y < 48
+  );
+  const nearest = creep.pos.findClosestByRange(engageable);
   if (nearest) {
     const range = creep.pos.getRangeTo(nearest);
     if (range === 1) return; // already engaged — hold and keep swinging

@@ -45,6 +45,11 @@ const BOOTSTRAP_INVASION_PAUSE = 200;
 // settler op can churn energy forever (e.g. the spawn site keeps getting stomped).
 const BOOTSTRAP_TIMEOUT = 6_000;
 
+// Give up on a claim that never lands (unreachable target, perpetual enemy reservation).
+// Without this a doomed target loops conqueror spawn→suicide forever and wedges the whole
+// expansion queue behind it, since the queue can't advance while Memory.expansion exists.
+const CLAIM_TIMEOUT = 1_500;
+
 // Keep the record around briefly after "established" so console/tools can see the
 // outcome, then the memory orchestrator (or the cleanup below) clears it.
 const ESTABLISHED_RETENTION = 1_000;
@@ -317,6 +322,10 @@ function manageActiveExpansion() {
     const rec = findRemoteRecord(exp.roomName);
     if (rec && isRemoteContested(rec)) {
       clearExpansion(`contested: scout flagged ${exp.roomName} hostile pre-claim`);
+      return;
+    }
+    if (Game.time - exp.startedAt > CLAIM_TIMEOUT) {
+      clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
       return;
     }
   }

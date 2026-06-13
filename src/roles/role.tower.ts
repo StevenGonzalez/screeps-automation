@@ -38,11 +38,14 @@ export function runTower(tower: StructureTower, attackTarget: Creep | null): voi
 // All towers should attack the same creep: kill one fast > tickle many.
 // Takes the room's hostile list (scanned once by the orchestrator) and excludes
 // edge tiles, where towers deal near-zero damage and the creep can flee a step.
-export function selectRoomAttackTarget(roomHostiles: Creep[]): Creep | null {
+export function selectRoomAttackTarget(roomHostiles: Creep[], room?: Room): Creep | null {
   const hostiles = roomHostiles.filter(
     (c) => c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48
   );
-  if (hostiles.length === 0) return null;
+  if (hostiles.length === 0) {
+    if (room) delete room.memory.lastTowerTargetId;
+    return null;
+  }
 
   let best = hostiles[0];
   let bestScore = Infinity;
@@ -55,6 +58,17 @@ export function selectRoomAttackTarget(roomHostiles: Creep[]): Creep | null {
       best = c;
     }
   }
+
+  // Hysteresis: keep hammering the previously-focused creep as long as it's still a valid
+  // hostile in the SAME priority tier as the new best. Without this, an enemy healer that
+  // tops two equal-tier targets back and forth makes the score (which tracks live HP) flip
+  // every tick, splitting tower DPS so neither dies. Only switch when the old target dies/
+  // leaves, or a strictly higher-priority tier appears.
+  if (room?.memory.lastTowerTargetId) {
+    const prev = hostiles.find((c) => c.id === room.memory.lastTowerTargetId);
+    if (prev && hostileTier(prev) === hostileTier(best)) best = prev;
+  }
+  if (room) room.memory.lastTowerTargetId = best.id;
   return best;
 }
 

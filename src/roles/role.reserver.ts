@@ -34,8 +34,9 @@ export function runReserver(creep: Creep) {
 }
 
 function moveToRoom(creep: Creep, targetRoom: string) {
-  const exit = creep.room.findExitTo(targetRoom);
-  if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) return;
-  const exitPos = creep.pos.findClosestByRange(exit);
-  if (exitPos) creep.moveTo(exitPos, { reusePath: 30 });
+  // Use PathFinder's multi-room routing toward the target room centre rather than
+  // findExitTo. findExitTo gives up silently on any ERR_NO_PATH/ERR_INVALID_ARGS hiccup,
+  // which strands the reserver in an intermediate room; moveTo to a RoomPosition routes
+  // across rooms robustly.
+  creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }

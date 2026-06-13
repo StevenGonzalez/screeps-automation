@@ -1,4 +1,14 @@
-import { resolveChain, getStockForCompound, REACTION_RECIPES } from "../services/services.labs";
+import {
+  resolveChain,
+  getStorageStockForCompound,
+  REACTION_RECIPES,
+} from "../services/services.labs";
+
+// Abort an active reaction that hasn't increased its produced count for this many ticks.
+// A reaction stalls when its reagents are unavailable (base mineral exhausted, or the
+// product is drained by boosting faster than it's made); without this the active compound
+// never completes and blocks the entire lab queue — including boosts — forever.
+const LAB_STALL_TIMEOUT = 200;
 
 const LAB_PLAN_INTERVAL = 100;
 
@@ -82,21 +92,45 @@ function processLabSystem(room: Room) {
     if (!recipe) { ls.queue.shift(); return; }
     ls.activeCompound = next.compound;
     ls.inputCompounds = [recipe[0], recipe[1]];
-    ls.startStock = getStockForCompound(next.compound, room);
+    ls.startStock = getStorageStockForCompound(next.compound, room);
     ls.targetAmount = next.amount;
+    ls.lastProduced = 0;
+    ls.lastProgressTick = Game.time;
     return; // let apothecary fill labs this tick before we try to react
   }
 
   if (!ls.inputCompounds) return;
 
-  // Check completion
-  const produced = getStockForCompound(ls.activeCompound, room) - (ls.startStock ?? 0);
+  // Check completion — measured against storage only, to match resolveChain's basis.
+  const produced = getStorageStockForCompound(ls.activeCompound, room) - (ls.startStock ?? 0);
   if (produced >= (ls.targetAmount ?? 0)) {
     ls.queue.shift();
     delete ls.activeCompound;
     delete ls.inputCompounds;
     delete ls.startStock;
     delete ls.targetAmount;
+    delete ls.lastProduced;
+    delete ls.lastProgressTick;
+    return;
+  }
+
+  // Stall watchdog: if production hasn't advanced in LAB_STALL_TIMEOUT ticks, the reagents
+  // aren't coming — abort this compound and free the queue instead of blocking it forever.
+  if (produced > (ls.lastProduced ?? 0)) {
+    ls.lastProduced = produced;
+    ls.lastProgressTick = Game.time;
+  } else if (Game.time - (ls.lastProgressTick ?? Game.time) > LAB_STALL_TIMEOUT) {
+    console.log(
+      `[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
+      `${LAB_STALL_TIMEOUT} ticks) — aborting and advancing queue.`
+    );
+    ls.queue.shift();
+    delete ls.activeCompound;
+    delete ls.inputCompounds;
+    delete ls.startStock;
+    delete ls.targetAmount;
+    delete ls.lastProduced;
+    delete ls.lastProgressTick;
     return;
   }
 
@@ -142,7 +176,9 @@ function refreshLabIdentity(room: Room) {
 function planAutoProduction(room: Room) {
   const ls = room.memory.labSystem!;
   for (const [compound, target] of Object.entries(AUTO_PRODUCTION_TARGETS)) {
-    const stock = getStockForCompound(compound, room);
+    // Storage-only basis so the chain's delta and the completion check agree (see
+    // getStorageStockForCompound). Reagents and the produced buffer both live in storage.
+    const stock = getStorageStockForCompound(compound, room);
     if (stock < target) {
       const chain = resolveChain(compound, target, room.storage ?? null);
       if (chain.length > 0) {

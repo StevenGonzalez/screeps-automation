@@ -103,7 +103,10 @@ export function runApothecary(creep: Creep) {
     const cap = outputLab.store.getCapacity() ?? 0;
     if (used >= cap * 0.75) {
       const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
-        (r) => (outputLab.store.getUsedCapacity(r) ?? 0) > 0 && !pendingBoostCompounds.has(r)
+        (r) =>
+          r !== RESOURCE_ENERGY &&
+          (outputLab.store.getUsedCapacity(r) ?? 0) > 0 &&
+          !pendingBoostCompounds.has(r)
       );
       if (resource) {
         if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
@@ -146,10 +149,14 @@ export function runApothecary(creep: Creep) {
     }
   }
 
-  // Priority 4: drain any remaining output lab product to storage (skip boost-reserved)
+  // Priority 4: drain any remaining output lab product to storage (skip boost-reserved
+  // and lab energy — energy in a lab is needed to run reactions/boosts, not a product).
   for (const outputLab of outputLabs) {
     const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
-      (r) => (outputLab.store.getUsedCapacity(r) ?? 0) > 0 && !pendingBoostCompounds.has(r)
+      (r) =>
+        r !== RESOURCE_ENERGY &&
+        (outputLab.store.getUsedCapacity(r) ?? 0) > 0 &&
+        !pendingBoostCompounds.has(r)
     );
     if (resource) {
       if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {

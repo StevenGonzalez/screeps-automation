@@ -18,7 +18,16 @@ export function runMineralMiner(creep: Creep): void {
     const terminal = terminalId
       ? (Game.getObjectById(terminalId) as StructureTerminal | null)
       : null;
-    const target = creep.room.storage ?? terminal;
+    const storage = creep.room.storage;
+    // Prefer whichever store can actually accept the load. A full storage must fall back to
+    // the terminal — otherwise the miner sits full forever (it ignores ERR_FULL) and mining
+    // deadlocks, since the source container has no drainer.
+    const target =
+      storage && storage.store.getFreeCapacity() > 0
+        ? storage
+        : terminal && terminal.store.getFreeCapacity() > 0
+        ? terminal
+        : storage ?? terminal;
     if (!target) return;
     for (const resourceType in creep.store) {
       const amount = creep.store[resourceType as ResourceConstant];

@@ -43,7 +43,10 @@ export function runSkMiner(creep: Creep) {
         filter: (c) => c.memory.role === ROLE_SK_GUARDIAN && c.memory.skOpId === op.id,
       })
       .length > 0;
-    if (!guardianNear) {
+    // Trust the guardian and keep mining — UNLESS we're actually losing the fight. If HP
+    // has dropped below 40% the guardian isn't killing the keeper fast enough, so retreat
+    // rather than sit at range 1 and die (a respawn is cheaper than feeding the keeper).
+    if (!guardianNear || creep.hits < creep.hitsMax * 0.4) {
       moveToRoom(creep, op.homeRoom); // fully retreat rather than corner-dance
       return;
     }

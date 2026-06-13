@@ -21,6 +21,8 @@ declare global {
     startStock?: number;
     targetAmount?: number;
     autoEnabled?: boolean;
+    lastProduced?: number;      // most produced-so-far seen for the active compound
+    lastProgressTick?: number;  // last tick production advanced — basis for the stall abort
   }
 
   interface PowerBankOp {
@@ -219,6 +221,8 @@ declare global {
     // Cached controller link IDs (refreshed every ~200 ticks)
     controllerLinkIds?: Id<StructureLink>[];
     controllerLinkScanTick?: number;
+    // Tower focus-fire target, persisted for hysteresis (avoid per-tick target flapping)
+    lastTowerTargetId?: Id<Creep>;
     // Lab / compound production
     labSystem?: LabSystemMemory;
     lastMarketBuyTick?: number;

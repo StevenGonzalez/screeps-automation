@@ -111,8 +111,17 @@ function deposit(creep: Creep, homeRoom: string): void {
     }
     return;
   }
-  const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
-  if (spawn && !creep.pos.isNearTo(spawn)) creep.moveTo(spawn, { reusePath: 50 });
+  // Storage and all containers are full — offload into a spawn that still has room so the
+  // hauler doesn't park beside a spawn holding a full load forever (which stalls the whole
+  // SK haul). If everything is full too, idle (rare; nothing to do but wait).
+  const spawn = creep.room
+    .find(FIND_MY_SPAWNS)
+    .find((s) => s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
+  if (spawn) {
+    if (creep.transfer(spawn, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(spawn, { reusePath: 50 });
+    }
+  }
 }
 
 function moveToRoom(creep: Creep, targetRoom: string): void {
