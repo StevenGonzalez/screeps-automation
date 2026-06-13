@@ -38,6 +38,9 @@ declare global {
     requiredCarriers: number;
     crackingStartedAt?: number;
     collectingStartedAt?: number;
+    // Set once a carrier confirms (with vision) the bank room holds no more power, so
+    // the op only completes after every dropped pile has actually been hauled.
+    collected?: boolean;
   }
 
   // Tactical squad formation: governs how members space themselves around the leader.
@@ -60,6 +63,8 @@ declare global {
     clearedSince?: number;
     // Set while the squad is split across rooms; drives the regroup watchdog.
     regroupSince?: number;
+    // Set when an auto-retreat begins; bounds how long we wait for stragglers to come home.
+    retreatSince?: number;
   }
 
   // An automatic, threat-driven defensive operation on an OWNED room. Kept separate

@@ -57,14 +57,21 @@ export function getThreatSeverity(room: Room): ThreatSeverity {
   return "high";
 }
 
-const threatCache: Record<string, { info: ThreatInfo; tick: number }> = {};
+// Cleared each tick so it never accumulates stale entries (and their dead
+// game-object references) for every room ever scanned.
+let threatCacheTick = -1;
+const threatCache: Record<string, ThreatInfo> = {};
 
 // Returns a threat score for the room: 0 = no hostiles.
 // Score scales with hostile count, ATTACK/RANGED_ATTACK parts, and HEAL parts.
 // Cached per-tick so multiple callers (spawner, tower) share one room.find.
 export function getThreatInfo(room: Room): ThreatInfo {
+  if (threatCacheTick !== Game.time) {
+    threatCacheTick = Game.time;
+    for (const name in threatCache) delete threatCache[name];
+  }
   const cached = threatCache[room.name];
-  if (cached && cached.tick === Game.time) return cached.info;
+  if (cached) return cached;
 
   const hostiles = room.find(FIND_HOSTILE_CREEPS);
   let score = 0;
@@ -78,7 +85,7 @@ export function getThreatInfo(room: Room): ThreatInfo {
   }
 
   const info: ThreatInfo = { hostiles, score };
-  threatCache[room.name] = { info, tick: Game.time };
+  threatCache[room.name] = info;
   return info;
 }
 
@@ -144,12 +151,19 @@ const STRUCTURE_ATTACK_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_CONTAINER]: 90,
 };
 
-const structureTargetCache: Record<string, { list: AnyStructure[]; tick: number }> = {};
+// Cleared each tick so it never accumulates stale entries (and their dead
+// game-object references) for every room ever scanned.
+let structureTargetCacheTick = -1;
+const structureTargetCache: Record<string, AnyStructure[]> = {};
 
 // Hostile + neutral-blocking structures in a room, scanned once per tick and shared.
 function getAttackableStructures(room: Room): AnyStructure[] {
+  if (structureTargetCacheTick !== Game.time) {
+    structureTargetCacheTick = Game.time;
+    for (const name in structureTargetCache) delete structureTargetCache[name];
+  }
   const cached = structureTargetCache[room.name];
-  if (cached && cached.tick === Game.time) return cached.list;
+  if (cached) return cached;
 
   const list = room.find(FIND_STRUCTURES, {
     filter: (s) => {
@@ -167,7 +181,7 @@ function getAttackableStructures(room: Room): AnyStructure[] {
     },
   }) as AnyStructure[];
 
-  structureTargetCache[room.name] = { list, tick: Game.time };
+  structureTargetCache[room.name] = list;
   return list;
 }
 

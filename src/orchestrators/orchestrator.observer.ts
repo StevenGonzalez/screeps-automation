@@ -165,8 +165,33 @@ function updatePowerOp(op: PowerBankOp) {
 
     case "collecting": {
       const elapsed = Game.time - (op.collectingStartedAt ?? Game.time);
-      const allHome = members.length > 0 && members.every((c) => c.room.name === op.homeRoom);
-      if (elapsed > COLLECTING_TIMEOUT || allHome) {
+      if (elapsed > COLLECTING_TIMEOUT) {
+        console.log(`[Power] Op #${op.id} collection timed out`);
+        op.phase = "done";
+        return;
+      }
+
+      // Carriers are multi-trip: a large bank drops more power than one carrier load,
+      // so completing the instant everyone first reaches home would strand the rest.
+      // While the bank room is visible (a carrier is there), mark the haul finished only
+      // once no power remains on the ground or in ruins.
+      const bankRoom = Game.rooms[op.roomName];
+      if (bankRoom) {
+        const groundPower =
+          bankRoom
+            .find(FIND_DROPPED_RESOURCES, { filter: (r) => r.resourceType === RESOURCE_POWER })
+            .reduce((sum, r) => sum + r.amount, 0) +
+          bankRoom
+            .find(FIND_RUINS)
+            .reduce((sum, r) => sum + (r.store.getUsedCapacity(RESOURCE_POWER) ?? 0), 0);
+        if (groundPower === 0) op.collected = true;
+      }
+
+      // Done once the room is confirmed empty AND every carrier has delivered its load.
+      const stillCarrying = members.some(
+        (c) => (c.store.getUsedCapacity(RESOURCE_POWER) ?? 0) > 0
+      );
+      if (op.collected && !stillCarrying) {
         console.log(`[Power] Op #${op.id} collection complete`);
         op.phase = "done";
       }

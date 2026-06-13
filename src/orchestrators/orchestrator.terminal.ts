@@ -10,7 +10,7 @@ import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
 const TERMINAL_CONFIG = {
   MINERAL_SELL_THRESHOLD: 1000,
   MINERAL_MAX_TRADE_AMOUNT: 1000,
-  MIN_PRICE_RATIO: 0.5,
+  MIN_PRICE_RATIO: 0.5,       // sell only at >= this fraction of the recent market average
   MAX_TRADE_DISTANCE: 10,
   MIN_TERMINAL_ENERGY: 1000,
 };
@@ -172,7 +172,12 @@ function buyMissingGhodium(room: Room, terminal: StructureTerminal): boolean {
 
   orders.sort((a, b) => a.price - b.price);
   const best = orders[0];
-  const amount = Math.min(needed, best.amount, GHODIUM_CONFIG.MAX_AMOUNT);
+  const amount = affordableTradeAmount(
+    terminal,
+    room.name,
+    best.roomName!,
+    Math.min(needed, best.amount, GHODIUM_CONFIG.MAX_AMOUNT)
+  );
   if (amount <= 0) return false;
 
   const result = Game.market.deal(best.id, amount, room.name);
@@ -351,6 +356,25 @@ function planGhodiumTransfers(
   }
 }
 
+// ── Market helpers ────────────────────────────────────────────────────────────
+
+// Cap a trade so its energy transfer fee can't drain the terminal below its reserve.
+// The fee is linear in amount, so when we can't afford the full quantity we scale it down
+// proportionally rather than letting Game.market.deal fail with ERR_NOT_ENOUGH_RESOURCES.
+function affordableTradeAmount(
+  terminal: StructureTerminal,
+  fromRoom: string,
+  toRoom: string,
+  want: number
+): number {
+  if (want <= 0) return 0;
+  const spare = (terminal.store[RESOURCE_ENERGY] ?? 0) - TERMINAL_CONFIG.MIN_TERMINAL_ENERGY;
+  if (spare <= 0) return 0;
+  const cost = Game.market.calcTransactionCost(want, fromRoom, toRoom);
+  if (cost <= spare) return want;
+  return Math.floor((want * spare) / cost);
+}
+
 // ── Mineral selling ───────────────────────────────────────────────────────────
 
 function attemptMineralSale(
@@ -359,8 +383,14 @@ function attemptMineralSale(
   mineralType: MineralConstant,
   availableAmount: number
 ): void {
-  let bestPrice = TERMINAL_CONFIG.MIN_PRICE_RATIO;
+  // MIN_PRICE_RATIO is a fraction of the recent market average, not an absolute credit
+  // floor — otherwise cheap minerals (avg < the flat floor) would never sell and clog the
+  // terminal, while expensive ones would be dumped far below value.
+  const history = Game.market.getHistory(mineralType);
+  const avgPrice = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
+  let bestPrice = avgPrice !== undefined ? avgPrice * TERMINAL_CONFIG.MIN_PRICE_RATIO : 0;
   let bestOrderId: string | null = null;
+  let bestOrderRoom = "";
   let bestOrderAmount = 0;
 
   const orders = Game.market.getAllOrders((order) => {
@@ -376,16 +406,18 @@ function attemptMineralSale(
     if (order.price > bestPrice) {
       bestPrice = order.price;
       bestOrderId = order.id;
+      bestOrderRoom = order.roomName!;
       bestOrderAmount = order.amount;
     }
   }
 
   if (!bestOrderId) return;
 
-  const tradeAmount = Math.min(
-    availableAmount,
-    bestOrderAmount,
-    TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT
+  const tradeAmount = affordableTradeAmount(
+    terminal,
+    room.name,
+    bestOrderRoom,
+    Math.min(availableAmount, bestOrderAmount, TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT)
   );
   if (tradeAmount <= 0) return;
 
@@ -420,7 +452,12 @@ function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
 
     orders.sort((a, b) => a.price - b.price);
     const best = orders[0];
-    const amount = Math.min(needed, best.amount, BUY_CONFIG.MAX_AMOUNT);
+    const amount = affordableTradeAmount(
+      terminal,
+      room.name,
+      best.roomName!,
+      Math.min(needed, best.amount, BUY_CONFIG.MAX_AMOUNT)
+    );
     if (amount <= 0) continue;
 
     const result = Game.market.deal(best.id, amount, room.name);

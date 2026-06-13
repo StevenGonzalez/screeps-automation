@@ -86,23 +86,28 @@ function checkSafeMode(room: Room, hostiles: Creep[]): void {
     filter: (c) => c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK),
   });
 
-  // Trigger 4: towers drained + no defenders + sufficient attacker count
+  // Our defenders should veto the last-resort safe mode only while they can plausibly
+  // hold. If the attackers more than double our fighters, the room is being overrun and
+  // a few defenders shouldn't suppress the trigger. (With zero defenders this is always
+  // true for any attacker, preserving the original "no defenders" behavior.)
+  const overwhelmed =
+    attackers.length >= SAFEMODE_OVERWHELMED_COUNT && myFighters.length * 2 < attackers.length;
+
+  // Trigger 4: towers drained + defenders overwhelmed
   if (towerIds.length > 0) {
     const allTowersDrained = towerIds.every((id) => {
       const t = Game.getObjectById(id) as StructureTower | null;
       return !t || t.store[RESOURCE_ENERGY] < SAFEMODE_MIN_TOWER_ENERGY;
     });
-    if (allTowersDrained) {
-      if (myFighters.length === 0 && attackers.length >= SAFEMODE_OVERWHELMED_COUNT) {
-        activateSafeMode(room, controller, "towers drained, no defenders");
-        return;
-      }
+    if (allTowersDrained && overwhelmed) {
+      activateSafeMode(room, controller, "towers drained, defenders overwhelmed");
+      return;
     }
   }
 
-  // Trigger 5: overwhelmed with no fighters at all
-  if (attackers.length >= SAFEMODE_OVERWHELMED_COUNT && myFighters.length === 0 && towerIds.length === 0) {
-    activateSafeMode(room, controller, `overwhelmed by ${attackers.length} attackers, no towers or defenders`);
+  // Trigger 5: overwhelmed with no towers at all
+  if (overwhelmed && towerIds.length === 0) {
+    activateSafeMode(room, controller, `overwhelmed by ${attackers.length} attackers, no towers`);
   }
 }
 

@@ -218,18 +218,25 @@ function runRetreating(op: MilitaryOp, members: Creep[]): void {
   if (members.length === 0) {
     op.phase = "forming";
     op.startedAt = Game.time; // restart the forming clock so a long-lived op doesn't instantly hit FORMING_TIMEOUT on reform
+    op.retreatSince = undefined;
     return;
   }
 
+  // Bound how long we wait for the squad to make it home. A straggler that can't path
+  // back (body-blocked, no route) must not strand the whole op — and the home room — forever.
+  if (!op.retreatSince) op.retreatSince = Game.time;
+  const timedOut = Game.time - op.retreatSince > FRAGMENT_TIMEOUT;
+
   const allHome = members.every((c) => c.room.name === op.homeRoom);
-  if (!allHome) return;
+  if (!allHome && !timedOut) return;
 
   const ctx = getSquadContext(op);
-  if (ctx.avgHpPct < REGROUP_HP_THRESHOLD) return; // still licking wounds
+  if (ctx.avgHpPct < REGROUP_HP_THRESHOLD && !timedOut) return; // still licking wounds
 
   // A manually ordered retreat holds at home until the commander issues new orders.
   if (op.tactic === "retreat") return;
 
+  op.retreatSince = undefined;
   if (squadMet(op, members)) {
     op.phase = "rallying";
     console.log(`[Military] ${op.targetRoom}: Regrouped — re-rallying for another push (${op.tactic})`);
@@ -920,12 +927,15 @@ export function runDefensiveWizard(creep: Creep, roomName: string): void {
   const { hostiles } = getThreatInfo(creep.room);
 
   // Fire: mass-attack a cluster, else focus the priority target within range.
+  // If the priority target is out of range, still fire at the closest hostile
+  // that is in range — a ranged shot costs nothing and shouldn't be wasted.
   const inMass = creep.pos.findInRange(hostiles, KITE_RANGE);
   if (inMass.length >= 3) {
     creep.rangedMassAttack();
   } else {
     const target = selectDefenseTarget(creep, rally, hostiles);
     if (target && creep.pos.getRangeTo(target) <= 3) creep.rangedAttack(target);
+    else if (inMass.length > 0) creep.rangedAttack(creep.pos.findClosestByRange(inMass)!);
   }
 
   // Movement: fire from a rampart within range of the threat; if the room has no
@@ -1068,6 +1078,8 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
   const hostiles = getThreatInfo(creep.room).hostiles;
 
   // Fire: mass attack when swarmed, otherwise focus the squad's priority target.
+  // Fall back to the closest in-range hostile (then a structure) so the free
+  // ranged shot is never wasted when the priority target is out of range.
   const inMass = creep.pos.findInRange(hostiles, KITE_RANGE);
   if (inMass.length >= 3) {
     creep.rangedMassAttack();
@@ -1075,6 +1087,8 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
     const target = selectHostileTarget(creep.pos, hostiles);
     if (target && creep.pos.getRangeTo(target) <= 3) {
       creep.rangedAttack(target);
+    } else if (inMass.length > 0) {
+      creep.rangedAttack(creep.pos.findClosestByRange(inMass)!);
     } else if (op.tactic !== "defend") {
       const struct = selectStructureTarget(creep.room, creep.pos, op.tactic);
       if (struct && creep.pos.getRangeTo(struct) <= 3) creep.rangedAttack(struct);
