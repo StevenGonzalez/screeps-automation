@@ -109,6 +109,10 @@ export function applyCastleStamp(room: Room): void {
     }
   }
 
+  // Track tower count for capping
+  let towerCount = 0;
+  const towerCap = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][rcl] ?? 0;
+
   for (const cell of cells) {
     const absX = anchor.x + cell.dx;
     const absY = anchor.y + cell.dy;
@@ -120,6 +124,12 @@ export function applyCastleStamp(room: Room): void {
     // so we don't plan a road on top of a (possibly wall-relocated) spawn/storage/etc. tile
     // (only structures are added to occupiedSet, so road-on-road is unaffected).
     if (occupiedSet.has(posKey)) continue;
+
+    // Cap towers at the RCL limit
+    if (cell.type === "tower") {
+      if (towerCount >= towerCap) continue;
+      towerCount++;
+    }
 
     let finalX = absX;
     let finalY = absY;
