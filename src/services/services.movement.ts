@@ -96,7 +96,7 @@ function roadCostCallback(roomName: string): CostMatrix {
     // Register a shove against whoever blocks our next step, resolved authoritatively
     // at end of tick (see resolveTraffic). We still force a fresh path here so we route
     // around the jam if an alternative exists.
-    if (sameRoom) registerShove(this, tpos);
+    if (sameRoom) registerShove(this, tpos, range);
     effectiveOpts.reusePath = 0;
     return originalMoveTo.call(this, target as never, effectiveOpts as never);
   }
@@ -115,10 +115,20 @@ interface ShoveReq {
 let shoveTick = -1;
 let pendingShoves: ShoveReq[] = [];
 
-function registerShove(creep: Creep, targetPos: RoomPosition): void {
-  const dir = creep.pos.getDirectionTo(targetPos);
-  const next = stepInDirection(creep.pos, dir);
-  if (!next) return;
+function registerShove(creep: Creep, targetPos: RoomPosition, range: number): void {
+  // Find the creep on our ACTUAL next path step, not the straight-line direction to the
+  // final target. moveTo routes around static obstacles, so the real next tile is usually
+  // not the one getDirectionTo(target) points at — shoving by straight line displaces an
+  // innocent bystander and leaves the true blocker in place (the exact failure that keeps
+  // single-file roads jammed). A short road-aware pathfind (the same cost matrix moveTo
+  // uses) yields the genuine next step.
+  const result = PathFinder.search(
+    creep.pos,
+    { pos: targetPos, range },
+    { roomCallback: roadCostCallback, plainCost: 2, swampCost: 10, maxOps: 1000 }
+  );
+  const next = result.path[0];
+  if (!next || next.roomName !== creep.pos.roomName) return;
   const blocker = next.lookFor(LOOK_CREEPS).find((c) => c.my);
   if (!blocker) return;
 
@@ -178,24 +188,16 @@ function isOnWorkingPost(creep: Creep): boolean {
     creep.memory.role === ROLE_HAULER || creep.memory.role === ROLE_REMOTE_HAULER;
   if (!isHauler && creep.pos.findInRange(FIND_SOURCES, 1).length > 0) return true;
   const ctrl = creep.room.controller;
-  if (creep.memory.role === ROLE_UPGRADER && ctrl && creep.pos.inRangeTo(ctrl, 3)) return true;
+  // Pin an upgrader only while it is actually upgrading (working === true) AND in range of
+  // the controller — NOT while it is fetching energy and merely transiting past. Pinning
+  // every upgrader within range 3 (up to 48 tiles) turned passing/queued upgraders into
+  // immovable blockers and gridlocked the single-file approach to the controller.
+  if (
+    creep.memory.role === ROLE_UPGRADER &&
+    creep.memory.working &&
+    ctrl &&
+    creep.pos.inRangeTo(ctrl, 3)
+  )
+    return true;
   return false;
-}
-
-function stepInDirection(pos: RoomPosition, dir: DirectionConstant): RoomPosition | null {
-  const deltas: Record<DirectionConstant, [number, number]> = {
-    [TOP]: [0, -1],
-    [TOP_RIGHT]: [1, -1],
-    [RIGHT]: [1, 0],
-    [BOTTOM_RIGHT]: [1, 1],
-    [BOTTOM]: [0, 1],
-    [BOTTOM_LEFT]: [-1, 1],
-    [LEFT]: [-1, 0],
-    [TOP_LEFT]: [-1, -1],
-  };
-  const [dx, dy] = deltas[dir];
-  const x = pos.x + dx;
-  const y = pos.y + dy;
-  if (x < 0 || x > 49 || y < 0 || y > 49) return null;
-  return new RoomPosition(x, y, pos.roomName);
 }

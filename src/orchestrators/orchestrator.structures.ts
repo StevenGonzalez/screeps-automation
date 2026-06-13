@@ -206,15 +206,21 @@ function applyPlannedConstruction(room: Room) {
   );
 
   const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
+  // Pace perimeter expansion to repair capacity by gating on the weakest PERIMETER
+  // rampart only. Reducing over every rampart in the room (including freshly-placed
+  // on-top ramparts over spawns/storage, which start at ~1 hit) let a single new
+  // structure rampart force the cap to 0 and stall the perimeter from ever sealing.
+  const perimeterPosSet = new Set<string>(mem[perimeterKey] ?? []);
   const builtRamparts = room.find(FIND_MY_STRUCTURES, {
     filter: (s) => s.structureType === STRUCTURE_RAMPART,
   }) as StructureRampart[];
-  const weakestRampartHits = builtRamparts.reduce(
-    (min, r) => Math.min(min, r.hits),
+  const weakestPerimeterHits = builtRamparts.reduce(
+    (min, r) =>
+      perimeterPosSet.has(`${r.pos.x},${r.pos.y}`) ? Math.min(min, r.hits) : min,
     Infinity
   );
   const perimeterCap =
-    weakestRampartHits < RAMPART_HEALTH_GATE
+    weakestPerimeterHits < RAMPART_HEALTH_GATE
       ? 0
       : STRUCTURE_PLANNER.maxPerimeterConstructionSites;
   const rampartSites = sitesByType.get(STRUCTURE_RAMPART);

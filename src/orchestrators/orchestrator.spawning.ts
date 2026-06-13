@@ -244,7 +244,12 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 
   // Under a serious raid (healer-backed squad), defenders take the next spawn slot
   // before stationary miners and haulers — a dead miner respawns, a dead spawn does not.
-  if (threatSeverity === "high" && phase !== "bootstrap") {
+  // But keep a minimal economy alive first: if the room has no miner or no hauler at all,
+  // spawn those before defenders, or a raid that kills cheap defenders as fast as they
+  // spawn starves the colony into a death spiral with nothing left to fund the fight.
+  const hasEconomyFloor =
+    countByRoleInRoom(ROLE_MINER, room) >= 1 && countByRoleInRoom(ROLE_HAULER, room) >= 1;
+  if (threatSeverity === "high" && phase !== "bootstrap" && hasEconomyFloor) {
     if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
     if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
     if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
@@ -899,8 +904,21 @@ function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
   ] as BodyPartConstant[];
 }
 
+// Count creeps available to DEFEND this room: present in the room and NOT assigned to an
+// offensive op (offensiveTarget). Plain countByRoleInRoom also counts offensive-squad
+// members staging at home, so a forming attack made the room look defended and suppressed
+// real defenders (and conversely an offensive cleric satisfied the heal-target check for
+// fighters that had already marched away). Spawning-in-progress is still counted so two
+// idle spawns don't double-raise the same defender.
+function countDefendersInRoom(role: string, room: Room): number {
+  const present = getCreepsByRoleInRoom(role, room).filter(
+    (c) => !c.memory.offensiveTarget
+  ).length;
+  return present + getRoomSpawningCount(room, role);
+}
+
 function shouldSpawnKnight(room: Room, threatScore: number): boolean {
-  return countByRoleInRoom(ROLE_KNIGHT, room) < Math.min(3, Math.ceil(threatScore / 40));
+  return countDefendersInRoom(ROLE_KNIGHT, room) < Math.min(3, Math.ceil(threatScore / 40));
 }
 
 function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
@@ -916,7 +934,7 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function shouldSpawnWizard(room: Room, threatScore: number): boolean {
-  return countByRoleInRoom(ROLE_WIZARD, room) < Math.min(2, Math.ceil(threatScore / 60));
+  return countDefendersInRoom(ROLE_WIZARD, room) < Math.min(2, Math.ceil(threatScore / 60));
 }
 
 function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
@@ -933,9 +951,10 @@ function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
 
 function shouldSpawnCleric(room: Room, threatScore: number): boolean {
   if (threatScore < 100) return false;
-  const fighters = countByRoleInRoom(ROLE_KNIGHT, room) + countByRoleInRoom(ROLE_WIZARD, room);
+  const fighters =
+    countDefendersInRoom(ROLE_KNIGHT, room) + countDefendersInRoom(ROLE_WIZARD, room);
   if (fighters === 0) return false;
-  return countByRoleInRoom(ROLE_CLERIC, room) < 1;
+  return countDefendersInRoom(ROLE_CLERIC, room) < 1;
 }
 
 function spawnCleric(room: Room, spawn: StructureSpawn): boolean {

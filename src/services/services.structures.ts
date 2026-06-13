@@ -473,11 +473,18 @@ export function pruneRoadsUnderStructures(room: Room) {
   const roadsByPos = new Map<string, Structure[]>();
   for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
     const k = `${s.pos.x},${s.pos.y}`;
-    if (s.structureType !== STRUCTURE_ROAD) {
-      nonRoadPosSet.add(k);
-    } else {
+    if (s.structureType === STRUCTURE_ROAD) {
       if (!roadsByPos.has(k)) roadsByPos.set(k, []);
       roadsByPos.get(k)!.push(s);
+    } else if (
+      // Ramparts and containers are walkable, so a road beneath them is useful, not
+      // buried. Source containers sit on cardinal-connector endpoints and the perimeter
+      // ring / on-top ramparts overlap arteries — pruning those roads tore up the very
+      // lanes the haulers depend on and churned them every plan pass.
+      s.structureType !== STRUCTURE_RAMPART &&
+      s.structureType !== STRUCTURE_CONTAINER
+    ) {
+      nonRoadPosSet.add(k);
     }
   }
 
@@ -540,51 +547,6 @@ export function removeConnectorRoads(room: Room) {
       delete room.memory.plannedStructuresMeta[key];
     }
   }
-}
-
-// Reap orphan roads: built roads with no entry in any current plan. Earlier planner
-// versions (the structure-wrap carpet, the cluster-connector web) laid hundreds of
-// roads whose keys were later pruned away — leaving the built roads on the map with
-// nothing to drive a key-based teardown, and the towers/repairers maintaining them
-// forever. This is the only sweep that works on them: it scans actual structures, not
-// keys. A road is kept if it is in the current plan OR inside the base footprint (the
-// stamp's internal lanes aren't tracked in plannedStructures, so they're protected by
-// position). Everything else outside the walls is destroyed. Capped per pass so tearing
-// down a large backlog doesn't spike CPU in a single tick.
-const MAX_ORPHAN_ROAD_DESTROYS_PER_PASS = 120;
-
-export function removeOrphanRoads(room: Room): number {
-  if (!room.memory.plannedStructures) return 0;
-  const mem = room.memory.plannedStructures as Record<string, string[]>;
-
-  // Positions the planner currently intends to be a road — always kept.
-  const planned = new Set<string>();
-  for (const key of Object.keys(mem)) {
-    if (structureTypeForKey(key) !== STRUCTURE_ROAD) continue;
-    for (const p of mem[key]) planned.add(p);
-  }
-
-  // Base footprint: the stamp's internal lanes aren't all tracked in plannedStructures,
-  // so protect every road near the base core by position. A generous radius around each
-  // spawn keeps the whole base (stamp + merchant rings sit within ~8 of the anchor) and
-  // ensures the reaper only ever reaches the open-terrain field well outside the walls.
-  const BASE_RADIUS = 12;
-  const spawns = room.find(FIND_MY_SPAWNS);
-
-  let destroyed = 0;
-  for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
-    if (s.structureType !== STRUCTURE_ROAD) continue;
-    const x = s.pos.x;
-    const y = s.pos.y;
-    if (planned.has(`${x},${y}`)) continue;
-    const nearBase = spawns.some(
-      (sp) => Math.max(Math.abs(sp.pos.x - x), Math.abs(sp.pos.y - y)) <= BASE_RADIUS
-    );
-    if (nearBase) continue;
-    try { (s as any).destroy(); } catch (e) {}
-    if (++destroyed >= MAX_ORPHAN_ROAD_DESTROYS_PER_PASS) break;
-  }
-  return destroyed;
 }
 
 export function removePlannedStructureFromMemory(

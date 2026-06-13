@@ -38,7 +38,18 @@ function processRoomMemory(room: Room) {
   if (!room.controller || !room.controller.my) return;
   const scanInterval =
     room.controller.level <= 3 ? DEVELOPING_SCAN_INTERVAL : ESTABLISHED_SCAN_INTERVAL;
-  if (!room.memory.lastScan || Game.time - room.memory.lastScan > scanInterval) {
+  // Self-heal the cache the moment a structure is destroyed. Otherwise a tower/container/
+  // spawn killed mid-interval leaves a dead ID cached for up to 100 ticks; consumers that
+  // deref it (Game.getObjectById -> null) throw under runSafe and silently go dark for the
+  // window — worst exactly during the attack that destroyed it.
+  const structureDestroyed = room
+    .getEventLog()
+    .some((e) => e.event === EVENT_OBJECT_DESTROYED && e.data.type !== "creep");
+  if (
+    structureDestroyed ||
+    !room.memory.lastScan ||
+    Game.time - room.memory.lastScan > scanInterval
+  ) {
     const spawns = room.find(FIND_MY_SPAWNS);
     room.memory.spawnId = spawns.length > 0 ? spawns[0].id : undefined;
 

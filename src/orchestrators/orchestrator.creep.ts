@@ -84,7 +84,14 @@ export function loop() {
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
     const handler = ROLE_HANDLERS[creep.memory.role];
-    if (handler) handler(creep);
+    if (handler) {
+      handler(creep);
+    } else if (Game.time % 100 === 0) {
+      // A creep whose role isn't in the map sits inert every tick, burning a population
+      // slot. Surface it (throttled) instead of failing silently — usually a renamed or
+      // never-wired role constant.
+      console.log(`[creep] no handler for role "${creep.memory.role}" on ${name}`);
+    }
   }
   // After every role has issued its moves, resolve queued shoves authoritatively so
   // stuck creeps and their blockers swap places instead of gridlocking the lane.
