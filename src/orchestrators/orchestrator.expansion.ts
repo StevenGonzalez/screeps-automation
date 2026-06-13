@@ -23,6 +23,7 @@ interface ExpansionRuntime extends ExpansionData {
   pausedUntil?: number;
   needsDefender?: boolean;
   abortReason?: string;
+  bootstrapStartedAt?: number;   // when bootstrapping actually began (not when claiming started)
 }
 
 // ── Bootstrap-completion / safety tuning ──────────────────────────────────────
@@ -216,15 +217,23 @@ function advanceExpansionQueue(): void {
   if (Game.gcl.level <= ownedRooms.length) return;
   if (Game.cpu.bucket < MIN_BUCKET) return;
 
-  while (queue.length > 0) {
+  // Bound the scan to one pass over the current entries so re-queued (still-contested)
+  // targets don't spin forever within a single tick.
+  let toExamine = queue.length;
+  while (queue.length > 0 && toExamine-- > 0) {
     const next = queue.shift()!;
 
-    // Skip targets we already own or that turned hostile while waiting.
+    // Already ours — drop it permanently, nothing left to claim.
     const targetRoom = Game.rooms[next.roomName];
     if (targetRoom?.controller?.my) continue;
-    if (targetRoom && isRoomContested(targetRoom)) continue;
+
+    // Momentarily contested (a passing invader / brief enemy reservation) — re-queue at
+    // the back to retry later rather than silently discarding a target the user chose.
     const rec = findRemoteRecord(next.roomName);
-    if (rec && isRemoteContested(rec)) continue;
+    if ((targetRoom && isRoomContested(targetRoom)) || (rec && isRemoteContested(rec))) {
+      queue.push(next);
+      continue;
+    }
 
     // Resolve a healthy funding room: honour an explicit choice if still healthy,
     // else pick the closest healthy owned room.
@@ -332,8 +341,12 @@ function manageActiveExpansion() {
 
   // ── Bootstrap phase: defense + completion ───────────────────────────────────
   if (exp.phase === "bootstrapping") {
+    // Stamp the bootstrap start the first tick we observe this phase, so the timeout
+    // measures actual bootstrap time — not claim travel/reservation time. A slow claim
+    // used to eat the bootstrap budget and abort a perfectly healthy child.
+    if (exp.bootstrapStartedAt === undefined) exp.bootstrapStartedAt = Game.time;
     // Hard timeout: a bootstrap that never completes is throwing energy away.
-    if (Game.time - exp.startedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
+    if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
       clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks`);
       return;
     }

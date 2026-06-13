@@ -116,8 +116,10 @@ export function applyCastleStamp(room: Room): void {
 
     const posKey = `${absX},${absY}`;
 
-    // Non-road cells skip positions already claimed by another stamp cell
-    if (cell.type !== "road" && occupiedSet.has(posKey)) continue;
+    // Skip any cell whose tile is already claimed by a planned structure — roads included,
+    // so we don't plan a road on top of a (possibly wall-relocated) spawn/storage/etc. tile
+    // (only structures are added to occupiedSet, so road-on-road is unaffected).
+    if (occupiedSet.has(posKey)) continue;
 
     let finalX = absX;
     let finalY = absY;

@@ -12,6 +12,7 @@ import {
 const REGROUP_HP_THRESHOLD = 0.85; // squad must heal to this avg before re-engaging
 const RALLY_RANGE = 8;             // distance from spawn that counts as "rallied"
 const CLEARED_TICKS_NEEDED = 10;   // ticks a room stays empty before the op completes
+const INTEL_TTL = 20_000;          // drop intel for rooms not seen in this long (memory cap)
 const FORMING_TIMEOUT = 1500;      // ticks to assemble a squad before aborting
 const FRAGMENT_TIMEOUT = 300;      // ticks split across rooms before pulling back to regroup
 const KITE_RANGE = 3;              // wizards hold the enemy at this range
@@ -620,6 +621,12 @@ function scanIntel(): void {
       safeMode: room.controller?.safeMode,
       threatLevel: evaluateRoomThreatLevel(room),
     };
+  }
+
+  // Prune stale intel so the map can't grow unbounded across the bot's lifetime (every
+  // distinct room ever scouted/transited would otherwise accumulate toward the 2MB cap).
+  for (const rn in Memory.intel) {
+    if (Game.time - (Memory.intel[rn].lastSeen ?? 0) > INTEL_TTL) delete Memory.intel[rn];
   }
 }
 

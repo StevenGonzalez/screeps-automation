@@ -65,7 +65,10 @@ export function runHauler(creep: Creep) {
       return;
     }
 
-    acquireEnergy(creep);
+    // Only tap the storage/link buffer when the base actually needs filling. If the base
+    // is full and the live producers are dry there's nothing useful to haul — pulling from
+    // storage just to deposit it straight back is a pointless storage→storage shuffle.
+    if (baseNeedsEnergy) acquireEnergy(creep);
     return;
   }
 

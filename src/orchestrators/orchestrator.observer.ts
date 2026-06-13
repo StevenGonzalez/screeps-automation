@@ -7,6 +7,9 @@ import {
 const POWER_BANK_MIN_POWER = 2000;
 const POWER_BANK_MIN_TICKS = 3000;
 const POWER_FORMING_TIMEOUT = 2000;
+// Abandon a crack that never lands (squad too weak, or pushed out of the room so we lose
+// the eyes that would detect the bank breaking) instead of hanging in 'cracking' forever.
+const CRACKING_TIMEOUT = 3000;
 const COLLECTING_TIMEOUT = 300;
 const SQUAD_ATTACKERS = 2;
 const SQUAD_HEALERS = 3;
@@ -130,6 +133,7 @@ function updatePowerOp(op: PowerBankOp) {
         carriers >= op.requiredCarriers
       ) {
         op.phase = "cracking";
+        op.crackingStartedAt = Game.time;
         console.log(`[Power] Op #${op.id} squad formed — cracking ${op.roomName}`);
       }
       break;
@@ -138,6 +142,12 @@ function updatePowerOp(op: PowerBankOp) {
     case "cracking": {
       if (members.length === 0) {
         console.log(`[Power] Op #${op.id} all members lost — aborting`);
+        op.phase = "done";
+        return;
+      }
+      if (Game.time - (op.crackingStartedAt ?? op.startedAt) > CRACKING_TIMEOUT) {
+        console.log(`[Power] Op #${op.id} cracking timed out (${op.roomName}) — aborting`);
+        disbandSquad(op.id);
         op.phase = "done";
         return;
       }

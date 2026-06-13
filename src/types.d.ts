@@ -36,6 +36,7 @@ declare global {
     requiredAttackers: number;
     requiredHealers: number;
     requiredCarriers: number;
+    crackingStartedAt?: number;
     collectingStartedAt?: number;
   }
 
@@ -211,7 +212,6 @@ declare global {
     plannedStructures?: Record<string, string[]>;
     plannedStructuresMeta?: Record<string, { createdAt: number }>;
     upgradeContainerId?: Id<StructureContainer>;
-    storagePositions?: string[];
     // Remote harvesting
     pendingScoutRooms?: string[];
     remoteRooms?: RemoteRoomData[];
