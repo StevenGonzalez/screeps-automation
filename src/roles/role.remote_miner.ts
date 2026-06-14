@@ -8,10 +8,11 @@
  *             creep.memory.remoteSourceId = Id<Source> to harvest
  */
 
-import { getThreatInfo } from "../services/services.combat";
+import { getThreatInfo, isInvaderCreep, isPlayerCreep } from "../services/services.combat";
 import {
-  isAssignedRemoteHostile,
+  isAssignedRemoteContested,
   flagRemoteInvader,
+  flagRemotePlayer,
   clearRemoteInvader,
 } from "../services/services.creep";
 
@@ -23,21 +24,24 @@ export function runRemoteMiner(creep: Creep) {
     return;
   }
 
-  // Retreat from danger: if the remote is flagged hostile, or we're in it with live
-  // hostiles, fall back home rather than harvesting next to invaders and dying. An
-  // unarmed outrider can't win — wait at home until the room clears.
+  // Record any threat we can see so the room gets flagged (Invader → defender; player →
+  // avoid), which is what stops us re-entering on later ticks.
   const inTarget = creep.room.name === targetRoom;
   const threat = inTarget ? getThreatInfo(creep.room) : null;
-  if (isAssignedRemoteHostile(creep) || (threat && threat.score > 0)) {
-    // An Invader (not a player) — flag the room so the home raises a knight to clear it.
-    if (threat && threat.hostiles.some((h) => h.owner.username === "Invader")) {
-      flagRemoteInvader(creep);
-    }
+  if (threat && threat.score > 0) {
+    if (threat.hostiles.some(isInvaderCreep)) flagRemoteInvader(creep);
+    else if (threat.hostiles.some(isPlayerCreep)) flagRemotePlayer(creep);
+  }
+
+  // Stay home while the remote is contested. Don't ferry an unarmed outrider in to die — and
+  // crucially don't ping-pong (in → attacked → flee → towers heal → back in), which drains
+  // tower energy. Wait until the flag clears (Invader killed by a defender, or window lapses).
+  if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
     if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
     return;
   }
 
-  // In the room and safe — the defender (if any) did its job; let mining resume.
+  // In the room and safe — a defender cleared it (or the flag lapsed); let mining resume.
   if (inTarget) clearRemoteInvader(creep);
 
   // Travel to the target room

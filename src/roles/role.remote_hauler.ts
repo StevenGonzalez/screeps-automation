@@ -9,11 +9,12 @@
 
 import {
   putSurplusEnergyToWork,
-  isAssignedRemoteHostile,
+  isAssignedRemoteContested,
   flagRemoteInvader,
+  flagRemotePlayer,
   clearRemoteInvader,
 } from "../services/services.creep";
-import { getThreatInfo } from "../services/services.combat";
+import { getThreatInfo, isInvaderCreep, isPlayerCreep } from "../services/services.combat";
 
 export function runRemoteHauler(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
@@ -23,16 +24,17 @@ export function runRemoteHauler(creep: Creep) {
     return;
   }
 
-  // Retreat from danger: if the remote is flagged hostile, or we're in it with live
-  // hostiles, head home instead of loitering by a source under fire. Deliver any load
-  // we're carrying; otherwise just fall back and wait for the room to clear.
+  // Record any visible threat so the room gets flagged (Invader → defender; player → avoid).
   const inTarget = creep.room.name === targetRoom;
   const threat = inTarget ? getThreatInfo(creep.room) : null;
-  if (isAssignedRemoteHostile(creep) || (threat && threat.score > 0)) {
-    // An Invader (not a player) — flag the room so the home raises a knight to clear it.
-    if (threat && threat.hostiles.some((h) => h.owner.username === "Invader")) {
-      flagRemoteInvader(creep);
-    }
+  if (threat && threat.score > 0) {
+    if (threat.hostiles.some(isInvaderCreep)) flagRemoteInvader(creep);
+    else if (threat.hostiles.some(isPlayerCreep)) flagRemotePlayer(creep);
+  }
+
+  // Stay home while the remote is contested. Deliver any load we're carrying, then wait —
+  // don't loiter by a source under fire, and don't ping-pong in and out draining tower energy.
+  if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
     if (creep.store[RESOURCE_ENERGY] > 0) {
       depositEnergy(creep, homeRoom);
     } else if (creep.room.name !== homeRoom) {

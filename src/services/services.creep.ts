@@ -916,20 +916,11 @@ export function findUnclaimedHaulerAssignment(
   return null;
 }
 
-// True when this creep's assigned remote room is currently flagged hostile in home
-// memory (scout / visibility marked it). Remote miners and haulers use this to stay home
-// instead of pathing into invaders, so we stop feeding unarmed creeps a free death.
-export function isAssignedRemoteHostile(creep: Creep): boolean {
-  const home = creep.memory.homeRoom;
-  const target = creep.memory.targetRoom;
-  if (!home || !target) return false;
-  const entry = Memory.rooms[home]?.remoteRooms?.find((r) => r.roomName === target);
-  return entry?.hostile === true;
-}
-
 // How long an Invader sighting keeps a remote flagged for defence (cleared early once a
-// remote creep works the room unmolested again).
+// remote creep works the room unmolested again), and how long a player sighting keeps it
+// flagged hostile (matches the scout's SCOUT_HOSTILE_DURATION).
 const REMOTE_INVADER_WINDOW = 1500;
+const REMOTE_PLAYER_WINDOW = 2000;
 
 function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
   const home = creep.memory.homeRoom;
@@ -938,10 +929,32 @@ function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
   return Memory.rooms[home]?.remoteRooms?.find((r) => r.roomName === target);
 }
 
+// True when this creep's assigned remote is contested — a player has it flagged hostile, OR
+// an Invader was seen recently. Remote miners/haulers must NOT re-enter while this holds, or
+// they ping-pong: in → attacked → flee home → towers heal → back in, draining tower energy
+// and accomplishing nothing. They wait at home until the flag clears (Invader killed by a
+// defender, or the window elapses).
+export function isAssignedRemoteContested(creep: Creep): boolean {
+  const entry = assignedRemoteEntry(creep);
+  if (!entry) return false;
+  if (entry.hostile) return true;
+  return entry.invaderUntil !== undefined && entry.invaderUntil > Game.time;
+}
+
 // Flag this creep's remote room as Invader-contested so the home raises a defender.
 export function flagRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
   if (entry) entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
+}
+
+// Flag this creep's remote room as player-hostile so we avoid it (we don't pick fights with
+// players over a remote — no defender is raised, the room is simply abandoned for the window).
+export function flagRemotePlayer(creep: Creep): void {
+  const entry = assignedRemoteEntry(creep);
+  if (entry) {
+    entry.hostile = true;
+    entry.hostileUntil = Game.time + REMOTE_PLAYER_WINDOW;
+  }
 }
 
 // Clear the Invader flag once a remote creep is working the room unmolested again, so the

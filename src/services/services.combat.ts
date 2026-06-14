@@ -287,6 +287,16 @@ export function isSourceKeeper(creep: Creep): boolean {
   return creep.owner?.username === "Source Keeper";
 }
 
+export function isInvaderCreep(creep: Creep): boolean {
+  return creep.owner?.username === "Invader";
+}
+
+// A rival player's creep — anything that isn't NPC (Source Keeper / Invader).
+export function isPlayerCreep(creep: Creep): boolean {
+  const u = creep.owner?.username;
+  return u !== undefined && u !== "Source Keeper" && u !== "Invader";
+}
+
 // ── Room threat evaluation (WarCouncil) ─────────────────────────────────────────
 //
 // Scores a non-owned room 0 (trivial) … 10 (fortress) for offensive target ranking.

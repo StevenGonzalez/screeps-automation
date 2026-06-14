@@ -1,4 +1,5 @@
 import { seekBoost } from "../services/services.combat";
+import { clearRemoteInvader } from "../services/services.creep";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
 
 const RETREAT_THRESHOLD = 0.2;
@@ -43,6 +44,10 @@ export function runKnight(creep: Creep) {
 
   const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
   if (!hostile) {
+    // Reached the assigned room and it's clear — a remote defender has secured it, so lift
+    // the Invader flag and let the miners/haulers come back (no-op for a child-room defender,
+    // which has no remote-room entry).
+    if (creep.memory.targetRoom === creep.room.name) clearRemoteInvader(creep);
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn && !creep.pos.isNearTo(spawn)) {
       creep.moveTo(spawn, { reusePath: 20 });
