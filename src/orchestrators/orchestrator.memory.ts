@@ -1,3 +1,5 @@
+import { isSourceKeeperRoom } from "../services/services.combat";
+
 const REMOTE_RESCAN_INTERVAL = 3000;
 const DEVELOPING_SCAN_INTERVAL = 10;
 const ESTABLISHED_SCAN_INTERVAL = 100;
@@ -116,6 +118,8 @@ function processRoomMemory(room: Room) {
         mineralContainers.length > 0
           ? (mineralContainers[0].id as Id<StructureContainer>)
           : undefined;
+    } else {
+      room.memory.mineralContainerId = undefined;
     }
 
     const observers = byType<StructureObserver>(STRUCTURE_OBSERVER);
@@ -180,7 +184,7 @@ function discoverAdjacentRooms(room: Room) {
     const adjacentName = exits[dir as ExitKey];
     if (!adjacentName || knownNames.has(adjacentName)) continue;
 
-    // Skip source-keeper and highway rooms (coordinates both divisible by 5)
+    // Skip source-keeper rooms — unguarded remote miners/reservers would die there.
     if (isSourceKeeperRoom(adjacentName)) continue;
 
     room.memory.pendingScoutRooms.push(adjacentName);
@@ -239,12 +243,3 @@ function cleanupEstablishedExpansion() {
 }
 
 type ExitKey = "1" | "3" | "5" | "7";
-
-function isSourceKeeperRoom(roomName: string): boolean {
-  const match = roomName.match(/^[WE](\d+)[NS](\d+)$/);
-  if (!match) return false;
-  const x = parseInt(match[1], 10) % 10;
-  const y = parseInt(match[2], 10) % 10;
-  // SK rooms: both coordinates land in the 4-5 range of each 10-room sector
-  return (x === 4 || x === 5) && (y === 4 || y === 5);
-}

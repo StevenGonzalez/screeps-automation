@@ -54,6 +54,10 @@ const NETWORK_CONFIG = {
 
 const BASE_MINERALS: MineralConstant[] = ['H', 'O', 'Z', 'K', 'U', 'L', 'X'];
 
+// Drop a queued inter-room send that hasn't gone through after this many ticks so a
+// send that can't be filled or paid for never permanently freezes the room's balancing.
+const SEND_STALL_TIMEOUT = 1500;
+
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
 export function loop() {
@@ -195,6 +199,21 @@ function buyMissingGhodium(room: Room, terminal: StructureTerminal): boolean {
 function executePendingSend(room: Room, terminal: StructureTerminal): void {
   const pending = room.memory.pendingSend;
   if (!pending) return;
+
+  // Abandon a send that can never complete (terminal can't be filled, or lacks the
+  // energy to pay a non-energy transfer fee). Without this it would block forever and,
+  // because every balancing pass skips rooms with a pendingSend, freeze this room out
+  // of all energy/mineral/ghodium balancing indefinitely.
+  if (pending.queuedAt === undefined) {
+    pending.queuedAt = Game.time;
+  } else if (Game.time - pending.queuedAt > SEND_STALL_TIMEOUT) {
+    console.log(
+      `[Network] Abandoning stuck send in ${room.name} (${pending.amount} ${pending.resource} → ${pending.to})`
+    );
+    delete room.memory.pendingSend;
+    return;
+  }
+
   if (terminal.cooldown > 0) return;
 
   const rc = pending.resource as ResourceConstant;
@@ -388,7 +407,10 @@ function attemptMineralSale(
   // terminal, while expensive ones would be dumped far below value.
   const history = Game.market.getHistory(mineralType);
   const avgPrice = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
-  let bestPrice = avgPrice !== undefined ? avgPrice * TERMINAL_CONFIG.MIN_PRICE_RATIO : 0;
+  // No price history — don't sell, or a 0 floor would dump the whole stock at near-zero
+  // to the first buy order. Wait for history rather than selling blind.
+  if (avgPrice === undefined) return;
+  let bestPrice = avgPrice * TERMINAL_CONFIG.MIN_PRICE_RATIO;
   let bestOrderId: string | null = null;
   let bestOrderRoom = "";
   let bestOrderAmount = 0;

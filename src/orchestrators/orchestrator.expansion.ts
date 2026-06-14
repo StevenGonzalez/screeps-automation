@@ -1,5 +1,5 @@
 import { getThreatInfo } from "../services/services.combat";
-import { ROLE_MINER, ROLE_HAULER } from "../config/config.roles";
+import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles";
 
 // Closes the growth loop: when GCL frees a colony slot and a healthy home room
 // can fund it, automatically claim the best scouted candidate — no console command.
@@ -334,8 +334,21 @@ function manageActiveExpansion() {
       return;
     }
     if (Game.time - exp.startedAt > CLAIM_TIMEOUT) {
-      clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
-      return;
+      // Don't abort while a conqueror has actually reached the target room — the claim
+      // may commit this very tick. Clearing now would delete the expansion record the
+      // same tick the room becomes ours, orphaning it at RCL 1 with no bootstrap. The
+      // timeout still fires for genuinely doomed claims (unreachable target / perpetual
+      // enemy reservation), where the conqueror never makes it into the room.
+      const claimerInRoom = Object.values(Game.creeps).some(
+        (c) =>
+          c.memory.role === ROLE_CONQUEROR &&
+          c.memory.targetRoom === exp.roomName &&
+          c.room.name === exp.roomName
+      );
+      if (!claimerInRoom) {
+        clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
+        return;
+      }
     }
   }
 

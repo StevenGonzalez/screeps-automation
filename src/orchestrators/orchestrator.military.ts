@@ -893,6 +893,12 @@ function anchorOnRampart(creep: Creep, anchorPos: RoomPosition, range: number): 
     }
   }
   if (!best) return isOnRampart(creep);
+  // For an active heal/fire/melee anchor (range > 0), don't commit to a rampart that
+  // sits outside the effective range of the target — that would strand the defender on
+  // cover but out of heal/fire range and the caller's `return` skips closing in. Leave
+  // cover and let the caller engage. (range 0 is idle positioning at the rally, where
+  // taking the nearest rampart is still correct.)
+  if (range > 0 && bestDist > range) return false;
   if (!creep.pos.isEqualTo(best.pos)) creep.moveTo(best, { range: 0, reusePath: 5 });
   return true;
 }

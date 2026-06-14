@@ -78,7 +78,10 @@ export function runMiner(creep: Creep) {
 }
 
 function findAdjacentLink(creep: Creep): StructureLink | null {
-  const links = creep.pos.findInRange(FIND_MY_STRUCTURES, 2, {
+  // Range 1 only: a stationary miner can transfer only to an adjacent link. Searching
+  // range 2 would pick a link the miner can never reach, making transfer fail every
+  // tick and stall harvesting.
+  const links = creep.pos.findInRange(FIND_MY_STRUCTURES, 1, {
     filter: (s): s is StructureLink => s.structureType === STRUCTURE_LINK,
   }) as StructureLink[];
   if (links.length === 0) return null;

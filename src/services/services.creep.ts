@@ -900,7 +900,12 @@ export function findUnclaimedMinerAssignment(
 export function findUnclaimedHaulerAssignment(
   room: Room
 ): StructureContainer | null {
-  const containers = getRoomContainers(room);
+  // Only assign miner (producer) containers. The hauler treats its assignment as a
+  // source to drain, so handing it the upgrade or mineral container would have it
+  // siphon energy away from upgraders straight back into spawn/extensions.
+  const minerIds = new Set(getMinerContainerIds(room).map((id) => id.toString()));
+  if (minerIds.size === 0) return null;
+  const containers = getRoomContainers(room).filter((c) => minerIds.has(c.id.toString()));
   const takenContainerIds = getAssignedContainerIdsByRole(room, ROLE_HAULER);
   for (const container of containers) {
     if (!takenContainerIds.has(container.id)) {
@@ -909,4 +914,15 @@ export function findUnclaimedHaulerAssignment(
     }
   }
   return null;
+}
+
+// True when this creep's assigned remote room is currently flagged hostile in home
+// memory (scout / visibility marked it). Remote miners and haulers use this to stay home
+// instead of pathing into invaders, so we stop feeding unarmed creeps a free death.
+export function isAssignedRemoteHostile(creep: Creep): boolean {
+  const home = creep.memory.homeRoom;
+  const target = creep.memory.targetRoom;
+  if (!home || !target) return false;
+  const entry = Memory.rooms[home]?.remoteRooms?.find((r) => r.roomName === target);
+  return entry?.hostile === true;
 }

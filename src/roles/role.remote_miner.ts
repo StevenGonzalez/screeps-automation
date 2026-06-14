@@ -8,11 +8,26 @@
  *             creep.memory.remoteSourceId = Id<Source> to harvest
  */
 
+import { getThreatInfo } from "../services/services.combat";
+import { isAssignedRemoteHostile } from "../services/services.creep";
+
 export function runRemoteMiner(creep: Creep) {
   const { targetRoom, homeRoom, remoteSourceId } = creep.memory;
 
   if (!targetRoom || !homeRoom || !remoteSourceId) {
     creep.suicide();
+    return;
+  }
+
+  // Retreat from danger: if the remote is flagged hostile, or we're in it with live
+  // hostiles, fall back home rather than harvesting next to invaders and dying. An
+  // unarmed outrider can't win — wait at home until the room clears (scouts re-clear
+  // the flag once it's safe).
+  if (
+    isAssignedRemoteHostile(creep) ||
+    (creep.room.name === targetRoom && getThreatInfo(creep.room).score > 0)
+  ) {
+    if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
     return;
   }
 

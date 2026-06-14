@@ -4,6 +4,7 @@ declare global {
     amount: number;     // what the receiver gets
     loadTarget: number; // how much to pre-load in terminal (amount + fee for energy; just amount for minerals)
     to: string;         // destination room name
+    queuedAt?: number;  // tick the send was first attempted; used to abandon a stuck send
   }
 
   interface LabQueueEntry {

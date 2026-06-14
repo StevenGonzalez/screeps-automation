@@ -19,6 +19,10 @@ export const SK_CONTEST_COOLDOWN = 1000;
 const SK_DISCOVERY_TIMEOUT = 3000;
 const SK_MIN_HOME_RCL = 7;
 const SK_MIN_HOME_ENERGY = 40_000;
+// The guardian body has a 5-group floor (RANGED_ATTACK+HEAL+2×MOVE = 500/group, see
+// buildSkGuardianBody), so a home whose energy capacity can't reach 2500 can never spawn
+// one and the op would silently stall until SK_DISCOVERY_TIMEOUT. Refuse up front instead.
+const SK_MIN_HOME_CAPACITY = 2_500;
 
 // Concurrency bounds. SK ops are funded per home room and never conflict across
 // different homes, so multiple run in parallel — but each op spawns a guardian +
@@ -113,10 +117,11 @@ export function launchSkOp(roomName: string): string | null {
       r.controller?.my &&
       (r.controller.level ?? 0) >= SK_MIN_HOME_RCL &&
       (r.storage?.store[RESOURCE_ENERGY] ?? 0) >= SK_MIN_HOME_ENERGY &&
+      r.energyCapacityAvailable >= SK_MIN_HOME_CAPACITY &&
       (opsPerHome[r.name] ?? 0) < SK_MAX_PER_HOME
   );
   if (candidates.length === 0) {
-    return `no owned room at RCL ${SK_MIN_HOME_RCL}+ with ${SK_MIN_HOME_ENERGY}+ stored energy and free SK capacity to fund it`;
+    return `no owned room at RCL ${SK_MIN_HOME_RCL}+ with ${SK_MIN_HOME_ENERGY}+ stored energy, ${SK_MIN_HOME_CAPACITY}+ spawn capacity, and free SK capacity to fund it`;
   }
 
   const home = candidates.reduce((best, r) =>

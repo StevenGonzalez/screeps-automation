@@ -7,13 +7,29 @@
  *             creep.memory.targetRoom = remote room to collect from
  */
 
-import { putSurplusEnergyToWork } from "../services/services.creep";
+import { putSurplusEnergyToWork, isAssignedRemoteHostile } from "../services/services.creep";
+import { getThreatInfo } from "../services/services.combat";
 
 export function runRemoteHauler(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
 
   if (!targetRoom || !homeRoom) {
     creep.suicide();
+    return;
+  }
+
+  // Retreat from danger: if the remote is flagged hostile, or we're in it with live
+  // hostiles, head home instead of loitering by a source under fire. Deliver any load
+  // we're carrying; otherwise just fall back and wait for the room to clear.
+  if (
+    isAssignedRemoteHostile(creep) ||
+    (creep.room.name === targetRoom && getThreatInfo(creep.room).score > 0)
+  ) {
+    if (creep.store[RESOURCE_ENERGY] > 0) {
+      depositEnergy(creep, homeRoom);
+    } else if (creep.room.name !== homeRoom) {
+      moveToRoom(creep, homeRoom);
+    }
     return;
   }
 
