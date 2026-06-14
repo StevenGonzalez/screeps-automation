@@ -282,6 +282,8 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Remote roles after local economy is stable
   if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
+  // Clear an Invader out of a remote before sending more miners into it.
+  if (shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
   if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
   if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
@@ -1229,6 +1231,52 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   if (res === OK) {
     console.log(`[Defense] Spawning child-room defender for ${exp.roomName}`);
   }
+  return res === OK;
+}
+
+// ── Remote-room invader defense ───────────────────────────────────────────────
+// Remote miners/haulers flag a remote (RemoteRoomData.invaderUntil) when they spot an
+// Invader. The home raises a single knight to clear it so remote income resumes; the knight
+// role travels to memory.targetRoom and engages. Bounded to one in-flight knight per remote;
+// player threats set `hostile` instead and we avoid them rather than send a lone knight.
+
+// The first contested remote of `room` that has no defender knight yet, or null.
+function findRemoteInvaderTarget(room: Room): string | null {
+  const remotes = room.memory.remoteRooms;
+  if (!remotes) return null;
+  for (const r of remotes) {
+    if (r.invaderUntil === undefined || r.invaderUntil <= Game.time) continue;
+    // Live knight list includes the spawning one (its memory is set at spawn time), so this
+    // bounds the count to a single defender per contested remote.
+    const defending = getCreepsByRole(ROLE_KNIGHT).some(
+      (c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName
+    );
+    if (!defending) return r.roomName;
+  }
+  return null;
+}
+
+function shouldSpawnRemoteDefender(room: Room): boolean {
+  return findRemoteInvaderTarget(room) !== null;
+}
+
+function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
+  const target = findRemoteInvaderTarget(room);
+  if (!target) return false;
+  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildKnightBody(allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const attackParts = body.filter((p) => p === ATTACK).length;
+  const boost = pickBoostCompound(room, "knight", attackParts);
+  const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_remote${Game.time}`, {
+    memory: {
+      role: ROLE_KNIGHT,
+      homeRoom: room.name,
+      targetRoom: target,
+      ...(boost ? { boostCompound: boost } : {}),
+    },
+  });
+  if (res === OK) console.log(`[Defense] Spawning remote defender for ${target}`);
   return res === OK;
 }
 

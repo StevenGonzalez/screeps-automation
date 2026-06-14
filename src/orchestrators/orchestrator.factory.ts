@@ -21,9 +21,9 @@
  *    wants a dedicated courier should: add a ROLE_FACTORY_HAULER handler in
  *    orchestrator.creep.ts, give orchestrator.spawning a spawn rule for it, and replace
  *    `commandCourier` below with a call into that role.
- *  - Selling commodities on the market is intentionally NOT handled here — that belongs in
- *    orchestrator.terminal.ts. We simply build a stockpile; the integrator can teach the
- *    terminal to vend commodities the same way it vends minerals today.
+ *  - Selling commodities on the market is handled in orchestrator.terminal.ts. To feed it,
+ *    the courier here routes evicted sellable commodities into the terminal (up to
+ *    COMMODITY_TERMINAL_STOCK) instead of storage, and the terminal vends them.
  *  - Factory levelling is handled by orchestrator.powercreep.ts (PWR_OPERATE_FACTORY).
  *    We only READ factory.level to gate tier-2 commodities.
  */
@@ -34,6 +34,8 @@ import {
   FACTORY_MIN_RESERVE_ENERGY,
   FACTORY_MAX_INPUT_LOAD,
   FACTORY_PRODUCT_EVICT_THRESHOLD,
+  MANAGED_COMMODITIES,
+  COMMODITY_TERMINAL_STOCK,
 } from "../config/config.factory";
 import { ROLE_HAULER } from "../config/config.roles";
 
@@ -242,12 +244,22 @@ function commandCourier(room: Room, factory: StructureFactory, recipe: Recipe | 
   );
 
   if (carried.length > 0) {
-    // If carrying the resource we want to load, take it to the factory; else dump to storage.
+    // If carrying the resource we want to load, take it to the factory. Otherwise route
+    // a sellable commodity to the terminal (up to its staging level) so the terminal can
+    // vend it; everything else (and any overflow past the staging level) goes to storage.
     const r = carried[0];
     if (load && r === load.resource) {
       if (courier.transfer(factory, r) === ERR_NOT_IN_RANGE) courier.moveTo(factory, { reusePath: 5 });
     } else {
-      if (courier.transfer(storage, r) === ERR_NOT_IN_RANGE) courier.moveTo(storage, { reusePath: 5 });
+      const terminal = room.terminal;
+      const dest =
+        MANAGED_COMMODITIES.has(r) &&
+        terminal &&
+        (terminal.store.getUsedCapacity(r) ?? 0) < COMMODITY_TERMINAL_STOCK &&
+        (terminal.store.getFreeCapacity(r) ?? 0) > 0
+          ? terminal
+          : storage;
+      if (courier.transfer(dest, r) === ERR_NOT_IN_RANGE) courier.moveTo(dest, { reusePath: 5 });
     }
     return;
   }

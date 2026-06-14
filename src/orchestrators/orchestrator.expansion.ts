@@ -11,21 +11,6 @@ import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles"
 // the lifecycle management below always runs so a manually-claimed expansion
 // (Game.arca.claim) finishes correctly too.
 
-// Extra runtime flags we hang off Memory.expansion. ExpansionData in types.d.ts
-// does NOT declare these yet, so we read/write them through this narrowed view.
-// NOTE (types.d.ts owner): add the following optional fields to interface
-// ExpansionData so these casts can be dropped:
-//   establishedAt?: number;        // (already present)
-//   pausedUntil?: number;          // bootstrap paused (child invaded) until this tick
-//   needsDefender?: boolean;       // home room should spawn a defender for roomName
-//   abortReason?: string;          // why a claim was abandoned (diagnostics only)
-interface ExpansionRuntime extends ExpansionData {
-  pausedUntil?: number;
-  needsDefender?: boolean;
-  abortReason?: string;
-  bootstrapStartedAt?: number;   // when bootstrapping actually began (not when claiming started)
-}
-
 // ── Bootstrap-completion / safety tuning ──────────────────────────────────────
 
 // A child room is "self-sufficient" (bootstrap → established) when ALL hold:
@@ -313,7 +298,7 @@ export function getExpansionQueue(): QueuedExpansion[] {
 // Runs EVERY tick regardless of autoExpand — manages whatever expansion is active
 // (whether auto-selected or set by Game.arca.claim).
 function manageActiveExpansion() {
-  const exp = Memory.expansion as ExpansionRuntime | undefined;
+  const exp = Memory.expansion;
   if (!exp) return;
 
   const child = Game.rooms[exp.roomName];
@@ -371,31 +356,19 @@ function manageActiveExpansion() {
         // home-room spawn rule can react. Settlers themselves retreat (role.settler).
         exp.pausedUntil = Game.time + BOOTSTRAP_INVASION_PAUSE;
         exp.needsDefender = true;
-        // NOTE (orchestrator.spawning owner): two requested changes when a child is
-        // invaded during bootstrap —
-        //  (1) shouldSpawnSettler() should `return false` while
-        //      Memory.expansion.pausedUntil > Game.time, so we stop feeding settlers
-        //      into the fight (they retreat on their own; see role.settler).
-        //  (2) when Memory.expansion.needsDefender is true, the funding home room
-        //      (Memory.expansion.homeRoom) should spawn a defender (knight/cleric)
-        //      with memory.targetRoom = Memory.expansion.roomName that travels to the
-        //      child room and engages.
-        // Neither rule exists yet; until added, the child relies on its own
-        // towers/defenders and settlers simply retreat.
+        // The spawn orchestrator consumes both flags: shouldSpawnSettler() halts settler
+        // production while pausedUntil is in the future, and needsChildRoomDefender()
+        // raises a knight (targetRoom = the child room) to clear it. Settlers retreat on
+        // their own meanwhile (see role.settler).
       } else {
         // Clear once the room is verifiably safe again.
         if (exp.needsDefender) exp.needsDefender = false;
         if (exp.pausedUntil && exp.pausedUntil <= Game.time) exp.pausedUntil = undefined;
       }
 
-      // Completion check — authoritative, explicit, documented criteria.
-      // NOTE (orchestrator.spawning owner): shouldSpawnSettler() currently flips
-      // phase to "established" as soon as ANY spawn exists in the child room. That is
-      // premature — it can happen at RCL 1 with no economy, stopping settlers before
-      // the room can sustain itself. Please REMOVE that early transition from
-      // shouldSpawnSettler() (just `return false` when a spawn exists / when phase is
-      // no longer "bootstrapping"); this orchestrator is now the single authority on
-      // the bootstrapping → established transition using the criteria below.
+      // Completion check — this orchestrator is the single authority on the
+      // bootstrapping → established transition (shouldSpawnSettler defers to it), using
+      // the authoritative self-sufficiency criteria below rather than "a spawn exists".
       if (isChildSelfSufficient(child)) {
         exp.phase = "established";
         exp.establishedAt = Game.time;

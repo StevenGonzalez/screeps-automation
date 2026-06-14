@@ -926,3 +926,27 @@ export function isAssignedRemoteHostile(creep: Creep): boolean {
   const entry = Memory.rooms[home]?.remoteRooms?.find((r) => r.roomName === target);
   return entry?.hostile === true;
 }
+
+// How long an Invader sighting keeps a remote flagged for defence (cleared early once a
+// remote creep works the room unmolested again).
+const REMOTE_INVADER_WINDOW = 1500;
+
+function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
+  const home = creep.memory.homeRoom;
+  const target = creep.memory.targetRoom;
+  if (!home || !target) return undefined;
+  return Memory.rooms[home]?.remoteRooms?.find((r) => r.roomName === target);
+}
+
+// Flag this creep's remote room as Invader-contested so the home raises a defender.
+export function flagRemoteInvader(creep: Creep): void {
+  const entry = assignedRemoteEntry(creep);
+  if (entry) entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
+}
+
+// Clear the Invader flag once a remote creep is working the room unmolested again, so the
+// home stops spawning defenders and mining resumes promptly.
+export function clearRemoteInvader(creep: Creep): void {
+  const entry = assignedRemoteEntry(creep);
+  if (entry && entry.invaderUntil !== undefined) entry.invaderUntil = undefined;
+}

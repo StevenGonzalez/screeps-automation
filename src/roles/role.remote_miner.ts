@@ -9,7 +9,11 @@
  */
 
 import { getThreatInfo } from "../services/services.combat";
-import { isAssignedRemoteHostile } from "../services/services.creep";
+import {
+  isAssignedRemoteHostile,
+  flagRemoteInvader,
+  clearRemoteInvader,
+} from "../services/services.creep";
 
 export function runRemoteMiner(creep: Creep) {
   const { targetRoom, homeRoom, remoteSourceId } = creep.memory;
@@ -21,15 +25,20 @@ export function runRemoteMiner(creep: Creep) {
 
   // Retreat from danger: if the remote is flagged hostile, or we're in it with live
   // hostiles, fall back home rather than harvesting next to invaders and dying. An
-  // unarmed outrider can't win — wait at home until the room clears (scouts re-clear
-  // the flag once it's safe).
-  if (
-    isAssignedRemoteHostile(creep) ||
-    (creep.room.name === targetRoom && getThreatInfo(creep.room).score > 0)
-  ) {
+  // unarmed outrider can't win — wait at home until the room clears.
+  const inTarget = creep.room.name === targetRoom;
+  const threat = inTarget ? getThreatInfo(creep.room) : null;
+  if (isAssignedRemoteHostile(creep) || (threat && threat.score > 0)) {
+    // An Invader (not a player) — flag the room so the home raises a knight to clear it.
+    if (threat && threat.hostiles.some((h) => h.owner.username === "Invader")) {
+      flagRemoteInvader(creep);
+    }
     if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
     return;
   }
+
+  // In the room and safe — the defender (if any) did its job; let mining resume.
+  if (inTarget) clearRemoteInvader(creep);
 
   // Travel to the target room
   if (creep.room.name !== targetRoom) {

@@ -92,7 +92,7 @@ function processLabSystem(room: Room) {
     if (!recipe) { ls.queue.shift(); return; }
     ls.activeCompound = next.compound;
     ls.inputCompounds = [recipe[0], recipe[1]];
-    ls.startStock = getStorageStockForCompound(next.compound, room);
+    ls.startStock = producedStock(next.compound, room, outputLabs);
     ls.targetAmount = next.amount;
     ls.lastProduced = 0;
     ls.lastProgressTick = Game.time;
@@ -101,8 +101,11 @@ function processLabSystem(room: Room) {
 
   if (!ls.inputCompounds) return;
 
-  // Check completion — measured against storage only, to match resolveChain's basis.
-  const produced = getStorageStockForCompound(ls.activeCompound, room) - (ls.startStock ?? 0);
+  // Check completion. Count product in storage AND in the output labs: runReaction
+  // deposits into the output lab, and the apothecary only drains it to storage once a
+  // lab fills past ~75%. Measuring storage alone lags real production, so the head would
+  // never pop (and the stall watchdog could abort a reaction that is in fact producing).
+  const produced = producedStock(ls.activeCompound, room, outputLabs) - (ls.startStock ?? 0);
   if (produced >= (ls.targetAmount ?? 0)) {
     ls.queue.shift();
     delete ls.activeCompound;
@@ -145,6 +148,15 @@ function processLabSystem(room: Room) {
       outputLab.runReaction(inputLabs[0], inputLabs[1]);
     }
   }
+}
+
+// Total amount of `compound` already produced this run: storage plus what's still sitting
+// in the output labs before the apothecary has hauled it to storage.
+function producedStock(compound: string, room: Room, outputLabs: StructureLab[]): number {
+  const rc = compound as ResourceConstant;
+  let total = room.storage?.store.getUsedCapacity(rc) ?? 0;
+  for (const lab of outputLabs) total += lab.store.getUsedCapacity(rc) ?? 0;
+  return total;
 }
 
 function refreshLabIdentity(room: Room) {

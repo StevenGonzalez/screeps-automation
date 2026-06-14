@@ -4,6 +4,7 @@
  */
 
 import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
+import { MANAGED_COMMODITIES } from "../config/config.factory";
 
 // ── Sell config ───────────────────────────────────────────────────────────────
 
@@ -94,18 +95,16 @@ function processTerminal(room: Room): void {
 
   if (terminal.store[RESOURCE_ENERGY] < TERMINAL_CONFIG.MIN_TERMINAL_ENERGY) return;
 
+  // Sell the room's own mineral surplus from the terminal.
   const mineralId = room.memory.mineralId;
-  if (!mineralId) return;
-  const mineral = Game.getObjectById(mineralId) as Mineral | null;
-  if (!mineral) {
-    room.memory.mineralId = undefined;
-    return;
-  }
-
-  const mineralType = mineral.mineralType;
-  const mineralAmount = terminal.store.getUsedCapacity(mineralType) ?? 0;
-  if (mineralAmount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD) {
-    attemptMineralSale(room, terminal, mineralType, mineralAmount);
+  const mineral = mineralId ? (Game.getObjectById(mineralId) as Mineral | null) : null;
+  if (mineralId && !mineral) room.memory.mineralId = undefined;
+  if (mineral) {
+    const mineralType = mineral.mineralType;
+    const mineralAmount = terminal.store.getUsedCapacity(mineralType) ?? 0;
+    if (mineralAmount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD) {
+      attemptMineralSale(room, terminal, mineralType, mineralAmount);
+    }
   }
 
   // Buy base minerals for lab chains when stock runs low
@@ -125,6 +124,10 @@ function processTerminal(room: Room): void {
       room.memory.lastGhodiumBuyTick = Game.time;
     }
   }
+
+  // Vend factory commodities last, so a steady stream of commodity deals can't keep the
+  // terminal on cooldown and starve the lab/nuker buys above.
+  attemptCommoditySale(room, terminal);
 }
 
 // ── Ghodium (nuker reserve) ─────────────────────────────────────────────────────
@@ -402,21 +405,36 @@ function attemptMineralSale(
   mineralType: MineralConstant,
   availableAmount: number
 ): void {
-  // MIN_PRICE_RATIO is a fraction of the recent market average, not an absolute credit
-  // floor — otherwise cheap minerals (avg < the flat floor) would never sell and clog the
-  // terminal, while expensive ones would be dumped far below value.
-  const history = Game.market.getHistory(mineralType);
+  sellResourceToMarket(
+    room,
+    terminal,
+    mineralType,
+    availableAmount,
+    TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT
+  );
+}
+
+// Sell up to `maxAmount` of `resource` from the terminal to the best nearby buy order,
+// provided that order pays at least MIN_PRICE_RATIO of the recent market average. Returns
+// true when a deal was placed (a deal puts the terminal on cooldown, so callers stop after
+// one). Skips resources with no price history rather than dumping at a zero floor.
+function sellResourceToMarket(
+  room: Room,
+  terminal: StructureTerminal,
+  resource: ResourceConstant,
+  availableAmount: number,
+  maxTradeAmount: number
+): boolean {
+  const history = Game.market.getHistory(resource);
   const avgPrice = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
-  // No price history — don't sell, or a 0 floor would dump the whole stock at near-zero
-  // to the first buy order. Wait for history rather than selling blind.
-  if (avgPrice === undefined) return;
+  if (avgPrice === undefined) return false;
   let bestPrice = avgPrice * TERMINAL_CONFIG.MIN_PRICE_RATIO;
   let bestOrderId: string | null = null;
   let bestOrderRoom = "";
   let bestOrderAmount = 0;
 
   const orders = Game.market.getAllOrders((order) => {
-    if (order.type !== ORDER_BUY || order.resourceType !== mineralType) return false;
+    if (order.type !== ORDER_BUY || order.resourceType !== resource) return false;
     if (!order.roomName) return false;
     return (
       Game.map.getRoomLinearDistance(room.name, order.roomName) <
@@ -433,23 +451,44 @@ function attemptMineralSale(
     }
   }
 
-  if (!bestOrderId) return;
+  if (!bestOrderId) return false;
 
   const tradeAmount = affordableTradeAmount(
     terminal,
     room.name,
     bestOrderRoom,
-    Math.min(availableAmount, bestOrderAmount, TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT)
+    Math.min(availableAmount, bestOrderAmount, maxTradeAmount)
   );
-  if (tradeAmount <= 0) return;
+  if (tradeAmount <= 0) return false;
 
   const result = Game.market.deal(bestOrderId, tradeAmount, room.name);
   if (result === OK) {
     console.log(
-      `[Terminal] ${room.name}: Sold ${tradeAmount} ${mineralType} @ ${bestPrice.toFixed(2)}`
+      `[Terminal] ${room.name}: Sold ${tradeAmount} ${resource} @ ${bestPrice.toFixed(2)}`
     );
-  } else if (result !== ERR_NOT_ENOUGH_RESOURCES && result !== ERR_FULL) {
-    console.log(`[Terminal] Market deal failed: ${result} for ${mineralType}`);
+    return true;
+  }
+  if (result !== ERR_NOT_ENOUGH_RESOURCES && result !== ERR_FULL) {
+    console.log(`[Terminal] Market deal failed: ${result} for ${resource}`);
+  }
+  return false;
+}
+
+// ── Commodity selling ───────────────────────────────────────────────────────────
+
+const COMMODITY_SELL_MIN_LOT = 100;   // don't bother dealing dust
+const COMMODITY_MAX_TRADE = 5_000;    // cap per market deal
+
+// Vend factory commodities the factory has staged in the terminal (see orchestrator.factory
+// routing evicted product here). One deal per tick — a deal cools the terminal down. Called
+// at the lowest priority so lab/nuker buys keep the terminal first.
+function attemptCommoditySale(room: Room, terminal: StructureTerminal): void {
+  if (terminal.cooldown > 0) return;
+  for (const c of MANAGED_COMMODITIES) {
+    const rc = c as ResourceConstant;
+    const amount = terminal.store.getUsedCapacity(rc) ?? 0;
+    if (amount < COMMODITY_SELL_MIN_LOT) continue;
+    if (sellResourceToMarket(room, terminal, rc, amount, COMMODITY_MAX_TRADE)) return;
   }
 }
 

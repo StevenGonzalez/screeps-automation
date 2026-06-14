@@ -127,6 +127,7 @@ declare global {
     pausedUntil?: number;     // bootstrap paused (child room contested) until this tick
     needsDefender?: boolean;  // home room should spawn a defender for the child room
     abortReason?: string;     // why an expansion was aborted (diagnostics)
+    bootstrapStartedAt?: number; // when bootstrapping actually began (not when claiming started)
   }
 
   // A pending expansion target waiting in the queue. homeRoom is optional: when
@@ -164,6 +165,9 @@ declare global {
     lastSeen: number;
     hostile: boolean;
     hostileUntil?: number;
+    // Set by a remote miner/hauler that spots an Invader (not a player) in the room, so
+    // the home raises a knight to clear it. Players set `hostile` instead and we avoid.
+    invaderUntil?: number;
   }
 
   interface CreepMemory {

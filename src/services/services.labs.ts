@@ -43,44 +43,52 @@ export const REACTION_RECIPES: Record<string, [string, string]> = {
 };
 
 // Returns ordered list of reactions needed to produce `amount` of `compound`.
-// Dependencies (ingredients) always come before the compounds that use them.
-// Deduplicates intermediates — if OH is needed by two chains, it appears once.
+// Dependencies (ingredients) always come before the compounds that use them, and an
+// intermediate consumed by more than one branch appears once with its demands summed.
+//
+// We can't subtract existing stock during a naive recursion: an intermediate reached by
+// two parents would have its stock deducted twice, under-producing it. So we propagate
+// demand in topological order (every consumer processed before its ingredients), compute
+// each compound's net need = max(0, summed-demand − stock) exactly once, and feed that
+// net need down to its ingredients. Net (not gross) propagation preserves the useful
+// short-circuit where existing intermediate stock cuts off deeper production.
 export function resolveChain(
   compound: string,
   amount: number,
   storage: StructureStorage | null
 ): LabQueueEntry[] {
-  const needed = new Map<string, number>();
+  // Post-order DFS over the recipe DAG: ingredients are pushed before the compound that
+  // uses them, so `post` lists every compound after its ingredients (the output order),
+  // and its reverse is a valid topological order (every consumer before its ingredients).
+  const post: string[] = [];
+  const visited = new Set<string>();
+  function dfs(c: string) {
+    if (visited.has(c) || !REACTION_RECIPES[c]) return; // base mineral — not a reaction
+    visited.add(c);
+    const [a, b] = REACTION_RECIPES[c];
+    dfs(a);
+    dfs(b);
+    post.push(c);
+  }
+  dfs(compound);
 
-  function collect(c: string, qty: number) {
-    const recipe = REACTION_RECIPES[c];
-    if (!recipe) return; // base mineral — no reaction, nothing to queue
+  const grossNeed = new Map<string, number>([[compound, amount]]);
+  const netNeed = new Map<string, number>();
+  for (let i = post.length - 1; i >= 0; i--) {
+    const c = post[i]; // reverse post-order = consumers before ingredients
     const have = storage?.store.getUsedCapacity(c as ResourceConstant) ?? 0;
-    const need = Math.max(0, qty - have);
-    if (need <= 0) return;
-    needed.set(c, Math.max(needed.get(c) ?? 0, need));
-    collect(recipe[0], need);
-    collect(recipe[1], need);
+    const net = Math.max(0, (grossNeed.get(c) ?? 0) - have);
+    if (net <= 0) continue;
+    netNeed.set(c, net);
+    const [a, b] = REACTION_RECIPES[c];
+    grossNeed.set(a, (grossNeed.get(a) ?? 0) + net);
+    grossNeed.set(b, (grossNeed.get(b) ?? 0) + net);
   }
 
-  collect(compound, amount);
-
-  // Topological sort: each compound appears after all its ingredients
   const result: LabQueueEntry[] = [];
-  const added = new Set<string>();
-
-  function addInOrder(c: string) {
-    if (added.has(c) || !needed.has(c)) return;
-    const recipe = REACTION_RECIPES[c];
-    if (recipe) {
-      addInOrder(recipe[0]);
-      addInOrder(recipe[1]);
-    }
-    result.push({ compound: c, amount: needed.get(c)! });
-    added.add(c);
+  for (const c of post) {
+    if (netNeed.has(c)) result.push({ compound: c, amount: netNeed.get(c)! });
   }
-
-  addInOrder(compound);
   return result;
 }
 

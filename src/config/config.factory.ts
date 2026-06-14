@@ -75,3 +75,8 @@ export const COMMODITY_TARGETS: CommodityTarget[] = [
 export const MANAGED_COMMODITIES: Set<string> = new Set(
   COMMODITY_TARGETS.map((t) => t.commodity)
 );
+
+// How much of each commodity to stage in the terminal for the market to sell from. The
+// factory courier routes evicted product here (up to this much) instead of storage, so the
+// terminal orchestrator has inventory to vend without a dedicated courier of its own.
+export const COMMODITY_TERMINAL_STOCK = 2_000;
