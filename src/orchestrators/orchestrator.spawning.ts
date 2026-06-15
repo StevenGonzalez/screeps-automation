@@ -342,9 +342,13 @@ function shouldSpawnHauler(room: Room): boolean {
 
   if (containers.length === 0) return false;
 
-  // Filter by homeRoom so haulers currently in a remote room are still counted.
+  // Filter by homeRoom so haulers currently in a remote room are still counted. Exclude
+  // creeps still spawning — they are already in Game.creeps, and getRoomSpawningCount below
+  // counts them, so including them here too would double-count an in-progress hauler and make
+  // the room believe it has one more than it does (chronically running a hauler short, which
+  // starves the far extensions and towers).
   const haulers = getCreepsByRole(ROLE_HAULER).filter(
-    (c) => (c.memory.homeRoom ?? c.room.name) === room.name
+    (c) => !c.spawning && (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
   const totalMinerWork = getCreepsByRoleInRoom(ROLE_MINER, room)
@@ -1150,10 +1154,14 @@ function countDefendersByRole(targetRoom: string, role: string, homeRoom: Room):
 function needsChildRoomDefender(room: Room): boolean {
   const exp = Memory.expansion;
   if (!exp?.needsDefender || exp.homeRoom !== room.name) return false;
+  // `existing` already includes an in-flight (spawning) child-defender: it is in Game.creeps
+  // with targetRoom/homeRoom set at spawn (see spawnChildRoomDefender), so this alone bounds
+  // us to one. Adding the broad getRoomSpawningCount would also count knights being raised for
+  // offense or this-room defense and wrongly suppress the child-room defender.
   const existing = getCreepsByRole(ROLE_KNIGHT).filter(
     (c) => c.memory.targetRoom === exp.roomName && c.memory.homeRoom === room.name
   );
-  return existing.length + getRoomSpawningCount(room, ROLE_KNIGHT) === 0;
+  return existing.length === 0;
 }
 
 function shouldSpawnDefender(room: Room): boolean {
