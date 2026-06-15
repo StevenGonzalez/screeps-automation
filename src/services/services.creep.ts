@@ -746,62 +746,39 @@ export function findClosestMinerContainerWithEnergy(
   return closestByPath(creep.pos, withEnergy) || null;
 }
 
-export function findDepositTargetExcludingMiner(
-  creep: Creep,
-  role: string
-): Structure | null {
+// Where a full hauler drops energy once spawn/extension/tower are topped up: the controller
+// container first (keep upgraders supplied), then storage, then any non-miner container.
+// Miner containers are excluded — they are pickup sources, not drop-offs.
+export function findDepositTargetExcludingMiner(creep: Creep): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
 
-  if (role === ROLE_HAULER) {
-    const upgradeId = creep.room.memory.upgradeContainerId;
-
-    // Prioritize controller container so upgraders stay supplied.
-    if (upgradeId) {
-      const upgradeCont = Game.getObjectById(
-        upgradeId
-      ) as StructureContainer | null;
-      if (
-        upgradeCont &&
-        upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-        minerIds.indexOf(upgradeCont.id as string) === -1
-      ) {
-        return upgradeCont;
-      }
+  const upgradeId = creep.room.memory.upgradeContainerId;
+  if (upgradeId) {
+    const upgradeCont = Game.getObjectById(upgradeId) as StructureContainer | null;
+    if (
+      upgradeCont &&
+      upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+      minerIds.indexOf(upgradeCont.id as string) === -1
+    ) {
+      return upgradeCont;
     }
-
-    // Next priority is storage, then any non-miner containers.
-    const storage = creep.room.storage;
-    if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-      return storage;
-    }
-
-    const nonMinerContainers = getRoomContainers(creep.room).filter(
-      (container) =>
-        minerIds.indexOf(container.id) === -1 &&
-        container.store.getFreeCapacity(RESOURCE_ENERGY) > 0
-    );
-    if (nonMinerContainers.length > 0) {
-      return closestByPath(creep.pos, nonMinerContainers) || null;
-    }
-
-    return null;
   }
 
-  const priorityTarget = findEnergyDepositTarget(creep, role);
-  if (priorityTarget && minerIds.indexOf(priorityTarget.id) === -1) {
-    return priorityTarget;
+  const storage = creep.room.storage;
+  if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+    return storage;
   }
 
-  const targets = getRoomStructures(creep.room).filter(
-    (s): s is AnyStoreStructure =>
-      (s.structureType === STRUCTURE_CONTAINER ||
-        s.structureType === STRUCTURE_STORAGE) &&
-      "store" in s &&
-      s.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-      minerIds.indexOf(s.id as string) === -1
+  const nonMinerContainers = getRoomContainers(creep.room).filter(
+    (container) =>
+      minerIds.indexOf(container.id) === -1 &&
+      container.store.getFreeCapacity(RESOURCE_ENERGY) > 0
   );
-  if (targets.length === 0) return null;
-  return closestByPath(creep.pos, targets) as Structure | null;
+  if (nonMinerContainers.length > 0) {
+    return closestByPath(creep.pos, nonMinerContainers) || null;
+  }
+
+  return null;
 }
 
 export function upgradeController(creep: Creep): void {

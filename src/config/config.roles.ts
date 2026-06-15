@@ -23,6 +23,10 @@ export const ROLE_SK_GUARDIAN = "huntsman";
 export const ROLE_SK_MINER = "delver";
 export const ROLE_SK_HAULER = "wain";
 
+// Deposit order for the early-game harvester (the only role that uses it, via
+// findEnergyDepositTarget). Other roles deposit through their own dedicated logic — haulers
+// fill spawn/extension/tower then findDepositTargetExcludingMiner; miners drop into their
+// container; upgraders/builders/repairers spend energy rather than bank it.
 export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
   [ROLE_HARVESTER]: [
     STRUCTURE_SPAWN,
@@ -30,16 +34,4 @@ export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
     STRUCTURE_CONTAINER,
     STRUCTURE_STORAGE,
   ],
-  [ROLE_UPGRADER]: [STRUCTURE_CONTROLLER],
-  [ROLE_BUILDER]: [],
-  [ROLE_REPAIRER]: [STRUCTURE_STORAGE, STRUCTURE_CONTAINER],
-  [ROLE_MINER]: [STRUCTURE_CONTAINER, STRUCTURE_STORAGE],
-  [ROLE_HAULER]: [
-    STRUCTURE_SPAWN,
-    STRUCTURE_EXTENSION,
-    STRUCTURE_TOWER,
-    STRUCTURE_STORAGE,
-    STRUCTURE_CONTAINER,
-  ],
-  [ROLE_MINERAL_MINER]: [STRUCTURE_CONTAINER, STRUCTURE_STORAGE, STRUCTURE_TERMINAL],
 };

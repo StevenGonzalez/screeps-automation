@@ -11,7 +11,7 @@ import {
   putSurplusEnergyToWork,
   getRoomStructures,
 } from "../services/services.creep";
-import { ROLE_HAULER } from "../config/config.roles";
+import { getThreatInfo } from "../services/services.combat";
 
 export function runHauler(creep: Creep) {
   if (!creep.memory.assignedContainerId) {
@@ -72,6 +72,27 @@ export function runHauler(creep: Creep) {
     return;
   }
 
+  // Under attack, keep the towers loaded ahead of everything else — they are the room's
+  // ranged defense and a sustained fight drains them ~10 energy/shot, so a far tower left to
+  // the normal closest-spawn/extension/tower order can run dry mid-fight. Top up the emptiest
+  // tower first (towers are clustered by the keep, so travel between them is cheap). In
+  // peacetime towers don't fire or decay, so this never triggers and the normal order holds.
+  if (getThreatInfo(creep.room).hostiles.length > 0) {
+    const towers = getRoomStructures(creep.room).filter(
+      (s): s is StructureTower =>
+        s.structureType === STRUCTURE_TOWER &&
+        (s as StructureTower).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+    );
+    if (towers.length > 0) {
+      const target = towers.reduce((a, b) =>
+        a.store.getUsedCapacity(RESOURCE_ENERGY) < b.store.getUsedCapacity(RESOURCE_ENERGY) ? a : b
+      );
+      creep.memory.fillTargetId = target.id;
+      transferEnergyTo(creep, target);
+      return;
+    }
+  }
+
   // Re-use any cached deposit target (spawn, extension, tower, storage, container).
   if (creep.memory.fillTargetId) {
     const cached = Game.getObjectById(creep.memory.fillTargetId as Id<AnyStoreStructure>) as AnyStoreStructure | null;
@@ -111,7 +132,7 @@ export function runHauler(creep: Creep) {
     }
   }
 
-  const depositTarget = findDepositTargetExcludingMiner(creep, ROLE_HAULER);
+  const depositTarget = findDepositTargetExcludingMiner(creep);
   if (depositTarget) {
     creep.memory.fillTargetId = depositTarget.id;
     transferEnergyTo(creep, depositTarget);
