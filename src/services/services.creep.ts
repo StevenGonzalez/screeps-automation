@@ -564,6 +564,22 @@ export function findClosestDamagedRampart(
   return closestByPath(creep.pos, ramparts) || null;
 }
 
+// A rampart/wall complete at 1 hit and is destroyed at its first decay tick (−300 hits
+// every 100 ticks) unless lifted past the decay amount quickly. Below this floor a defense
+// is at risk of decaying away before the towers/repairers (which maintain the much higher
+// RCL target HP) ever reach it — so the builder that just laid it boosts it here first.
+const CRITICAL_DEFENSE_HITS = 1000;
+
+export function findCriticalDefenseTarget(creep: Creep): AnyStructure | null {
+  const critical = getRoomStructures(creep.room).filter(
+    (s): s is AnyStructure =>
+      (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
+      s.hits < CRITICAL_DEFENSE_HITS
+  );
+  if (critical.length === 0) return null;
+  return closestByPath(creep.pos, critical) || null;
+}
+
 // When a nuke is inbound, the rampart over a threatened critical structure that is
 // furthest below its survival HP takes top repair priority — over everything else.
 export function getNukeRampartTarget(room: Room): StructureRampart | null {

@@ -118,10 +118,15 @@ function getRoomSpawningCount(room: Room, role: string): number {
   return spawningCache[room.name][role] ?? 0;
 }
 
-// Counts creeps in a room by role, including any currently being spawned
-// (which aren't in Game.creeps yet but are in Memory.creeps).
+// Counts creeps in a room by role. A creep being spawned is ALREADY present in
+// Game.creeps (with spawning === true), so getCreepsByRoleInRoom already counts it;
+// we exclude those here and add getRoomSpawningCount instead. That term also catches a
+// creep just issued this tick by another idle spawn in the same room (not yet in
+// Game.creeps) — so each creep is counted exactly once and two idle spawns can't
+// double-raise the same role, while an in-progress spawn isn't double-counted.
 function countByRoleInRoom(role: string, room: Room): number {
-  return getCreepsByRoleInRoom(role, room).length + getRoomSpawningCount(room, role);
+  const present = getCreepsByRoleInRoom(role, room).filter((c) => !c.spawning).length;
+  return present + getRoomSpawningCount(room, role);
 }
 
 function getMinerPopulationTarget(room: Room): number {
@@ -495,11 +500,13 @@ function shouldSpawnRepairer(room: Room): boolean {
 }
 
 function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): boolean {
-  // Minimum body: one harvester that can actually work. Use available energy.
-  const body = room.energyAvailable >= 300
-    ? [WORK, CARRY, MOVE]
-    : [WORK, CARRY, MOVE]; // cheapest working body costs 200 exactly
   if (room.energyAvailable < 200) return false;
+  // Scale to the energy on hand right now (never waits — it spends only what's already
+  // available, and more [WORK,CARRY,MOVE] sets means a faster climb out of an energy
+  // wipe). Capped at 3 sets so it stays a cheap, quick-to-spawn recovery body.
+  const sets = Math.min(3, Math.floor(room.energyAvailable / 200));
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < sets; i++) body.push(WORK, CARRY, MOVE);
   const res = spawn.spawnCreep(body, `${ROLE_HARVESTER}_emrg${Game.time}`, {
     memory: { role: ROLE_HARVESTER },
   });
@@ -913,8 +920,10 @@ function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
 // fighters that had already marched away). Spawning-in-progress is still counted so two
 // idle spawns don't double-raise the same defender.
 function countDefendersInRoom(role: string, room: Room): number {
+  // Exclude creeps still spawning — getRoomSpawningCount already accounts for them, so
+  // counting them here too would double-count an in-progress defender.
   const present = getCreepsByRoleInRoom(role, room).filter(
-    (c) => !c.memory.offensiveTarget
+    (c) => !c.spawning && !c.memory.offensiveTarget
   ).length;
   return present + getRoomSpawningCount(room, role);
 }
@@ -1128,7 +1137,11 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
 
 // Counts current + spawning defenders of a role assigned to defend `targetRoom`.
 function countDefendersByRole(targetRoom: string, role: string, homeRoom: Room): number {
-  const live = getDefenders(targetRoom).filter((c) => c.memory.role === role).length;
+  // Exclude still-spawning defenders — getRoomSpawningCount(homeRoom) already counts the
+  // in-progress one, so including it here as well would double-count it.
+  const live = getDefenders(targetRoom).filter(
+    (c) => !c.spawning && c.memory.role === role
+  ).length;
   return live + getRoomSpawningCount(homeRoom, role);
 }
 

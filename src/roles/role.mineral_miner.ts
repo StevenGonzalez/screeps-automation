@@ -3,7 +3,7 @@ export function runMineralMiner(creep: Creep): void {
   if (!mineralId) return;
 
   const mineral = Game.getObjectById(mineralId) as Mineral | null;
-  if (!mineral || mineral.mineralAmount === 0) return;
+  if (!mineral) return;
 
   const containerId = creep.room.memory.mineralContainerId;
   if (!containerId) return;
@@ -11,9 +11,14 @@ export function runMineralMiner(creep: Creep): void {
   const container = Game.getObjectById(containerId) as StructureContainer | null;
   if (!container) return;
 
-  // Full: carry minerals to storage or terminal — the container has no drainer so we
-  // must not dump there or it fills up and mining deadlocks.
-  if (creep.store.getFreeCapacity() === 0) {
+  const depleted = mineral.mineralAmount === 0;
+  const carrying = creep.store.getUsedCapacity() > 0;
+
+  // Deliver when full, OR when the deposit has just depleted but we still hold a partial
+  // load — otherwise the carried minerals are stranded for the entire regen cooldown
+  // (~50k ticks) and lost when this creep dies. Carry to storage or terminal; the source
+  // container has no drainer so we must not dump there or it fills up and mining deadlocks.
+  if (creep.store.getFreeCapacity() === 0 || (depleted && carrying)) {
     const terminalId = creep.room.memory.terminalId;
     const terminal = terminalId
       ? (Game.getObjectById(terminalId) as StructureTerminal | null)
@@ -39,6 +44,9 @@ export function runMineralMiner(creep: Creep): void {
     }
     return;
   }
+
+  // Deposit depleted and load already delivered — nothing to do until it regenerates.
+  if (depleted) return;
 
   // Empty/partial: position on the container (adjacent to mineral) and harvest.
   if (!creep.pos.isEqualTo(container.pos)) {

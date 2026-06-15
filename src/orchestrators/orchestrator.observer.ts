@@ -164,18 +164,12 @@ function updatePowerOp(op: PowerBankOp) {
     }
 
     case "collecting": {
-      const elapsed = Game.time - (op.collectingStartedAt ?? Game.time);
-      if (elapsed > COLLECTING_TIMEOUT) {
-        console.log(`[Power] Op #${op.id} collection timed out`);
-        op.phase = "done";
-        return;
-      }
-
       // Carriers are multi-trip: a large bank drops more power than one carrier load,
       // so completing the instant everyone first reaches home would strand the rest.
       // While the bank room is visible (a carrier is there), mark the haul finished only
       // once no power remains on the ground or in ruins.
       const bankRoom = Game.rooms[op.roomName];
+      let powerStillVisible = false;
       if (bankRoom) {
         const groundPower =
           bankRoom
@@ -184,13 +178,28 @@ function updatePowerOp(op: PowerBankOp) {
           bankRoom
             .find(FIND_RUINS)
             .reduce((sum, r) => sum + (r.store.getUsedCapacity(RESOURCE_POWER) ?? 0), 0);
+        powerStillVisible = groundPower > 0;
         if (groundPower === 0) op.collected = true;
       }
 
-      // Done once the room is confirmed empty AND every carrier has delivered its load.
       const stillCarrying = members.some(
         (c) => (c.store.getUsedCapacity(RESOURCE_POWER) ?? 0) > 0
       );
+
+      // The timeout is a *no-progress* watchdog, not a hard cap: a large or distant bank
+      // can take several round trips, and once the last carrier leaves with the final load
+      // the room goes invisible so op.collected may never flip. Keep extending the deadline
+      // while carriers are still hauling (or visible power remains), so the squad isn't
+      // disbanded mid-run — which would strand the rest of the power. It only fires after
+      // COLLECTING_TIMEOUT ticks of genuinely no progress (carriers dead/stuck and empty).
+      if (stillCarrying || powerStillVisible) op.collectingStartedAt = Game.time;
+      if (Game.time - (op.collectingStartedAt ?? Game.time) > COLLECTING_TIMEOUT) {
+        console.log(`[Power] Op #${op.id} collection timed out`);
+        op.phase = "done";
+        return;
+      }
+
+      // Done once the room is confirmed empty AND every carrier has delivered its load.
       if (op.collected && !stillCarrying) {
         console.log(`[Power] Op #${op.id} collection complete`);
         op.phase = "done";

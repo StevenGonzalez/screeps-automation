@@ -954,7 +954,9 @@ export function runDefensiveWizard(creep: Creep, roomName: string): void {
     const range = creep.pos.getRangeTo(nearest);
     if (range < KITE_RANGE) {
       fleeFrom(creep, nearest.pos);
-    } else if (range > KITE_RANGE + 1) {
+    } else if (range > KITE_RANGE) {
+      // Close whenever past KITE_RANGE. `> KITE_RANGE` (not `+ 1`) removes the range-4
+      // dead zone where the wizard could neither fire (ranged max 3) nor advance.
       defenseMoveToward(creep, rally, nearest, KITE_RANGE);
     } else if (isNearEdge(creep.pos)) {
       defenseHold(creep, rally);
@@ -1107,7 +1109,10 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
     const range = creep.pos.getRangeTo(nearest);
     if (range < KITE_RANGE) {
       fleeFrom(creep, nearest.pos);
-    } else if (range > KITE_RANGE + 1) {
+    } else if (range > KITE_RANGE) {
+      // Close whenever we've drifted past KITE_RANGE. `> KITE_RANGE` (not `+ 1`) avoids a
+      // dead zone at exactly range 4 where the wizard could neither fire (ranged max 3)
+      // nor advance, letting a hostile sit one tile out and neutralize it.
       if (op.tactic === "defend") holdNearRally(creep, op, ctx, isLeader);
       else if (isLeader) leaderAdvance(creep, op, ctx, nearest.pos, KITE_RANGE);
       else moveToSlot(creep, op, ctx);

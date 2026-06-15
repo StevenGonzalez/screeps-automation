@@ -167,10 +167,14 @@ function refreshLabIdentity(room: Room) {
 
   const ls = room.memory.labSystem!;
 
-  // Keep cached IDs if they're still valid
+  // Keep cached IDs if they're still valid AND still cover every lab — when a new lab is
+  // built (e.g. RCL 7 → 8) the count grows, so we must re-derive roles to slot the new labs
+  // in and re-check that the input pair is still central (see below).
+  const cachedCount = (ls.inputLabIds?.length ?? 0) + (ls.outputLabIds?.length ?? 0);
   if (
     ls.inputLabIds?.length === 2 &&
     (ls.outputLabIds?.length ?? 0) > 0 &&
+    cachedCount === labs.length &&
     [...(ls.inputLabIds ?? []), ...(ls.outputLabIds ?? [])].every((id) => Game.getObjectById(id))
   ) {
     return;
@@ -179,10 +183,20 @@ function refreshLabIdentity(room: Room) {
   const refPos = room.storage?.pos ?? room.find(FIND_MY_SPAWNS)[0]?.pos;
   if (!refPos) return;
 
-  // Input labs = 2 closest to storage (easiest for apothecary to access)
+  // runReaction requires BOTH input labs within range 2 of every output lab, so each input
+  // must be within range 2 of ALL other labs. At RCL 8 the cluster spans 3 tiles, so a
+  // corner lab can't reach the opposite corner — picking inputs purely by distance-to-storage
+  // could grab a corner and silently disable the far output labs (they'd return ERR_NOT_IN_RANGE
+  // forever). Restrict input candidates to "central" labs, then prefer the two closest to
+  // storage for apothecary access. Fall back to closest-to-storage if no central pair exists.
   const sorted = [...labs].sort((a, b) => a.pos.getRangeTo(refPos) - b.pos.getRangeTo(refPos));
-  ls.inputLabIds = sorted.slice(0, 2).map((l) => l.id as Id<StructureLab>);
-  ls.outputLabIds = sorted.slice(2).map((l) => l.id as Id<StructureLab>);
+  const central = sorted.filter((lab) =>
+    labs.every((other) => other.id === lab.id || lab.pos.getRangeTo(other) <= 2)
+  );
+  const inputs = (central.length >= 2 ? central : sorted).slice(0, 2);
+  const inputIds = new Set(inputs.map((l) => l.id));
+  ls.inputLabIds = inputs.map((l) => l.id as Id<StructureLab>);
+  ls.outputLabIds = labs.filter((l) => !inputIds.has(l.id)).map((l) => l.id as Id<StructureLab>);
 }
 
 function planAutoProduction(room: Room) {

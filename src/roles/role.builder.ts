@@ -5,6 +5,7 @@ import {
   isCreepFull,
   getRoomBuildTarget,
   findClosestRepairTarget,
+  findCriticalDefenseTarget,
   upgradeController,
   buildAtConstructionSite,
   repairStructure,
@@ -22,6 +23,18 @@ export function runBuilder(creep: Creep) {
   }
   if (!creep.memory.working) {
     acquireEnergy(creep);
+    return;
+  }
+
+  // Rescue a freshly-built (critically low) rampart/wall before laying or building anything
+  // else. A rampart completes at 1 hit and decays away within ~100 ticks if it isn't lifted
+  // past the decay amount — and the builder's generic repair fallback excludes ramparts — so
+  // without this a mason that just built a rampart abandons it at 1 hit and it dies, looping
+  // build→decay→rebuild forever. Once it's past the floor, towers/repairers maintain it.
+  const critical = findCriticalDefenseTarget(creep);
+  if (critical) {
+    const r = repairStructure(creep, critical);
+    if (r === ERR_NOT_ENOUGH_RESOURCES) creep.memory.working = false;
     return;
   }
 

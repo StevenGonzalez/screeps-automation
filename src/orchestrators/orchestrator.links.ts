@@ -124,7 +124,10 @@ function pickSink(
   src: StructureLink
 ): StructureLink | null {
   let best: StructureLink | null = null;
-  let bestFree = LINK_SINK_HEADROOM;
+  // Seed one below the headroom so a sink with *exactly* LINK_SINK_HEADROOM free still
+  // qualifies (the rule is "at least HEADROOM free", and the `>` test below would
+  // otherwise exclude the boundary).
+  let bestFree = LINK_SINK_HEADROOM - 1;
 
   for (const sink of sinks) {
     if (sink.id === src.id) continue;

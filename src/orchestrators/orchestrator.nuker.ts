@@ -165,8 +165,14 @@ function commandCourier(room: Room, nuker: StructureNuker, job: FillJob): void {
     // If already carrying exactly what the nuker needs, deliver it; otherwise dump to
     // storage so the courier is free to fetch the right resource next tick.
     const r = carried[0];
-    if (r === job.resource && (courier.store.getUsedCapacity(r) ?? 0) > 0) {
-      if (courier.transfer(nuker, r) === ERR_NOT_IN_RANGE) courier.moveTo(nuker, { reusePath: 5 });
+    const carriedAmount = courier.store.getUsedCapacity(r) ?? 0;
+    if (r === job.resource && carriedAmount > 0) {
+      // Cap to job.amount so a pre-loaded hauler doesn't dump its whole cargo into the nuker
+      // and blow past the per-tick / storage-surplus fill gate; the residual stays with the
+      // hauler for its normal work (or the next fill tick).
+      if (courier.transfer(nuker, r, Math.min(carriedAmount, job.amount)) === ERR_NOT_IN_RANGE) {
+        courier.moveTo(nuker, { reusePath: 5 });
+      }
     } else {
       if (courier.transfer(storage, r) === ERR_NOT_IN_RANGE) courier.moveTo(storage, { reusePath: 5 });
     }
