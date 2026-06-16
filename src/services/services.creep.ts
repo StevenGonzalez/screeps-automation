@@ -746,27 +746,46 @@ export function findClosestMinerContainerWithEnergy(
   return closestByPath(creep.pos, withEnergy) || null;
 }
 
-// Where a full hauler drops energy once spawn/extension/tower are topped up: the controller
-// container first (keep upgraders supplied), then storage, then any non-miner container.
-// Miner containers are excluded — they are pickup sources, not drop-offs.
+// How low the controller container may get before a hauler tops it up. Gated this low (rather
+// than "any free space") so haulers drop the bulk of their load into storage instead of all
+// funnelling to the small controller container — which jammed a queue at the controller and,
+// because their energy never reached storage, left the stewards nothing to distribute.
+const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
+
+// Where a full hauler drops energy once spawn/extension/tower are topped up. Storage is the bulk
+// sink and comes first; the controller container only gets a top-up while it's actually running
+// low, so upgraders keep a local supply without every porter funnelling to it (upgraders also
+// pull straight from storage / the controller link when their container empties). Miner
+// containers are excluded — they are pickup sources, not drop-offs.
 export function findDepositTargetExcludingMiner(creep: Creep): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
 
   const upgradeId = creep.room.memory.upgradeContainerId;
-  if (upgradeId) {
-    const upgradeCont = Game.getObjectById(upgradeId) as StructureContainer | null;
-    if (
-      upgradeCont &&
-      upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
-      minerIds.indexOf(upgradeCont.id as string) === -1
-    ) {
-      return upgradeCont;
-    }
+  const upgradeCont = upgradeId
+    ? (Game.getObjectById(upgradeId) as StructureContainer | null)
+    : null;
+  const upgradeIsDropTarget =
+    !!upgradeCont &&
+    upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+    minerIds.indexOf(upgradeCont.id as string) === -1;
+
+  // Top up the controller container only while it's low — not merely because it has any room.
+  if (
+    upgradeIsDropTarget &&
+    (upgradeCont!.store[RESOURCE_ENERGY] ?? 0) < UPGRADE_CONTAINER_REFILL_BELOW
+  ) {
+    return upgradeCont;
   }
 
   const storage = creep.room.storage;
   if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
     return storage;
+  }
+
+  // Storage full — fall back to the controller container (even if not low), then any other
+  // non-miner container, rather than stranding the load.
+  if (upgradeIsDropTarget) {
+    return upgradeCont;
   }
 
   const nonMinerContainers = getRoomContainers(creep.room).filter(
