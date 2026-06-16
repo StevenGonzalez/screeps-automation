@@ -114,6 +114,7 @@ export function runHauler(creep: Creep) {
   const depositTarget = findDepositTargetExcludingMiner(creep);
   if (depositTarget) {
     creep.memory.fillTargetId = depositTarget.id;
+    if (Memory.debugHaulers === creep.room.name) debugDeposit(creep, depositTarget);
     transferEnergyTo(creep, depositTarget);
     return;
   }
@@ -121,6 +122,52 @@ export function runHauler(creep: Creep) {
   // Nowhere to deliver (colony full) — put the carried energy to work
   // (build, then repair, then upgrade) rather than idling.
   putSurplusEnergyToWork(creep);
+}
+
+// Diagnostic: log why a hauler may be stalling at its deposit target. Prints the target, the
+// hauler's range to it, the next path step it intends to take and whether that step is occupied,
+// and an occupancy ring of the 8 tiles around the target (role initial / '#' wall / '.' free).
+// If free tiles exist in the ring while the hauler isn't adjacent, pathing is fixating on an
+// occupied tile (treating creeps as walkable). Gated by Memory.debugHaulers === room name.
+function debugDeposit(creep: Creep, target: Structure): void {
+  const terrain = creep.room.getTerrain();
+  const ring: string[] = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = target.pos.x + dx;
+      const y = target.pos.y + dy;
+      if (x < 0 || x > 49 || y < 0 || y > 49) {
+        ring.push("x");
+        continue;
+      }
+      const occupant = creep.room
+        .lookForAt(LOOK_CREEPS, x, y)
+        .find((c) => c.my);
+      if (occupant) ring.push(occupant.memory.role[0]);
+      else if (terrain.get(x, y) === TERRAIN_MASK_WALL) ring.push("#");
+      else ring.push(".");
+    }
+  }
+
+  const search = PathFinder.search(
+    creep.pos,
+    { pos: target.pos, range: 1 },
+    { plainCost: 2, swampCost: 10, maxOps: 500 }
+  );
+  const step = search.path[0];
+  let stepInfo = "none";
+  if (step) {
+    const onStep = creep.room.lookForAt(LOOK_CREEPS, step.x, step.y).find((c) => c.my);
+    stepInfo = `${step.x},${step.y}:${onStep ? onStep.memory.role[0] : "free"}`;
+  }
+
+  const t = target as Structure & { structureType: string };
+  console.log(
+    `[H ${creep.name}] pos=${creep.pos.x},${creep.pos.y} st=${creep.store[RESOURCE_ENERGY]} ` +
+      `-> ${t.structureType}@${target.pos.x},${target.pos.y} range=${creep.pos.getRangeTo(target)} ` +
+      `next=${stepInfo} ring=[${ring.join("")}]`
+  );
 }
 
 // A loaded porter tops off only from sources within this range — it won't trek across the room

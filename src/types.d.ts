@@ -285,6 +285,8 @@ declare global {
     nextSkOpId?: number;
     // Kill-switch for the traffic manager (set true to fall back to vanilla moveTo)
     trafficDisabled?: boolean;
+    // Diagnostic: set to a room name to log hauler deposit decisions for that room.
+    debugHaulers?: string;
     // When true, the expansion orchestrator auto-claims scouted candidates (default off)
     autoExpand?: boolean;
   }
