@@ -431,7 +431,12 @@ export function isCreepFull(creep: Creep): boolean {
 
 export function transferEnergyTo(creep: Creep, target: Structure): void {
   if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-    creep.moveTo(target, { reusePath: 50 });
+    // Short reuse window on the delivery approach: deposit targets (controller container, spawn,
+    // extensions) get ringed by parked upgraders/haulers. A long cached path keeps re-issuing a
+    // move onto the occupied tile every tick — the engine silently drops it and the hauler stalls
+    // behind the blocker for the life of the cache. A short window forces a creep-aware repath
+    // (moveTo's default ignoreCreeps:false routes around the parked creep) within a tick or two.
+    creep.moveTo(target, { reusePath: 5 });
   }
 }
 
