@@ -40,6 +40,14 @@ export function runHauler(creep: Creep) {
       creep.memory.assignedContainerId = assignment.id;
     }
   }
+
+  // Once a room has storage AND a living steward (filler), fillers own core distribution and
+  // haulers just restock the storage buffer. Until then — no storage yet, or the filler just
+  // died — haulers fill the core directly so spawning is never starved. In the storage model a
+  // hauler must NOT pull from storage to collect (it would only deposit it straight back into
+  // storage — a pointless loop): it only ever moves producer energy (containers/dropped) in.
+  const storageModel = !!creep.room.storage && hasActiveFiller(creep.room);
+
   if (creep.memory.working === undefined) creep.memory.working = false;
   // Collect-until-full / deliver-until-empty, on a flag (like the builder). The flag is what
   // makes a porter top off before delivering: it keeps collecting while it has room rather than
@@ -53,7 +61,7 @@ export function runHauler(creep: Creep) {
 
   if (!creep.memory.working) {
     creep.memory.fillTargetId = undefined;
-    if (collectEnergy(creep)) return;
+    if (collectEnergy(creep, storageModel)) return;
     // Nothing left worth collecting: deliver a partial load if we have one, else idle.
     if (creep.store[RESOURCE_ENERGY] === 0) return;
     creep.memory.working = true;
@@ -71,10 +79,7 @@ export function runHauler(creep: Creep) {
     }
   }
 
-  // Once a room has storage AND a living steward (filler), fillers own core distribution and
-  // haulers just restock the storage buffer below. Until then — no storage yet, or the filler
-  // just died — haulers fill the core directly so spawning is never starved.
-  const storageModel = !!creep.room.storage && hasActiveFiller(creep.room);
+  // In the direct-fill model (no storage/steward) haulers fill the core themselves.
   if (!storageModel) {
     // Re-use the cached core target while it still has room (skips a findClosestByPath/tick).
     if (creep.memory.fillTargetId) {
@@ -127,7 +132,7 @@ const DIVERT_RANGE = 10;
 // container, then the storage buffer — but because the caller only flips to delivering once the
 // porter is full (or nothing's left worth fetching), grabbing a small pile no longer ends the
 // trip with most of the capacity unused while a full container overflows behind it.
-function collectEnergy(creep: Creep): boolean {
+function collectEnergy(creep: Creep, storageModel: boolean): boolean {
   const carried = creep.store[RESOURCE_ENERGY];
   const nearbyOnly = carried > 0; // an empty porter fetches from anywhere; a loaded one tops off close by
 
@@ -162,9 +167,11 @@ function collectEnergy(creep: Creep): boolean {
     return true;
   }
 
-  // Storage buffer: only an empty porter taps it, and only when the base needs filling — a loaded
-  // porter pulling from storage just to top off would be a pointless storage→core round trip.
-  if (carried === 0) {
+  // Storage buffer: a porter pulls from storage to feed the core only in the DIRECT-FILL model.
+  // In the storage model the steward distributes storage → core, so a hauler pulling from storage
+  // would just deposit it straight back — the storage→storage loop. Producers above (containers/
+  // dropped) are always fine to pull from; this buffer tap is the only one that must be gated.
+  if (carried === 0 && !storageModel) {
     const storage = creep.room.storage;
     const baseNeedsEnergy = creep.room.energyAvailable < creep.room.energyCapacityAvailable;
     if (storage && baseNeedsEnergy && storage.store[RESOURCE_ENERGY] > 0) {
