@@ -53,8 +53,42 @@ function getRoomCostMatrix(roomName: string): CostMatrix {
   return cm;
 }
 
-function roadCostCallback(roomName: string): CostMatrix {
+// The structure matrix alone, for callers that want the "ideal" path ignoring creeps (the shove
+// uses this to find the blocker on the path a creep WOULD take if no creeps were in the way).
+function structureCostCallback(roomName: string): CostMatrix {
   return getRoomCostMatrix(roomName);
+}
+
+// Per-tick cache of the structure matrix with current creep positions overlaid as obstacles.
+const creepAwareCache: Record<string, CostMatrix> = {};
+let creepAwareTick = -1;
+
+/**
+ * The cost matrix moveTo actually paths with: the cached structure matrix CLONED and overlaid
+ * with every creep's current tile as impassable. This is the whole point of the traffic manager
+ * — without it, supplying a costCallback that returns a structure-only matrix REPLACES the
+ * engine's built-in matrix (which marks creeps as obstacles), so pathing silently ignores every
+ * creep and fixates on occupied tiles instead of routing around them. Rebuilt once per room per
+ * tick (creeps move every tick, so it can't share the 100-tick structure cache) and reused by
+ * every creep pathing in that room this tick.
+ */
+function roadCostCallback(roomName: string): CostMatrix {
+  if (creepAwareTick !== Game.time) {
+    creepAwareTick = Game.time;
+    for (const k in creepAwareCache) delete creepAwareCache[k];
+  }
+  const cached = creepAwareCache[roomName];
+  if (cached) return cached;
+
+  const base = getRoomCostMatrix(roomName);
+  const room = Game.rooms[roomName];
+  if (!room) return base;
+
+  const cm = base.clone();
+  for (const c of room.find(FIND_CREEPS)) cm.set(c.pos.x, c.pos.y, 0xff);
+  for (const pc of room.find(FIND_POWER_CREEPS)) cm.set(pc.pos.x, pc.pos.y, 0xff);
+  creepAwareCache[roomName] = cm;
+  return cm;
 }
 
 (Creep.prototype as { moveTo: unknown }).moveTo = function (
@@ -125,7 +159,7 @@ function registerShove(creep: Creep, targetPos: RoomPosition, range: number): vo
   const result = PathFinder.search(
     creep.pos,
     { pos: targetPos, range },
-    { roomCallback: roadCostCallback, plainCost: 2, swampCost: 10, maxOps: 1000 }
+    { roomCallback: structureCostCallback, plainCost: 2, swampCost: 10, maxOps: 1000 }
   );
   const next = result.path[0];
   if (!next || next.roomName !== creep.pos.roomName) return;
