@@ -815,21 +815,31 @@ export function upgradeController(creep: Creep): void {
   const controller = creep.room.controller;
   if (!controller) return;
 
-  // Lay our mark before settling in to upgrade. signControllerIfNeeded returns true while it
-  // still needs to reach (range 1) and sign the controller — a one-time detour per room — so
-  // we skip upgrading that tick; once the sign is in place it returns false and upgrading
-  // proceeds normally from the usual range-3 spot.
-  if (signControllerIfNeeded(creep, controller)) return;
-
+  // Upgrade FIRST — signing must never block it. When already in range, optionally edge toward
+  // range 1 to lay our mark; the upgrade intent for this tick is already issued, so signing
+  // runs alongside it and, if range 1 can't be reached, the creep just keeps upgrading from
+  // here instead of standing idle.
   if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
     creep.moveTo(controller, { reusePath: 50 });
+    return;
   }
+
+  signControllerIfNeeded(creep, controller);
 }
+
+const SIGN_RECHECK_INTERVAL = 5000; // ticks before re-attempting a controller signature
 
 export function signControllerIfNeeded(
   creep: Creep,
   controller: StructureController
 ): boolean {
+  // Back off for a while after each attempt. Signing is purely cosmetic, and a sign whose
+  // stored text doesn't byte-match our desired text (server-side normalisation, an em-dash
+  // round-trip, a length cap) would otherwise read as "still needs signing" forever and pull
+  // the upgrader back to the controller every tick. One attempt, then leave it for a long while.
+  const lastSigned = creep.room.memory.lastSigned;
+  if (lastSigned !== undefined && Game.time - lastSigned < SIGN_RECHECK_INTERVAL) return false;
+
   // Sign in ARCA's name, naming the stronghold by its MU town name (the same
   // name its spawns carry). The town name is stable for the room's life, so cache
   // it on memory; fall back to the seat of power before a spawn exists.
@@ -846,8 +856,14 @@ export function signControllerIfNeeded(
   const desiredSignature = `Held by decree of ARCA — the stronghold of ${townName}`;
 
   const currentSign = controller.sign;
-  const myUsername = controller.owner?.username;
 
+  // Leave a server sign in place. When a Novice/Respawn area is being planned the server signs
+  // every controller in the sector ("...make sure all important rooms are reserved." — Screeps)
+  // and that sign cannot be overridden, so trying would just send the upgrader on an endless
+  // futile detour to the controller.
+  if (currentSign?.username === "Screeps") return false;
+
+  const myUsername = controller.owner?.username;
   const needsSign =
     !currentSign ||
     currentSign.username !== myUsername ||
@@ -855,16 +871,17 @@ export function signControllerIfNeeded(
   if (!needsSign) return false;
 
   // signController requires adjacency, but upgraders work from up to range 3 (parked by the
-  // controller link/container) and may never reach range 1 on their own. Make a one-time
-  // detour to range 1 to lay the mark — it persists, so this runs once per room.
+  // controller link/container). Edge in to range 1 to lay the mark; the caller has already
+  // issued this tick's upgrade, so this never blocks. Stamp lastSigned on the attempt itself
+  // (not just on OK) so the back-off above engages even if the stored text never matches —
+  // one detour, not an endless loop.
   if (creep.pos.getRangeTo(controller.pos) > 1) {
     creep.moveTo(controller, { range: 1, reusePath: 5 });
     return true;
   }
 
-  if (creep.signController(controller, desiredSignature) === OK) {
-    creep.room.memory.lastSigned = Game.time;
-  }
+  creep.signController(controller, desiredSignature);
+  creep.room.memory.lastSigned = Game.time;
   return true;
 }
 
