@@ -5,6 +5,7 @@ import {
   ROLE_REPAIRER,
   ROLE_MINER,
   ROLE_HAULER,
+  ROLE_FILLER,
   ROLE_MINERAL_MINER,
   ROLE_SCOUT,
   ROLE_REMOTE_MINER,
@@ -262,6 +263,9 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
   if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
+  // Fillers distribute storage energy to the keep core; haulers cover it directly until one
+  // exists, so a missing filler never stalls spawning.
+  if (shouldSpawnFiller(room) && spawnFiller(room, spawn)) return;
 
   // Non-essential spawns are suppressed during an energy emergency so that
   // every spare joule goes back into harvesters and miners.
@@ -501,6 +505,36 @@ function getRepairerPopulationTarget(room: Room): number {
 function shouldSpawnRepairer(room: Room): boolean {
   const target = getRepairerPopulationTarget(room);
   return target > 0 && countByRoleInRoom(ROLE_REPAIRER, room) < target;
+}
+
+function getFillerPopulationTarget(room: Room): number {
+  // Fillers (stewards) distribute energy from storage out to the keep core. Without storage
+  // there is no buffer to draw from, so haulers fill the core directly (see role.hauler) and we
+  // raise none. A small number suffices because storage sits at the keep heart with extensions
+  // ringed around it: one for most rooms, two once the core is large (RCL 7+).
+  if (!room.storage) return 0;
+  if (isEnergyEmergency(room)) return 0;
+  return (room.controller?.level ?? 0) >= 7 ? 2 : 1;
+}
+
+function shouldSpawnFiller(room: Room): boolean {
+  return countByRoleInRoom(ROLE_FILLER, room) < getFillerPopulationTarget(room);
+}
+
+function spawnFiller(room: Room, spawn: StructureSpawn): boolean {
+  // Size against capacity once one filler exists; fall back to current energy for the first so
+  // the room isn't stuck waiting (haulers cover the core directly until a filler is alive).
+  const energyBasis =
+    countByRoleInRoom(ROLE_FILLER, room) === 0
+      ? room.energyAvailable
+      : room.energyCapacityAvailable;
+  const allowedEnergy = Math.floor(energyBasis * (1 - SPAWN_ENERGY_RESERVE));
+  const body = buildScaledBody(ROLE_FILLER, allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${ROLE_FILLER}${Game.time}`, {
+    memory: { role: ROLE_FILLER, homeRoom: room.name },
+  });
+  return res === OK;
 }
 
 function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): boolean {
@@ -817,8 +851,15 @@ function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
   const target = activeRooms.find((r) => !assignedTargets.has(r.roomName));
   if (!target) return false;
 
-  // 1 CLAIM + 4 MOVE: max speed on plains, reasonable on swamp (800 energy)
-  const body: BodyPartConstant[] = [CLAIM, MOVE, MOVE, MOVE, MOVE];
+  // A single CLAIM adds +1 reservation/tick, exactly cancelling the −1/tick decay — it holds
+  // a reservation steady but builds no buffer, so the moment the reserver dies the room drops
+  // to unreserved and source yield halves. 2 CLAIM out-paces decay and banks toward the cap,
+  // so brief reserver gaps don't cost income. Use it whenever the room can afford it; fall
+  // back to the single-CLAIM body when it can't.
+  const bigBody: BodyPartConstant[] = [CLAIM, CLAIM, MOVE, MOVE, MOVE, MOVE];
+  const smallBody: BodyPartConstant[] = [CLAIM, MOVE, MOVE, MOVE, MOVE];
+  const body =
+    room.energyCapacityAvailable >= calculateBodyPartCost(bigBody) ? bigBody : smallBody;
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const res = spawn.spawnCreep(body, `${ROLE_RESERVER}${Game.time}`, {

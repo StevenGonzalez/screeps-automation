@@ -3,6 +3,7 @@ import {
   ROLE_HARVESTER,
   ROLE_UPGRADER,
   ROLE_HAULER,
+  ROLE_FILLER,
   ROLE_REPAIRER,
   ROLE_APOTHECARY,
 } from "./config.roles";
@@ -10,6 +11,8 @@ import {
 export const BODY_PATTERNS: Record<string, BodyPartConstant[]> = {
   // 2:1 carry-to-move on roads; scales up with energy
   [ROLE_HAULER]: [CARRY, CARRY, MOVE],
+  // Steward (filler) loops the keep core — same carry-heavy pattern as the porter
+  [ROLE_FILLER]: [CARRY, CARRY, MOVE],
   // Apothecary moves resources between storage and labs — same carry-heavy pattern
   [ROLE_APOTHECARY]: [CARRY, CARRY, MOVE],
   // WORK-heavy for maximum build/repair throughput

@@ -4,6 +4,7 @@ export const ROLE_UPGRADER = "scholar";
 export const ROLE_REPAIRER = "blacksmith";
 export const ROLE_MINER = "miner";
 export const ROLE_HAULER = "porter";
+export const ROLE_FILLER = "steward";
 export const ROLE_MINERAL_MINER = "prospector";
 export const ROLE_SCOUT = "ranger";
 export const ROLE_REMOTE_MINER = "outrider";

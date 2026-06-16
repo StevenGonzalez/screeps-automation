@@ -781,24 +781,55 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
   return null;
 }
 
+// The tower with the most free energy capacity (i.e. emptiest) that still needs filling, or
+// null if every tower is topped up. Used as a defensive priority — under attack, towers drain
+// ~10 energy/shot and must be kept loaded ahead of spawn/extensions.
+export function findEmptiestTower(room: Room): StructureTower | null {
+  const towers = getRoomStructures(room).filter(
+    (s): s is StructureTower =>
+      s.structureType === STRUCTURE_TOWER &&
+      (s as StructureTower).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+  );
+  if (towers.length === 0) return null;
+  return towers.reduce((a, b) =>
+    a.store.getUsedCapacity(RESOURCE_ENERGY) < b.store.getUsedCapacity(RESOURCE_ENERGY) ? a : b
+  );
+}
+
+// The closest spawn/extension/tower with free energy capacity — the core structures a hauler
+// or filler tops up. Returns null when the whole core is full.
+export function findCoreFillTarget(creep: Creep): AnyStoreStructure | null {
+  const targets = getRoomStructures(creep.room).filter(
+    (s): s is AnyStoreStructure =>
+      (s.structureType === STRUCTURE_SPAWN ||
+        s.structureType === STRUCTURE_EXTENSION ||
+        s.structureType === STRUCTURE_TOWER) &&
+      "store" in s &&
+      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+  );
+  if (targets.length === 0) return null;
+  return (creep.pos.findClosestByPath(targets, { ignoreCreeps: true }) as AnyStoreStructure | null) ?? null;
+}
+
 export function upgradeController(creep: Creep): void {
   const controller = creep.room.controller;
   if (!controller) return;
 
+  // Lay our mark before settling in to upgrade. signControllerIfNeeded returns true while it
+  // still needs to reach (range 1) and sign the controller — a one-time detour per room — so
+  // we skip upgrading that tick; once the sign is in place it returns false and upgrading
+  // proceeds normally from the usual range-3 spot.
+  if (signControllerIfNeeded(creep, controller)) return;
+
   if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
     creep.moveTo(controller, { reusePath: 50 });
   }
-
-  signControllerIfNeeded(creep, controller);
 }
 
 export function signControllerIfNeeded(
   creep: Creep,
   controller: StructureController
 ): boolean {
-  // Only compute the signature when we're actually positioned to sign.
-  if (creep.pos.getRangeTo(controller.pos) > 1) return false;
-
   // Sign in ARCA's name, naming the stronghold by its MU town name (the same
   // name its spawns carry). The town name is stable for the room's life, so cache
   // it on memory; fall back to the seat of power before a spawn exists.
@@ -822,6 +853,14 @@ export function signControllerIfNeeded(
     currentSign.username !== myUsername ||
     currentSign.text !== desiredSignature;
   if (!needsSign) return false;
+
+  // signController requires adjacency, but upgraders work from up to range 3 (parked by the
+  // controller link/container) and may never reach range 1 on their own. Make a one-time
+  // detour to range 1 to lay the mark — it persists, so this runs once per room.
+  if (creep.pos.getRangeTo(controller.pos) > 1) {
+    creep.moveTo(controller, { range: 1, reusePath: 5 });
+    return true;
+  }
 
   if (creep.signController(controller, desiredSignature) === OK) {
     creep.room.memory.lastSigned = Game.time;

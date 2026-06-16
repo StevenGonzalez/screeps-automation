@@ -5,6 +5,7 @@ import {
   ROLE_REPAIRER,
   ROLE_MINER,
   ROLE_HAULER,
+  ROLE_FILLER,
   ROLE_MINERAL_MINER,
   ROLE_SCOUT,
   ROLE_REMOTE_MINER,
@@ -30,6 +31,7 @@ import { runBuilder } from "../roles/role.builder";
 import { runRepairer } from "../roles/role.repairer";
 import { runMiner } from "../roles/role.miner";
 import { runHauler } from "../roles/role.hauler";
+import { runFiller } from "../roles/role.filler";
 import { runMineralMiner } from "../roles/role.mineral_miner";
 import { runScout } from "../roles/role.scout";
 import { runRemoteMiner } from "../roles/role.remote_miner";
@@ -60,6 +62,7 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_REPAIRER]: runRepairer,
   [ROLE_MINER]: runMiner,
   [ROLE_HAULER]: runHauler,
+  [ROLE_FILLER]: runFiller,
   [ROLE_MINERAL_MINER]: runMineralMiner,
   [ROLE_SCOUT]: runScout,
   [ROLE_REMOTE_MINER]: runRemoteMiner,

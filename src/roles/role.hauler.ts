@@ -5,13 +5,34 @@ import {
   findUnclaimedHaulerAssignment,
   pickupDroppedResource,
   withdrawFromContainer,
-  findClosestContainerWithFreeCapacity,
   findClosestMinerContainerWithEnergy,
   findDepositTargetExcludingMiner,
+  findEmptiestTower,
+  findCoreFillTarget,
   putSurplusEnergyToWork,
-  getRoomStructures,
 } from "../services/services.creep";
 import { getThreatInfo } from "../services/services.combat";
+import { ROLE_FILLER } from "../config/config.roles";
+
+// Cheap per-tick, per-room check: is a steward (filler) alive to own core distribution? When
+// one is, haulers restock storage instead of filling spawn/extensions/towers directly. One
+// FIND_MY_CREEPS per room per tick, shared across every hauler in that room.
+let fillerCheckTick = -1;
+const roomHasFiller: Record<string, boolean> = {};
+function hasActiveFiller(room: Room): boolean {
+  if (fillerCheckTick !== Game.time) {
+    fillerCheckTick = Game.time;
+    for (const k in roomHasFiller) delete roomHasFiller[k];
+  }
+  if (!(room.name in roomHasFiller)) {
+    // Only count a filler that is actually working — a still-spawning one can't distribute yet,
+    // and switching haulers off direct-fill too early would drain the core during its spawn.
+    roomHasFiller[room.name] = room
+      .find(FIND_MY_CREEPS)
+      .some((c) => c.memory.role === ROLE_FILLER && !c.spawning);
+  }
+  return roomHasFiller[room.name];
+}
 
 export function runHauler(creep: Creep) {
   if (!creep.memory.assignedContainerId) {
@@ -72,50 +93,37 @@ export function runHauler(creep: Creep) {
     return;
   }
 
-  // Under attack, keep the towers loaded ahead of everything else — they are the room's
-  // ranged defense and a sustained fight drains them ~10 energy/shot, so a far tower left to
-  // the normal closest-spawn/extension/tower order can run dry mid-fight. Top up the emptiest
-  // tower first (towers are clustered by the keep, so travel between them is cheap). In
-  // peacetime towers don't fire or decay, so this never triggers and the normal order holds.
+  // Defense override (both logistics models): under attack, top the emptiest tower first —
+  // towers drain ~10 energy/shot and must not run dry mid-fight. In peacetime towers don't
+  // fire or decay, so this never triggers.
   if (getThreatInfo(creep.room).hostiles.length > 0) {
-    const towers = getRoomStructures(creep.room).filter(
-      (s): s is StructureTower =>
-        s.structureType === STRUCTURE_TOWER &&
-        (s as StructureTower).store.getFreeCapacity(RESOURCE_ENERGY) > 0
-    );
-    if (towers.length > 0) {
-      const target = towers.reduce((a, b) =>
-        a.store.getUsedCapacity(RESOURCE_ENERGY) < b.store.getUsedCapacity(RESOURCE_ENERGY) ? a : b
-      );
-      creep.memory.fillTargetId = target.id;
-      transferEnergyTo(creep, target);
+    const tower = findEmptiestTower(creep.room);
+    if (tower) {
+      creep.memory.fillTargetId = tower.id;
+      transferEnergyTo(creep, tower);
       return;
     }
   }
 
-  // Re-use any cached deposit target (spawn, extension, tower, storage, container).
-  if (creep.memory.fillTargetId) {
-    const cached = Game.getObjectById(creep.memory.fillTargetId as Id<AnyStoreStructure>) as AnyStoreStructure | null;
-    if (cached && "store" in cached && cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-      transferEnergyTo(creep, cached as Structure);
-      return;
+  // Once a room has storage AND a living steward (filler), fillers own core distribution and
+  // haulers just restock the storage buffer below. Until then — no storage yet, or the filler
+  // just died — haulers fill the core directly so spawning is never starved.
+  const storageModel = !!creep.room.storage && hasActiveFiller(creep.room);
+  if (!storageModel) {
+    // Re-use the cached core target while it still has room (skips a findClosestByPath/tick).
+    if (creep.memory.fillTargetId) {
+      const cached = Game.getObjectById(creep.memory.fillTargetId as Id<AnyStoreStructure>) as AnyStoreStructure | null;
+      if (cached && "store" in cached && cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        transferEnergyTo(creep, cached as Structure);
+        return;
+      }
+      creep.memory.fillTargetId = undefined;
     }
-    creep.memory.fillTargetId = undefined;
-  }
 
-  const targets = getRoomStructures(creep.room).filter(
-    (s) =>
-      (s.structureType === STRUCTURE_SPAWN ||
-        s.structureType === STRUCTURE_EXTENSION ||
-        s.structureType === STRUCTURE_TOWER) &&
-      "store" in s &&
-      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
-  );
-  if (targets.length > 0) {
-    const target = creep.pos.findClosestByPath(targets, { ignoreCreeps: true });
-    if (target) {
-      creep.memory.fillTargetId = target.id;
-      transferEnergyTo(creep, target);
+    const coreTarget = findCoreFillTarget(creep);
+    if (coreTarget) {
+      creep.memory.fillTargetId = coreTarget.id;
+      transferEnergyTo(creep, coreTarget);
       return;
     }
   }

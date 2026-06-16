@@ -44,7 +44,8 @@ reports CPU and creep counts every 100 ticks.
 |------|------|-------|
 | **peasant** | Early harvester | Gathers directly from sources; phases out once miners are up |
 | **miner** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
-| **porter** | Hauler | Moves energy to spawns/extensions/storage; also borrowed by the factory and nuker as a courier |
+| **porter** | Hauler | Hauls source energy to storage (fills the core directly until a steward exists); also borrowed by the factory and nuker as a courier |
+| **steward** | Filler | Distributes energy from storage to spawns, extensions, and towers; appears once the room has storage (RCL 4+) |
 | **scholar** | Upgrader | Upgrades the controller to advance RCL |
 | **mason** | Builder | Constructs queued construction sites |
 | **blacksmith** | Repairer | Repairs damaged structures |

@@ -148,6 +148,7 @@ src/
 │   ├── role.harvester.ts            # peasant — early energy gathering
 │   ├── role.miner.ts                # miner — stationary source miner
 │   ├── role.hauler.ts               # porter — energy logistics
+│   ├── role.filler.ts               # steward — storage → keep-core distribution (RCL 4+)
 │   ├── role.upgrader.ts             # scholar — controller upgrading
 │   ├── role.builder.ts              # mason — construction
 │   ├── role.repairer.ts             # blacksmith — structure repair
@@ -194,7 +195,8 @@ in creep names and `Game.arca` output; the right is what it does.
 |------|-----------|----------------|
 | **peasant** | `role.harvester.ts` | Early energy gathering (phases out once miners are up) |
 | **miner** | `role.miner.ts` | Stationary source miner on a container |
-| **porter** | `role.hauler.ts` | Energy logistics (also borrowed by factory/nuker as a courier) |
+| **porter** | `role.hauler.ts` | Source → storage hauling (fills the keep core directly until a steward exists; also borrowed by factory/nuker as a courier) |
+| **steward** | `role.filler.ts` | Distributes storage energy to spawn/extensions/towers; spawned once storage exists (RCL 4+) |
 | **scholar** | `role.upgrader.ts` | Controller upgrading |
 | **mason** | `role.builder.ts` | Construction |
 | **blacksmith** | `role.repairer.ts` | Structure repair |
