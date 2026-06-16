@@ -757,6 +757,35 @@ export function findClosestMinerContainerWithEnergy(
 // because their energy never reached storage, left the stewards nothing to distribute.
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
 
+// How many haulers may top up the controller container at once. The "<1000" gate above is not
+// enough on its own: a hungry upgrader keeps the small container permanently below the threshold,
+// so the gate never closes and the ENTIRE fleet funnels to that one tile — they jam a queue at
+// the controller and stand there unable to reach it while storage sits with room. Restrict the
+// top-up to a fixed, deterministically chosen subset (the N lowest-id haulers in the room);
+// every other hauler drops into storage. The pick is id-based so it is stable tick to tick with
+// no memory races, and one filler keeps the buffer supplied because upgraders also pull straight
+// from storage and the controller link.
+const UPGRADE_CONTAINER_FILLERS = 1;
+
+let upgradeFillerTick = -1;
+const upgradeFillerIdsByRoom: Record<string, Set<string>> = {};
+function getUpgradeContainerFillerIds(room: Room): Set<string> {
+  if (upgradeFillerTick !== Game.time) {
+    upgradeFillerTick = Game.time;
+    for (const k in upgradeFillerIdsByRoom) delete upgradeFillerIdsByRoom[k];
+  }
+  if (!upgradeFillerIdsByRoom[room.name]) {
+    const haulerIds: string[] = [];
+    for (const name in Game.creeps) {
+      const c = Game.creeps[name];
+      if (c.room.name === room.name && c.memory.role === ROLE_HAULER) haulerIds.push(c.id);
+    }
+    haulerIds.sort();
+    upgradeFillerIdsByRoom[room.name] = new Set(haulerIds.slice(0, UPGRADE_CONTAINER_FILLERS));
+  }
+  return upgradeFillerIdsByRoom[room.name];
+}
+
 // Where a full hauler drops energy once spawn/extension/tower are topped up. Storage is the bulk
 // sink and comes first; the controller container only gets a top-up while it's actually running
 // low, so upgraders keep a local supply without every porter funnelling to it (upgraders also
@@ -774,10 +803,13 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
     upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
     minerIds.indexOf(upgradeCont.id as string) === -1;
 
-  // Top up the controller container only while it's low — not merely because it has any room.
+  // Top up the controller container only while it's low, and only if this hauler is one of the
+  // designated fillers — otherwise the whole fleet funnels to it (the upgrader keeps it below the
+  // threshold) and jams the controller. Non-fillers fall through to storage.
   if (
     upgradeIsDropTarget &&
-    (upgradeCont!.store[RESOURCE_ENERGY] ?? 0) < UPGRADE_CONTAINER_REFILL_BELOW
+    (upgradeCont!.store[RESOURCE_ENERGY] ?? 0) < UPGRADE_CONTAINER_REFILL_BELOW &&
+    getUpgradeContainerFillerIds(creep.room).has(creep.id)
   ) {
     return upgradeCont;
   }
