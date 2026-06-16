@@ -165,6 +165,10 @@ declare global {
     lastSeen: number;
     hostile: boolean;
     hostileUntil?: number;
+    // Consecutive player-hostile detections without the room being seen clear. Drives the
+    // escalating avoidance backoff so a player who parks in our remote is abandoned for
+    // progressively longer instead of us re-probing and re-feeding miners every window.
+    hostileStrikes?: number;
     // Set by a remote miner/hauler that spots an Invader (not a player) in the room, so
     // the home raises a knight to clear it. Players set `hostile` instead and we avoid.
     invaderUntil?: number;

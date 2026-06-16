@@ -6,6 +6,11 @@
  *             creep.memory.homeRoom   = owning room name
  */
 
+import {
+  markRemotePlayerHostile,
+  clearRemotePlayerHostile,
+} from "../services/services.creep";
+
 const SCOUT_HOSTILE_DURATION = 2000; // ticks a hostile room is avoided before re-scouting
 
 export function runScout(creep: Creep) {
@@ -56,7 +61,7 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
   const sourceKeepers = hostiles.filter(
     (c) => c.owner.username === "Source Keeper"
   );
-  const isHostile = sourceKeepers.length > 0 || hostiles.some(isPlayerCreep);
+  const hasPlayer = hostiles.some(isPlayerCreep);
 
   let entry = homeRoomMemory.remoteRooms.find((r) => r.roomName === targetRoomName);
   if (!entry) {
@@ -65,12 +70,14 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
   }
 
   entry.lastSeen = Game.time;
-  entry.hostile = isHostile;
-  if (isHostile) {
+  if (hasPlayer) {
+    // Re-probe found the player still here — escalate the avoidance backoff.
+    markRemotePlayerHostile(entry);
+  } else if (sourceKeepers.length > 0) {
+    entry.hostile = true;
     entry.hostileUntil = Game.time + SCOUT_HOSTILE_DURATION;
-  }
-
-  if (!isHostile) {
+  } else {
+    clearRemotePlayerHostile(entry);
     const sources = creep.room.find(FIND_SOURCES);
     entry.sources = sources.map((s) => {
       const existing = entry!.sources.find((es) => es.sourceId === s.id);

@@ -994,6 +994,10 @@ export function findUnclaimedHaulerAssignment(
 // flagged hostile (matches the scout's SCOUT_HOSTILE_DURATION).
 const REMOTE_INVADER_WINDOW = 1500;
 const REMOTE_PLAYER_WINDOW = 2000;
+// Player avoidance escalates: each re-detection without the room being seen clear doubles the
+// window, capped here. A player who parks in our remote is thus abandoned for longer and
+// longer instead of us re-probing and re-feeding miners every REMOTE_PLAYER_WINDOW.
+const REMOTE_PLAYER_WINDOW_MAX = 20000;
 
 function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
   const home = creep.memory.homeRoom;
@@ -1021,13 +1025,34 @@ export function flagRemoteInvader(creep: Creep): void {
 }
 
 // Flag this creep's remote room as player-hostile so we avoid it (we don't pick fights with
-// players over a remote — no defender is raised, the room is simply abandoned for the window).
+// players over a remote — no defender is raised, the room is simply abandoned).
 export function flagRemotePlayer(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
-  if (entry) {
-    entry.hostile = true;
-    entry.hostileUntil = Game.time + REMOTE_PLAYER_WINDOW;
-  }
+  if (entry) markRemotePlayerHostile(entry);
+}
+
+// Mark a remote player-hostile with escalating backoff. The first sighting parks it for
+// REMOTE_PLAYER_WINDOW; each fresh re-detection (after the prior window lapsed) doubles the
+// window up to REMOTE_PLAYER_WINDOW_MAX. Re-flagging within an active window only refreshes
+// the expiry — it doesn't escalate — so one contested episode counts as a single strike.
+export function markRemotePlayerHostile(entry: RemoteRoomData): void {
+  const avoided =
+    entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
+  if (!avoided) entry.hostileStrikes = (entry.hostileStrikes ?? 0) + 1;
+  const window = Math.min(
+    REMOTE_PLAYER_WINDOW * 2 ** ((entry.hostileStrikes ?? 1) - 1),
+    REMOTE_PLAYER_WINDOW_MAX
+  );
+  entry.hostile = true;
+  entry.hostileUntil = Game.time + window;
+}
+
+// Remote confirmed clear of players — lift avoidance and reset the backoff so mining resumes
+// and the next player sighting starts the escalation from scratch.
+export function clearRemotePlayerHostile(entry: RemoteRoomData): void {
+  entry.hostile = false;
+  entry.hostileUntil = undefined;
+  entry.hostileStrikes = 0;
 }
 
 // Clear the Invader flag once a remote creep is working the room unmolested again, so the

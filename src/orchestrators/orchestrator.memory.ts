@@ -1,4 +1,8 @@
-import { isSourceKeeperRoom } from "../services/services.combat";
+import { isSourceKeeperRoom, isPlayerCreep } from "../services/services.combat";
+import {
+  markRemotePlayerHostile,
+  clearRemotePlayerHostile,
+} from "../services/services.creep";
 
 const REMOTE_RESCAN_INTERVAL = 3000;
 const DEVELOPING_SCAN_INTERVAL = 10;
@@ -202,11 +206,17 @@ function refreshVisibleRemoteRooms(room: Room) {
 
     remote.lastSeen = Game.time;
     const hostiles = visible.find(FIND_HOSTILE_CREEPS);
-    remote.hostile = hostiles.length > 0;
-    if (remote.hostile) {
+    if (hostiles.some(isPlayerCreep)) {
+      // Player present — escalating backoff (don't stomp it with the flat window below).
+      markRemotePlayerHostile(remote);
+      continue;
+    }
+    if (hostiles.length > 0) {
+      remote.hostile = true;
       remote.hostileUntil = Game.time + REMOTE_HOSTILE_EXPIRY;
       continue;
     }
+    clearRemotePlayerHostile(remote);
 
     // Refresh source → container mapping while the room is visible
     const sources = visible.find(FIND_SOURCES);
