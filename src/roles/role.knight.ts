@@ -1,4 +1,4 @@
-import { seekBoost } from "../services/services.combat";
+import { seekBoost, findInvaderCore } from "../services/services.combat";
 import { clearRemoteInvader } from "../services/services.creep";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
 
@@ -43,18 +43,30 @@ export function runKnight(creep: Creep) {
   }
 
   const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
-  if (!hostile) {
-    // Reached the assigned room and it's clear — a remote defender has secured it, so lift
-    // the Invader flag and let the miners/haulers come back (no-op for a child-room defender,
-    // which has no remote-room entry).
-    if (creep.memory.targetRoom === creep.room.name) clearRemoteInvader(creep);
-    const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
-    if (spawn && !creep.pos.isNearTo(spawn)) {
-      creep.moveTo(spawn, { reusePath: 20 });
+  if (hostile) {
+    if (creep.attack(hostile) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(hostile, { reusePath: 3 });
     }
     return;
   }
-  if (creep.attack(hostile) === ERR_NOT_IN_RANGE) {
-    creep.moveTo(hostile, { reusePath: 3 });
+
+  // No hostile creeps left, but an Invader Core keeps re-reserving the room and re-spawning
+  // defenders — destroy it too, or the remote stays bricked. (Pre-deploy it's invulnerable;
+  // attacking simply parks the knight on it until the deploy timer elapses.)
+  const core = findInvaderCore(creep.room);
+  if (core) {
+    if (creep.attack(core) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(core, { reusePath: 3 });
+    }
+    return;
+  }
+
+  // Reached the assigned room and it's truly clear (no creeps, no core) — lift the Invader
+  // flag and let the miners/haulers come back (no-op for a child-room defender, which has no
+  // remote-room entry).
+  if (creep.memory.targetRoom === creep.room.name) clearRemoteInvader(creep);
+  const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
+  if (spawn && !creep.pos.isNearTo(spawn)) {
+    creep.moveTo(spawn, { reusePath: 20 });
   }
 }

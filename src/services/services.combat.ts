@@ -291,6 +291,17 @@ export function isInvaderCreep(creep: Creep): boolean {
   return creep.owner?.username === "Invader";
 }
 
+// The NPC Invader Core structure, if one is present. In a remote/reserved room a core
+// reserves the controller for "Invader" (blocking ours) and periodically spawns defender
+// creeps — so killing only the creeps leaves the core to re-reserve and re-spawn forever.
+// A defender must destroy the core itself to free the remote.
+export function findInvaderCore(room: Room): StructureInvaderCore | null {
+  const cores = room.find(FIND_HOSTILE_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
+  });
+  return (cores[0] as StructureInvaderCore | undefined) ?? null;
+}
+
 // A rival player's creep — anything that isn't NPC (Source Keeper / Invader).
 export function isPlayerCreep(creep: Creep): boolean {
   const u = creep.owner?.username;

@@ -14,7 +14,7 @@ import {
   flagRemotePlayer,
   clearRemoteInvader,
 } from "../services/services.creep";
-import { getThreatInfo, isInvaderCreep, isPlayerCreep } from "../services/services.combat";
+import { getThreatInfo, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 
 export function runRemoteHauler(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
@@ -25,9 +25,12 @@ export function runRemoteHauler(creep: Creep) {
   }
 
   // Record any visible threat so the room gets flagged (Invader → defender; player → avoid).
+  // An Invader Core is an Invader threat in its own right — flag it so a defender is raised.
   const inTarget = creep.room.name === targetRoom;
   const threat = inTarget ? getThreatInfo(creep.room) : null;
-  if (threat && threat.score > 0) {
+  const core = inTarget ? findInvaderCore(creep.room) : null;
+  if (core) flagRemoteInvader(creep);
+  else if (threat && threat.score > 0) {
     if (threat.hostiles.some(isInvaderCreep)) flagRemoteInvader(creep);
     else if (threat.hostiles.some(isPlayerCreep)) flagRemotePlayer(creep);
   }
@@ -43,8 +46,9 @@ export function runRemoteHauler(creep: Creep) {
     return;
   }
 
-  // In the room and safe again — let collection resume and stop the defender spawns.
-  if (inTarget) clearRemoteInvader(creep);
+  // In the room and safe again — let collection resume and stop the defender spawns. Hold the
+  // flag while a core still stands so the defender keeps working until the room is truly clear.
+  if (inTarget && !core) clearRemoteInvader(creep);
 
   if (creep.store[RESOURCE_ENERGY] === 0) {
     collectEnergy(creep, targetRoom);

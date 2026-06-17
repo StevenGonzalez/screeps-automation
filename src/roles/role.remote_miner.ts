@@ -8,7 +8,7 @@
  *             creep.memory.remoteSourceId = Id<Source> to harvest
  */
 
-import { getThreatInfo, isInvaderCreep, isPlayerCreep } from "../services/services.combat";
+import { getThreatInfo, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 import {
   isAssignedRemoteContested,
   flagRemoteInvader,
@@ -25,24 +25,28 @@ export function runRemoteMiner(creep: Creep) {
   }
 
   // Record any threat we can see so the room gets flagged (Invader → defender; player →
-  // avoid), which is what stops us re-entering on later ticks.
+  // avoid), which is what stops us re-entering on later ticks. An Invader Core counts as an
+  // Invader threat even with no creeps in sight — it must be destroyed to free the remote.
   const inTarget = creep.room.name === targetRoom;
   const threat = inTarget ? getThreatInfo(creep.room) : null;
-  if (threat && threat.score > 0) {
+  const core = inTarget ? findInvaderCore(creep.room) : null;
+  if (core) flagRemoteInvader(creep);
+  else if (threat && threat.score > 0) {
     if (threat.hostiles.some(isInvaderCreep)) flagRemoteInvader(creep);
     else if (threat.hostiles.some(isPlayerCreep)) flagRemotePlayer(creep);
   }
 
   // Stay home while the remote is contested. Don't ferry an unarmed outrider in to die — and
   // crucially don't ping-pong (in → attacked → flee → towers heal → back in), which drains
-  // tower energy. Wait until the flag clears (Invader killed by a defender, or window lapses).
+  // tower energy. Wait until the flag clears (Invader/core killed by a defender, or window lapses).
   if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
     if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
     return;
   }
 
   // In the room and safe — a defender cleared it (or the flag lapsed); let mining resume.
-  if (inTarget) clearRemoteInvader(creep);
+  // Don't lift the flag while a core still stands, or we'd march back in and re-flag in a loop.
+  if (inTarget && !core) clearRemoteInvader(creep);
 
   // Travel to the target room
   if (creep.room.name !== targetRoom) {
