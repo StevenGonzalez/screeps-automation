@@ -21,6 +21,8 @@ import {
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
+  ROLE_DEPOSIT_MINER,
+  ROLE_DEPOSIT_HAULER,
   ROLE_SK_GUARDIAN,
   ROLE_SK_MINER,
   ROLE_SK_HAULER,
@@ -286,6 +288,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 
   if (shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
   if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
+  if (shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;
   if (spawnSkCreeps(room, spawn)) return;
   if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
@@ -1437,6 +1440,79 @@ function buildPowerCarrierBody(): BodyPartConstant[] {
     ...Array(25).fill(CARRY),
     ...Array(25).fill(MOVE),
   ] as BodyPartConstant[];
+}
+
+// ── Deposit mining squad helpers ──────────────────────────────────────────────
+
+function getDepositOpForRoom(room: Room): DepositOp | undefined {
+  return Memory.depositOps?.find((o) => o.homeRoom === room.name && o.phase === "mining");
+}
+
+function getDepositMembersById(opId: number): Creep[] {
+  const result: Creep[] = [];
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.memory.depositOpId === opId) result.push(c);
+  }
+  return result;
+}
+
+function shouldSpawnDepositCreep(room: Room): boolean {
+  const op = getDepositOpForRoom(room);
+  if (!op) return false;
+  const members = getDepositMembersById(op.id);
+  return (
+    members.filter((c) => c.memory.role === ROLE_DEPOSIT_MINER).length < op.requiredMiners ||
+    members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length < op.requiredHaulers
+  );
+}
+
+function spawnNextDepositCreep(room: Room, spawn: StructureSpawn): boolean {
+  const op = getDepositOpForRoom(room);
+  if (!op) return false;
+
+  const members = getDepositMembersById(op.id);
+  const miners = members.filter((c) => c.memory.role === ROLE_DEPOSIT_MINER).length;
+  const haulers = members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length;
+
+  // Miner first — without it there is nothing for the haulers to collect.
+  let roleToSpawn: string;
+  let body: BodyPartConstant[];
+  const energy = room.energyCapacityAvailable;
+  if (miners < op.requiredMiners) {
+    roleToSpawn = ROLE_DEPOSIT_MINER;
+    body = buildDepositMinerBody(energy);
+  } else if (haulers < op.requiredHaulers) {
+    roleToSpawn = ROLE_DEPOSIT_HAULER;
+    body = buildRemoteHaulerBody(Math.floor(energy * (1 - SPAWN_ENERGY_RESERVE)));
+  } else {
+    return false;
+  }
+
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = spawn.spawnCreep(body, `${roleToSpawn}${Game.time}`, {
+    memory: { role: roleToSpawn, homeRoom: room.name, depositOpId: op.id },
+  });
+  if (res === OK) {
+    console.log(`[Deposit] Spawning ${roleToSpawn} for op #${op.id} → ${op.roomName}`);
+  }
+  return res === OK;
+}
+
+// Deposit miner: WORK-heavy with a CARRY buffer. group = 2×WORK + CARRY + 2×MOVE = 350e;
+// the 2 MOVE clear the 3 fatigue from 2 WORK + 1 CARRY, so it travels full speed on plains.
+// More WORK = more yield per harvest before the deposit-wide cooldown bites.
+function buildDepositMinerBody(availableEnergy: number): BodyPartConstant[] {
+  const group: BodyPartConstant[] = [WORK, WORK, CARRY, MOVE, MOVE];
+  const groupCost = calculateBodyPartCost(group);
+  const maxGroups = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / group.length),
+    Math.floor(availableEnergy / groupCost)
+  );
+  const groups = Math.max(1, maxGroups);
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < groups; i++) body.push(...group);
+  return body;
 }
 
 // ── Source Keeper mining squad helpers ────────────────────────────────────────

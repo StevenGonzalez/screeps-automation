@@ -42,6 +42,11 @@ for each.
 The orchestrator walks this list and makes the first target that is under-stocked,
 has its ingredients available, and clears its level gate.
 
+> Tier-2 ingredients (the compressed silicon/metal/biomass/mist bars) come from raw
+> **highway deposits**, harvested by the deposit-mining system on the observer scan.
+> Without it, Tier-2 can only run on market-bought raw materials. See
+> [OBSERVER_SYSTEM.md](OBSERVER_SYSTEM.md#deposit-mining-orchestratorobserverts-rcl-8).
+
 ### Factory-level gating (PWR_OPERATE_FACTORY)
 
 Tier-0 and Tier-1 commodities need no leveled factory. Tier-2 commodities carry

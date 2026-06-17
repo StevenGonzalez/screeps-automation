@@ -21,6 +21,8 @@ import {
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
+  ROLE_DEPOSIT_MINER,
+  ROLE_DEPOSIT_HAULER,
   ROLE_SK_GUARDIAN,
   ROLE_SK_MINER,
   ROLE_SK_HAULER,
@@ -47,6 +49,8 @@ import { runApothecary } from "../roles/role.apothecary";
 import { runPowerAttacker } from "../roles/role.powerattacker";
 import { runPowerHealer } from "../roles/role.powerhealer";
 import { runPowerCarrier } from "../roles/role.powercarrier";
+import { runDepositMiner } from "../roles/role.depositminer";
+import { runDepositHauler } from "../roles/role.deposithauler";
 import { runSkGuardian } from "../roles/role.sk_guardian";
 import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
@@ -78,6 +82,8 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_POWER_ATTACKER]: runPowerAttacker,
   [ROLE_POWER_HEALER]: runPowerHealer,
   [ROLE_POWER_CARRIER]: runPowerCarrier,
+  [ROLE_DEPOSIT_MINER]: runDepositMiner,
+  [ROLE_DEPOSIT_HAULER]: runDepositHauler,
   [ROLE_SK_GUARDIAN]: runSkGuardian,
   [ROLE_SK_MINER]: runSkMiner,
   [ROLE_SK_HAULER]: runSkHauler,

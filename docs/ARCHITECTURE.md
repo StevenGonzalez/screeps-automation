@@ -70,7 +70,7 @@ See [QUICKSTART.md](QUICKSTART.md) for the full command list. There is no
 `Game.arca.showPlan()`, `intel()`, `threats()`, or `sendEnergy()` — those were
 never built. The real commands include `expand`, `queueExpand`, `claim`,
 `status`, `ops`, `labs`, `produce`, `network`, `attack`, `squads`, `warcouncil`,
-`threat`, `nukes`, `nuker`, `launchNuke`, `factory`, `sk`, `power`, and more.
+`threat`, `nukes`, `nuker`, `launchNuke`, `factory`, `sk`, `power`, `deposits`, and more.
 
 ---
 
@@ -170,7 +170,9 @@ src/
 │   ├── role.sk_guardian.ts          # Source Keeper killer / guardian
 │   ├── role.powerattacker.ts        # breacher — PowerBank assault
 │   ├── role.powerhealer.ts          # battlepriest — PowerBank squad healing
-│   └── role.powercarrier.ts         # caravan — power collection
+│   ├── role.powercarrier.ts         # caravan — power collection
+│   ├── role.depositminer.ts         # quarrier — highway deposit harvesting
+│   └── role.deposithauler.ts        # carter — highway deposit hauling
 ├── planning/
 │   ├── planner.stamp.ts             # Castle stamp layout generation
 │   ├── planner.room.ts              # Road planning and structure placement
@@ -215,6 +217,8 @@ in creep names and `Game.arca` output; the right is what it does.
 | **breacher** | `role.powerattacker.ts` | PowerBank assault |
 | **battlepriest** | `role.powerhealer.ts` | PowerBank squad healing |
 | **caravan** | `role.powercarrier.ts` | Power collection |
+| **quarrier** | `role.depositminer.ts` | Highway deposit harvesting (silicon/metal/biomass/mist) |
+| **carter** | `role.deposithauler.ts` | Highway deposit hauling home |
 
 (Source Keeper roles — sk_miner / sk_hauler / sk_guardian — keep their plain names.)
 

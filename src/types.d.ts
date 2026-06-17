@@ -44,6 +44,26 @@ declare global {
     collected?: boolean;
   }
 
+  // A highway-deposit mining operation against one Deposit (silicon/metal/biomass/mist).
+  // Mirrors PowerBankOp but needs no combat squad — deposits are unguarded. A single
+  // WORK-heavy miner works the deposit (harvest triggers a deposit-wide cooldown, so one
+  // big miner out-yields several small ones) and haulers ferry the raw resource home to
+  // storage, where the factory consumes it for tier-2 commodities.
+  interface DepositOp {
+    id: number;
+    depositId?: Id<Deposit>;
+    roomName: string;
+    homeRoom: string;
+    depositType: DepositConstant;
+    phase: "mining" | "done";
+    startedAt: number;
+    // Most recent observed deposit.lastCooldown. Harvest cooldown grows with total yield;
+    // the op is abandoned once it climbs past DEPOSIT_MAX_COOLDOWN (no longer worth it).
+    lastCooldown: number;
+    requiredMiners: number;
+    requiredHaulers: number;
+  }
+
   // Tactical squad formation: governs how members space themselves around the leader.
   type SquadFormation = "line" | "box" | "wedge" | "scatter";
 
@@ -199,6 +219,8 @@ declare global {
     defensiveTarget?: string;
     // Power bank ops
     powerOpId?: number;
+    // Highway deposit mining ops
+    depositOpId?: number;
     // Source Keeper mining ops
     skOpId?: number;
     skSourceId?: Id<Source>;
@@ -281,6 +303,8 @@ declare global {
     intel?: Record<string, RoomIntelData>;
     powerOps?: PowerBankOp[];
     nextPowerOpId?: number;
+    depositOps?: DepositOp[];
+    nextDepositOpId?: number;
     skOps?: SourceKeeperOp[];
     nextSkOpId?: number;
     // Kill-switch for the traffic manager (set true to fall back to vanilla moveTo)

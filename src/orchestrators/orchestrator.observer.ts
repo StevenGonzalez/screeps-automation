@@ -6,6 +6,14 @@ import {
 
 const POWER_BANK_MIN_POWER = 2000;
 const POWER_BANK_MIN_TICKS = 3000;
+// Deposit harvest cooldown grows with cumulative yield. Only commit to a fresh-ish deposit
+// (low lastCooldown) with plenty of life left, and abandon it once the cooldown climbs past
+// the max — past that the energy/CPU spent hauling outweighs the trickle of resource.
+const DEPOSIT_MAX_COOLDOWN = 100;
+const DEPOSIT_MIN_TICKS = 3000;
+// Bound an op that never makes contact (deposit unreachable, room contested) so it can't
+// linger in memory forever when the room is never seen clear.
+const DEPOSIT_HARD_TIMEOUT = 20000;
 const POWER_FORMING_TIMEOUT = 2000;
 // Abandon a crack that never lands (squad too weak, or pushed out of the room so we lose
 // the eyes that would detect the bank breaking) instead of hanging in 'cracking' forever.
@@ -24,6 +32,7 @@ export function loop() {
     runPowerSpawn(room);
   }
   updatePowerOps();
+  updateDepositOps();
 }
 
 function runObserver(room: Room) {
@@ -47,6 +56,7 @@ function scanVisibleHighwayRooms(homeRoomName: string) {
     if (!isHighwayRoom(roomName)) continue;
     if (Game.map.getRoomLinearDistance(homeRoomName, roomName) > OBSERVER_SCAN_RANGE) continue;
     checkForPowerBanks(roomName);
+    checkForDeposits(roomName);
   }
 }
 
@@ -221,6 +231,109 @@ export function getPowerSquadMembers(opId: number): Creep[] {
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
     if (c.memory.powerOpId === opId) result.push(c);
+  }
+  return result;
+}
+
+// ── Highway deposit mining ────────────────────────────────────────────────────
+
+function checkForDeposits(roomName: string) {
+  const room = Game.rooms[roomName];
+  if (!room) return;
+
+  const existing = (Memory.depositOps ?? []).find(
+    (op) => op.roomName === roomName && op.phase !== "done"
+  );
+  if (existing) return;
+
+  const deposits = room.find(FIND_DEPOSITS);
+  if (deposits.length === 0) return;
+  // Prefer the freshest deposit (lowest accumulated cooldown).
+  const deposit = deposits.reduce((best, d) => (d.lastCooldown < best.lastCooldown ? d : best));
+  if (deposit.lastCooldown > DEPOSIT_MAX_COOLDOWN) return;
+  if (deposit.ticksToDecay < DEPOSIT_MIN_TICKS) return;
+
+  // Fund from the closest owned room.
+  const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
+  if (ownedRooms.length === 0) return;
+  const homeRoom = ownedRooms.reduce((best, r) => {
+    const d = Game.map.getRoomLinearDistance(r.name, roomName);
+    const bd = Game.map.getRoomLinearDistance(best.name, roomName);
+    return d < bd ? r : best;
+  });
+
+  if (!Memory.depositOps) Memory.depositOps = [];
+  if (!Memory.nextDepositOpId) Memory.nextDepositOpId = 1;
+
+  // One big WORK miner out-yields several small ones (harvest triggers a deposit-wide
+  // cooldown), so we run a single miner. Haulers scale with travel distance so the miner
+  // never stalls on a full buffer waiting for a courier to return.
+  const distance = Game.map.getRoomLinearDistance(homeRoom.name, roomName);
+  const haulers = distance >= 4 ? 2 : 1;
+  const op: DepositOp = {
+    id: Memory.nextDepositOpId++,
+    depositId: deposit.id,
+    roomName,
+    homeRoom: homeRoom.name,
+    depositType: deposit.depositType,
+    phase: "mining",
+    startedAt: Game.time,
+    lastCooldown: deposit.lastCooldown,
+    requiredMiners: 1,
+    requiredHaulers: haulers,
+  };
+  Memory.depositOps.push(op);
+  console.log(
+    `[Observer] Deposit (${deposit.depositType}) in ${roomName}: cooldown ${deposit.lastCooldown}, ` +
+    `${deposit.ticksToDecay} ticks. Op #${op.id} — 1 miner/${haulers} haulers from ${homeRoom.name}`
+  );
+}
+
+function updateDepositOps() {
+  if (!Memory.depositOps?.length) return;
+  for (const op of Memory.depositOps) {
+    if (op.phase !== "done") updateDepositOp(op);
+  }
+  Memory.depositOps = Memory.depositOps.filter((op) => op.phase !== "done");
+}
+
+function updateDepositOp(op: DepositOp) {
+  if (Game.time - op.startedAt > DEPOSIT_HARD_TIMEOUT) {
+    console.log(`[Deposit] Op #${op.id} hard-timed-out (${op.roomName}) — ending`);
+    endDepositOp(op);
+    return;
+  }
+
+  // The deposit can only be re-checked when the room is visible (a creep is in it, or the
+  // observer just scanned it). Mirror the power-op pattern: terminate once we can see the
+  // deposit is gone or no longer worth working.
+  if (Game.rooms[op.roomName]) {
+    const deposit = op.depositId ? Game.getObjectById(op.depositId) : null;
+    if (!deposit) {
+      console.log(`[Deposit] Op #${op.id} deposit gone (${op.roomName}) — ending`);
+      endDepositOp(op);
+      return;
+    }
+    op.lastCooldown = deposit.lastCooldown;
+    if (deposit.lastCooldown > DEPOSIT_MAX_COOLDOWN || deposit.ticksToDecay < DEPOSIT_MIN_TICKS) {
+      console.log(
+        `[Deposit] Op #${op.id} exhausted (${op.roomName}, cooldown ${deposit.lastCooldown}) — ending`
+      );
+      endDepositOp(op);
+    }
+  }
+}
+
+// End an op cleanly: flip to done and release members so they deliver any load and suicide.
+function endDepositOp(op: DepositOp) {
+  op.phase = "done";
+}
+
+export function getDepositSquadMembers(opId: number): Creep[] {
+  const result: Creep[] = [];
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.memory.depositOpId === opId) result.push(c);
   }
   return result;
 }

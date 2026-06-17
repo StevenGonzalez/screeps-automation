@@ -26,6 +26,8 @@ import {
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
+  ROLE_DEPOSIT_MINER,
+  ROLE_DEPOSIT_HAULER,
 } from "./config/config.roles";
 import {
   rankExpansionCandidates,
@@ -747,6 +749,31 @@ export function setupConsole() {
         );
       }
       if (!foundPs) console.log("[Power] No PowerSpawn structures found (RCL 8 required)");
+    },
+
+    // Show highway deposit mining operation status
+    deposits: () => {
+      const ops = Memory.depositOps;
+      if (!ops || ops.length === 0) {
+        console.log("[Deposit] No active deposit mining operations");
+        return;
+      }
+      for (const op of ops) {
+        const age = Game.time - op.startedAt;
+        const members = Object.values(Game.creeps).filter((c) => c.memory.depositOpId === op.id);
+        const miners = members.filter((c) => c.memory.role === ROLE_DEPOSIT_MINER).length;
+        const haulers = members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length;
+        console.log(
+          `[Deposit] Op #${op.id}: ${op.homeRoom} → ${op.roomName}` +
+          `  type=${op.depositType}  phase=${op.phase}  cooldown=${op.lastCooldown}  age=${age}`
+        );
+        console.log(
+          `  Crew: ${miners}/${op.requiredMiners} miners  ${haulers}/${op.requiredHaulers} haulers`
+        );
+        for (const c of members) {
+          console.log(`  ${c.name}  role=${c.memory.role}  room=${c.room.name}  load=${c.store.getUsedCapacity()}`);
+        }
+      }
     },
 
     // Source Keeper mining. No arg → status; with a room → start an op; skstop → cancel.
