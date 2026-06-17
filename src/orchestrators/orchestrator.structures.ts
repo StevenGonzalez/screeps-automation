@@ -1,6 +1,8 @@
 import {
   planSourceContainer,
   planControllerContainer,
+  planControllerLink,
+  planSourceLink,
   planMineralContainer,
   addPlannedStructureToMemory,
   ensureMemoryRoomStructures,
@@ -501,6 +503,50 @@ function processRoomStructures(room: Room) {
     } else if (planned.length === 0 && !hasControllerContainer) {
       const pos = planControllerContainer(room, room.controller);
       if (pos) addPlannedStructureToMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER, pos);
+    }
+  }
+
+  // Energy links. The link engine only *sends* from miner-adjacent links to
+  // controller/storage sinks, so a link is useless until it has a partner — there's no
+  // value in the lone RCL5 link, so the first functional pair (source link + controller
+  // link) lands together at RCL6. Per-RCL cap rollout: source link + controller @6,
+  // storage-hub (placed by the castle stamp) @7, 2nd source link @8.
+  if (room.controller) {
+    const rcl = room.controller.level;
+
+    // Controller link (sink) from RCL6.
+    if (rcl >= 6) {
+      const plannedLink = plannedPositionsFromMemory(room, PLANNER_KEYS.LINK_CONTROLLER);
+      const builtNearController =
+        room.controller.pos.findInRange(FIND_MY_STRUCTURES, 3, {
+          filter: (s) => s.structureType === STRUCTURE_LINK,
+        }).length > 0;
+      if (plannedLink.length === 0 && !builtNearController) {
+        const pos = planControllerLink(room, room.controller);
+        if (pos) addPlannedStructureToMemory(room, PLANNER_KEYS.LINK_CONTROLLER, pos);
+      }
+    }
+
+    // Source links (senders). Rank sources by distance from storage so the farthest
+    // (longest hauls saved) gets the first link @RCL6; remaining sources wait until RCL8.
+    const ref = room.storage?.pos ?? room.find(FIND_MY_SPAWNS)[0]?.pos;
+    if (ref) {
+      const ranked = room
+        .find(FIND_SOURCES)
+        .filter((s) => isSourceSafe(s))
+        .sort((a, b) => b.pos.getRangeTo(ref) - a.pos.getRangeTo(ref));
+      ranked.forEach((source, i) => {
+        if (rcl < (i === 0 ? 6 : 8)) return;
+        const key = `${PLANNER_KEYS.LINK_SOURCE_PREFIX}${source.id}`;
+        if (plannedPositionsFromMemory(room, key).length > 0) return;
+        const builtNearSource =
+          source.pos.findInRange(FIND_MY_STRUCTURES, 2, {
+            filter: (s) => s.structureType === STRUCTURE_LINK,
+          }).length > 0;
+        if (builtNearSource) return;
+        const pos = planSourceLink(room, source);
+        if (pos) addPlannedStructureToMemory(room, key, pos);
+      });
     }
   }
 

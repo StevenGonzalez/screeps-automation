@@ -11,6 +11,7 @@ export type StampStructureType =
   | "nuker"
   | "power_spawn"
   | "observer"
+  | "link"
   | "road"
   | "rampart";
 
@@ -34,6 +35,10 @@ export const CASTLE_STAMP: StampCell[] = [
   { dx:  0, dy: -6, type: "observer",    minRcl: 8 },
   { dx:  2, dy: -4, type: "power_spawn", minRcl: 8, critical: true },
   { dx: -2, dy: -4, type: "nuker",       minRcl: 8 },
+  // Storage-hub link: sits in the courtyard SE of storage (range 1), so fillers
+  // draw from it and the link engine classifies it as a storage sink. RCL7 — only
+  // useful once a source link exists (RCL6) to feed it (see planSourceLink).
+  { dx:  1, dy:  3, type: "link",        minRcl: 7 },
   // Towers at corners + E/W midpoints
   { dx: -4, dy: -4, type: "tower",       minRcl: 3 },
   { dx:  4, dy: -4, type: "tower",       minRcl: 5 },
@@ -101,6 +106,7 @@ export function stampMemoryKeyFor(cell: StampCell): string {
     case "terminal":    return PLANNER_KEYS.STAMP_TERMINAL_KEY;
     case "factory":     return PLANNER_KEYS.STAMP_FACTORY_KEY;
     case "observer":    return PLANNER_KEYS.STAMP_OBSERVER_KEY;
+    case "link":        return PLANNER_KEYS.STAMP_LINK_KEY;
     case "nuker":       return PLANNER_KEYS.STAMP_NUKER_KEY;
     case "power_spawn": return PLANNER_KEYS.STAMP_POWER_SPAWN_KEY;
     default:            return PLANNER_KEYS.CASTLE_STAMP_KEY;

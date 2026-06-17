@@ -236,6 +236,79 @@ export function planMineralContainer(
   return null;
 }
 
+// Miner container for a source: a built container within range 1, else the planned
+// one in memory. The source link anchors off this so the stationary miner can reach it.
+function sourceContainerPos(room: Room, source: Source): RoomPosition | null {
+  const built = source.pos.findInRange(FIND_STRUCTURES, 1, {
+    filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+  }) as StructureContainer[];
+  if (built.length > 0) return built[0].pos;
+  const planned = plannedPositionsFromMemory(
+    room,
+    `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`
+  );
+  return planned[0] ?? null;
+}
+
+// A source link sits beside the miner container so the stationary miner can transfer
+// into it (range 1) and the link engine classifies it as an energy "source". Prefer a
+// tile that doesn't also border the source, keeping the miner's stand tile walkable.
+export function planSourceLink(room: Room, source: Source): RoomPosition | null {
+  const container = sourceContainerPos(room, source);
+  if (!container) return null;
+  let fallback: RoomPosition | null = null;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = container.x + dx;
+      const y = container.y + dy;
+      if (x === source.pos.x && y === source.pos.y) continue;
+      if (!isBuildableTile(room, x, y)) continue;
+      const pos = new RoomPosition(x, y, room.name);
+      if (pos.getRangeTo(source.pos) > 1) return pos;
+      if (!fallback) fallback = pos;
+    }
+  }
+  return fallback;
+}
+
+// The controller link is a "sink": upgraders withdraw from it and the link engine
+// fills it. Place it beside the upgrade container (so upgraders draw in place) while
+// staying within link/scan range 3 of the controller; fall back to a ring around it.
+export function planControllerLink(
+  room: Room,
+  controller: StructureController
+): RoomPosition | null {
+  const container =
+    (room.memory.upgradeContainerId &&
+      (Game.getObjectById(room.memory.upgradeContainerId) as StructureContainer | null)?.pos) ||
+    plannedPositionsFromMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER)[0] ||
+    null;
+  if (container) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const x = container.x + dx;
+        const y = container.y + dy;
+        const pos = new RoomPosition(x, y, room.name);
+        if (pos.getRangeTo(controller.pos) > 3) continue;
+        if (isBuildableTile(room, x, y)) return pos;
+      }
+    }
+  }
+  for (let r = 2; r <= 3; r++) {
+    for (let dx = -r; dx <= r; dx++) {
+      for (let dy = -r; dy <= r; dy++) {
+        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+        const x = controller.pos.x + dx;
+        const y = controller.pos.y + dy;
+        if (isBuildableTile(room, x, y)) return new RoomPosition(x, y, room.name);
+      }
+    }
+  }
+  return null;
+}
+
 export function planRoadsBetween(
   room: Room,
   fromPos: RoomPosition,
@@ -567,6 +640,8 @@ export function structureTypeForKey(key: string): StructureConstant | null {
   if (key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)) return STRUCTURE_ROAD;
   if (key === PLANNER_KEYS.RAMPARTS_KEY) return STRUCTURE_RAMPART;
   if (key === PLANNER_KEYS.CONTAINER_CONTROLLER) return STRUCTURE_CONTAINER;
+  if (key === PLANNER_KEYS.LINK_CONTROLLER) return STRUCTURE_LINK;
+  if (key.startsWith(PLANNER_KEYS.LINK_SOURCE_PREFIX)) return STRUCTURE_LINK;
   // Stamp keys
   if (key.startsWith(PLANNER_KEYS.STAMP_SPAWN_PREFIX))  return STRUCTURE_SPAWN;
   if (key.startsWith(PLANNER_KEYS.STAMP_TOWER_PREFIX))  return STRUCTURE_TOWER;
@@ -578,6 +653,7 @@ export function structureTypeForKey(key: string): StructureConstant | null {
   if (key === PLANNER_KEYS.STAMP_NUKER_KEY)             return STRUCTURE_NUKER;
   if (key === PLANNER_KEYS.STAMP_POWER_SPAWN_KEY)       return STRUCTURE_POWER_SPAWN;
   if (key === PLANNER_KEYS.STAMP_OBSERVER_KEY)          return STRUCTURE_OBSERVER;
+  if (key === PLANNER_KEYS.STAMP_LINK_KEY)              return STRUCTURE_LINK;
   if (key === PLANNER_KEYS.STAMP_ROAD_KEY)              return STRUCTURE_ROAD;
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY)           return STRUCTURE_RAMPART;
   if (key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX)) return STRUCTURE_ROAD;
