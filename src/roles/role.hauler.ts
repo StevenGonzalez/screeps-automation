@@ -10,7 +10,7 @@ import {
   findCoreFillTarget,
   putSurplusEnergyToWork,
 } from "../services/services.creep";
-import { getThreatInfo } from "../services/services.combat";
+import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
 
 // Cheap per-tick, per-room check: is a steward (filler) alive to own core distribution? When
@@ -34,6 +34,11 @@ function hasActiveFiller(room: Room): boolean {
 }
 
 export function runHauler(creep: Creep) {
+  // Get move-boosted (XZHO2, -75% fatigue) before hauling. seekBoost returns true while still
+  // travelling to / waiting on a lab and clears the request on timeout, so this never blocks
+  // logistics forever — once boosted (or given up) it returns false and the hauler proceeds.
+  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
+
   if (!creep.memory.assignedContainerId) {
     const assignment = findUnclaimedHaulerAssignment(creep.room);
     if (assignment) {

@@ -22,6 +22,11 @@ const COLLECTING_TIMEOUT = 300;
 const SQUAD_ATTACKERS = 2;
 const SQUAD_HEALERS = 3;
 const OBSERVER_SCAN_RANGE = 10;
+// Power processing burns 1 energy + 1 power per cycle and competes with the whole
+// economy for storage energy. Only process when storage is comfortably stocked so a
+// thin colony never starves spawning/upgrading to convert power. Healthy colonies
+// (storage above this floor) process freely.
+const POWER_PROCESS_ENERGY_FLOOR = 100000;
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -344,6 +349,10 @@ function runPowerSpawn(room: Room) {
   if (!ps) { room.memory.powerSpawnId = undefined; return; }
   if (ps.power === 0) return;
   if (ps.store[RESOURCE_ENERGY] < 50) return; // POWER_PROCESS_COST = 50
+  // Don't convert power while the colony's energy is thin — power processing must never
+  // starve spawning/upgrading. Only process when storage energy is above a healthy floor.
+  const storedEnergy = room.storage?.store[RESOURCE_ENERGY] ?? 0;
+  if (storedEnergy < POWER_PROCESS_ENERGY_FLOOR) return;
   ps.processPower();
 }
 

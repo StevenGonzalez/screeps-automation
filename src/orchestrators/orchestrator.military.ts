@@ -13,6 +13,27 @@ import {
   type BreachPlan,
   type TowerStatus,
 } from "../services/services.combat";
+// READ-ONLY use of the offensive nuker: launchNukeFrom validates the nuker's loaded/ready
+// state + range and fires it (same path the manual Game.arca.launchNuke uses). We only
+// CALL it for auto nuke-then-assault; the nuker loading loop stays wholly in that file.
+import { launchNukeFrom } from "./orchestrator.nuker";
+
+// Additive memory augmentation (declaration-merged with the base interfaces in types.d.ts,
+// which is out of scope to edit). These optional fields are owned entirely by the auto
+// nuke-then-assault logic below; nothing else reads or writes them.
+declare global {
+  interface WarCouncilMemory {
+    // Throttle so the auto-nuke path can't double-fire across ticks.
+    lastAutoNukeTick?: number;
+    // Targets we've auto-nuked, keyed by target room → the tick the nuke is modelled to
+    // land (minus a lead so the squad arrives as it lands). While Game.time < this, we do
+    // NOT auto-launch an assault squad at that room — a ground assault on the intact bunker
+    // would just die before the nuke softens it. Once the tick passes the entry is dropped
+    // and the normal auto-attack resumes (now against a freshly-cratered room). This is the
+    // "launch + nukedUntil marker" model: see considerAutoNuke for the timing tradeoff.
+    nukedUntil?: Record<string, number>;
+  }
+}
 
 // ── Tunables ────────────────────────────────────────────────────────────────────
 const REGROUP_HP_THRESHOLD = 0.85; // squad must heal to this avg before re-engaging
@@ -26,6 +47,22 @@ const DEFEND_RADIUS = 3;           // defend tactic holds within this of the ral
 const CRITICAL_HP = 0.2;           // members below this break off to find a cleric
 const WARCOUNCIL_SCAN_INTERVAL = 50;
 const AUTO_ATTACK_INTERVAL = 1000; // min ticks between auto-launched attacks
+
+// ── Boost deploy-gate tunables ────────────────────────────────────────────────────
+// A forming/rallying squad must not march out half-boosted: a member that requested a
+// boost should actually receive it before we commit (an unboosted assault into a
+// fortified room is a wasted squad). But boosting is best-effort — if the labs can't
+// supply the compound (none in stock, lab unreachable) the seekBoost pipeline gives up
+// after ~BOOST_TIMEOUT (50) ticks and clears boostCompound. So the gate only HOLDS the
+// advance while a member is still mid-boost AND recently spawned (within the grace
+// window); once every member is boosted/gave up, or the window elapses, we proceed
+// rather than deadlock forever on a permanently-unavailable boost.
+//
+// The window is measured from spawn via (CREEP_LIFE_TIME - ticksToLive). It is sized a
+// little beyond seekBoost's own BOOST_TIMEOUT so the gate normally releases because the
+// boost finished (or the pipeline gave up) — not because the clock ran out — while still
+// guaranteeing the op can never freeze on missing labs.
+const BOOST_GRACE_TICKS = 80;
 
 // ── Standing defense tunables ────────────────────────────────────────────────────
 // A defensive op is declared when a home room's threat score crosses this. The score
@@ -126,6 +163,10 @@ function runForming(op: MilitaryOp, members: Creep[]): void {
   }
 
   if (squadMet(op, members)) {
+    // Hold in forming while members that requested a boost are still mid-boost and within
+    // the grace window — don't rally (and then march) a half-boosted squad. The grace
+    // window guarantees a permanently-unavailable boost can't freeze us here.
+    if (!squadBoostReady(members)) return;
     op.phase = "rallying";
     console.log(`[Military] ${op.targetRoom}: Squad formed (${members.length} creeps) — rallying at spawn`);
   }
@@ -146,7 +187,11 @@ function runRallying(op: MilitaryOp, homeRoom: Room, members: Creep[]): void {
     (c) => c.room.name === op.homeRoom && c.pos.getRangeTo(spawn) <= RALLY_RANGE
   );
 
-  if (allRallied) {
+  // Final abort-if-unboosted gate before committing to the attack: a member can still be
+  // finishing its boost while the squad gathers at the rally point. Hold the advance until
+  // every boost-requesting member is boosted/gave up, or has aged out of the grace window
+  // (so a missing-lab boost never strands the squad at home indefinitely).
+  if (allRallied && squadBoostReady(members)) {
     op.phase = "attacking";
     console.log(`[Military] ${op.targetRoom}: Squad rallied — advancing in ${op.formation}/${op.tactic}!`);
   }
@@ -380,6 +425,41 @@ function squadMet(op: MilitaryOp, members: Creep[]): boolean {
     members.filter((c) => c.memory.role === ROLE_CLERIC).length >= op.requiredClerics &&
     members.filter((c) => c.memory.role === ROLE_SIEGER).length >= op.requiredSiegers
   );
+}
+
+// ── Boost deploy gate ───────────────────────────────────────────────────────────
+//
+// A creep "needs a boost" while it still carries an unfinished boost request: either a
+// current boostCompound it's seeking a lab for, or a boostQueue of further compounds to
+// apply. The boost pipeline (seekBoost / advanceBoost in services.combat) clears both —
+// setting memory.boosted — once fully boosted, AND clears them when it gives up (boost
+// unavailable / timed out). So an empty boostCompound + empty boostQueue means "ready":
+// boosted OR deliberately abandoned. Either way the creep won't seek a lab anymore, so
+// holding the squad for it would be pointless.
+function creepNeedsBoost(creep: Creep): boolean {
+  return !!creep.memory.boostCompound || (creep.memory.boostQueue?.length ?? 0) > 0;
+}
+
+// True while a still-unboosted member is recent enough that holding for its boost is
+// worthwhile. Measured from spawn: a creep starts at CREEP_LIFE_TIME and counts down, so
+// (CREEP_LIFE_TIME - ticksToLive) is its age. A still-spawning creep (ticksToLive
+// undefined) is treated as age 0 — freshly born, definitely within the window.
+function withinBoostGrace(creep: Creep): boolean {
+  const age = CREEP_LIFE_TIME - (creep.ticksToLive ?? CREEP_LIFE_TIME);
+  return age <= BOOST_GRACE_TICKS;
+}
+
+// The gate for advancing a formed squad out of forming/rallying: hold (return false) while
+// ANY member still needs a boost AND is young enough that the boost might still land. Once
+// every member is ready (boosted or gave up), OR every still-unboosted member has aged past
+// the grace window (a permanently-unavailable boost we won't wait on forever), the squad is
+// clear to advance. This prevents marching in half-boosted without ever deadlocking on a
+// missing lab.
+function squadBoostReady(members: Creep[]): boolean {
+  for (const c of members) {
+    if (creepNeedsBoost(c) && withinBoostGrace(c)) return false;
+  }
+  return true;
 }
 
 // ── Post-kill controller neutralization (Task 5) ─────────────────────────────────
@@ -904,6 +984,33 @@ const WAR_ECONOMY_ENERGY = 100_000;
 // when we have several capable homes (enough force) or it's exceptionally valuable.
 const FORTRESS_BARRIER_HP = 5_000_000;
 
+// ── Auto nuke-then-assault tunables ────────────────────────────────────────────────
+//
+// A turtled RCL8 — barriers so thick a ground assault can't crack them, behind multiple
+// towers — is exactly the target our squads stall on. For that case (and ONLY that case)
+// we soften it with the offensive nuker before committing the squad. The bar is set HIGH
+// on purpose: nukes are expensive (300k energy + 5k ghodium) and slow (NUKE_LAND_TIME ≈
+// 50000 ticks), so we never spend one on a room a squad could have cracked on its own.
+//
+// Fortification bar: toughest barrier must exceed this AND the room must have at least the
+// tower count below. Tuned above FORTRESS_BARRIER_HP so we only nuke the genuinely
+// uncrackable bunkers, not merely "hard" rooms.
+const NUKE_BARRIER_HP = 8_000_000;
+const NUKE_MIN_TOWERS = 3;
+const NUKE_MIN_RCL = 7;                // a developed, owned bunker — not a soft outpost
+// How many nukes to land on the cluster. A single nuke does NUKE_DAMAGE (10M at center,
+// 5M to range-2 splash), enough to gut a bunker's core + drop most of one barrier stack.
+// Two overlapping nukes flatten a turtled RCL8's center; capped to conserve ghodium.
+const NUKE_MAX_LAUNCH = 2;
+// Throttle between auto-nuke decisions (independent of AUTO_ATTACK_INTERVAL so a launch
+// doesn't reset the attack clock or vice-versa).
+const AUTO_NUKE_INTERVAL = 1000;
+// Ticks before the modelled impact at which we let the squad commit, so it's arriving as
+// the nuke lands rather than waiting out the full ~50k after it's already at the wall.
+// Travel from a neighbouring home is a few hundred ticks, so we release the commit this
+// far ahead of impact. (See the timing tradeoff note on the launch site.)
+const NUKE_ASSAULT_LEAD = 600;
+
 // Rough value of a target room for offensive ranking. Higher = more worth taking. Combines
 // stored loot, controller level (a developed room is a strategic prize), and a bonus for
 // belonging to a sizeable rival empire (breaking their key room hurts them most).
@@ -939,6 +1046,10 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
   // whose room is dead/ours/safe-moded is cleared so strategy can drop WAR posture.
   maintainWarTarget();
 
+  // Expire any inbound-nuke markers whose impact window has passed, re-opening those rooms
+  // to the auto-attack pool (now softened by the nuke).
+  maintainNukedTargets(wc);
+
   // Posture gate: never START a new offensive while turtling or recovering. In-progress
   // ops finish on their own; this only blocks fresh launches. Missing posture ⇒ EXPAND
   // (safe default), which permits launches.
@@ -967,6 +1078,10 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
     if (isAllyPlayer(intel.owner)) continue;
     if (intel.safeMode) continue;                       // untouchable
     if (intel.threatLevel > AUTO_ATTACK_MAX_THREAT) continue;
+    // A nuke is already inbound to this room — don't throw an assault squad at the intact
+    // bunker; it would die before the nuke softens it. The room becomes a target again once
+    // the impact window passes (the marker is dropped in maintainNukedTargets).
+    if (nukeInbound(wc, rn)) continue;
 
     // Pick the closest free home to fund this target.
     const home = freeHomes.reduce((b, r) =>
@@ -997,6 +1112,14 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
 
   if (!best) return;
 
+  // Turtled-RCL8 path: if this target is genuinely uncrackable by a ground assault (very
+  // thick barriers + multiple towers + owned/stationary) and a home in nuke range has a
+  // loaded nuker, NUKE it now and DEFER the squad. considerAutoNuke records a nukedUntil
+  // marker; while it's pending the selection loop above skips this room, so we don't launch
+  // a squad until near impact (when the bunker is about to be cratered). If we can't
+  // actually fire (no loaded nuker in range), it falls through and we siege it the old way.
+  if (isNukeWorthyFortress(best) && considerAutoNuke(wc, best)) return;
+
   // A fortified target gets a siege; a soft one an assault. The composition scales to the
   // known defenses either way (recommendComposition reads tower intel).
   const fortified = best.towers >= 2 || (best.barrierHpMax ?? 0) > 1_000_000;
@@ -1005,6 +1128,7 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
   const err = launchOp(best.roomName, "box", tactic, comp, bestHome);
   if (!err) {
     wc.lastAutoAttackTick = Game.time;
+
     // Signal the strategy coordinator: this is now a war target (it flips posture to WAR
     // next tick). Only do so when the empire economy is healthy enough to sustain a war.
     if (empireEconomyHealthy()) {
@@ -1018,6 +1142,143 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
       `[WarCouncil] Auto-launch (${tactic}): ${bestHome} → ${best.roomName} ` +
         `(value/effort ${bestRatio.toFixed(2)}, owner ${best.owner})`
     );
+  }
+}
+
+// ── Auto nuke-then-assault ─────────────────────────────────────────────────────────
+//
+// True when a target is the kind a ground assault simply can't crack: a developed, OWNED
+// bunker (RCL high, controller owned — a stationary fortress, not a mobile raiding force)
+// behind very thick barriers AND several towers. This is the narrow case nukes exist for;
+// everything softer is left to the squad so we never waste a nuke. Reads only persistent
+// intel (no live room needed), so it works on a target we currently have no vision of.
+function isNukeWorthyFortress(intel: RoomIntelData): boolean {
+  if (!intel.owner) return false; // must be an owned, stationary bunker — not a mobile force
+  if (intel.rcl < NUKE_MIN_RCL) return false;
+  if (intel.towers < NUKE_MIN_TOWERS) return false;
+  if ((intel.barrierHpMax ?? 0) < NUKE_BARRIER_HP) return false;
+  return true;
+}
+
+// Unpack a packed position (x*50+y) into a RoomPosition in the target room. Guards the
+// range so a corrupt intel value can never throw constructing the position.
+function unpackIntelPos(packed: number, roomName: string): RoomPosition | null {
+  const x = Math.floor(packed / 50);
+  const y = packed % 50;
+  if (x < 0 || x > 49 || y < 0 || y > 49) return null;
+  return new RoomPosition(x, y, roomName);
+}
+
+// The aim points for a nuke strike, drawn from persistent intel: the tower positions first
+// (knocking out defensive fire is the whole point), then spawns (stop respawns), then the
+// controller as a fallback so we always have a center to hit. De-duplicated and capped to
+// NUKE_MAX_LAUNCH so two nukes overlap on the core cluster.
+function nukeAimPoints(intel: RoomIntelData): RoomPosition[] {
+  const packed: number[] = [];
+  for (const p of intel.towerPos ?? []) packed.push(p);
+  for (const p of intel.spawnPos ?? []) packed.push(p);
+  if (packed.length === 0 && intel.controllerPos !== undefined) packed.push(intel.controllerPos);
+
+  const seen = new Set<number>();
+  const out: RoomPosition[] = [];
+  for (const p of packed) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    const pos = unpackIntelPos(p, intel.roomName);
+    if (pos) out.push(pos);
+    if (out.length >= NUKE_MAX_LAUNCH) break;
+  }
+  return out;
+}
+
+// True while a nuke we auto-launched is still inbound to `roomName` (impact window not yet
+// reached). Used to skip a room for assault until its bunker is about to be cratered.
+function nukeInbound(wc: WarCouncilMemory, roomName: string): boolean {
+  const until = wc.nukedUntil?.[roomName];
+  return until !== undefined && Game.time < until;
+}
+
+// Drops nukedUntil markers whose impact window has passed, so the target re-enters the
+// auto-attack pool (now as a softened room). Bounded: runs each WarCouncil tick and only
+// touches the small map of pending nukes. Safe with no map present.
+function maintainNukedTargets(wc: WarCouncilMemory): void {
+  const map = wc.nukedUntil;
+  if (!map) return;
+  for (const rn in map) {
+    if (Game.time >= map[rn]) delete map[rn];
+  }
+}
+
+// Auto-nukes a genuinely uncrackable fortress and DEFERS the assault until impact. Returns
+// true when a nuke was launched (so the caller skips launching a squad this round); false
+// when we couldn't/shouldn't nuke (caller proceeds with a normal siege).
+//
+// SAFE and conservative by construction:
+//   (a) only reached when autoAttack is enabled (caller gated on wc.autoAttack);
+//   (b) caller pre-checks isNukeWorthyFortress, so this only fires on owned, stationary,
+//       multi-tower, very-thick-barrier bunkers — never a soft room or a mobile force;
+//   (c) launchNukeFrom fires ONLY a fully-loaded, off-cooldown nuker that's in range (the
+//       exact validation the manual Game.arca.launchNuke uses) — an unready/out-of-range
+//       nuker is a silent no-op, and with no nuker available we return false and siege;
+//   (d) throttled by AUTO_NUKE_INTERVAL and skipped while a nuke is already inbound.
+// Everything is wrapped so a thrown game-API error can never break the WarCouncil tick.
+//
+// TIMING TRADEOFF: a nuke lands ~NUKE_LAND_TIME (≈50000) ticks after launch — far longer
+// than a combat creep's 1500-tick lifetime, so we CANNOT keep a real squad loitering until
+// impact (it would die and the op would FORMING_TIMEOUT-abort long before the nuke lands).
+// So instead of choreographing a squad to arrive at the same tick, we record a nukedUntil
+// marker for the room and simply DON'T auto-launch an assault there until NUKE_ASSAULT_LEAD
+// ticks before impact. At that point the room re-enters the auto-attack pool and a fresh
+// squad is raised against the about-to-be-cratered (and then cratered) bunker — arriving as
+// or just after the nuke lands. This is the "launch + nukedUntil marker" model: correct and
+// safe, accepting that the squad is raised near impact rather than babysat for ~50k ticks.
+function considerAutoNuke(wc: WarCouncilMemory, intel: RoomIntelData): boolean {
+  try {
+    if (nukeInbound(wc, intel.roomName)) return true; // already softened — keep deferring
+    if (Game.time - (wc.lastAutoNukeTick ?? -AUTO_NUKE_INTERVAL) < AUTO_NUKE_INTERVAL) {
+      return false;
+    }
+
+    const aimPoints = nukeAimPoints(intel);
+    if (aimPoints.length === 0) return false; // no known cluster to hit
+
+    // Try each owned home for a loaded nuker in range; launchNukeFrom validates ready+range
+    // and returns an error string if it can't fire. Land up to NUKE_MAX_LAUNCH nukes, one
+    // per cluster tile so they overlap on the core.
+    let launched = 0;
+    for (const point of aimPoints) {
+      if (launched >= NUKE_MAX_LAUNCH) break;
+      for (const rn in Game.rooms) {
+        const home = Game.rooms[rn];
+        if (!home.controller?.my) continue;
+        const fireErr = launchNukeFrom(rn, point);
+        if (!fireErr) {
+          launched++;
+          console.log(
+            `[WarCouncil] Auto-NUKE: ${rn} → ${intel.roomName} @${point.x},${point.y} ` +
+              `(fortress: ${intel.towers} towers, barrier ${(intel.barrierHpMax ?? 0).toLocaleString()})`
+          );
+          break; // this aim point is covered; move to the next cluster tile
+        }
+      }
+    }
+
+    if (launched === 0) return false; // no loaded nuker in range — fall back to a siege
+
+    wc.lastAutoNukeTick = Game.time;
+    if (!wc.nukedUntil) wc.nukedUntil = {};
+    // Model the impact tick; release the assault NUKE_ASSAULT_LEAD ticks early so the squad
+    // we raise then arrives as the nuke lands.
+    const until = Game.time + Math.max(0, NUKE_LAND_TIME - NUKE_ASSAULT_LEAD);
+    wc.nukedUntil[intel.roomName] = until;
+    console.log(
+      `[WarCouncil] ${intel.roomName}: ${launched} nuke(s) inbound — assault deferred until tick ${until}`
+    );
+    return true;
+  } catch (e) {
+    // Never let a nuke-launch hiccup break the WarCouncil. Diagnostics only.
+    console.log(`[WarCouncil] Auto-nuke skipped (guarded error): ${String(e)}`);
+    return false;
   }
 }
 

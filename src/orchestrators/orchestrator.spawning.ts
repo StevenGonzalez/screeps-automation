@@ -474,8 +474,18 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
     }) === OK;
   }
 
+  // Boost MOVE with XZHO2 (-75% fatigue) at high RCL when the labs hold enough. A move-boosted
+  // hauler runs full speed at a higher CARRY:MOVE ratio, so more body is cargo — more throughput
+  // per hauler. Gated like the upgrader boost (RCL7+ once the catalyzed compound exists) and only
+  // applied to full-size, capacity-sized haulers — not the smaller affordable bodies spawned
+  // above during an energy shortage. seekBoost clears the request on timeout so a boost-seeking
+  // hauler never stalls logistics.
+  const moveParts = body.filter((p) => p === MOVE).length;
+  const queue =
+    (room.controller?.level ?? 0) >= 7 ? buildBoostQueue(room, "hauler", moveParts, 0) : [];
+
   return spawn.spawnCreep(body, newName, {
-    memory: { role: ROLE_HAULER, homeRoom: room.name },
+    memory: { role: ROLE_HAULER, homeRoom: room.name, ...boostMemory(queue) },
   }) === OK;
 }
 
@@ -1017,7 +1027,22 @@ const BOOST_CANDIDATES: Record<string, string[]> = {
   // TOUGH damage-reduction boost (best tier first). Applied as a second boost to front-line
   // melee/dismantle creeps (knight, sieger) on top of their primary combat boost.
   tough:   ['XGHO2', 'GHO2', 'GO'],
+  // Catalyzed move boost (XZHO2, -75% fatigue). Lets a hauler run a higher CARRY:MOVE ratio at
+  // full speed, so more of its body is cargo — more throughput per spawned hauler. Also appended
+  // to front-line combat creeps so they reach the fight faster.
+  hauler:  ['XZHO2', 'ZHO2', 'ZO'],
+  move:    ['XZHO2', 'ZHO2', 'ZO'],
 };
+
+// NOTE on miner/harvester harvest boosting (UO line, XUHO2 = +200% harvest/WORK):
+// deliberately NOT wired. A standard source regenerates 3000/300t = 10 energy/tick, and
+// buildMinerBody already caps a miner at 5 WORK (= 10 e/tick), which saturates that cap.
+// Harvest-boosting a cap-limited source miner yields literally nothing, so we don't. The only
+// places extra harvest helps are SK sources and mineral extraction — but those run on the
+// separate ROLE_SK_MINER / ROLE_MINERAL_MINER roles, neither of which is in scope here.
+// role.harvester is the early peasant that phases out once miners exist; labs don't exist at
+// RCL1-2 when harvesters run, so a harvest boost there would never trigger — a pure no-op — so
+// it is intentionally omitted rather than wiring dead code.
 
 // Returns the best available boost compound if there's enough stock in storage/terminal.
 // boostParts = number of the relevant body parts being boosted (30 units each).
@@ -1032,13 +1057,17 @@ function pickBoostCompound(room: Room, roleKey: string, boostParts: number): str
 }
 
 // Build an ordered list of boost compounds a creep should seek: its primary combat boost
-// first, then a TOUGH boost when the role has TOUGH parts (toughParts > 0). Each entry is
-// only included when there's enough stock for it; an empty list means deploy unboosted.
+// first, then a TOUGH boost when the role has TOUGH parts (toughParts > 0), then a MOVE boost
+// when the role carries MOVE parts (moveParts > 0). Each entry is only included when there's
+// enough stock for it; an empty list means deploy unboosted. Ordering (primary, tough, move)
+// mirrors the body front-loading so the most combat-critical boost is applied first if a lab
+// run is cut short. moveParts defaults to 0 so non-MOVE-boosted callers are unaffected.
 function buildBoostQueue(
   room: Room,
   roleKey: string,
   primaryParts: number,
-  toughParts: number
+  toughParts: number,
+  moveParts = 0
 ): string[] {
   const queue: string[] = [];
   const primary = pickBoostCompound(room, roleKey, primaryParts);
@@ -1046,6 +1075,10 @@ function buildBoostQueue(
   if (toughParts > 0) {
     const tough = pickBoostCompound(room, "tough", toughParts);
     if (tough) queue.push(tough);
+  }
+  if (moveParts > 0) {
+    const move = pickBoostCompound(room, "move", moveParts);
+    if (move) queue.push(move);
   }
   return queue;
 }
@@ -1149,7 +1182,8 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const queue = buildBoostQueue(room, 'knight', attackParts, toughParts);
+  const moveParts = body.filter((p) => p === MOVE).length;
+  const queue = buildBoostQueue(room, 'knight', attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}${Game.time}`, {
     memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
   });
@@ -1325,7 +1359,15 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   // Only knight/sieger carry TOUGH parts, so only they queue a TOUGH boost; wizard/cleric
   // bodies have no TOUGH and stay single-boosted.
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const queue = buildBoostQueue(room, boostKey, combatParts, toughParts);
+  // Append a MOVE boost (XZHO2) only for the front-line melee/dismantle bodies (knight, sieger)
+  // so they reach the fight faster. Wizard/cleric already run a 1:1 MOVE ratio for kiting and
+  // don't need it, so leave their move count at 0. Body ratios are left unchanged — appending
+  // the boost is a pure speed win with no risk of an under-MOVEd creep if the lab run is cut short.
+  const moveParts =
+    boostKey === "knight" || boostKey === "sieger"
+      ? body.filter((p) => p === MOVE).length
+      : 0;
+  const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
 
   const res = spawn.spawnCreep(body, `${roleToSpawn}_off${Game.time}`, {
     memory: {
@@ -1432,7 +1474,10 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   // Only knight carries TOUGH parts here, so only it queues a TOUGH boost; wizard/cleric
   // bodies have no TOUGH and stay single-boosted.
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const queue = buildBoostQueue(room, boostKey, combatParts, toughParts);
+  // MOVE boost (XZHO2) only for the knight (front-line melee); wizard/cleric kite at 1:1 and
+  // skip it. Body ratios unchanged — pure speed win, no under-MOVE risk if the lab run is cut short.
+  const moveParts = boostKey === "knight" ? body.filter((p) => p === MOVE).length : 0;
+  const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${roleToSpawn}_def${Game.time}`, {
     memory: {
       role: roleToSpawn,
@@ -1455,7 +1500,8 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const queue = buildBoostQueue(room, "knight", attackParts, toughParts);
+  const moveParts = body.filter((p) => p === MOVE).length;
+  const queue = buildBoostQueue(room, "knight", attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_child${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,
@@ -1504,7 +1550,8 @@ function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const queue = buildBoostQueue(room, "knight", attackParts, toughParts);
+  const moveParts = body.filter((p) => p === MOVE).length;
+  const queue = buildBoostQueue(room, "knight", attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_remote${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,

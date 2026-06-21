@@ -14,7 +14,13 @@
  * (a neighbour that runs its own logic later may override it). Set
  * `Memory.trafficDisabled = true` to fall back to vanilla moveTo instantly.
  */
-import { ROLE_UPGRADER, ROLE_HAULER, ROLE_REMOTE_HAULER } from "../config/config.roles";
+import {
+  ROLE_UPGRADER,
+  ROLE_HAULER,
+  ROLE_REMOTE_HAULER,
+  ROLE_REMOTE_MINER,
+  ROLE_RESERVER,
+} from "../config/config.roles";
 
 const STUCK_THRESHOLD = 3; // ticks without moving (fatigue-free) before intervening
 // Structure matrices are invalidated explicitly when a structure is destroyed/built (see
@@ -127,6 +133,82 @@ function roadCostCallback(roomName: string): CostMatrix {
   return cm;
 }
 
+// ── Multi-room route caching ──────────────────────────────────────────────────
+//
+// Long-haul creeps (remote haulers/miners/reservers) repeatedly path the same
+// owned-room → remote-room corridor. Every recompute, the engine's moveTo re-runs
+// the whole multi-room PathFinder search, which is free to wander into off-route
+// rooms before correcting. We add a heap cache of Game.map.findRoute results keyed
+// by the from→to room pair: the route is a cheap whole-map BFS over room exits, and
+// caching it lets us (a) avoid recomputing findRoute every call and (b) feed the set
+// of on-route rooms into the costCallback so PathFinder won't expand into rooms the
+// route doesn't use (returning `false` from roomCallback marks a room impassable).
+//
+// Kept in heap (not Memory) for the same reason as the stuck state: it never touches
+// RawMemory. Wiped on global reset, which only costs a few re-computations.
+//
+// NOTE: the companion idea — a heap cache of serialized creep paths for cross-tick
+// reuse — is deliberately NOT implemented. The engine's own reusePath (preserved
+// untouched above) already caches the serialized path in creep Memory, and the
+// traffic manager mutates reusePath on stuck creeps; a parallel heap path cache would
+// have to mirror that invalidation exactly or it would feed stale paths back into
+// stuck creeps and fight the route-around. The findRoute cache is the bigger win for
+// many remote rooms and carries none of that risk, so we ship just that.
+
+// How long a cached route stays valid. Room connectivity effectively never changes
+// (only novel-room portals/walls would, which we don't path through), so this is a
+// pure CPU/memory bound, not a correctness TTL.
+const ROUTE_TTL = 1000;
+// Roles whose pathing is worth biasing onto a cached cross-room route. Limiting it to
+// long-haul roles keeps the findRoute calls (and the route-restricted costCallback)
+// off the hot path for the swarm of in-room workers that never leave their room.
+const LONG_HAUL_ROLES: ReadonlySet<string> = new Set([
+  ROLE_REMOTE_HAULER,
+  ROLE_REMOTE_MINER,
+  ROLE_RESERVER,
+]);
+
+interface RouteCacheEntry {
+  // Set of room names on the route (origin and destination included), used as an
+  // allow-list in the costCallback. Empty/undefined route → no restriction.
+  rooms: Set<string>;
+  tick: number;
+}
+const routeCache: Map<string, RouteCacheEntry> = new Map();
+let routePruneTick = -1;
+
+// Drop expired route entries once per tick so the map can't grow unbounded as remote
+// corridors come and go.
+function pruneRouteCache(): void {
+  if (routePruneTick === Game.time) return;
+  routePruneTick = Game.time;
+  for (const [key, entry] of routeCache) {
+    if (Game.time - entry.tick >= ROUTE_TTL) routeCache.delete(key);
+  }
+}
+
+// Return the set of rooms on the cached route from→to, computing (and caching) it via
+// Game.map.findRoute on a miss. Returns undefined when no sensible route restriction
+// applies (same room, or findRoute failed) so the caller falls back to unrestricted
+// pathing rather than boxing the creep into an empty allow-list.
+function getRouteRooms(from: string, to: string): Set<string> | undefined {
+  if (from === to) return undefined;
+  const key = `${from}->${to}`;
+  const cached = routeCache.get(key);
+  if (cached && Game.time - cached.tick < ROUTE_TTL) {
+    return cached.rooms.size > 0 ? cached.rooms : undefined;
+  }
+
+  const route = Game.map.findRoute(from, to);
+  const rooms = new Set<string>();
+  if (route !== ERR_NO_PATH) {
+    rooms.add(from);
+    for (const step of route) rooms.add(step.room);
+  }
+  routeCache.set(key, { rooms, tick: Game.time });
+  return rooms.size > 0 ? rooms : undefined;
+}
+
 (Creep.prototype as { moveTo: unknown }).moveTo = function (
   this: Creep,
   ...args: unknown[]
@@ -143,9 +225,33 @@ function roadCostCallback(roomName: string): CostMatrix {
   const range = (opts?.range as number | undefined) ?? 1;
 
   const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
-  if (!effectiveOpts.costCallback) effectiveOpts.costCallback = roadCostCallback;
+  if (!effectiveOpts.costCallback) {
+    // For a long-haul creep travelling between rooms, bias multi-room pathing onto the
+    // cached findRoute corridor: rooms off the route return `false` (impassable) so the
+    // engine can't wander off-route, and on-route rooms get the usual creep-aware matrix.
+    // Falls back to the plain callback when there's no useful route (same room, or any
+    // caller that already supplied its own costCallback above keeps full control).
+    const routeRooms =
+      tpos instanceof RoomPosition &&
+      !sameRoom &&
+      LONG_HAUL_ROLES.has(this.memory.role)
+        ? getRouteRooms(this.pos.roomName, tpos.roomName)
+        : undefined;
+
+    if (routeRooms) {
+      // Off-route rooms return `false` to mark the whole room impassable to PathFinder.
+      // The engine's roomCallback honours a `false` return, but @types/screeps types
+      // costCallback as returning only `void | CostMatrix`; the cast keeps us honest
+      // about the engine behaviour we rely on without loosening the field's type.
+      effectiveOpts.costCallback = ((roomName: string) =>
+        routeRooms.has(roomName) ? roadCostCallback(roomName) : false) as MoveToOpts["costCallback"];
+    } else {
+      effectiveOpts.costCallback = roadCostCallback;
+    }
+  }
 
   pruneStuckState();
+  pruneRouteCache();
 
   // Already parked within range — the creep isn't travelling, so it isn't "stuck".
   if (sameRoom && this.pos.getRangeTo(tpos) <= range) {

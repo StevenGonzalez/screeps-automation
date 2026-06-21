@@ -65,6 +65,7 @@ const NETWORK_CONFIG = {
   ENERGY_RICH_THRESHOLD: 200_000,    // donate energy if storage above this
   ENERGY_POOR_THRESHOLD: 50_000,     // accept energy if storage below this
   ENERGY_TRANSFER_AMOUNT: 30_000,    // energy sent to receiver per transfer
+  ENERGY_MAX_TRANSFERS_PER_PASS: 4,  // cap donor→receiver pairs queued per planning pass
   MINERAL_SURPLUS_THRESHOLD: 2_000,  // only donate mineral if stock above this + needed
   MINERAL_TRANSFER_AMOUNT: 1_000,    // minerals per transfer
   MAX_DISTANCE: 10,                  // skip cross-room transfers beyond this
@@ -123,6 +124,29 @@ const NON_SELLABLE = new Set<ResourceConstant>([...BASE_MINERALS, RESOURCE_GHODI
 const SEND_STALL_TIMEOUT = 1500;
 
 // ── Main loop ─────────────────────────────────────────────────────────────────
+
+// ── Market order-book cache ─────────────────────────────────────────────────────
+//
+// Game.market.getAllOrders() is one of the most CPU-expensive calls in the API — it
+// returns (and deserializes) the entire global order book. The terminal queries it from
+// several places, per owned room and per candidate resource, every tick; on a multi-room
+// empire that alone can exceed the per-tick CPU limit and drain the bucket to zero (the
+// whole colony then appears to "freeze" until the bucket recovers). To bound the cost we
+// fetch the full book at most once per ORDER_BOOK_CACHE_TTL ticks into a heap variable and
+// filter it in JS — so the heavy call happens once, not dozens of times per tick. The mild
+// staleness is harmless: stale order IDs/amounts just make the occasional deal() fail,
+// which every caller already handles by checking the result.
+let orderBookCache: Order[] | null = null;
+let orderBookCacheTick = -Infinity;
+const ORDER_BOOK_CACHE_TTL = 15;
+
+function getMarketOrders(filter: (o: Order) => boolean): Order[] {
+  if (!orderBookCache || Game.time - orderBookCacheTick >= ORDER_BOOK_CACHE_TTL) {
+    orderBookCache = Game.market.getAllOrders();
+    orderBookCacheTick = Game.time;
+  }
+  return orderBookCache.filter(filter);
+}
 
 export function loop() {
   if (Game.time % NETWORK_CONFIG.PLAN_INTERVAL === 0) {
@@ -251,7 +275,7 @@ function buyMissingGhodium(room: Room, terminal: StructureTerminal): boolean {
   if (stock >= target) return false;
 
   const needed = target - stock;
-  const orders = Game.market.getAllOrders(
+  const orders = getMarketOrders(
     (o) =>
       o.type === ORDER_SELL &&
       o.resourceType === RESOURCE_GHODIUM &&
@@ -351,16 +375,30 @@ function planNetworkBalancing(): void {
 }
 
 function planEnergyTransfers(infos: Array<{ room: Room; terminal: StructureTerminal; storageEnergy: number }>) {
+  // Scale the donor/receiver lines modestly with empire size (GCL): bigger empires run
+  // more rooms with deeper storage, so a slightly higher rich line / lower poor line keeps
+  // us from churning small balancing sends. Bounded so a high GCL can't push them silly.
+  const gclScale = Math.min(2, 1 + (Game.gcl.level - 1) * 0.1);
+  const richThreshold = NETWORK_CONFIG.ENERGY_RICH_THRESHOLD * gclScale;
+  const poorThreshold = NETWORK_CONFIG.ENERGY_POOR_THRESHOLD / gclScale;
+
   // Poorest rooms first; richest donors first
   const receivers = infos
-    .filter((i) => !i.room.memory.pendingSend && i.storageEnergy < NETWORK_CONFIG.ENERGY_POOR_THRESHOLD)
+    .filter((i) => !i.room.memory.pendingSend && i.storageEnergy < poorThreshold)
     .sort((a, b) => a.storageEnergy - b.storageEnergy);
 
   const donors = infos
-    .filter((i) => !i.room.memory.pendingSend && i.storageEnergy > NETWORK_CONFIG.ENERGY_RICH_THRESHOLD)
+    .filter((i) => !i.room.memory.pendingSend && i.storageEnergy > richThreshold)
     .sort((a, b) => b.storageEnergy - a.storageEnergy);
 
+  // Service multiple donor→receiver pairs per pass so a multi-room empire converges faster.
+  // Each donor is consumed once it's assigned (a terminal can only send once per tick), so
+  // there are no double-sends; the cap bounds CPU/log spam per planning pass.
+  let queued = 0;
   for (const receiver of receivers) {
+    if (queued >= NETWORK_CONFIG.ENERGY_MAX_TRANSFERS_PER_PASS) break;
+    if (donors.length === 0) break;
+
     const donor = donors.find((d) => {
       if (d.room.name === receiver.room.name) return false;
       return Game.map.getRoomLinearDistance(d.room.name, receiver.room.name) <= NETWORK_CONFIG.MAX_DISTANCE;
@@ -379,7 +417,7 @@ function planEnergyTransfers(infos: Array<{ room: Room; terminal: StructureTermi
 
     // Remove donor so it's not assigned twice this cycle
     donors.splice(donors.indexOf(donor), 1);
-    break; // one energy transfer queued per planning pass
+    queued++;
   }
 }
 
@@ -522,7 +560,7 @@ function sellResourceToMarket(
   let bestOrderRoom = "";
   let bestOrderAmount = 0;
 
-  const orders = Game.market.getAllOrders((order) => {
+  const orders = getMarketOrders((order) => {
     if (order.type !== ORDER_BUY || order.resourceType !== resource) return false;
     if (!order.roomName) return false;
     return (
@@ -616,7 +654,7 @@ function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
     if (stock >= BUY_CONFIG.MIN_STOCK) continue;
 
     const needed = BUY_CONFIG.TARGET_STOCK - stock;
-    const orders = Game.market.getAllOrders(
+    const orders = getMarketOrders(
       (o) =>
         o.type === ORDER_SELL &&
         o.resourceType === mineral &&
@@ -689,7 +727,7 @@ function tradeEnergy(room: Room, terminal: StructureTerminal): boolean {
 // Sell up to `amount` energy to the best nearby buy order paying at least SELL_MIN_PRICE.
 function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: number): boolean {
   let best: Order | null = null;
-  const orders = Game.market.getAllOrders((o) => {
+  const orders = getMarketOrders((o) => {
     if (o.type !== ORDER_BUY || o.resourceType !== RESOURCE_ENERGY) return false;
     if (!o.roomName || o.amount <= 0) return false;
     if (o.price < ENERGY_TRADE_CONFIG.SELL_MIN_PRICE) return false;
@@ -720,7 +758,7 @@ function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: num
 
 // Buy energy from the cheapest nearby sell order under BUY_MAX_PRICE to refill a low room.
 function buyCheapEnergy(room: Room, terminal: StructureTerminal): boolean {
-  const orders = Game.market.getAllOrders((o) => {
+  const orders = getMarketOrders((o) => {
     if (o.type !== ORDER_SELL || o.resourceType !== RESOURCE_ENERGY) return false;
     if (!o.roomName || o.amount <= 0) return false;
     if (o.price > ENERGY_TRADE_CONFIG.BUY_MAX_PRICE) return false;
@@ -824,7 +862,7 @@ function fairSellPrice(resource: ResourceConstant): number | undefined {
 
   // Best (lowest) competing sell order — we undercut it slightly to win the next sale.
   let bestAsk: number | undefined;
-  const asks = Game.market.getAllOrders(
+  const asks = getMarketOrders(
     (o) => o.type === ORDER_SELL && o.resourceType === resource && o.amount > 0
   );
   for (const o of asks) {

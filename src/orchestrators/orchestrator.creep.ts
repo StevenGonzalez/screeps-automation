@@ -55,6 +55,7 @@ import { runSkGuardian } from "../roles/role.sk_guardian";
 import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
 import { resolveTraffic } from "../services/services.movement";
+import { recordRole } from "../services/services.profiler";
 
 // Role → handler lookup. A single map dispatch per creep replaces a 20-branch
 // if/else chain that, for late-listed roles, re-compared the role string up to
@@ -94,7 +95,10 @@ export function loop() {
     const creep = Game.creeps[name];
     const handler = ROLE_HANDLERS[creep.memory.role];
     if (handler) {
+      // Per-role CPU accounting so the expensive role is visible (Game.arca CPU report).
+      const start = Game.cpu.getUsed();
       handler(creep);
+      recordRole(creep.memory.role, Game.cpu.getUsed() - start);
     } else if (Game.time % 100 === 0) {
       // A creep whose role isn't in the map sits inert every tick, burning a population
       // slot. Surface it (throttled) instead of failing silently — usually a renamed or

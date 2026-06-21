@@ -10,7 +10,8 @@
  *   neutral     — transfer from any link with energy to any link that needs it
  */
 
-const LINK_TRANSFER_THRESHOLD = 400; // only send when source has this much energy
+const LINK_TRANSFER_THRESHOLD = 400; // classification fallback: energy above which an unclassified link counts as a source
+const LINK_MIN_TRANSFER = 150;       // never send less than this (3% loss makes tiny dribbles wasteful)
 const LINK_SINK_HEADROOM = 100;      // sink must have at least this much free capacity
 
 export function loop() {
@@ -35,11 +36,20 @@ function processRoomLinks(room: Room) {
 
   for (const src of sources) {
     if (src.cooldown > 0) continue;
-    if (src.store[RESOURCE_ENERGY] < LINK_TRANSFER_THRESHOLD) continue;
 
-    // Find the neediest sink
+    const available = src.store[RESOURCE_ENERGY];
+    if (available < LINK_MIN_TRANSFER) continue;
+
+    // Find the neediest sink, then send as soon as we can meaningfully fill its
+    // deficit rather than always waiting for a fixed threshold — lower latency and
+    // less idle energy, while LINK_MIN_TRANSFER guards against wasteful micro-sends.
     const sink = pickSink(sinks, src);
     if (!sink) continue;
+
+    const deficit = sink.store.getFreeCapacity(RESOURCE_ENERGY);
+    // Send what will actually land in the sink: min(available, deficit). Only hold off
+    // if even that lands below the minimum (the receiver is nearly full).
+    if (Math.min(available, deficit) < LINK_MIN_TRANSFER) continue;
 
     src.transferEnergy(sink);
   }
