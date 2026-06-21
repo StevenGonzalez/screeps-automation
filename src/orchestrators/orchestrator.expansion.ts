@@ -1,4 +1,4 @@
-import { getThreatInfo } from "../services/services.combat";
+import { getThreatInfo, isSourceKeeperRoom } from "../services/services.combat";
 import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles";
 
 // Closes the growth loop: when GCL frees a colony slot and a healthy home room
@@ -40,8 +40,56 @@ const CLAIM_TIMEOUT = 1_500;
 // outcome, then the memory orchestrator (or the cleanup below) clears it.
 const ESTABLISHED_RETENTION = 1_000;
 
-const EXPANSION_CANDIDATE_SOURCES_WEIGHT = 40;
-const EXPANSION_CANDIDATE_DIST_PENALTY = 5;
+// ── Multi-factor candidate scoring weights ────────────────────────────────────
+// A candidate's score is a weighted sum of real settlement factors. The tuning goal
+// (see rankExpansionCandidates) is that a 2-source, single-rare-mineral, 2-exit room
+// near home with a couple of free remote neighbours and no enemies scores highest.
+// Sources dominate (a 1-source room is a poor colony); distance matters but weighs
+// less than sources; "remotes gained" is one of the biggest real multipliers.
+
+// Sources: 2 is the sweet spot. We award the full bonus for the first source and a
+// much smaller bonus for the second so a 2-source room far outscores a 1-source one,
+// but a (rare) 3-source room doesn't run away. 0 sources is rejected outright.
+const W_SOURCE_FIRST = 50;     // having ANY source at all
+const W_SOURCE_SECOND = 60;    // the decisive jump from 1 → 2 sources (2-source preferred)
+const W_SOURCE_EXTRA = 15;     // diminishing value for a 3rd+ source
+
+// Distance from the funding home (linear room distance). Penalty per room — kept well
+// below the source weights so a closer 1-source room never beats a 2-source room.
+const W_DIST_PENALTY = 6;
+
+// Mineral diversity: bonus for a mineral type the empire doesn't already mine, with an
+// extra kicker for the rare catalyst (X), which unlocks the highest-tier lab boosts.
+const W_MINERAL_NEW = 25;
+const W_MINERAL_RARE = 25;     // additional, on top of W_MINERAL_NEW, for RESOURCE_CATALYST
+
+// Defensibility: fewer exit sides = fewer attack avenues. We penalise per exit side and
+// hand a chokepoint bonus to 2-exit rooms (corner/dead-end rooms that are easy to wall).
+const W_EXIT_PENALTY = 12;        // per exit side beyond the unavoidable minimum
+const W_CHOKEPOINT_BONUS = 30;    // 2-exit room: highly defensible
+
+// Remotes gained: each neighbouring room that has sources and isn't already ours /
+// contested is a future remote-mining target — a major chunk of a colony's value.
+const W_REMOTE = 35;
+const MAX_SCORED_REMOTES = 4;     // cap the per-candidate neighbour credit (CPU + realism)
+
+// Enemy proximity: penalise candidates sitting close to a strong enemy player's
+// territory centroid. Rooms owned/reserved by a strong hostile are rejected entirely.
+const W_ENEMY_PENALTY = 20;            // per room inside the danger radius, scaled by strength
+const ENEMY_DANGER_RADIUS = 4;         // rooms; enemies further than this don't penalise
+const STRONG_ENEMY_MILITARY = 8;       // PlayerIntelData.militaryStrength ≥ this ⇒ "strong"
+
+// Swamp ratio (optional, only when terrain is cheaply available): very swampy rooms have
+// expensive hauling and slow building. Penalty scales with how far past "tolerable" the
+// swamp fraction is. Skipped entirely when computing terrain would be too costly.
+const W_SWAMP_PENALTY = 40;            // applied to (swampFraction − SWAMP_TOLERANCE)
+const SWAMP_TOLERANCE = 0.35;          // up to this fraction of swamp is free of penalty
+const MAX_TERRAIN_SCANS_PER_TICK = 6;  // bound the expensive getRoomTerrain calls per tick
+
+// Candidate-pool widening: also pull rooms from Memory.intel that sit within claim range
+// of a healthy home, not just a home's own remoteRooms. Bounded so scoring stays cheap.
+const MAX_CLAIM_RANGE = 4;             // rooms; intel beyond this from every home is ignored
+const MAX_INTEL_CANDIDATES = 25;       // cap intel-sourced candidates considered per tick
 
 // Only re-evaluate occasionally — candidates change slowly and ranking is cheap,
 // but there's no reason to scan every tick.
@@ -59,13 +107,36 @@ export interface ExpansionCandidate {
   score: number;
   sources: number;
   dist: number;
+  // Diagnostic breakdown so the console can explain WHY a room ranks where it does.
+  remotes?: number;       // free harvestable neighbour rooms credited
+  exits?: number;         // exit sides (defensibility)
+  mineral?: MineralConstant; // mineral type, if known
 }
 
-// Rank non-hostile, unowned rooms from every owned room's scout data. Shared with
-// Game.arca.expand() so the console and the auto-expander always agree on choice.
+// Rank non-hostile, unowned rooms as colony candidates using a multi-factor model
+// (sources, mineral diversity, defensibility, distance, free remotes, enemy proximity,
+// terrain). Shared with Game.arca.expand() so the console and the auto-expander always
+// agree on choice. Candidates come from BOTH every home's scouted remoteRooms AND from
+// cached Memory.intel within claim range — no vision required, bounded per tick for CPU.
 export function rankExpansionCandidates(): ExpansionCandidate[] {
-  const candidates: ExpansionCandidate[] = [];
+  // Per-call caches: the empire's known minerals (for the diversity bonus) and a hard
+  // budget on expensive getRoomTerrain calls so a big intel store can't blow the CPU.
+  const ownedMinerals = scanOwnedMinerals();
+  const terrainBudget = { remaining: MAX_TERRAIN_SCANS_PER_TICK };
 
+  // Gather unique candidate (room, fundingHome) pairs. A room reachable from several
+  // homes is scored once, against its CLOSEST healthy-ish home (lowest distance wins).
+  const byRoom = new Map<string, { home: string; dist: number; sourceCount: number }>();
+
+  const consider = (roomName: string, home: string, sourceCount: number) => {
+    const dist = Game.map.getRoomLinearDistance(home, roomName);
+    const existing = byRoom.get(roomName);
+    if (!existing || dist < existing.dist) {
+      byRoom.set(roomName, { home, dist, sourceCount });
+    }
+  };
+
+  // ── Pool 1: each home's own scouted remoteRooms (the original source). ──────────
   for (const rn in Game.rooms) {
     const room = Game.rooms[rn];
     if (!room.controller?.my) continue;
@@ -73,23 +144,239 @@ export function rankExpansionCandidates(): ExpansionCandidate[] {
       if (isRemoteContested(remote)) continue;
       const targetRoom = Game.rooms[remote.roomName];
       if (targetRoom?.controller?.my) continue; // already ours
-      if (targetRoom && isRoomContested(targetRoom)) continue; // owned/reserved/hostile right now
-      const dist = Game.map.getRoomLinearDistance(rn, remote.roomName);
-      const score =
-        remote.sources.length * EXPANSION_CANDIDATE_SOURCES_WEIGHT -
-        dist * EXPANSION_CANDIDATE_DIST_PENALTY;
-      candidates.push({
-        room: remote.roomName,
-        homeRoom: rn,
-        score,
-        sources: remote.sources.length,
-        dist,
-      });
+      if (targetRoom && isRoomContested(targetRoom)) continue; // owned/reserved/hostile now
+      consider(remote.roomName, rn, remote.sources.length);
     }
+  }
+
+  // ── Pool 2: cached Memory.intel within claim range of a healthy home. ───────────
+  // This widens beyond directly-scouted remotes to any room we have intel on, so the
+  // auto-expander can reach good colonies a home never ran a remote into. Bounded by
+  // MAX_INTEL_CANDIDATES so a large intel store stays cheap.
+  const homeNames: string[] = [];
+  for (const rn in Game.rooms) {
+    if (isHomeRoomHealthy(Game.rooms[rn])) homeNames.push(rn);
+  }
+  if (homeNames.length > 0 && Memory.intel) {
+    let intelSeen = 0;
+    for (const rn in Memory.intel) {
+      if (intelSeen >= MAX_INTEL_CANDIDATES) break;
+      if (byRoom.has(rn)) continue;            // already covered by a remoteRooms entry
+      if (Game.rooms[rn]?.controller?.my) continue; // already ours
+      const intel = Memory.intel[rn];
+      if (intelIsHostile(intel)) continue;     // owned/reserved/strong-threat → not claimable
+      if (isSourceKeeperRoom(rn)) continue;    // SK rooms are never colony candidates
+      // Closest healthy home within claim range.
+      let bestHome: string | undefined;
+      let bestDist = Infinity;
+      for (const hn of homeNames) {
+        const d = Game.map.getRoomLinearDistance(hn, rn);
+        if (d <= MAX_CLAIM_RANGE && d < bestDist) {
+          bestDist = d;
+          bestHome = hn;
+        }
+      }
+      if (!bestHome) continue;
+      intelSeen++;
+      // sourcePos (packed positions) tells us the source count without vision.
+      const sourceCount = intel.sourcePos?.length ?? 0;
+      consider(rn, bestHome, sourceCount);
+    }
+  }
+
+  // ── Score every gathered candidate with the weighted model. ─────────────────────
+  const candidates: ExpansionCandidate[] = [];
+  for (const [roomName, info] of byRoom) {
+    const scored = scoreCandidate(roomName, info.home, info.dist, info.sourceCount, ownedMinerals, terrainBudget);
+    if (scored) candidates.push(scored);
   }
 
   candidates.sort((a, b) => b.score - a.score);
   return candidates;
+}
+
+// Compute the weighted multi-factor score for one candidate room. Returns undefined to
+// REJECT the room (0 sources, or owned/reserved by a strong hostile). `terrainBudget` is
+// mutated to bound the number of getRoomTerrain scans across the whole ranking pass.
+function scoreCandidate(
+  roomName: string,
+  home: string,
+  dist: number,
+  sourceCount: number,
+  ownedMinerals: Set<MineralConstant>,
+  terrainBudget: { remaining: number }
+): ExpansionCandidate | undefined {
+  // ── Sources (dominant). 0 sources is a non-starter for a colony. ────────────────
+  if (sourceCount <= 0) return undefined;
+  let score = W_SOURCE_FIRST;
+  if (sourceCount >= 2) score += W_SOURCE_SECOND;
+  if (sourceCount >= 3) score += (sourceCount - 2) * W_SOURCE_EXTRA;
+
+  // ── Distance (matters, but weighed below sources). ──────────────────────────────
+  score -= dist * W_DIST_PENALTY;
+
+  // ── Mineral diversity: reward a type we don't already mine; extra for rare X. ────
+  const mineral = mineralTypeOf(roomName);
+  if (mineral && !ownedMinerals.has(mineral)) {
+    score += W_MINERAL_NEW;
+    if (mineral === RESOURCE_CATALYST) score += W_MINERAL_RARE;
+  }
+
+  // ── Defensibility via exit sides (cheap: describeExits is free of vision). ───────
+  const exitSides = countExitSides(roomName);
+  // Penalise each exit side; reward a true 2-exit chokepoint room.
+  score -= exitSides * W_EXIT_PENALTY;
+  if (exitSides <= 2) score += W_CHOKEPOINT_BONUS;
+
+  // ── Remotes gained: harvestable, un-owned, un-contested neighbour rooms. ─────────
+  const remotes = countFreeRemoteNeighbours(roomName);
+  score += remotes * W_REMOTE;
+
+  // ── Enemy proximity: penalise nearness to strong enemy centroids. ───────────────
+  score -= enemyProximityPenalty(roomName);
+
+  // ── Swamp ratio (optional/cheap): only when terrain budget remains. ─────────────
+  if (terrainBudget.remaining > 0) {
+    const swamp = swampFraction(roomName);
+    if (swamp !== undefined) {
+      terrainBudget.remaining--;
+      if (swamp > SWAMP_TOLERANCE) {
+        score -= (swamp - SWAMP_TOLERANCE) * W_SWAMP_PENALTY;
+      }
+    }
+  }
+
+  return {
+    room: roomName,
+    homeRoom: home,
+    score: Math.round(score),
+    sources: sourceCount,
+    dist,
+    remotes,
+    exits: exitSides,
+    mineral,
+  };
+}
+
+// ── Scoring helpers ───────────────────────────────────────────────────────────
+
+// The mineral types the empire ALREADY mines (one per owned room with vision). Used to
+// reward a candidate that brings a *new* type. Cheap: iterates owned rooms only.
+function scanOwnedMinerals(): Set<MineralConstant> {
+  const owned = new Set<MineralConstant>();
+  for (const rn in Game.rooms) {
+    const room = Game.rooms[rn];
+    if (!room.controller?.my) continue;
+    const mineral = room.find(FIND_MINERALS)[0];
+    if (mineral) owned.add(mineral.mineralType);
+  }
+  return owned;
+}
+
+// Mineral type for a candidate room: live vision first, else cached Memory.intel.
+function mineralTypeOf(roomName: string): MineralConstant | undefined {
+  const room = Game.rooms[roomName];
+  if (room) {
+    const mineral = room.find(FIND_MINERALS)[0];
+    if (mineral) return mineral.mineralType;
+  }
+  return Memory.intel?.[roomName]?.mineralType;
+}
+
+// Number of map edges with an exit (1–4). Fewer = more defensible. describeExits is a
+// pure map query (no vision, very cheap).
+function countExitSides(roomName: string): number {
+  const exits = Game.map.describeExits(roomName);
+  let n = 0;
+  for (const dir in exits) {
+    if (exits[dir as ExitKey]) n++;
+  }
+  return n;
+}
+
+// Count neighbour rooms that would make good remotes: they have sources and aren't ours,
+// SK rooms, or owned/reserved/threatened by a hostile (per cached intel). Vision-free.
+function countFreeRemoteNeighbours(roomName: string): number {
+  const exits = Game.map.describeExits(roomName);
+  let count = 0;
+  for (const dir in exits) {
+    if (count >= MAX_SCORED_REMOTES) break;
+    const neighbor = exits[dir as ExitKey];
+    if (!neighbor) continue;
+    if (Game.rooms[neighbor]?.controller?.my) continue;  // our own room, not a free remote
+    if (isSourceKeeperRoom(neighbor)) continue;          // SK rooms aren't simple remotes
+    const intel = Memory.intel?.[neighbor];
+    if (!intel) continue;                                // no intel ⇒ don't credit it
+    if (intelIsHostile(intel)) continue;                 // owned/reserved/strong-threat
+    const sources = intel.sourcePos?.length ?? 0;
+    if (sources > 0) count++;
+  }
+  return count;
+}
+
+// Penalty for sitting close to strong enemy territory. Uses PlayerIntelData centroids
+// (sector-grid average coords) and only counts players judged militarily strong. Rooms
+// owned/reserved by a strong hostile are rejected earlier (intelIsHostile), so this is
+// the softer "nearby enemy" signal.
+function enemyProximityPenalty(roomName: string): number {
+  if (!Memory.players) return 0;
+  const coords = roomNameToCoords(roomName);
+  if (!coords) return 0;
+  let penalty = 0;
+  for (const username in Memory.players) {
+    const p = Memory.players[username];
+    if (p.username === myUsername()) continue;
+    if (p.militaryStrength < STRONG_ENEMY_MILITARY) continue;
+    // Centroid is stored as sector-grid coords (same space as roomNameToCoords).
+    const d = Math.max(Math.abs(coords.x - p.centroidX), Math.abs(coords.y - p.centroidY));
+    if (d <= ENEMY_DANGER_RADIUS) {
+      // Closer + stronger ⇒ larger penalty.
+      penalty += (ENEMY_DANGER_RADIUS - d + 1) * W_ENEMY_PENALTY;
+    }
+  }
+  return penalty;
+}
+
+// Fraction of a room's tiles that are swamp, when terrain is cheaply available. Returns
+// undefined when the terrain query isn't available (treated as "no penalty"). Sampling a
+// coarse grid keeps the 2500-tile scan affordable.
+function swampFraction(roomName: string): number | undefined {
+  const terrain = Game.map.getRoomTerrain(roomName);
+  if (!terrain) return undefined;
+  let swamp = 0;
+  let sampled = 0;
+  // Sample every 5th tile in both axes (100 samples) — enough signal, ~25× cheaper.
+  for (let x = 0; x < 50; x += 5) {
+    for (let y = 0; y < 50; y += 5) {
+      sampled++;
+      if (terrain.get(x, y) === TERRAIN_MASK_SWAMP) swamp++;
+    }
+  }
+  return sampled > 0 ? swamp / sampled : undefined;
+}
+
+// True if cached intel says a room is unclaimable: owned by another player, reserved by
+// someone else, or holding a strong standing threat. Mirrors isRoomContested for the
+// vision-free (intel-only) case.
+function intelIsHostile(intel: RoomIntelData): boolean {
+  const me = myUsername();
+  if (intel.owner && intel.owner !== me) return true;
+  if (intel.reservedBy && intel.reservedBy !== me) return true;
+  // threatLevel is 0 (trivial) … 10 (fortress); a high standing threat means avoid.
+  if ((intel.threatLevel ?? 0) >= 5) return true;
+  return false;
+}
+
+// Parse a room name into signed sector-grid coordinates. MUST match parseRoomCoords in
+// orchestrator.military.ts (W and N negative) so distances against the PlayerIntelData
+// centroids — which are averaged in that exact space — are meaningful. Returns undefined
+// for malformed names.
+function roomNameToCoords(roomName: string): { x: number; y: number } | undefined {
+  const m = roomName.match(/^([WE])(\d+)([NS])(\d+)$/);
+  if (!m) return undefined;
+  const x = m[1] === "W" ? -parseInt(m[2], 10) : parseInt(m[2], 10);
+  const y = m[3] === "N" ? -parseInt(m[4], 10) : parseInt(m[4], 10);
+  return { x, y };
 }
 
 // ── Contested-room safety ─────────────────────────────────────────────────────
@@ -397,6 +684,15 @@ function manageActiveExpansion() {
 // balloon with stale candidates that change as scouting progresses.
 const MAX_AUTO_QUEUE_DEPTH = 3;
 
+// Whether the empire's strategic posture permits STARTING new auto-claims. Per the
+// EmpireMemory contract a missing Memory.empire means "EXPAND" (backward-compatible
+// default), so we only block when an explicit non-EXPAND posture is set. Manual claims
+// (Game.arca) and already-running expansions are unaffected — they don't pass through here.
+function isExpansionPostureAllowed(): boolean {
+  const posture = Memory.empire?.posture ?? "EXPAND";
+  return posture === "EXPAND";
+}
+
 export function loop() {
   // Lifecycle management always runs — a manually claimed (Game.arca.claim)
   // expansion must complete/abort even with autoExpand off.
@@ -407,6 +703,14 @@ export function loop() {
   if (!Memory.expansion) advanceExpansionQueue();
 
   if (Memory.autoExpand !== true) return;
+
+  // Posture gate: only START NEW auto-claims while the empire is in EXPAND posture.
+  // Note this gates ONLY the auto-enqueue below — manageActiveExpansion() and
+  // advanceExpansionQueue() already ran above, so an in-progress expansion (or anything
+  // a human queued via Game.arca) still finishes during TURTLE / RECOVER / WAR. We just
+  // stop FEEDING the queue new candidates until the empire returns to EXPAND.
+  if (!isExpansionPostureAllowed()) return;
+
   if (Game.time % AUTO_EXPAND_CHECK_INTERVAL !== 0) return;
 
   if (Game.cpu.bucket < MIN_BUCKET) return;

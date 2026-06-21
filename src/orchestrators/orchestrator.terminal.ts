@@ -6,6 +6,23 @@
 import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
 import { MANAGED_COMMODITIES } from "../config/config.factory";
 
+// Module augmentation — the market-maker keeps a tiny rolling price record and a couple
+// of throttles in Memory. Kept here (not in types.d.ts) because the terminal fully owns
+// this slice of memory.
+declare global {
+  interface Memory {
+    // Bounded rolling record of recently-SEEN sale prices, per resource type, used as a
+    // sanity floor so we never post/sell well below our own recent average.
+    marketPrices?: Record<string, number[]>;
+  }
+  interface RoomMemory {
+    // Throttle: last tick this room reconciled its market-maker sell orders.
+    lastOrderManageTick?: number;
+    // Throttle: last tick this room evaluated surplus-energy market trading.
+    lastEnergyTradeTick?: number;
+  }
+}
+
 // ── Sell config ───────────────────────────────────────────────────────────────
 
 const TERMINAL_CONFIG = {
@@ -53,7 +70,53 @@ const NETWORK_CONFIG = {
   MAX_DISTANCE: 10,                  // skip cross-room transfers beyond this
 };
 
+// ── Market-maker (sell orders) config ─────────────────────────────────────────
+//
+// In addition to the deal()-taker path (which always pays the 5% taker premium), we
+// post our OWN sell orders to capture the bid/ask spread. Order management is throttled
+// and bounded so we never spam createOrder (each post costs credits = 0.05 × total value)
+// and never hold more orders than we can babysit.
+
+const MARKET_MAKER_CONFIG = {
+  MANAGE_INTERVAL: 50,        // reconcile this room's orders at most this often
+  MAX_ACTIVE_ORDERS: 12,      // empire-wide cap on our live sell orders (credit-cost guard)
+  MIN_SELL_SURPLUS: 5_000,    // only post a sell order once we hold this much of a resource
+  ORDER_LOT: 5_000,           // remaining-amount we aim to keep on a live order
+  TOPUP_THRESHOLD: 1_000,     // top a thinning order back up once it drops below this
+  UNDERCUT: 0.001,            // price just under the best competing ask (capture the sale)
+  MIN_CREDITS_TO_POST: 10_000, // never post orders unless we have a healthy credit cushion
+  PRICE_FLOOR_RATIO: 0.9,     // never price below this fraction of our recent seen average
+  REPRICE_TOLERANCE: 0.15,    // cancel+replace if our price drifts >15% from the new fair price
+};
+
+// Resources we are willing to market-make: the room's own mineral plus managed commodities.
+// (Base lab minerals and ghodium are things we BUY/keep, so they're excluded from selling.)
+
+// ── Energy trading config ─────────────────────────────────────────────────────
+//
+// Sell only TRUE empire-wide surplus energy (storage persistently very high, well above
+// the inter-room donor threshold so we don't fight the balancer), and buy energy when the
+// market is unusually cheap and a room is genuinely low. Sane floors/ceilings throughout.
+
+const ENERGY_TRADE_CONFIG = {
+  INTERVAL: 100,                 // throttle energy market evaluation per room
+  SELL_STORAGE_THRESHOLD: 400_000, // only sell surplus when storage is persistently this high
+  SELL_KEEP: 350_000,            // never let a market sale draw storage below this
+  SELL_MIN_PRICE: 2,             // don't sell energy for less than this many credits/unit
+  SELL_MAX_AMOUNT: 5_000,        // cap per energy sell deal
+  BUY_STORAGE_THRESHOLD: 30_000, // only buy energy when a room is genuinely low
+  BUY_MAX_PRICE: 1,              // energy is "cheap" below this — worth buying with credits
+  BUY_MAX_AMOUNT: 5_000,         // cap per energy buy deal
+  MIN_CREDITS_TO_BUY: 50_000,    // keep a credit cushion; only buy energy above this
+};
+
+// ── Rolling price record config ───────────────────────────────────────────────
+const PRICE_HISTORY_LEN = 20;     // bounded samples kept per resource
+
 const BASE_MINERALS: MineralConstant[] = ['H', 'O', 'Z', 'K', 'U', 'L', 'X'];
+
+// Base minerals + ghodium are bought/kept, never market-made for sale.
+const NON_SELLABLE = new Set<ResourceConstant>([...BASE_MINERALS, RESOURCE_GHODIUM, RESOURCE_ENERGY]);
 
 // Drop a queued inter-room send that hasn't gone through after this many ticks so a
 // send that can't be filled or paid for never permanently freezes the room's balancing.
@@ -128,6 +191,25 @@ function processTerminal(room: Room): void {
   // Vend factory commodities last, so a steady stream of commodity deals can't keep the
   // terminal on cooldown and starve the lab/nuker buys above.
   attemptCommoditySale(room, terminal);
+
+  // Energy market trading: sell true empire-wide surplus / buy when unusually cheap.
+  // Throttled and gated so it never fights the inter-room balancer. A market deal cools
+  // the terminal, so this runs after the lab/nuker/commodity priorities above.
+  const lastEnergyTrade = room.memory.lastEnergyTradeTick ?? 0;
+  if (Game.time - lastEnergyTrade >= ENERGY_TRADE_CONFIG.INTERVAL) {
+    if (tradeEnergy(room, terminal)) {
+      room.memory.lastEnergyTradeTick = Game.time;
+    }
+  }
+
+  // Market-maker: maintain our own sell orders so surplus minerals/commodities capture the
+  // bid/ask spread instead of always paying the 5% taker premium. Order management costs no
+  // terminal cooldown (createOrder is not a terminal action), so it's safe to run last.
+  const lastOrderManage = room.memory.lastOrderManageTick ?? 0;
+  if (Game.time - lastOrderManage >= MARKET_MAKER_CONFIG.MANAGE_INTERVAL) {
+    manageSellOrders(room, terminal);
+    room.memory.lastOrderManageTick = Game.time;
+  }
 }
 
 // ── Ghodium (nuker reserve) ─────────────────────────────────────────────────────
@@ -428,7 +510,14 @@ function sellResourceToMarket(
   const history = Game.market.getHistory(resource);
   const avgPrice = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
   if (avgPrice === undefined) return false;
+  // Floor = the higher of (a) the market-history fraction we already used and (b) our own
+  // recent rolling average — so a transient crash in the order book can't make us dump
+  // below what we've actually been getting lately.
+  const recentAvg = recentAvgPrice(resource);
   let bestPrice = avgPrice * TERMINAL_CONFIG.MIN_PRICE_RATIO;
+  if (recentAvg !== undefined) {
+    bestPrice = Math.max(bestPrice, recentAvg * TERMINAL_CONFIG.MIN_PRICE_RATIO);
+  }
   let bestOrderId: string | null = null;
   let bestOrderRoom = "";
   let bestOrderAmount = 0;
@@ -463,6 +552,7 @@ function sellResourceToMarket(
 
   const result = Game.market.deal(bestOrderId, tradeAmount, room.name);
   if (result === OK) {
+    recordPrice(resource, bestPrice); // feed the rolling sanity record
     console.log(
       `[Terminal] ${room.name}: Sold ${tradeAmount} ${resource} @ ${bestPrice.toFixed(2)}`
     );
@@ -472,6 +562,29 @@ function sellResourceToMarket(
     console.log(`[Terminal] Market deal failed: ${result} for ${resource}`);
   }
   return false;
+}
+
+// ── Rolling price record ──────────────────────────────────────────────────────
+//
+// A tiny bounded history of prices we've actually transacted/seen per resource, used as a
+// sanity floor (see sellResourceToMarket / market-maker pricing). Lightweight: at most
+// PRICE_HISTORY_LEN numbers per resource live in Memory.
+
+function recordPrice(resource: ResourceConstant, price: number): void {
+  if (!(price > 0)) return;
+  if (!Memory.marketPrices) Memory.marketPrices = {};
+  const arr = (Memory.marketPrices[resource] ??= []);
+  arr.push(Math.round(price * 1000) / 1000); // keep memory small (3 dp)
+  while (arr.length > PRICE_HISTORY_LEN) arr.shift();
+}
+
+// Average of the recently-seen prices for a resource, or undefined if we have none yet.
+function recentAvgPrice(resource: ResourceConstant): number | undefined {
+  const arr = Memory.marketPrices?.[resource];
+  if (!arr || arr.length === 0) return undefined;
+  let sum = 0;
+  for (const p of arr) sum += p;
+  return sum / arr.length;
 }
 
 // ── Commodity selling ───────────────────────────────────────────────────────────
@@ -530,4 +643,240 @@ function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
     }
   }
   return false;
+}
+
+// ── Energy market trading ─────────────────────────────────────────────────────
+//
+// Sell TRUE empire-wide surplus energy for credits, or buy energy when it's unusually
+// cheap and a room is genuinely low. Both paths are deliberately conservative so they
+// never undermine the inter-room balancer: we only sell well ABOVE the donor threshold
+// (NETWORK_CONFIG.ENERGY_RICH_THRESHOLD = 200k) — at 400k — and never draw storage below
+// SELL_KEEP, and we only buy when a room is below BUY_STORAGE_THRESHOLD. Returns true when
+// a deal was placed (a deal cools the terminal, so the caller stops for the tick).
+function tradeEnergy(room: Room, terminal: StructureTerminal): boolean {
+  if (terminal.cooldown > 0) return false;
+  const storageEnergy = room.storage?.store[RESOURCE_ENERGY] ?? 0;
+
+  // Don't sell while a queued send still wants this room's energy — let the balancer win.
+  if (room.memory.pendingSend) return false;
+
+  // SELL: storage persistently very high → unload the surplus above SELL_KEEP for credits.
+  if (storageEnergy > ENERGY_TRADE_CONFIG.SELL_STORAGE_THRESHOLD) {
+    const surplus = storageEnergy - ENERGY_TRADE_CONFIG.SELL_KEEP;
+    // We can only sell what's staged in the terminal (haulers fill it from storage).
+    const inTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+    const sellable = Math.min(
+      surplus,
+      inTerminal - TERMINAL_CONFIG.MIN_TERMINAL_ENERGY,
+      ENERGY_TRADE_CONFIG.SELL_MAX_AMOUNT
+    );
+    if (sellable >= 1000) {
+      if (sellEnergyToMarket(room, terminal, sellable)) return true;
+    }
+  }
+
+  // BUY: room genuinely low AND energy is unusually cheap AND we have a credit cushion.
+  if (
+    storageEnergy < ENERGY_TRADE_CONFIG.BUY_STORAGE_THRESHOLD &&
+    Game.market.credits > ENERGY_TRADE_CONFIG.MIN_CREDITS_TO_BUY
+  ) {
+    if (buyCheapEnergy(room, terminal)) return true;
+  }
+
+  return false;
+}
+
+// Sell up to `amount` energy to the best nearby buy order paying at least SELL_MIN_PRICE.
+function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: number): boolean {
+  let best: Order | null = null;
+  const orders = Game.market.getAllOrders((o) => {
+    if (o.type !== ORDER_BUY || o.resourceType !== RESOURCE_ENERGY) return false;
+    if (!o.roomName || o.amount <= 0) return false;
+    if (o.price < ENERGY_TRADE_CONFIG.SELL_MIN_PRICE) return false;
+    return (
+      Game.map.getRoomLinearDistance(room.name, o.roomName) < TERMINAL_CONFIG.MAX_TRADE_DISTANCE
+    );
+  });
+  for (const o of orders) {
+    if (!best || o.price > best.price) best = o;
+  }
+  if (!best || !best.roomName) return false;
+
+  // Energy sales spend energy on the fee too; cap by what we can afford after the fee.
+  const want = Math.min(amount, best.amount);
+  const dealAmount = affordableTradeAmount(terminal, room.name, best.roomName, want);
+  if (dealAmount < 1000) return false;
+
+  const result = Game.market.deal(best.id, dealAmount, room.name);
+  if (result === OK) {
+    recordPrice(RESOURCE_ENERGY, best.price);
+    console.log(
+      `[Terminal] ${room.name}: Sold ${dealAmount} surplus energy @ ${best.price.toFixed(2)}`
+    );
+    return true;
+  }
+  return false;
+}
+
+// Buy energy from the cheapest nearby sell order under BUY_MAX_PRICE to refill a low room.
+function buyCheapEnergy(room: Room, terminal: StructureTerminal): boolean {
+  const orders = Game.market.getAllOrders((o) => {
+    if (o.type !== ORDER_SELL || o.resourceType !== RESOURCE_ENERGY) return false;
+    if (!o.roomName || o.amount <= 0) return false;
+    if (o.price > ENERGY_TRADE_CONFIG.BUY_MAX_PRICE) return false;
+    return (
+      Game.map.getRoomLinearDistance(room.name, o.roomName) < TERMINAL_CONFIG.MAX_TRADE_DISTANCE
+    );
+  });
+  if (orders.length === 0) return false;
+  orders.sort((a, b) => a.price - b.price);
+  const best = orders[0];
+
+  const want = Math.min(best.amount, ENERGY_TRADE_CONFIG.BUY_MAX_AMOUNT);
+  // Buying energy still costs energy for the fee; cap by what the terminal can spare.
+  const amount = affordableTradeAmount(terminal, room.name, best.roomName!, want);
+  if (amount < 1000) return false;
+
+  const result = Game.market.deal(best.id, amount, room.name);
+  if (result === OK) {
+    console.log(
+      `[Terminal] ${room.name}: Bought ${amount} energy @ ${best.price.toFixed(2)} (room low)`
+    );
+    return true;
+  }
+  return false;
+}
+
+// ── Market-maker (sell orders) ─────────────────────────────────────────────────
+//
+// Post and maintain our own ORDER_SELL listings for surplus minerals/commodities so buyers
+// come to us at the ask price (we pocket the spread) instead of us always crossing to a bid
+// and paying the 5% taker premium. We:
+//   • cap total live orders empire-wide (each post costs credits = 0.05 × price × amount),
+//   • never duplicate an order for the same resource+room,
+//   • top up a thinning order's remaining amount from terminal stock,
+//   • cancel+replace an order whose price has drifted from the current fair price,
+//   • price just under the best competing ask, never below our recent rolling-average floor.
+function manageSellOrders(room: Room, terminal: StructureTerminal): void {
+  if (Game.market.credits < MARKET_MAKER_CONFIG.MIN_CREDITS_TO_POST) return;
+
+  const myOrders = Object.values(Game.market.orders);
+  const mySellCount = myOrders.filter((o) => o.type === ORDER_SELL).length;
+
+  // Candidate resources to sell from THIS room's terminal: own mineral + managed commodities.
+  const candidates = new Set<ResourceConstant>();
+  const mineralId = room.memory.mineralId;
+  const mineral = mineralId ? (Game.getObjectById(mineralId) as Mineral | null) : null;
+  if (mineral && !NON_SELLABLE.has(mineral.mineralType)) candidates.add(mineral.mineralType);
+  for (const c of MANAGED_COMMODITIES) {
+    const rc = c as ResourceConstant;
+    if (!NON_SELLABLE.has(rc)) candidates.add(rc);
+  }
+
+  for (const resource of candidates) {
+    const surplus = terminal.store.getUsedCapacity(resource) ?? 0;
+    if (surplus < MARKET_MAKER_CONFIG.MIN_SELL_SURPLUS) continue;
+
+    const fair = fairSellPrice(resource);
+    if (fair === undefined) continue; // no price signal — don't guess
+
+    // Existing live sell order for this resource owned by this room (avoid duplicates).
+    const existing = myOrders.find(
+      (o) => o.type === ORDER_SELL && o.resourceType === resource && o.roomName === room.name
+    );
+
+    if (existing) {
+      reconcileOrder(room, terminal, existing, resource, surplus, fair);
+      continue;
+    }
+
+    // No order yet — post a new one if we're under the empire-wide cap.
+    if (mySellCount >= MARKET_MAKER_CONFIG.MAX_ACTIVE_ORDERS) continue;
+    const lot = Math.min(surplus, MARKET_MAKER_CONFIG.ORDER_LOT);
+    // createOrder fee = 0.05 × price × amount; bail if we can't comfortably afford it.
+    const fee = fair * lot * 0.05;
+    if (Game.market.credits < MARKET_MAKER_CONFIG.MIN_CREDITS_TO_POST + fee) continue;
+
+    const result = Game.market.createOrder({
+      type: ORDER_SELL,
+      resourceType: resource,
+      price: fair,
+      totalAmount: lot,
+      roomName: room.name,
+    });
+    if (result === OK) {
+      recordPrice(resource, fair);
+      console.log(
+        `[Terminal] ${room.name}: Posted sell order ${lot} ${resource} @ ${fair.toFixed(3)}`
+      );
+    }
+    return; // one order action per management pass to spread credit cost over time
+  }
+}
+
+// The price to list a sell order at: just under the best competing ask within trade range,
+// but never below our recent rolling-average floor (PRICE_FLOOR_RATIO of it). Falls back to
+// the market history average when no competing ask exists. undefined → no signal, skip.
+function fairSellPrice(resource: ResourceConstant): number | undefined {
+  const floorAvg = recentAvgPrice(resource);
+  const history = Game.market.getHistory(resource);
+  const histAvg = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
+
+  // Best (lowest) competing sell order — we undercut it slightly to win the next sale.
+  let bestAsk: number | undefined;
+  const asks = Game.market.getAllOrders(
+    (o) => o.type === ORDER_SELL && o.resourceType === resource && o.amount > 0
+  );
+  for (const o of asks) {
+    if (bestAsk === undefined || o.price < bestAsk) bestAsk = o.price;
+  }
+
+  let price = bestAsk !== undefined ? bestAsk - MARKET_MAKER_CONFIG.UNDERCUT : histAvg;
+  if (price === undefined || price <= 0) return undefined;
+
+  // Enforce the rolling-average floor so a depressed order book can't make us list cheap.
+  if (floorAvg !== undefined) {
+    price = Math.max(price, floorAvg * MARKET_MAKER_CONFIG.PRICE_FLOOR_RATIO);
+  }
+  return Math.round(price * 1000) / 1000;
+}
+
+// Keep an existing sell order healthy: top up its remaining amount from terminal surplus,
+// or cancel+replace it when its price has drifted too far from the current fair price.
+function reconcileOrder(
+  room: Room,
+  terminal: StructureTerminal,
+  order: Order,
+  resource: ResourceConstant,
+  surplus: number,
+  fair: number
+): void {
+  // Reprice: if our listed price has drifted beyond tolerance, cancel so a fresh order at
+  // the new fair price is posted next pass. (Cheaper than extendOrder's price-change cost
+  // semantics and keeps the logic simple.)
+  const drift = Math.abs(order.price - fair) / fair;
+  if (drift > MARKET_MAKER_CONFIG.REPRICE_TOLERANCE) {
+    Game.market.cancelOrder(order.id);
+    console.log(
+      `[Terminal] ${room.name}: Cancelled stale ${resource} order @ ${order.price.toFixed(3)} (fair ${fair.toFixed(3)})`
+    );
+    return;
+  }
+
+  // Top up a thinning order from terminal surplus so it stays attractive/visible.
+  if (order.remainingAmount < MARKET_MAKER_CONFIG.TOPUP_THRESHOLD) {
+    const addBy = Math.min(
+      surplus,
+      MARKET_MAKER_CONFIG.ORDER_LOT - order.remainingAmount
+    );
+    if (addBy > 0) {
+      const fee = fair * addBy * 0.05;
+      if (Game.market.credits >= MARKET_MAKER_CONFIG.MIN_CREDITS_TO_POST + fee) {
+        const result = Game.market.extendOrder(order.id, addBy);
+        if (result === OK) {
+          console.log(`[Terminal] ${room.name}: Topped up ${resource} order by ${addBy}`);
+        }
+      }
+    }
+  }
 }

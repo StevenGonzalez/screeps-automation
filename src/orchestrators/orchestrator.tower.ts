@@ -1,4 +1,5 @@
 import { runTower, selectRoomAttackTarget } from "../roles/role.tower";
+import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
 
 const THREAT_NOTIFY_COOLDOWN = 200;
 
@@ -9,6 +10,20 @@ const SAFEMODE_STORAGE_HP_RATIO = 0.25;  // storage below 25% HP (dismantlers)
 const SAFEMODE_TERMINAL_HP_RATIO = 0.25; // terminal below 25% HP
 const SAFEMODE_MIN_TOWER_ENERGY = 50;    // towers considered "drained" below this
 const SAFEMODE_OVERWHELMED_COUNT = 3;    // attacker count threshold for overwhelmed check
+
+// ── Safe-mode conservation ──────────────────────────────────────────────────────
+// Safe mode is a finite, precious resource (a fresh room has very few charges). The
+// guards below stop us from spending the LAST charge on a threat that can't actually
+// take the room — a lone harasser or a tower-drainer that only chips structures.
+//
+// We only veto on the FINAL charge: with charges to spare we keep the original, eager
+// triggers so a genuine assault is always answered.
+const SAFEMODE_LOW_CHARGE = 1;            // "this is our last charge" — be conservative
+// A spawn loses this fraction of its max HP per tick of sustained hostile melee/ranged
+// fire (DPS / hitsMax). When projected destruction lands within the predictive window
+// AND defenders can't stop it, fire BEFORE the spawn reaches 50% rather than after.
+const SAFEMODE_SPAWN_PREDICT_TICKS = 12;  // fire if a spawn will die within this many ticks
+const SAFEMODE_SPAWN_PREDICT_HP_RATIO = 0.80; // ...and it's already taking real damage (<80% HP)
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -50,27 +65,66 @@ function checkSafeMode(room: Room, hostiles: Creep[]): void {
   );
   if (attackers.length === 0) return;
 
+  // Conservation gate: are we down to our last safe-mode charge? When so, refuse to
+  // spend it on a low/medium threat (a harasser or a drain-attacker that can't finish
+  // the job). The boost-aware severity (getThreatSeverity) sees through TOUGH/heal/attack
+  // boosts, so a small-but-deadly boosted squad still reads "high" and is allowed through.
+  const lastCharge = controller.safeModeAvailable <= SAFEMODE_LOW_CHARGE;
+  const severity = getThreatSeverity(room);
+  const trivialThreat = severity === "low" || severity === "medium";
+  // On the final charge, only a "high" threat (real assault) may consume it.
+  const conserve = lastCharge && trivialThreat;
+
+  // A force that can actually breach: enough bodies plus the dismantle/melee power to
+  // chew through ramparts, OR a high boost-aware severity. A pure tower-drainer (a few
+  // RANGED_ATTACK kiters with no breaching mass) won't clear this bar, so it can chip
+  // towers all day without inducing a wasted safe mode.
+  const breaching = isBreachingForce(room, attackers, severity);
+
   // Trigger 1: any spawn critically damaged
   for (const spawn of room.find(FIND_MY_SPAWNS)) {
     if (spawn.hits < spawn.hitsMax * SAFEMODE_SPAWN_HP_RATIO) {
+      if (conserve) break; // don't burn the last charge on a trivial threat
       activateSafeMode(room, controller, `spawn at ${pct(spawn)}% HP`);
       return;
     }
   }
 
-  // Trigger 2: any tower critically damaged (losing towers means losing DPS permanently)
+  // Trigger 1b (predictive): a spawn is already taking damage and projected incoming
+  // hostile DPS (boost-aware, via getThreatInfo) will destroy it within the next several
+  // ticks faster than defenders can intervene. Fire EARLY rather than waiting for 50%.
+  if (!conserve && breaching) {
+    for (const spawn of room.find(FIND_MY_SPAWNS)) {
+      if (spawn.hits >= spawn.hitsMax * SAFEMODE_SPAWN_PREDICT_HP_RATIO) continue;
+      const ticksToDie = ticksUntilDestroyed(room, spawn);
+      if (ticksToDie !== undefined && ticksToDie <= SAFEMODE_SPAWN_PREDICT_TICKS) {
+        activateSafeMode(
+          room,
+          controller,
+          `spawn at ${pct(spawn)}% HP, projected loss in ~${ticksToDie} ticks`
+        );
+        return;
+      }
+    }
+  }
+
+  // Trigger 2: any tower critically damaged. Losing towers means losing DPS permanently,
+  // but a drain-attacker that merely chips towers (no force that can finish the room)
+  // must NOT be able to trick us into spending a charge — gate on a real breaching force.
   const towerIds = room.memory.towerIds ?? [];
-  for (const id of towerIds) {
-    const tower = Game.getObjectById(id) as StructureTower | null;
-    if (tower && tower.hits < tower.hitsMax * SAFEMODE_TOWER_HP_RATIO) {
-      activateSafeMode(room, controller, `tower at ${pct(tower)}% HP`);
-      return;
+  if (breaching && !conserve) {
+    for (const id of towerIds) {
+      const tower = Game.getObjectById(id) as StructureTower | null;
+      if (tower && tower.hits < tower.hitsMax * SAFEMODE_TOWER_HP_RATIO) {
+        activateSafeMode(room, controller, `tower at ${pct(tower)}% HP under breaching force`);
+        return;
+      }
     }
   }
 
   // Trigger 3: storage being dismantled (attackers with WORK parts present)
   const hasDismantlers = attackers.some((c) => c.body.some((p) => p.type === WORK));
-  if (hasDismantlers) {
+  if (hasDismantlers && !conserve) {
     if (room.storage && room.storage.hits < room.storage.hitsMax * SAFEMODE_STORAGE_HP_RATIO) {
       activateSafeMode(room, controller, `storage at ${pct(room.storage)}% HP`);
       return;
@@ -94,7 +148,7 @@ function checkSafeMode(room: Room, hostiles: Creep[]): void {
     attackers.length >= SAFEMODE_OVERWHELMED_COUNT && myFighters.length * 2 < attackers.length;
 
   // Trigger 4: towers drained + defenders overwhelmed
-  if (towerIds.length > 0) {
+  if (towerIds.length > 0 && !conserve) {
     const allTowersDrained = towerIds.every((id) => {
       const t = Game.getObjectById(id) as StructureTower | null;
       return !t || t.store[RESOURCE_ENERGY] < SAFEMODE_MIN_TOWER_ENERGY;
@@ -106,9 +160,77 @@ function checkSafeMode(room: Room, hostiles: Creep[]): void {
   }
 
   // Trigger 5: overwhelmed with no towers at all
-  if (overwhelmed && towerIds.length === 0) {
+  if (overwhelmed && towerIds.length === 0 && !conserve) {
     activateSafeMode(room, controller, `overwhelmed by ${attackers.length} attackers, no towers`);
   }
+}
+
+// A "breaching force" is one that can plausibly take the room — not a kiting drainer that
+// only chips towers from outside the walls. Two ways to qualify:
+//   • high boost-aware severity (a small boosted assault still reads "high"), or
+//   • enough bodies AND raw breaching power (melee ATTACK or WORK dismantle parts) to
+//     grind through ramparts. RANGED_ATTACK-only harassers have no breaching mass and
+//     therefore can never trip a tower/structure safe-mode trigger on their own.
+function isBreachingForce(room: Room, attackers: Creep[], severity: string): boolean {
+  if (severity === "high") return true;
+
+  // Count live melee + dismantle parts across all attackers; these are what actually
+  // remove rampart HP (ranged fire is splashy chip damage, not a wall-breaker).
+  let breachParts = 0;
+  for (const c of attackers) {
+    for (const p of c.body) {
+      if (p.hits <= 0) continue;
+      if (p.type === ATTACK || p.type === WORK) breachParts++;
+    }
+  }
+  // Roughly a full melee/dismantle creep's worth of working parts present, with enough
+  // bodies to absorb tower fire while they work. Tuned to exclude a lone harasser.
+  return breachParts >= 10 && attackers.length >= SAFEMODE_OVERWHELMED_COUNT;
+}
+
+// Estimate how many ticks until `target` is destroyed by sustained hostile fire, net of
+// the repair our towers can throw at it. Returns undefined if the structure isn't dying
+// (incoming DPS ≤ achievable repair). Uses the boost-aware room threat DPS so a boosted
+// squad's true output is respected. Conservative: tower repair is discounted because the
+// towers are also splitting effort between attacking and repairing under fire.
+function ticksUntilDestroyed(
+  room: Room,
+  target: { hits: number; pos: RoomPosition }
+): number | undefined {
+  const { hostiles } = getThreatInfo(room);
+  if (hostiles.length === 0) return undefined;
+
+  // Raw boost-aware damage-per-tick from live ATTACK/RANGED parts in the room.
+  let dps = 0;
+  for (const c of hostiles) {
+    for (const p of c.body) {
+      if (p.hits <= 0) continue;
+      if (p.type === ATTACK) dps += ATTACK_POWER * boostMult(p);
+      else if (p.type === RANGED_ATTACK) dps += RANGED_ATTACK_POWER * boostMult(p);
+    }
+  }
+  if (dps <= 0) return undefined;
+
+  // Achievable tower repair on the target (TOWER_POWER_REPAIR per tower, halved as a
+  // conservative discount for split attack/repair duty + range falloff + energy limits).
+  const towerIds = room.memory.towerIds ?? [];
+  const liveTowers = towerIds
+    .map((id) => Game.getObjectById(id) as StructureTower | null)
+    .filter((t): t is StructureTower => !!t && t.store[RESOURCE_ENERGY] >= 10).length;
+  const repairPerTick = liveTowers * TOWER_POWER_REPAIR * 0.5;
+
+  const netDps = dps - repairPerTick;
+  if (netDps <= 0) return undefined; // we can out-repair the incoming fire — not dying
+  return Math.ceil(target.hits / netDps);
+}
+
+// Boost multiplier for an ATTACK/RANGED_ATTACK part (1 when unboosted). Mirrors the
+// boost-aware tables in services.combat without re-exporting its internals.
+function boostMult(part: BodyPartDefinition): number {
+  if (!part.boost) return 1;
+  const attackBoosts: Record<string, number> = { UH: 2, UH2O: 3, XUH2O: 4 };
+  const rangedBoosts: Record<string, number> = { KO: 2, KHO2: 3, XKHO2: 4 };
+  return attackBoosts[part.boost] ?? rangedBoosts[part.boost] ?? 1;
 }
 
 function activateSafeMode(room: Room, controller: StructureController, reason: string): void {

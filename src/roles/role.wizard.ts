@@ -4,7 +4,7 @@ import { getDefenseOp, getOffensiveOp, runDefensiveWizard, runOffensiveWizard } 
 const KITE_RANGE = 3;
 
 export function runWizard(creep: Creep) {
-  if (creep.memory.boostCompound && seekBoost(creep)) return;
+  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
     const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);

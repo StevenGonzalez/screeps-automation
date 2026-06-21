@@ -5,7 +5,7 @@ import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } 
 const RETREAT_THRESHOLD = 0.2;
 
 export function runKnight(creep: Creep) {
-  if (creep.memory.boostCompound && seekBoost(creep)) return;
+  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
   // Offensive squad: tagged creep follows military orchestrator orders
   if (creep.memory.offensiveTarget) {

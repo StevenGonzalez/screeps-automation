@@ -2,6 +2,17 @@ import { findTowerRepairTarget } from "../services/services.creep";
 
 const TOWER_REPAIR_ENERGY_THRESHOLD = 0.25;
 
+// Official tower damage falloff: full TOWER_POWER_ATTACK at range <= TOWER_OPTIMAL_RANGE,
+// dropping linearly by TOWER_FALLOFF (75%) out to TOWER_FALLOFF_RANGE, where it bottoms out.
+const TWR_POWER_ATTACK   = 600;
+const TWR_OPTIMAL_RANGE  = 5;
+const TWR_FALLOFF_RANGE  = 20;
+const TWR_FALLOFF        = 0.75;
+
+// Heal output per HEAL part: full power within range 1, ranged power within range 3.
+const HEAL_RANGE         = 1;
+const RANGED_HEAL_RANGE  = 3;
+
 // attackTarget is computed once per room by the orchestrator so all towers concentrate fire.
 // healTarget is computed per-tower so each heals the closest friendly (no over-healing one creep).
 export function runTower(tower: StructureTower, attackTarget: Creep | null): void {
@@ -47,12 +58,14 @@ export function selectRoomAttackTarget(roomHostiles: Creep[], room?: Room): Cree
     return null;
   }
 
+  // Resolve the firing towers once (only those with energy can actually contribute damage).
+  // The set is tiny, so summing per-tower falloff damage for each candidate is cheap.
+  const towers = activeTowers(room);
+
   let best = hostiles[0];
   let bestScore = Infinity;
   for (const c of hostiles) {
-    // Tier × 10000 + current HP: lower score = higher priority.
-    // Within the same tier, focus the creep closest to dying.
-    const score = hostileTier(c) * 10_000 + c.hits;
+    const score = targetScore(c, hostiles, towers);
     if (score < bestScore) {
       bestScore = score;
       best = c;
@@ -60,16 +73,85 @@ export function selectRoomAttackTarget(roomHostiles: Creep[], room?: Room): Cree
   }
 
   // Hysteresis: keep hammering the previously-focused creep as long as it's still a valid
-  // hostile in the SAME priority tier as the new best. Without this, an enemy healer that
-  // tops two equal-tier targets back and forth makes the score (which tracks live HP) flip
-  // every tick, splitting tower DPS so neither dies. Only switch when the old target dies/
-  // leaves, or a strictly higher-priority tier appears.
+  // hostile and ranks in the SAME priority band (damageable + tier) as the new best. Without
+  // this, an enemy healer that tops two equal-tier targets back and forth makes the score
+  // (which tracks live HP) flip every tick, splitting tower DPS so neither dies. Only switch
+  // when the old target dies/leaves, drops out of the damageable set, or a strictly
+  // higher-priority band appears.
   if (room?.memory.lastTowerTargetId) {
     const prev = hostiles.find((c) => c.id === room.memory.lastTowerTargetId);
-    if (prev && hostileTier(prev) === hostileTier(best)) best = prev;
+    if (
+      prev &&
+      isDamageable(prev, hostiles, towers) === isDamageable(best, hostiles, towers) &&
+      hostileTier(prev) === hostileTier(best)
+    ) {
+      best = prev;
+    }
   }
   if (room) room.memory.lastTowerTargetId = best.id;
   return best;
+}
+
+// Lower score = higher priority. Ordering, most significant first:
+//   1. damageable targets (effective tower damage beats incoming heal) before un-killable ones
+//   2. healer-first tier doctrine within each group
+//   3. the creep closest to dying within a tier
+// Un-damageable targets aren't ignored — they just sink below anything we can actually hurt,
+// so towers stop wasting energy out-healed shots when a winnable target exists.
+function targetScore(creep: Creep, hostiles: Creep[], towers: StructureTower[]): number {
+  const damageablePenalty = isDamageable(creep, hostiles, towers) ? 0 : 100_000;
+  return damageablePenalty + hostileTier(creep) * 10_000 + creep.hits;
+}
+
+// A target is "damageable" this tick when the combined effective tower damage strictly
+// exceeds the heal it's receiving — i.e. the shot makes net progress toward a kill.
+function isDamageable(creep: Creep, hostiles: Creep[], towers: StructureTower[]): boolean {
+  return effectiveTowerDamage(creep, towers) > incomingHeal(creep, hostiles);
+}
+
+// Sum of each firing tower's range-adjusted damage against the target.
+function effectiveTowerDamage(creep: Creep, towers: StructureTower[]): number {
+  let total = 0;
+  for (const tower of towers) total += towerDamageAtRange(tower.pos.getRangeTo(creep));
+  return total;
+}
+
+// Official tower damage falloff: 600 at range <= 5, scaling down by 75% out to range 20.
+export function towerDamageAtRange(range: number): number {
+  let effectiveRange = range;
+  if (effectiveRange < TWR_OPTIMAL_RANGE) effectiveRange = TWR_OPTIMAL_RANGE;
+  if (effectiveRange > TWR_FALLOFF_RANGE) effectiveRange = TWR_FALLOFF_RANGE;
+  const falloff =
+    ((effectiveRange - TWR_OPTIMAL_RANGE) / (TWR_FALLOFF_RANGE - TWR_OPTIMAL_RANGE)) * TWR_FALLOFF;
+  return Math.floor(TWR_POWER_ATTACK * (1 - falloff));
+}
+
+// Estimated HP the target can recover this tick from nearby hostile healers. A healer in
+// melee range applies full HEAL_POWER per HEAL part; from 2–3 tiles it applies the weaker
+// RANGED_HEAL_POWER. A self-healing creep counts itself.
+function incomingHeal(creep: Creep, hostiles: Creep[]): number {
+  let heal = 0;
+  for (const ally of hostiles) {
+    const range = ally.pos.getRangeTo(creep);
+    if (range > RANGED_HEAL_RANGE) continue;
+    const healParts = ally.body.filter((p) => p.type === HEAL && p.hits > 0).length;
+    if (healParts === 0) continue;
+    heal += healParts * (range <= HEAL_RANGE ? HEAL_POWER : RANGED_HEAL_POWER);
+  }
+  return heal;
+}
+
+// The room's towers that still have energy to fire. Drained towers add no damage, so
+// excluding them keeps the effective-damage estimate honest.
+function activeTowers(room?: Room): StructureTower[] {
+  if (!room) return [];
+  const towerIds = room.memory.towerIds ?? [];
+  const towers: StructureTower[] = [];
+  for (const id of towerIds) {
+    const tower = Game.getObjectById(id);
+    if (tower && tower.store[RESOURCE_ENERGY] > 0) towers.push(tower);
+  }
+  return towers;
 }
 
 function hostileTier(creep: Creep): number {

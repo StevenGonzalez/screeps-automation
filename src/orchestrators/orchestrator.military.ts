@@ -6,6 +6,12 @@ import {
   selectStructureTarget,
   formationOffset,
   evaluateRoomThreatLevel,
+  buildTowerCostMatrix,
+  planBreach,
+  assessTowers,
+  towersAreDrained,
+  type BreachPlan,
+  type TowerStatus,
 } from "../services/services.combat";
 
 // ── Tunables ────────────────────────────────────────────────────────────────────
@@ -310,6 +316,55 @@ export function getSquadContext(op: MilitaryOp): SquadContext {
   return squadContextValue;
 }
 
+// ── Breach planning (coordinated dismantle) ──────────────────────────────────────
+//
+// So siegers/attackers don't each chip at a different barrier, an op caches ONE breach
+// plan per target room: a hits-weighted path to the room's core, whose first barrier is
+// the shared focus. Everyone hits that focus until it dies, then we recompute (the next
+// barrier on the path becomes the new focus). Cached in module state (not Memory) because
+// it holds live RoomPosition/Id references and is cheap to rebuild on demand.
+
+const breachCache: Record<string, BreachPlan> = {};
+
+function breachKey(op: MilitaryOp): string {
+  return `${op.homeRoom}>${op.targetRoom}`;
+}
+
+// Returns the shared focus barrier for an op's target room: the first barrier on the
+// cheapest-to-break breach path. Recomputes when the cached focus has died (or no plan
+// exists yet). Returns null when there are no barriers to breach. `fromPos` orients the
+// breach toward the squad's approach side.
+function getBreachFocus(op: MilitaryOp, room: Room, fromPos: RoomPosition): AnyStructure | null {
+  const key = breachKey(op);
+  const cached = breachCache[key];
+  if (cached) {
+    const focus = Game.getObjectById(cached.focusId) as AnyStructure | null;
+    // Cached focus still standing and still in this room — keep concentrating fire on it.
+    if (focus && focus.room?.name === room.name && (focus as { hits?: number }).hits) {
+      return focus;
+    }
+    delete breachCache[key]; // focus fell (or stale) — recompute below
+  }
+
+  const plan = planBreach(room, fromPos);
+  if (!plan) return null;
+  breachCache[key] = plan;
+  return Game.getObjectById(plan.focusId) as AnyStructure | null;
+}
+
+function clearBreachPlan(op: MilitaryOp): void {
+  delete breachCache[breachKey(op)];
+}
+
+// The structure a squad member should attack/dismantle: the shared breach focus when one
+// exists (concentrate the whole squad on cracking ONE barrier), else the standard
+// tactic-driven structure priority. Keeps siege doctrine but adds focus-fire on barriers.
+function attackStructureTarget(creep: Creep, op: MilitaryOp): AnyStructure | null {
+  const breach = getBreachFocus(op, creep.room, creep.pos);
+  if (breach) return breach;
+  return selectStructureTarget(creep.room, creep.pos, op.tactic);
+}
+
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 function getSquadMembers(op: MilitaryOp): Creep[] {
@@ -327,9 +382,61 @@ function squadMet(op: MilitaryOp, members: Creep[]): boolean {
   );
 }
 
+// ── Post-kill controller neutralization (Task 5) ─────────────────────────────────
+//
+// Once a target room's hostiles AND hostile structures are gone, a razed enemy room can
+// still respawn the moment we leave unless its controller is downgraded. Before releasing
+// the squad we drive any CLAIM-capable member onto the controller to attackController it
+// (downgrading / freeing the room). For a pure combat squad (no CLAIM parts) this is a
+// safe no-op — the API mirrors role.conqueror.ts's attackController usage.
+
+// True when the room is structurally cleared (no hostiles, no enemy structures) so it's
+// safe/worthwhile to start neutralizing the controller.
+function roomStructurallyCleared(room: Room): boolean {
+  if (room.find(FIND_HOSTILE_CREEPS).length > 0) return false;
+  return room.find(FIND_HOSTILE_STRUCTURES).length === 0;
+}
+
+// A hostile controller still worth downgrading: owned or reserved by someone who isn't us.
+function hostileControllerToNeutralize(room: Room): StructureController | null {
+  const ctrl = room.controller;
+  if (!ctrl) return null;
+  if (ctrl.my) return null;
+  if (ctrl.owner || ctrl.reservation) return ctrl;
+  return null;
+}
+
+// Drives a CLAIM-capable creep to attackController the target room's controller. Returns
+// true when it handled the creep this tick (so callers skip their fallback movement).
+function neutralizeController(creep: Creep, op: MilitaryOp): boolean {
+  if (creep.room.name !== op.targetRoom) return false;
+  if (!creep.body.some((p) => p.type === CLAIM && p.hits > 0)) return false; // no CLAIM: no-op
+  if (!roomStructurallyCleared(creep.room)) return false;
+  const ctrl = hostileControllerToNeutralize(creep.room);
+  if (!ctrl) return false;
+
+  if (creep.attackController(ctrl) === ERR_NOT_IN_RANGE) {
+    creep.moveTo(ctrl, { range: 1, reusePath: 10 });
+  }
+  return true;
+}
+
 // An op finished its objective: release its squad, remove it, and pull the next
 // queued target for the freed home room (the pipeline advances here).
 function completeOp(op: MilitaryOp): void {
+  // Final best-effort downgrade before the squad disbands: if the room is cleared and a
+  // CLAIM-capable member is on hand, knock the controller down so the razed room can't
+  // immediately respawn. Vision-guarded; a no-op for a pure combat squad.
+  const room = Game.rooms[op.targetRoom];
+  if (room && roomStructurallyCleared(room) && hostileControllerToNeutralize(room)) {
+    const ctrl = hostileControllerToNeutralize(room)!;
+    for (const c of getSquadMembers(op)) {
+      if (c.room.name !== op.targetRoom) continue;
+      if (!c.body.some((p) => p.type === CLAIM && p.hits > 0)) continue;
+      if (c.attackController(ctrl) === ERR_NOT_IN_RANGE) c.moveTo(ctrl, { range: 1, reusePath: 5 });
+      break; // one downgrade attempt per tick is enough
+    }
+  }
   removeOp(op);
 }
 
@@ -338,6 +445,7 @@ function completeOp(op: MilitaryOp): void {
 // same room (different home) keeps its creeps.
 function removeOp(op: MilitaryOp): void {
   clearSquadTargets(op.targetRoom, op.homeRoom);
+  clearBreachPlan(op);
   if (Memory.militaryOps) delete Memory.militaryOps[op.homeRoom];
 }
 
@@ -500,6 +608,11 @@ function advanceMilitaryQueue(): void {
   const queue = Memory.militaryQueue;
   if (!queue || queue.length === 0) return;
 
+  // Posture gate: hold the auto-pipeline while turtling/recovering. Queued targets stay
+  // queued and start once posture eases. (Manual launchOp from the console is ungated.)
+  const posture = Memory.empire?.posture;
+  if (posture === "TURTLE" || posture === "RECOVER") return;
+
   for (let i = 0; i < queue.length; ) {
     const q = queue[i];
 
@@ -597,37 +710,7 @@ function scanIntel(): void {
   for (const rn in Game.rooms) {
     const room = Game.rooms[rn];
     if (room.controller?.my) continue;
-
-    const towers = room.find(FIND_HOSTILE_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_TOWER,
-    }).length;
-    const spawns = room.find(FIND_HOSTILE_STRUCTURES, {
-      filter: (s) => s.structureType === STRUCTURE_SPAWN,
-    }).length;
-    const { hostiles } = getThreatInfo(room);
-    let combatParts = 0;
-    let healParts = 0;
-    for (const h of hostiles) {
-      for (const p of h.body) {
-        if (p.type === ATTACK || p.type === RANGED_ATTACK) combatParts++;
-        if (p.type === HEAL) healParts++;
-      }
-    }
-
-    Memory.intel[rn] = {
-      roomName: rn,
-      lastSeen: Game.time,
-      owner: room.controller?.owner?.username,
-      reservedBy: room.controller?.reservation?.username,
-      rcl: room.controller?.level ?? 0,
-      towers,
-      spawns,
-      hostileCreeps: hostiles.length,
-      hostileCombatParts: combatParts,
-      hostileHealParts: healParts,
-      safeMode: room.controller?.safeMode,
-      threatLevel: evaluateRoomThreatLevel(room),
-    };
+    recordRoomIntel(room);
   }
 
   // Prune stale intel so the map can't grow unbounded across the bot's lifetime (every
@@ -635,58 +718,355 @@ function scanIntel(): void {
   for (const rn in Memory.intel) {
     if (Game.time - (Memory.intel[rn].lastSeen ?? 0) > INTEL_TTL) delete Memory.intel[rn];
   }
+
+  rebuildPlayerModel();
+}
+
+// Records a full persistent intel snapshot for one currently-visible non-owned room into
+// Memory.intel. Shared by the WarCouncil scan and the scout role (which calls it on arrival
+// so freshly walked rooms update Memory.intel[*].lastSeen and feed the deep-scout BFS).
+//
+// Backward-compatible: every field the original shallow record carried is still written;
+// the richer fields (positions, loot, barriers, mineral) are additive and optional.
+export function recordRoomIntel(room: Room): void {
+  if (!Memory.intel) Memory.intel = {};
+  const rn = room.name;
+
+  const pack = (p: RoomPosition): number => p.x * 50 + p.y;
+
+  const towerStructs = room.find(FIND_HOSTILE_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_TOWER,
+  }) as StructureTower[];
+  const spawnStructs = room.find(FIND_HOSTILE_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_SPAWN,
+  }) as StructureSpawn[];
+
+  const { hostiles } = getThreatInfo(room);
+  let combatParts = 0;
+  let healParts = 0;
+  for (const h of hostiles) {
+    for (const p of h.body) {
+      if (p.type === ATTACK || p.type === RANGED_ATTACK) combatParts++;
+      if (p.type === HEAL) healParts++;
+    }
+  }
+
+  const sources = room.find(FIND_SOURCES);
+  const minerals = room.find(FIND_MINERALS);
+
+  const storage = room.storage;
+  const terminal = room.terminal;
+
+  // Sum barrier hits in one pass; track the single toughest barrier (the breach point).
+  let barrierTotal = 0;
+  let barrierMax = 0;
+  const barriers = room.find(FIND_STRUCTURES, {
+    filter: (s) =>
+      s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL,
+  });
+  for (const b of barriers) {
+    barrierTotal += b.hits;
+    if (b.hits > barrierMax) barrierMax = b.hits;
+  }
+
+  const nonEnergyLoad = (store: StoreDefinition): number => {
+    let total = 0;
+    for (const r in store) {
+      if (r !== RESOURCE_ENERGY) total += store[r as ResourceConstant];
+    }
+    return total;
+  };
+
+  Memory.intel[rn] = {
+    roomName: rn,
+    lastSeen: Game.time,
+    owner: room.controller?.owner?.username,
+    reservedBy: room.controller?.reservation?.username,
+    rcl: room.controller?.level ?? 0,
+    towers: towerStructs.length,
+    spawns: spawnStructs.length,
+    hostileCreeps: hostiles.length,
+    hostileCombatParts: combatParts,
+    hostileHealParts: healParts,
+    safeMode: room.controller?.safeMode,
+    threatLevel: evaluateRoomThreatLevel(room),
+    // ── persistent attack-planning fields ──
+    controllerPos: room.controller ? pack(room.controller.pos) : undefined,
+    spawnPos: spawnStructs.length > 0 ? spawnStructs.map((s) => pack(s.pos)) : undefined,
+    towerPos: towerStructs.length > 0 ? towerStructs.map((t) => pack(t.pos)) : undefined,
+    sourcePos: sources.length > 0 ? sources.map((s) => pack(s.pos)) : undefined,
+    storagePos: storage ? pack(storage.pos) : undefined,
+    storageEnergy: storage ? storage.store[RESOURCE_ENERGY] : undefined,
+    storageMineral: storage ? nonEnergyLoad(storage.store) : undefined,
+    terminalPos: terminal ? pack(terminal.pos) : undefined,
+    terminalEnergy: terminal ? terminal.store[RESOURCE_ENERGY] : undefined,
+    terminalMineral: terminal ? nonEnergyLoad(terminal.store) : undefined,
+    barrierHpTotal: barriers.length > 0 ? barrierTotal : undefined,
+    barrierHpMax: barriers.length > 0 ? barrierMax : undefined,
+    mineralType: minerals.length > 0 ? minerals[0].mineralType : undefined,
+  };
+}
+
+// Rebuilds the per-player empire aggregates from the current room intel. Owned-room intel
+// is keyed by owner; reserved-only rooms don't count as territory. Bounded: each player's
+// room list is capped, and players unseen for INTEL_TTL are pruned. This feeds value-based
+// target selection later — it does NOT select targets here.
+function rebuildPlayerModel(): void {
+  if (!Memory.intel) return;
+  if (!Memory.players) Memory.players = {};
+
+  // Accumulate fresh aggregates from owned-room intel.
+  const fresh: Record<string, PlayerIntelData> = {};
+  for (const rn in Memory.intel) {
+    const intel: RoomIntelData = Memory.intel[rn];
+    const owner = intel.owner;
+    if (!owner) continue; // only actually-owned rooms count toward an empire
+
+    const coords = parseRoomCoords(rn);
+    if (!coords) continue;
+
+    let p = fresh[owner];
+    if (!p) {
+      p = fresh[owner] = {
+        username: owner,
+        rooms: [],
+        roomCount: 0,
+        maxRcl: 0,
+        totalTowers: 0,
+        totalSpawns: 0,
+        militaryStrength: 0,
+        economicStrength: 0,
+        centroidX: 0,
+        centroidY: 0,
+        lastSeen: 0,
+      };
+    }
+
+    if (p.rooms.length < PLAYER_ROOM_CAP) p.rooms.push(rn);
+    p.roomCount++;
+    p.maxRcl = Math.max(p.maxRcl, intel.rcl);
+    p.totalTowers += intel.towers;
+    p.totalSpawns += intel.spawns;
+    // Coarse, unitless estimates good enough for ranking targets by value/effort.
+    p.militaryStrength +=
+      intel.towers * 100 + Math.floor((intel.barrierHpMax ?? 0) / 100_000) * 50 + intel.rcl * 10;
+    p.economicStrength +=
+      Math.floor(((intel.storageEnergy ?? 0) + (intel.terminalEnergy ?? 0)) / 1000) +
+      (intel.storageMineral ?? 0) + (intel.terminalMineral ?? 0);
+    p.centroidX += coords.x;
+    p.centroidY += coords.y;
+    p.lastSeen = Math.max(p.lastSeen, intel.lastSeen);
+  }
+
+  // Finalize centroids (running sum → average over counted rooms).
+  for (const u in fresh) {
+    const p = fresh[u];
+    if (p.roomCount > 0) {
+      p.centroidX = Math.round(p.centroidX / p.roomCount);
+      p.centroidY = Math.round(p.centroidY / p.roomCount);
+    }
+  }
+
+  // Merge: replace re-seen players with fresh data, keep recently-seen ones whose rooms
+  // are currently out of vision, and prune anyone stale.
+  const players = Memory.players;
+  for (const u in fresh) players[u] = fresh[u];
+  for (const u in players) {
+    if (fresh[u]) continue;
+    if (Game.time - players[u].lastSeen > INTEL_TTL) delete players[u];
+  }
+}
+
+const PLAYER_ROOM_CAP = 30; // bound a single player's stored room list
+
+// Parses a room name (e.g. "W12N34") into signed sector-grid coordinates. W/N are negative
+// so a centroid average is meaningful across the E/W and N/S axes.
+function parseRoomCoords(roomName: string): { x: number; y: number } | null {
+  const m = /^([WE])(\d+)([NS])(\d+)$/.exec(roomName);
+  if (!m) return null;
+  const x = m[1] === "W" ? -parseInt(m[2], 10) : parseInt(m[2], 10);
+  const y = m[3] === "N" ? -parseInt(m[4], 10) : parseInt(m[4], 10);
+  return { x, y };
+}
+
+// ── Value-based target ranking ───────────────────────────────────────────────────
+//
+// We no longer just attack the nearest-softest room. Each candidate is scored on its
+// VALUE (loot, RCL, whether it belongs to a rival empire we want to break) divided by
+// the EFFORT to crack it given our strength (towers, barriers, range). The best
+// value-per-effort target wins — provided it's actually crackable. Safe-mode rooms and
+// fortresses we can't commit enough force to are filtered out entirely.
+
+// Minimum storage+terminal energy a home needs (in addition to the 50k bar) before we'll
+// commit it to a long siege of a fortified target. Keeps the empire economy healthy.
+const WAR_ECONOMY_ENERGY = 100_000;
+// A target whose toughest barrier exceeds this is a "fortress" — only worth committing to
+// when we have several capable homes (enough force) or it's exceptionally valuable.
+const FORTRESS_BARRIER_HP = 5_000_000;
+
+// Rough value of a target room for offensive ranking. Higher = more worth taking. Combines
+// stored loot, controller level (a developed room is a strategic prize), and a bonus for
+// belonging to a sizeable rival empire (breaking their key room hurts them most).
+function targetValue(intel: RoomIntelData): number {
+  let value = 0;
+  // Loot: energy is cheap-per-unit, minerals/commodities are the real prize.
+  value += Math.floor(((intel.storageEnergy ?? 0) + (intel.terminalEnergy ?? 0)) / 2_000);
+  value += Math.floor(((intel.storageMineral ?? 0) + (intel.terminalMineral ?? 0)) / 200);
+  // A developed room is strategically valuable to deny/take.
+  value += intel.rcl * 8;
+  // Breaking a key room of a larger rival empire is worth more.
+  const player = intel.owner ? Memory.players?.[intel.owner] : undefined;
+  if (player) value += Math.min(40, player.roomCount * 4 + player.maxRcl);
+  return Math.max(1, value);
+}
+
+// Rough effort to crack a target: towers and barrier strength dominate, threatLevel and
+// distance add to it. Higher = harder. Used as the denominator of value-per-effort.
+function targetEffort(intel: RoomIntelData, dist: number): number {
+  let effort = 1;
+  effort += intel.towers * 6;
+  effort += Math.floor((intel.barrierHpMax ?? 0) / 500_000);
+  effort += intel.threatLevel * 3;
+  effort += dist;
+  return effort;
 }
 
 function considerAutoAttack(wc: WarCouncilMemory): void {
   if (Game.time - (wc.lastAutoAttackTick ?? 0) < AUTO_ATTACK_INTERVAL) return;
   if (!Memory.intel) return;
 
+  // Maintain the campaign signal regardless of whether we launch this tick: a war target
+  // whose room is dead/ours/safe-moded is cleared so strategy can drop WAR posture.
+  maintainWarTarget();
+
+  // Posture gate: never START a new offensive while turtling or recovering. In-progress
+  // ops finish on their own; this only blocks fresh launches. Missing posture ⇒ EXPAND
+  // (safe default), which permits launches.
+  const posture = Memory.empire?.posture;
+  if (posture === "TURTLE" || posture === "RECOVER") return;
+
   const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
   if (ownedRooms.length === 0) return;
-
-  // Only attack from a room with the economy to sustain a squad AND not already
-  // running an offensive op (concurrency is one op per home room).
-  const capableHome = ownedRooms.find(
-    (r) =>
-      (r.controller?.level ?? 0) >= 5 &&
-      (r.storage?.store[RESOURCE_ENERGY] ?? 0) >= 50_000 &&
-      !Memory.militaryOps?.[r.name]
-  );
-  if (!capableHome) return;
 
   // Only free, capable homes are valid launch points (one offensive op per home).
   const freeHomes = ownedRooms.filter((r) => isCapableOffensiveHome(r));
   if (freeHomes.length === 0) return;
 
+  // Our usernames (don't attack ourselves) and a coarse measure of committable force.
+  const myNames = new Set(
+    ownedRooms.map((r) => r.controller?.owner?.username).filter((u): u is string => !!u)
+  );
+  const capableHomeCount = freeHomes.length;
+
   let best: RoomIntelData | null = null;
-  let bestHome = capableHome.name;
-  let bestScore = Infinity;
+  let bestHome = freeHomes[0].name;
+  let bestRatio = 0;
   for (const rn in Memory.intel) {
     const intel = Memory.intel[rn];
-    if (!intel.owner || intel.owner === capableHome.controller?.owner?.username) continue;
-    if (intel.safeMode) continue;
+    if (!intel.owner || myNames.has(intel.owner)) continue;
+    if (isAllyPlayer(intel.owner)) continue;
+    if (intel.safeMode) continue;                       // untouchable
     if (intel.threatLevel > AUTO_ATTACK_MAX_THREAT) continue;
 
+    // Pick the closest free home to fund this target.
     const home = freeHomes.reduce((b, r) =>
       Game.map.getRoomLinearDistance(r.name, rn) < Game.map.getRoomLinearDistance(b.name, rn) ? r : b
     );
     const dist = Game.map.getRoomLinearDistance(home.name, rn);
     if (dist > AUTO_ATTACK_MAX_RANGE) continue;
 
-    const score = intel.threatLevel * 10 + dist;
-    if (score < bestScore) {
-      bestScore = score;
+    // Don't bite off a fortress we can't commit enough force to. We accept it only when we
+    // have multiple free homes (so we can sustain the grind) or the home is energy-rich.
+    const isFortress = (intel.barrierHpMax ?? 0) > FORTRESS_BARRIER_HP;
+    if (isFortress) {
+      const homeRoom = Game.rooms[home.name];
+      const homeEnergy =
+        (homeRoom?.storage?.store[RESOURCE_ENERGY] ?? 0) +
+        (homeRoom?.terminal?.store[RESOURCE_ENERGY] ?? 0);
+      if (capableHomeCount < 2 && homeEnergy < WAR_ECONOMY_ENERGY) continue;
+    }
+
+    // Value-per-effort: the crackable target that gives us the most for the least cost.
+    const ratio = targetValue(intel) / targetEffort(intel, dist);
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
       best = intel;
       bestHome = home.name;
     }
   }
 
   if (!best) return;
-  const comp = recommendComposition(best.roomName, "assault");
-  const err = launchOp(best.roomName, "box", "assault", comp, bestHome);
+
+  // A fortified target gets a siege; a soft one an assault. The composition scales to the
+  // known defenses either way (recommendComposition reads tower intel).
+  const fortified = best.towers >= 2 || (best.barrierHpMax ?? 0) > 1_000_000;
+  const tactic: SquadTactic = fortified ? "siege" : "assault";
+  const comp = recommendComposition(best.roomName, tactic);
+  const err = launchOp(best.roomName, "box", tactic, comp, bestHome);
   if (!err) {
     wc.lastAutoAttackTick = Game.time;
-    console.log(`[WarCouncil] Auto-launch: ${bestHome} → ${best.roomName} (threat ${best.threatLevel})`);
+    // Signal the strategy coordinator: this is now a war target (it flips posture to WAR
+    // next tick). Only do so when the empire economy is healthy enough to sustain a war.
+    if (empireEconomyHealthy()) {
+      if (!Memory.empire) {
+        Memory.empire = { posture: posture ?? "EXPAND", updatedAt: Game.time };
+      }
+      Memory.empire.warTargetRoom = best.roomName;
+      Memory.empire.warTargetPlayer = best.owner;
+    }
+    console.log(
+      `[WarCouncil] Auto-launch (${tactic}): ${bestHome} → ${best.roomName} ` +
+        `(value/effort ${bestRatio.toFixed(2)}, owner ${best.owner})`
+    );
+  }
+}
+
+// The empire can afford a war when at least one home has a comfortable energy buffer beyond
+// the base squad-funding bar. Conservative so we don't declare WAR while economically fragile.
+function empireEconomyHealthy(): boolean {
+  for (const rn in Game.rooms) {
+    const room = Game.rooms[rn];
+    if (!room.controller?.my) continue;
+    const energy =
+      (room.storage?.store[RESOURCE_ENERGY] ?? 0) + (room.terminal?.store[RESOURCE_ENERGY] ?? 0);
+    if (energy >= WAR_ECONOMY_ENERGY) return true;
+  }
+  return false;
+}
+
+// Allies are friends we never attack even though the game lists their creeps as hostile.
+// Mirror that for empire-level targeting via the player intel model's owner names.
+function isAllyPlayer(username: string | undefined): boolean {
+  if (!username) return false;
+  const allies = (Memory as unknown as { allies?: string[] }).allies;
+  return Array.isArray(allies) && allies.includes(username);
+}
+
+// Keeps Memory.empire.warTargetRoom honest: clears it once the campaign is over — the
+// target became ours, was safe-moded, dropped out of intel (razed/lost vision long-term),
+// or no offensive op is targeting it anymore (the squad stood down / completed). The
+// strategy coordinator reads this to drop WAR posture when the campaign ends.
+function maintainWarTarget(): void {
+  const empire = Memory.empire;
+  const warRoom = empire?.warTargetRoom;
+  if (!empire || !warRoom) return;
+
+  // Still actively assaulting it? Keep the signal alive.
+  const opActive = Memory.militaryOps
+    ? Object.values(Memory.militaryOps).some((op) => op.targetRoom === warRoom)
+    : false;
+  if (opActive) return;
+
+  // The op has stood down. Decide whether the campaign succeeded or simply ended.
+  const room = Game.rooms[warRoom];
+  const intel = Memory.intel?.[warRoom];
+  const tookIt = room?.controller?.my === true;
+  const safeNow = (room?.controller?.safeMode ?? intel?.safeMode) ? true : false;
+
+  if (tookIt || safeNow || !intel) {
+    delete empire.warTargetRoom;
+    delete empire.warTargetPlayer;
+    console.log(`[WarCouncil] War campaign against ${warRoom} ended — clearing war target.`);
   }
 }
 
@@ -1052,13 +1432,18 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
     return;
   }
 
-  const struct = selectStructureTarget(creep.room, creep.pos, op.tactic);
+  const struct = attackStructureTarget(creep, op);
   if (struct) {
     if (creep.pos.isNearTo(struct)) creep.attack(struct);
     if (isLeader) leaderAdvance(creep, op, ctx, struct.pos, 1);
     else moveToSlot(creep, op, ctx);
     return;
   }
+
+  // Room structurally cleared: downgrade the controller so it can't immediately respawn
+  // defenses while we hold (Task 5). Only a CLAIM-bearing member can; for a pure combat
+  // squad this is a no-op and the creep just regroups.
+  if (neutralizeController(creep, op)) return;
 
   regroup(creep, op, ctx, isLeader);
 }
@@ -1098,7 +1483,7 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
     } else if (inMass.length > 0) {
       creep.rangedAttack(creep.pos.findClosestByRange(inMass)!);
     } else if (op.tactic !== "defend") {
-      const struct = selectStructureTarget(creep.room, creep.pos, op.tactic);
+      const struct = attackStructureTarget(creep, op);
       if (struct && creep.pos.getRangeTo(struct) <= 3) creep.rangedAttack(struct);
     }
   }
@@ -1125,7 +1510,7 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
     return;
   }
 
-  const struct = selectStructureTarget(creep.room, creep.pos, op.tactic);
+  const struct = attackStructureTarget(creep, op);
   if (struct) {
     if (isLeader) leaderAdvance(creep, op, ctx, struct.pos, KITE_RANGE);
     else moveToSlot(creep, op, ctx);
@@ -1194,7 +1579,15 @@ export function runOffensiveSieger(creep: Creep, op: MilitaryOp): void {
     return;
   }
 
-  const struct = selectStructureTarget(creep.room, creep.pos, op.tactic);
+  // Tower-drain hold: against a still-towered siege target, don't grind into live tower
+  // fire. Hold at the breach approach until the towers are drained (a drain pair baits
+  // them, or they simply run dry), THEN commit to dismantling. See shouldHoldForDrain.
+  if (op.tactic === "siege" && shouldHoldForDrain(creep.room)) {
+    holdAtBreachApproach(creep, op, ctx, isLeader);
+    return;
+  }
+
+  const struct = attackStructureTarget(creep, op);
   if (struct) {
     if (creep.pos.isNearTo(struct)) creep.dismantle(struct);
     else if (isLeader) leaderAdvance(creep, op, ctx, struct.pos, 1);
@@ -1276,16 +1669,99 @@ function moveKnightFollower(creep: Creep, op: MilitaryOp, ctx: SquadContext, hos
   moveToSlot(creep, op, ctx);
 }
 
-// The leader only advances when the squad is together, so the group commits as one.
+// ── Tower-aware coordinated block movement ───────────────────────────────────────
+//
+// Inside the target room the leader paths the WHOLE block around tower fire using a
+// CostMatrix that adds graduated cost near hostile towers (buildTowerCostMatrix). It
+// only steps forward when the block is in formation, so the squad moves as one cohesive
+// mass through the killbox rather than dribbling in one creep at a time. Followers keep
+// stepping toward their leader-relative slots (moveToSlot) in lockstep. With no towers
+// the matrix is just obstacles and this degrades to a normal cohesive advance.
+
+// Per-tick cache of the tower cost matrix, keyed by room. Rebuilding scans the whole room
+// so we compute it at most once per room per tick and share it across all squad members.
+let towerMatrixTick = -1;
+const towerMatrixCache: Record<string, CostMatrix> = {};
+
+function getTowerMatrix(room: Room): CostMatrix {
+  if (towerMatrixTick !== Game.time) {
+    towerMatrixTick = Game.time;
+    for (const k in towerMatrixCache) delete towerMatrixCache[k];
+  }
+  let m = towerMatrixCache[room.name];
+  if (!m) {
+    const towers = room.find(FIND_HOSTILE_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_TOWER,
+    }) as StructureTower[];
+    m = buildTowerCostMatrix(room, towers);
+    towerMatrixCache[room.name] = m;
+  }
+  return m;
+}
+
+// How far a follower may sit from its ideal slot before the block counts as "broken" and
+// the leader pauses to let it close up. A small slack absorbs fatigue desync without
+// stalling the advance on every minor jostle.
+const FORMATION_SLOT_SLACK = 2;
+
+// True when every follower is in (or near) its formation slot relative to the leader — the
+// gate for the leader to take its next step so cohesion holds through tower fire.
+function blockInFormation(op: MilitaryOp, ctx: SquadContext): boolean {
+  const leader = ctx.leader;
+  if (!leader) return true;
+  for (const c of ctx.members) {
+    if (c.id === leader.id) continue;
+    if (c.room.name !== leader.room.name) return false; // a straggler in another room
+    const slot = ctx.slotById[c.id] ?? 0;
+    const [dx, dy] = formationOffset(op.formation, slot);
+    const sx = Math.min(48, Math.max(1, leader.pos.x + dx));
+    const sy = Math.min(48, Math.max(1, leader.pos.y + dy));
+    if (c.pos.getRangeTo(new RoomPosition(sx, sy, leader.room.name)) > FORMATION_SLOT_SLACK) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The leader only advances when the squad is together, so the group commits as one. Inside
+// the target room it routes the block around the worst tower-fire tiles and additionally
+// waits until the block is in formation (not just same-room) before each step.
 function leaderAdvance(
   creep: Creep,
-  _op: MilitaryOp,
+  op: MilitaryOp,
   ctx: SquadContext,
   dest: RoomPosition,
   range: number
 ): void {
-  if (!ctx.cohesive) return; // hold and let stragglers form up
+  if (!ctx.cohesive) return; // hold and let stragglers form up across rooms
   if (creep.pos.inRangeTo(dest, range)) return;
+
+  // In the target room, hold the leader still while the block is broken so followers can
+  // catch up — this is what keeps the formation tight through a tower killbox. Fatigued
+  // creeps simply lag a tick; the slack tolerance keeps that from desyncing the advance.
+  if (creep.room.name === op.targetRoom && !blockInFormation(op, ctx)) return;
+
+  // Tower-aware pathing inside the target room: bend the route around tower fire.
+  if (creep.room.name === op.targetRoom) {
+    const matrix = getTowerMatrix(creep.room);
+    const result = PathFinder.search(
+      creep.pos,
+      { pos: dest, range },
+      {
+        maxRooms: 1,
+        plainCost: 2,
+        swampCost: 5,
+        roomCallback: (rn) => (rn === creep.room.name ? matrix : false),
+      }
+    );
+    if (result.path.length > 0) {
+      creep.move(creep.pos.getDirectionTo(result.path[0]));
+      return;
+    }
+    // No path through the matrix (fully walled): fall through to a plain moveTo so the
+    // leader at least closes on the breach barrier the siegers are cutting.
+  }
+
   creep.moveTo(dest, { range, reusePath: 3 });
 }
 
@@ -1327,6 +1803,42 @@ function regroup(creep: Creep, op: MilitaryOp, ctx: SquadContext, isLeader: bool
     const center = new RoomPosition(25, 25, op.targetRoom);
     if (creep.room.name !== op.targetRoom || !creep.pos.inRangeTo(center, 5)) {
       creep.moveTo(center, { range: 5, reusePath: 10 });
+    }
+    return;
+  }
+  moveToSlot(creep, op, ctx);
+}
+
+// ── Tower-drain tactic (minimal version) ─────────────────────────────────────────
+//
+// Against a heavily-towered siege target we don't want the whole squad grinding a wall
+// while loaded towers shred them. The drain doctrine: edge into tower range to bait their
+// fire until their energy runs low, THEN commit the dismantle. This minimal version skips
+// a dedicated bait squad — the siegers themselves hold at the breach approach (just in/near
+// tower range, healed by the clerics) which IS the bait: the towers spend energy on them
+// each tick. Once assessTowers reports the towers drained below the commit threshold, the
+// hold releases and the dismantle begins. Bounded: only triggers for genuinely fortified
+// rooms (2+ towers still loaded), and a full drain is inevitable as long as we hold.
+
+// True when a siege should hold for a drain rather than dismantle: the room still has
+// multiple towers with enough collective energy to punish a committed assault.
+function shouldHoldForDrain(room: Room): boolean {
+  const status: TowerStatus = assessTowers(room);
+  if (status.count < 2) return false;       // not fortified enough to bother draining
+  return !towersAreDrained(status);         // hold while towers can still bite
+}
+
+// Hold the squad at the breach approach (just inside tower range) to bait/drain the towers
+// without grinding the wall. Followers hold formation on the leader; the leader edges toward
+// the breach focus but stops at DEFEND_RADIUS so the block soaks fire as one healed mass.
+function holdAtBreachApproach(creep: Creep, op: MilitaryOp, ctx: SquadContext, isLeader: boolean): void {
+  const focus = getBreachFocus(op, creep.room, creep.pos);
+  const anchor = focus ? focus.pos : new RoomPosition(25, 25, op.targetRoom);
+  if (isLeader || !ctx.leader) {
+    // Edge toward the breach but hold a few tiles back — close enough to draw tower fire,
+    // far enough not to start chipping the wall before the towers are dry.
+    if (!creep.pos.inRangeTo(anchor, DEFEND_RADIUS)) {
+      leaderAdvance(creep, op, ctx, anchor, DEFEND_RADIUS);
     }
     return;
   }

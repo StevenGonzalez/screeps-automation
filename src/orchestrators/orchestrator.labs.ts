@@ -3,6 +3,7 @@ import {
   getStorageStockForCompound,
   REACTION_RECIPES,
 } from "../services/services.labs";
+import { advanceBoost } from "../services/services.combat";
 
 // Abort an active reaction that hasn't increased its produced count for this many ticks.
 // A reaction stalls when its reagents are unavailable (base mineral exhausted, or the
@@ -49,8 +50,8 @@ function runBoosts(room: Room) {
       if ((lab.store.getUsedCapacity(compound) ?? 0) < 30) continue;
       if (!lab.pos.isNearTo(creep.pos)) continue;
       if (lab.boostCreep(creep) === OK) {
-        creep.memory.boosted = true;
-        delete creep.memory.boostCompound;
+        // Advance to the next queued boost (e.g. TOUGH) or mark fully boosted.
+        advanceBoost(creep);
       }
       break;
     }

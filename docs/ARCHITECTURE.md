@@ -39,24 +39,26 @@ The loop is gated by two CPU mechanisms:
 
 Run order each tick (from `main.ts`):
 
-1. `memory` — memory cleanup + per-room ID caching
-2. `expansion` — GCL-driven claiming + bootstrap lifecycle + expansion queue
-3. `creeps` — dispatch every creep to its role handler
-4. `spawning` — per-room spawn priority
-5. `structures` — castle stamp / road / rampart-perimeter planning *(CPU-gated)*
-6. `labs` — reaction chains, T4 auto-production, boosting
-7. `factory` — commodity production (borrows a hauler as a courier)
-8. `links` — link energy distribution
-9. `towers` — tower targeting + safe-mode triggers
-10. `terminal` — mineral sell/buy, energy/mineral/ghodium inter-room balancing
-11. `military` — WarCouncil intel, DefenseCouncil, offensive squads + queue
-12. `nukes` — **defense** against incoming nukes (rampart reinforcement)
-13. `nuker` — **offensive** nuker loading (energy + ghodium)
-14. `sourcekeeper` — Source Keeper room mining ops
-15. `powercreep` — power creep (Operator) spawning + power use
-16. `observer` — highway power-bank scanning + power-spawn processing
-17. `pixels` — pixel generation from spare CPU
-18. `visuals` — room visuals *(CPU-gated)*
+1. `memory` — memory cleanup + per-room ID caching + deep-scout BFS queue
+2. `strategy` — sets empire-wide posture (EXPAND/TURTLE/WAR/RECOVER) the rest of the tick reads
+3. `allies` — refresh SimpleAllies identity + exchange ally segment requests (before combat)
+4. `expansion` — GCL-driven claiming + multi-factor room scoring + expansion queue
+5. `creeps` — dispatch every creep to its role handler
+6. `spawning` — per-room spawn priority
+7. `structures` — castle stamp / road / min-cut rampart-perimeter planning *(CPU-gated)*
+8. `labs` — reaction chains, T4 auto-production, boosting
+9. `factory` — commodity production incl. deep Tier 3-5 chains (borrows a hauler as a courier)
+10. `links` — link energy distribution
+11. `towers` — tower targeting + safe-mode triggers (conservation-aware)
+12. `terminal` — market making (sell orders), energy trading, inter-room balancing
+13. `military` — value-based WarCouncil, DefenseCouncil, formation offense + queue
+14. `nukes` — **defense** against incoming nukes (rampart reinforcement + terminal evac)
+15. `nuker` — **offensive** nuker loading (energy + ghodium)
+16. `sourcekeeper` — Source Keeper room mining ops
+17. `powercreep` — per-room Operator spawning + power use (REGEN_SOURCE etc.)
+18. `observer` — highway power-bank scanning + power-spawn processing
+19. `pixels` — pixel generation from spare CPU
+20. `visuals` — room visuals *(CPU-gated)*
 
 A side-effect import of `services/services.movement` installs a traffic-managed
 `moveTo` override on `Creep.prototype` before the loop runs.
@@ -97,13 +99,16 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
 - **On-top ramparts.** The stamp drops a rampart on top of every key structure
   (spawns, storage, towers, labs, terminal, factory, nuker, power spawn,
   observer, containers) so a nuke can't one-shot them.
-- **Defensive perimeter** (`planning/planner.rampart.ts`). At RCL 4+ a continuous
-  ring of ramparts is laid around the padded bounding box of all core structures
-  (the castle stamp + Merchant Ring extensions), sealing the base against a ground
-  assault. It uses a robust padded bounding-box ring rather than an exit min-cut,
-  skips natural-wall tiles, and re-plans only every ~1500 ticks. The ring is stored
-  under the stamp-rampart memory key, so it inherits the existing low build priority
-  (after economy and roads) and the normal rampart repair/tower upkeep.
+- **Defensive perimeter** (`planning/planner.rampart.ts`). At RCL 4+ a **min-cut**
+  rampart wall is computed (`services/services.mincut.ts`, max-flow/min-cut on the
+  50×50 grid) to seal the core structures (castle stamp + Merchant Ring extensions,
+  plus the controller when it sits near the keep) from the room exits with the
+  *fewest* tiles — concentrating HP on far fewer ramparts than a bounding box. It
+  hugs natural walls automatically and re-plans only every ~1500 ticks. If the
+  min-cut is degenerate (already sealed by terrain), it falls back to the old
+  padded bounding-box ring so a room is never left wall-less. Stored under the
+  stamp-rampart memory key, inheriting the existing build priority (raised site cap)
+  and the normal rampart repair/tower upkeep.
 - **Nuke defense** (`orchestrators/orchestrator.nukes.ts`). Reinforces ramparts
   on impact tiles when an incoming nuke is detected. Distinct from the *offensive*
   nuker (see [NUKER_SYSTEM.md](NUKER_SYSTEM.md)).
@@ -140,8 +145,9 @@ src/
 │   ├── orchestrator.sourcekeeper.ts # Source Keeper room mining operations
 │   ├── orchestrator.powercreep.ts   # Power creep spawning + power usage
 │   ├── orchestrator.observer.ts     # Highway power-bank scan + power-spawn processing
-│   ├── orchestrator.expansion.ts    # GCL-driven claiming + bootstrap lifecycle + queue
-│   ├── orchestrator.memory.ts       # Memory cleanup and ID caching
+│   ├── orchestrator.expansion.ts    # GCL-driven claiming + multi-factor room scoring + queue
+│   ├── orchestrator.strategy.ts     # Central posture coordinator (EXPAND/TURTLE/WAR/RECOVER)
+│   ├── orchestrator.memory.ts       # Memory cleanup, ID caching, deep-scout BFS + intel/player model
 │   ├── orchestrator.visuals.ts      # Room visuals
 │   └── orchestrator.pixels.ts       # Pixel generation
 ├── roles/
@@ -180,10 +186,12 @@ src/
 └── services/
     ├── services.memory.ts           # Room memory helpers
     ├── services.creep.ts            # Creep utilities + shared find caches
-    ├── services.combat.ts           # Threat scoring, target/formation helpers
+    ├── services.combat.ts           # Boost-aware threat scoring, target/formation/breach helpers
+    ├── services.allies.ts           # SimpleAllies diplomacy (ally list + segment requests)
+    ├── services.mincut.ts           # Min-cut max-flow utility (defensive wall planning)
     ├── services.labs.ts             # Compound stock + reaction-chain helpers
     ├── services.structures.ts       # Structure planning helpers
-    └── services.movement.ts         # Traffic-managed moveTo override
+    └── services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache)
 ```
 
 ---

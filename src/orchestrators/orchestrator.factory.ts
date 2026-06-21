@@ -34,7 +34,9 @@ import {
   FACTORY_MIN_RESERVE_ENERGY,
   FACTORY_MAX_INPUT_LOAD,
   FACTORY_PRODUCT_EVICT_THRESHOLD,
+  FACTORY_RESOLVE_MAX_DEPTH,
   MANAGED_COMMODITIES,
+  COMMODITY_VALUE,
   COMMODITY_TERMINAL_STOCK,
 } from "../config/config.factory";
 import { ROLE_HAULER } from "../config/config.roles";
@@ -147,56 +149,101 @@ function resolveFactory(room: Room): StructureFactory | null {
   return factory;
 }
 
-// ── Recipe selection ────────────────────────────────────────────────────────────
+// ── Recipe selection (profitability-aware + dependency resolution) ───────────────
 
-// Picks the first under-stocked commodity (in priority order) whose level gate is met
-// and whose ingredients are all obtainable from the room's stores. Returns undefined if
-// nothing can be made right now.
+// Picks what to produce this cycle. Two stages:
+//   1. Choose the best TOP target: among every under-stocked target whose level gate is
+//      met and whose full chain is buildable, prefer the highest static `value` (deep
+//      tiers rank above cheap fillers). Ties break by the config order. This is the
+//      profitability-aware step — we don't grind batteries while a circuit is feasible.
+//   2. Resolve that top target down to the deepest missing producible intermediate, so we
+//      build the chain bottom-up (like the lab reaction-chain resolver). The returned
+//      commodity is always something the factory can make THIS cycle (level-gated, with
+//      ingredients available).
+// Returns undefined if nothing is feasible right now.
 function selectCommodity(room: Room, factory: StructureFactory): CommodityConstant | undefined {
   const factoryLevel = factory.level ?? 0;
 
+  let best: CommodityConstant | undefined;
+  let bestValue = -Infinity;
+
   for (const t of COMMODITY_TARGETS) {
     if (factoryLevel < t.requiresLevel) continue;
-
-    const recipe = getRecipe(t.commodity);
-    if (!recipe) continue;
-
-    // Already have enough?
+    if (t.value <= bestValue) continue; // can't beat current best — skip the work
     if (totalStock(room, t.commodity) >= t.target) continue;
 
-    // Can we source every ingredient (across storage + terminal + factory)?
-    if (!ingredientsAvailable(room, factory, recipe)) continue;
+    // Resolve the chain: returns the commodity to actually produce now, or null if the
+    // chain is blocked (a raw ingredient is missing, or it needs a higher factory level).
+    const produce = resolveProduction(room, factory, t.commodity);
+    if (!produce) continue;
 
-    return t.commodity;
+    best = produce;
+    bestValue = t.value;
   }
-  return undefined;
+
+  return best;
 }
 
-// True when every component of `recipe` can be supplied. Energy must respect the colony
-// reserve; everything else just needs a positive stock somewhere in the room.
-function ingredientsAvailable(
+// Dependency resolver. Given a desired (top) commodity, walk its recipe and return the
+// deepest missing producible ingredient that the factory can make right now, or the top
+// commodity itself when all its ingredients are already in stock. Returns null when the
+// chain is blocked: a raw (non-producible) ingredient is unavailable, the recipe needs a
+// higher factory level than we have, or the recursion bound is hit.
+//
+// "Producible intermediate" = an ingredient that is itself a managed commodity (so the
+// factory can make it). "Raw" = a mineral / deposit resource / energy we can only source
+// from stores. Energy respects the colony reserve.
+function resolveProduction(
   room: Room,
   factory: StructureFactory,
-  recipe: Recipe
-): boolean {
+  commodity: CommodityConstant,
+  depth = 0,
+  seen: Set<string> = new Set()
+): CommodityConstant | null {
+  if (depth > FACTORY_RESOLVE_MAX_DEPTH) return null;
+  if (seen.has(commodity)) return null; // cycle guard (shouldn't happen, but be safe)
+  seen.add(commodity);
+
+  const recipe = getRecipe(commodity);
+  if (!recipe) return null;
+  if ((factory.level ?? 0) < recipe.level) return null; // level-gated out
+
   for (const comp in recipe.components) {
     const rc = comp as ResourceConstant;
     const needPerBatch = recipe.components[rc] ?? 0;
     if (needPerBatch <= 0) continue;
 
-    const available = totalStock(room, rc) + (factory.store.getUsedCapacity(rc) ?? 0);
+    const inStores = totalStock(room, rc) + (factory.store.getUsedCapacity(rc) ?? 0);
 
     if (rc === RESOURCE_ENERGY) {
-      // Only spend energy above the protected reserve.
+      // Energy: only what's above the protected reserve counts as spendable.
       const spendable =
         (room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0) - FACTORY_MIN_RESERVE_ENERGY +
         (factory.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0);
-      if (spendable < needPerBatch) return false;
-    } else if (available < needPerBatch) {
-      return false;
+      if (spendable < needPerBatch) return null; // can't afford energy → chain blocked
+      continue;
     }
+
+    if (inStores >= needPerBatch) continue; // ingredient already on hand
+
+    // Short on this ingredient. If it's a producible intermediate, recurse to build it
+    // first. If it's a raw resource we can't make, the chain is blocked.
+    if (MANAGED_COMMODITIES.has(rc)) {
+      const sub = resolveProduction(room, factory, rc as CommodityConstant, depth + 1, seen);
+      if (sub) return sub; // produce the deeper intermediate first
+      // The whole sub-chain for this missing ingredient is blocked (a raw resource under
+      // it is unavailable). Since we can't supply this ingredient, the parent can't be
+      // made either — block the chain. (Chains are level-monotonic, so a buildable top
+      // target never has a level-gated sub-rung; line 209 covers that case anyway.)
+      return null;
+    }
+
+    // Raw ingredient missing and unbuildable → chain can't proceed.
+    return null;
   }
-  return true;
+
+  // Every ingredient is available (or affordable) → make this commodity itself.
+  return commodity;
 }
 
 function hasAllComponents(factory: StructureFactory, recipe: Recipe): boolean {
@@ -414,8 +461,12 @@ export function describeFactories(): string[] {
       `[Factory] ${rn}: active=${active} level=${level} cd=${cd} auto=${auto} store=${used}/${cap}`
     );
 
-    // Show stock vs target for managed commodities.
+    // Show stock vs target for the level-supported commodities that are still
+    // under-stocked, most valuable first (the order selection prefers). Skipping the
+    // satisfied ones keeps the line readable now that there are many deep-chain targets.
     const parts = COMMODITY_TARGETS.filter((t) => t.requiresLevel <= level)
+      .filter((t) => totalStock(room, t.commodity) < t.target)
+      .sort((a, b) => (COMMODITY_VALUE.get(b.commodity) ?? 0) - (COMMODITY_VALUE.get(a.commodity) ?? 0))
       .map((t) => `${t.commodity}=${totalStock(room, t.commodity)}/${t.target}`)
       .join("  ");
     if (parts) lines.push(`  ${parts}`);

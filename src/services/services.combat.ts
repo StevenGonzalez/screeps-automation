@@ -1,3 +1,5 @@
+import { isAlly } from "./services.allies";
+
 export interface ThreatInfo {
   hostiles: Creep[];
   score: number;
@@ -10,6 +12,13 @@ const BOOST_TIMEOUT = 50;
 // Returns true while still seeking (caller should return early).
 // Returns false (and clears boostCompound) when timed out or no lab found.
 export function seekBoost(creep: Creep): boolean {
+  // Pull the next queued compound into boostCompound once the current one is applied,
+  // so a creep seeks each boost lab in turn (primary, then TOUGH).
+  if (!creep.memory.boostCompound && creep.memory.boostQueue?.length) {
+    creep.memory.boostCompound = creep.memory.boostQueue.shift();
+    if (creep.memory.boostQueue.length === 0) delete creep.memory.boostQueue;
+  }
+
   const compound = creep.memory.boostCompound as ResourceConstant | undefined;
   if (!compound) return false;
 
@@ -17,12 +26,14 @@ export function seekBoost(creep: Creep): boolean {
   // If more than BOOST_TIMEOUT ticks have passed since spawn, give up.
   if ((creep.ticksToLive ?? 0) < 1500 - BOOST_TIMEOUT) {
     delete creep.memory.boostCompound;
+    delete creep.memory.boostQueue;
     return false;
   }
 
   const ls = creep.room.memory.labSystem;
   if (!ls?.outputLabIds?.length) {
     delete creep.memory.boostCompound;
+    delete creep.memory.boostQueue;
     return false;
   }
 
@@ -33,6 +44,7 @@ export function seekBoost(creep: Creep): boolean {
 
   if (!boostLab) {
     delete creep.memory.boostCompound;
+    delete creep.memory.boostQueue;
     return false;
   }
 
@@ -42,12 +54,28 @@ export function seekBoost(creep: Creep): boolean {
   return true;
 }
 
+// Called after a lab successfully boosts the creep with its current boostCompound.
+// Advances to the next queued compound (so the creep seeks the next lab), or marks
+// the creep fully boosted when the queue is empty.
+export function advanceBoost(creep: Creep): void {
+  if (creep.memory.boostQueue?.length) {
+    creep.memory.boostCompound = creep.memory.boostQueue.shift();
+    if (creep.memory.boostQueue.length === 0) delete creep.memory.boostQueue;
+  } else {
+    creep.memory.boosted = true;
+    delete creep.memory.boostCompound;
+  }
+}
+
 export type ThreatSeverity = "none" | "low" | "medium" | "high";
 
-// Thresholds derived from score formula: 10/creep + 5/ATTACK part + 5/RANGED_ATTACK part + 8/HEAL part
-// low  (~1 weak creep), medium (~small unhealed squad), high (~healer-backed raid)
+// Thresholds derived from the boost-/EHP-aware score formula in getThreatInfo:
+//   per creep ≈ 10 + (attackPower + rangedPower)/30 + healPower×0.10 + effectiveHp/1000
+// An unboosted melee attacker (25 ATTACK) scores ≈ 40; a fully T3-boosted one ≈ 115.
+// low (~1 weak creep), medium (~small unhealed squad ≈ 2 attackers),
+// high (~healer-backed raid, or a boosted assault).
 const SEVERITY_MEDIUM = 80;
-const SEVERITY_HIGH   = 150;
+const SEVERITY_HIGH   = 160;
 
 export function getThreatSeverity(room: Room): ThreatSeverity {
   const { score } = getThreatInfo(room);
@@ -57,13 +85,83 @@ export function getThreatSeverity(room: Room): ThreatSeverity {
   return "high";
 }
 
+// ── Boost-aware threat scoring tables ────────────────────────────────────────────
+//
+// Each combat body part has an optional `.boost` resource when boosted. The official
+// BOOSTS table multiplies that part's output by a tier-dependent factor (T1/T2/T3).
+// We hard-code the relevant multipliers here (matching the game's BOOSTS constant) so
+// the scoring is deterministic and unit-testable without a live Screeps runtime.
+//
+//   ATTACK damage:        UH ×2,   UH2O ×3,   XUH2O ×4
+//   RANGED_ATTACK damage: KO ×2,   KHO2 ×3,   XKHO2 ×4
+//   HEAL output:          LO ×2,   LHO2 ×3,   XLHO2 ×4
+//   TOUGH damage taken:   GO ×0.7, GHO2 ×0.5, XGHO2 ×0.3  (lower = tankier)
+//
+// Unboosted parts default to ×1 (and TOUGH to ×1 damage taken).
+const ATTACK_BOOST_MULT: Record<string, number> = { UH: 2, UH2O: 3, XUH2O: 4 };
+const RANGED_BOOST_MULT: Record<string, number> = { KO: 2, KHO2: 3, XKHO2: 4 };
+const HEAL_BOOST_MULT: Record<string, number> = { LO: 2, LHO2: 3, XLHO2: 4 };
+const TOUGH_DAMAGE_MULT: Record<string, number> = { GO: 0.7, GHO2: 0.5, XGHO2: 0.3 };
+
+// Score weights tuned so a unit's contribution tracks its real DPS + effective HP.
+// See SEVERITY_MEDIUM/SEVERITY_HIGH for how these map onto severity thresholds.
+const THREAT_BASE_PER_CREEP = 10;   // mere presence of a hostile
+const DAMAGE_DIVISOR = 30;          // raw attack+ranged damage → score points
+const HEAL_WEIGHT = 0.10;           // raw heal-per-tick → score points
+const EHP_DIVISOR = 1000;           // effective HP → score points
+
 // Cleared each tick so it never accumulates stale entries (and their dead
 // game-object references) for every room ever scanned.
 let threatCacheTick = -1;
 const threatCache: Record<string, ThreatInfo> = {};
 
+// Combat strength of a single creep, boost- and effective-HP-aware. Only live parts
+// (hits > 0) contribute — a creep whose ATTACK parts are already chewed off is weaker.
+function creepThreatScore(c: Creep): number {
+  let attackPower = 0;   // melee damage per tick
+  let rangedPower = 0;   // ranged damage per tick
+  let healPower = 0;     // heal per tick
+  let effectiveHp = 0;   // raw HP scaled up by TOUGH boosts
+
+  for (const part of c.body) {
+    if (part.hits <= 0) continue; // destroyed part: no output, no HP
+    switch (part.type) {
+      case ATTACK:
+        attackPower += ATTACK_POWER * (part.boost ? ATTACK_BOOST_MULT[part.boost] ?? 1 : 1);
+        effectiveHp += 100;
+        break;
+      case RANGED_ATTACK:
+        rangedPower += RANGED_ATTACK_POWER * (part.boost ? RANGED_BOOST_MULT[part.boost] ?? 1 : 1);
+        effectiveHp += 100;
+        break;
+      case HEAL:
+        healPower += HEAL_POWER * (part.boost ? HEAL_BOOST_MULT[part.boost] ?? 1 : 1);
+        effectiveHp += 100;
+        break;
+      case TOUGH: {
+        // TOUGH boost reduces damage taken, so it multiplies effective HP by 1/mult.
+        const dmgMult = part.boost ? TOUGH_DAMAGE_MULT[part.boost] ?? 1 : 1;
+        effectiveHp += 100 / dmgMult;
+        break;
+      }
+      default:
+        effectiveHp += 100; // MOVE/CARRY/WORK/CLAIM still soak 100 HP before dying
+        break;
+    }
+  }
+
+  return (
+    THREAT_BASE_PER_CREEP +
+    (attackPower + rangedPower) / DAMAGE_DIVISOR +
+    healPower * HEAL_WEIGHT +
+    effectiveHp / EHP_DIVISOR
+  );
+}
+
 // Returns a threat score for the room: 0 = no hostiles.
-// Score scales with hostile count, ATTACK/RANGED_ATTACK parts, and HEAL parts.
+// Score scales with each hostile's real DPS (boost-weighted), heal output, and effective
+// HP (TOUGH-boost-aware). Allied creeps are excluded — Screeps has no native ally concept,
+// so FIND_HOSTILE_CREEPS also returns friends we must not count or shoot at.
 // Cached per-tick so multiple callers (spawner, tower) share one room.find.
 export function getThreatInfo(room: Room): ThreatInfo {
   if (threatCacheTick !== Game.time) {
@@ -73,15 +171,12 @@ export function getThreatInfo(room: Room): ThreatInfo {
   const cached = threatCache[room.name];
   if (cached) return cached;
 
-  const hostiles = room.find(FIND_HOSTILE_CREEPS);
+  const hostiles = room
+    .find(FIND_HOSTILE_CREEPS)
+    .filter((c) => !isAlly(c.owner?.username));
   let score = 0;
   for (const c of hostiles) {
-    score += 10;
-    for (const part of c.body) {
-      if (part.type === ATTACK) score += 5;
-      if (part.type === RANGED_ATTACK) score += 5;
-      if (part.type === HEAL) score += 8;
-    }
+    score += creepThreatScore(c);
   }
 
   const info: ThreatInfo = { hostiles, score };
@@ -236,6 +331,200 @@ export function selectStructureTarget(
   return barriers.reduce((a, b) => (a.hits < b.hits ? a : b));
 }
 
+// ── Tower-fire cost matrix ───────────────────────────────────────────────────────
+//
+// A hostile tower deals falloff damage: full damage within TOWER_OPTIMAL_RANGE (5),
+// scaling down linearly to TOWER_FALLOFF_RANGE (20). We model this as extra path cost
+// so a coordinated block routes AROUND the worst tower-fire tiles instead of straight
+// through them. Structures/terrain still set the base cost; with no towers present the
+// matrix simply reflects obstacles. Costs are clamped well below 255 (impassable) so a
+// path always exists — towers shape the route, they don't wall it off.
+
+const TOWER_OPTIMAL_RANGE = 5;   // full tower damage at or within this range
+const TOWER_FALLOFF_RANGE = 20;  // tower damage reaches its floor at this range
+// Peak per-tower path penalty at point-blank. Tuned so a few towers visibly bend the
+// path without exceeding the 255 wall threshold when several overlap.
+const TOWER_MAX_PENALTY = 40;
+
+// Tower damage falloff as a 0..1 fraction of max, by Chebyshev range to the tower.
+function towerDamageFraction(range: number): number {
+  if (range <= TOWER_OPTIMAL_RANGE) return 1;
+  if (range >= TOWER_FALLOFF_RANGE) return 0.25; // game floor: towers still bite at long range
+  // Linear interpolation between optimal (1.0) and falloff (0.25) edges.
+  const span = TOWER_FALLOFF_RANGE - TOWER_OPTIMAL_RANGE;
+  return 1 - ((range - TOWER_OPTIMAL_RANGE) / span) * 0.75;
+}
+
+// Builds a CostMatrix for `room` that bakes in structure obstacles, roads, and — when
+// `towers` are supplied — graduated tower-fire penalties around each hostile tower.
+// Exported so the squad leader can path the whole block around heavy fire. Robust with
+// zero towers (returns a plain obstacle matrix).
+export function buildTowerCostMatrix(room: Room, towers: StructureTower[]): CostMatrix {
+  const matrix = new PathFinder.CostMatrix();
+
+  // Base layer: walls/obstacles impassable, roads cheap. Ramparts we don't own block.
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_ROAD) {
+      if (matrix.get(s.pos.x, s.pos.y) === 0) matrix.set(s.pos.x, s.pos.y, 1);
+    } else if (
+      s.structureType === STRUCTURE_RAMPART
+        ? !(s as StructureRampart).my
+        : (OBSTACLE_OBJECT_TYPES as string[]).includes(s.structureType)
+    ) {
+      matrix.set(s.pos.x, s.pos.y, 255);
+    }
+  }
+
+  // Tower-fire layer: add a falloff-weighted penalty to every interior tile in range of
+  // any hostile tower. Penalties accumulate where multiple towers overlap (the killbox).
+  if (towers.length > 0) {
+    for (let x = 1; x < 49; x++) {
+      for (let y = 1; y < 49; y++) {
+        const base = matrix.get(x, y);
+        if (base >= 255) continue; // already impassable — skip
+        let penalty = 0;
+        for (const t of towers) {
+          const range = Math.max(Math.abs(t.pos.x - x), Math.abs(t.pos.y - y));
+          if (range > TOWER_FALLOFF_RANGE) continue;
+          penalty += Math.round(TOWER_MAX_PENALTY * towerDamageFraction(range));
+        }
+        if (penalty > 0) matrix.set(x, y, Math.min(254, (base || 1) + penalty));
+      }
+    }
+  }
+
+  return matrix;
+}
+
+// ── Min-cut / weakest-path breach planning ──────────────────────────────────────
+//
+// Against a fortified room, siegers must concentrate on ONE breach tile rather than
+// chipping at whichever barrier happens to be nearest. We compute the cheapest-to-break
+// path from outside the wall ring to the room's highest-value structure (spawn, else
+// controller, else any target) by running PathFinder with barrier tiles weighted by
+// their hits — so the route naturally threads the thinnest walls/ramparts. The FIRST
+// barrier on that path is the shared focus target; everyone hits it until it falls,
+// then the caller recomputes. (getCutTiles in services.mincut models the DEFENSIVE
+// problem; for OFFENSE a hits-weighted path is the pragmatic, cheap choice.)
+
+export interface BreachPlan {
+  // The first barrier (wall/rampart) on the cheapest breach path — the shared focus.
+  focusId: Id<AnyStructure>;
+  focusPos: RoomPosition;
+  // All barrier positions along the path, in order, for diagnostics / progress display.
+  pathBarriers: RoomPosition[];
+}
+
+// Picks the highest-value structure to breach toward: spawn first (stops respawns),
+// then controller, then the standard structure priority, then any hostile structure.
+function breachGoal(room: Room): AnyStructure | StructureController | null {
+  const spawn = room.find(FIND_HOSTILE_SPAWNS)[0];
+  if (spawn) return spawn;
+  const target = selectStructureTarget(room, new RoomPosition(25, 25, room.name), "siege");
+  // selectStructureTarget may return a barrier when only barriers remain; in that case
+  // fall back to the controller as the goal so the path still aims at the room's core.
+  if (target && target.structureType !== STRUCTURE_WALL && target.structureType !== STRUCTURE_RAMPART) {
+    return target;
+  }
+  if (room.controller) return room.controller;
+  return target;
+}
+
+// Computes a breach plan for `room`: the cheapest-to-break path to its core and the first
+// barrier on it. Returns null when there's nothing to breach (no barriers between the
+// squad's approach and the goal) or no goal/vision. `fromPos` anchors the path origin so
+// the breach faces the side the squad is actually approaching from.
+export function planBreach(room: Room, fromPos: RoomPosition): BreachPlan | null {
+  const goal = breachGoal(room);
+  if (!goal) return null;
+
+  // Index this room's barriers by packed position for O(1) lookup along the path.
+  const barrierAt = new Map<number, StructureWall | StructureRampart>();
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
+      if ((s as StructureWall | StructureRampart).hits > 0) {
+        barrierAt.set(s.pos.x * 50 + s.pos.y, s as StructureWall | StructureRampart);
+      }
+    }
+  }
+  if (barrierAt.size === 0) return null; // no barriers — nothing to focus-breach
+
+  // Hits-weighted cost matrix: a barrier costs proportional to its hits (capped < 255 so
+  // PathFinder will still route through it rather than treating it as an impassable wall),
+  // so the cheapest path threads the weakest segment of the defenses.
+  const matrix = new PathFinder.CostMatrix();
+  for (const [packed, b] of barrierAt) {
+    const x = Math.floor(packed / 50);
+    const y = packed % 50;
+    // Scale hits → cost. Capped at 250 so even a full wall stays passable to PathFinder.
+    const cost = Math.min(250, 5 + Math.floor(b.hits / 200_000));
+    matrix.set(x, y, cost);
+  }
+
+  const result = PathFinder.search(
+    fromPos,
+    { pos: goal.pos, range: 1 },
+    {
+      maxRooms: 1,
+      plainCost: 2,
+      swampCost: 5,
+      roomCallback: (rn) => (rn === room.name ? matrix : false),
+    }
+  );
+  if (result.path.length === 0 && !fromPos.isNearTo(goal.pos)) return null;
+
+  // Walk the path and collect the barriers it passes through, in order.
+  const pathBarriers: RoomPosition[] = [];
+  let focus: StructureWall | StructureRampart | null = null;
+  for (const pos of result.path) {
+    const b = barrierAt.get(pos.x * 50 + pos.y);
+    if (b) {
+      if (!focus) focus = b;
+      pathBarriers.push(pos);
+    }
+  }
+
+  if (!focus) return null; // path found a barrier-free route — no breach needed
+  return { focusId: focus.id, focusPos: focus.pos, pathBarriers };
+}
+
+// ── Tower-drain assessment ───────────────────────────────────────────────────────
+//
+// A heavily towered room can out-damage a squad on the approach. The drain tactic baits
+// the towers (which fire on any hostile in range) until their energy runs low, THEN the
+// main body commits while the towers can't shoot. This helper reports a room's hostile
+// tower energy so the orchestrator can decide whether the towers are drained enough to
+// assault. Bounded and vision-gated: with no vision it returns null (unknown).
+
+export interface TowerStatus {
+  count: number;        // number of hostile towers with vision
+  totalEnergy: number;  // summed energy across them
+  maxEnergy: number;    // theoretical full load (count × TOWER_CAPACITY)
+}
+
+export function assessTowers(room: Room): TowerStatus {
+  const towers = room.find(FIND_HOSTILE_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_TOWER,
+  }) as StructureTower[];
+  let totalEnergy = 0;
+  for (const t of towers) totalEnergy += t.store[RESOURCE_ENERGY];
+  return {
+    count: towers.length,
+    totalEnergy,
+    maxEnergy: towers.length * TOWER_CAPACITY,
+  };
+}
+
+// True when a room's towers can no longer meaningfully punish an assault: either no towers,
+// or their summed energy has fallen below the cost of ~a few full-power volleys. Used to
+// hold the main assault until a drain pair has emptied the towers.
+export function towersAreDrained(status: TowerStatus): boolean {
+  if (status.count === 0) return true;
+  // One tower volley at optimal range costs TOWER_ENERGY_COST (10). Below ~10 volleys of
+  // collective energy the towers can't sustain fire through an assault — commit.
+  return status.totalEnergy < status.count * TOWER_ENERGY_COST * 10;
+}
+
 // ── Formation geometry ──────────────────────────────────────────────────────────
 //
 // Offsets are relative to the squad leader (slot 0). The squad reorients naturally
@@ -302,10 +591,11 @@ export function findInvaderCore(room: Room): StructureInvaderCore | null {
   return (cores[0] as StructureInvaderCore | undefined) ?? null;
 }
 
-// A rival player's creep — anything that isn't NPC (Source Keeper / Invader).
+// A rival player's creep — anything that isn't NPC (Source Keeper / Invader) and isn't
+// an ally (allies are friends we never target, even though the game lists them as hostile).
 export function isPlayerCreep(creep: Creep): boolean {
   const u = creep.owner?.username;
-  return u !== undefined && u !== "Source Keeper" && u !== "Invader";
+  return u !== undefined && u !== "Source Keeper" && u !== "Invader" && !isAlly(u);
 }
 
 // ── Room threat evaluation (WarCouncil) ─────────────────────────────────────────

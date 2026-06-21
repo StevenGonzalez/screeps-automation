@@ -24,7 +24,14 @@ export const STRUCTURE_PLANNER = {
   // room may have pending at once — this leaves headroom under the global cap for
   // economy structures (extensions especially) to get a site.
   maxRoadConstructionSites: 15,
-  maxPerimeterConstructionSites: 4,
+  // The perimeter is now a MIN-CUT seal (tens of tiles, not a full rectangular
+  // curtain), so raising the concurrent-site cap from 4 → 10 lets the whole wall
+  // come up in a few build cycles instead of trickling in four tiles at a time.
+  // The build queue still ranks the perimeter last (PERIMETER_PRIORITY) and the
+  // weakest-rampart health gate still paces expansion to repair capacity, so this
+  // only speeds the initial PLACEMENT of low-HP ramparts — economy/roads keep
+  // their slots first, and the existing repair system tiers the walls up to full HP.
+  maxPerimeterConstructionSites: 10,
   plannedCleanupInterval: 1000,
   plannedCleanupUnseenAge: 10000,
   plannedRoadPruneTicks: 5000,

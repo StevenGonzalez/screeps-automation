@@ -1,31 +1,34 @@
 import { PLANNER_KEYS, PERIMETER_PLANNER } from "../config/config.structures";
 import { addPlannedStructureToMemory } from "../services/services.structures";
+import { getCutTiles, Rect } from "../services/services.mincut";
 
 // ── Defensive perimeter ─────────────────────────────────────────────────────────
 //
 // The stamp already drops ramparts ON TOP of key structures (spawns, storage,
 // towers, …) so a nuke can't one-shot them, but nothing seals the base against a
-// ground assault. This planner walls the whole core in: it takes the bounding box
-// of every placed/planned core structure (the castle stamp AND the concentric
-// Merchant Ring extensions), pads it by a margin, and lays a continuous ring of
-// ramparts around that rectangle.
+// ground assault. This planner walls the whole core in: it gathers the tiles that
+// must end up INSIDE the walls — every placed/planned core structure (the castle
+// stamp AND the concentric Merchant Ring extensions), plus the controller when it
+// sits economically close to the keep — and computes the minimal set of ramparts
+// that seals them from the room exits.
 //
-// Why a padded bounding-box ring rather than a min-cut to exits: a min-cut is
-// optimal (fewest ramparts) but fragile — it depends on the room's wall topology
-// and can leave the base exposed if the cut is computed wrong. A solid rectangular
-// curtain is the robust, no-surprises option the architecture favours: it always
-// encloses everything, costs O(perimeter) to compute, and grows with the base as
-// new extension rings push the bounding box outward. Natural walls already seal a
-// tile, so we skip those (a rampart on a wall is wasted energy); a defender can
-// build manual ramparts in any natural-wall gap if they ever want one closed.
+// The seal is a proper MIN-CUT to the exits (see services.mincut): given the
+// protected rectangle(s), it finds the fewest tiles to rampart so no path of
+// walkable tiles leads from inside to a room edge. This hugs natural walls for
+// free (a natural wall is already an impassable cut) and yields a far cheaper,
+// tighter wall than a padded bounding-box ring — the room seals with tens of
+// ramparts instead of a full rectangular curtain.
 //
-// Road-crossing tiles get a rampart too — ramparts are walkable for the owner, so
-// there's no need to leave open choke gaps, and an open gap is just an invitation.
+// The old padded bounding-box ring is kept as a FALLBACK (planBoundingBoxRing):
+// if the min-cut comes back empty — degenerate input, or a base already sealed by
+// natural walls such that the algorithm finds no cuttable tiles — we fall back to
+// the rectangular curtain so a room is never left wall-less.
 //
-// The plan is stored under the existing STAMP_RAMPART_KEY, so it inherits the
+// Either way the tiles are STRUCTURE_RAMPARTs stored under the existing
+// STAMP_RAMPART_KEY as a list of "x,y" strings, so the plan inherits the
 // established build budgeting (low priority, after economy + roads) and is picked
-// up unchanged by the rampart repair/tower logic — these are ordinary
-// STRUCTURE_RAMPARTs, indistinguishable from the on-top ones.
+// up unchanged by the rampart repair/tower logic — indistinguishable from the
+// on-top ones.
 
 // Planner keys whose tiles are real core structures we must enclose. Roads and the
 // rampart key itself are excluded — roads sprawl out to sources/controller/exits
@@ -78,6 +81,101 @@ function coreBoundingBox(
   return { minX, minY, maxX, maxY };
 }
 
+// Build the list of protected rectangles (tiles that must end up inside the walls).
+// The core box already covers the stamp + every Merchant Ring extension. The
+// controller is added as its own small rect ONLY when it sits close to the keep:
+// enclosing a far-flung controller would drag the min-cut across half the room for
+// no defensive gain, so we leave a distant controller outside the curtain.
+function protectedRects(
+  room: Room,
+  box: { minX: number; minY: number; maxX: number; maxY: number }
+): Rect[] {
+  const rects: Rect[] = [{ x1: box.minX, y1: box.minY, x2: box.maxX, y2: box.maxY }];
+
+  const controller = room.controller;
+  if (controller) {
+    // Distance from the controller to the core box (0 if already inside it).
+    const dx = Math.max(box.minX - controller.pos.x, 0, controller.pos.x - box.maxX);
+    const dy = Math.max(box.minY - controller.pos.y, 0, controller.pos.y - box.maxY);
+    // Within ~5 tiles of the box edge the controller is effectively part of the
+    // keep (upgraders work there constantly); enclose a 1-tile margin around it so
+    // the upgrade tile is defended too.
+    if (Math.max(dx, dy) <= 5) {
+      rects.push({
+        x1: controller.pos.x - 1,
+        y1: controller.pos.y - 1,
+        x2: controller.pos.x + 1,
+        y2: controller.pos.y + 1,
+      });
+    }
+  }
+  return rects;
+}
+
+// Store a set of rampart tiles under STAMP_RAMPART_KEY, replacing whatever was
+// there. Rewritten from scratch each replan so a grown base (or a relocated core)
+// can't leave a stale inner wall behind. The on-top ramparts the orchestrator adds
+// for built core structures live under RAMPARTS_KEY, not this key, so clearing here
+// only drops perimeter tiles. Stamps createdAt so the throttle can measure the
+// interval even when zero tiles end up stored.
+function storePerimeter(room: Room, tiles: Array<{ x: number; y: number }>): void {
+  const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
+  mem[PLANNER_KEYS.STAMP_RAMPART_KEY] = [];
+  if (room.memory.plannedStructuresMeta) {
+    delete room.memory.plannedStructuresMeta[PLANNER_KEYS.STAMP_RAMPART_KEY];
+  }
+  for (const t of tiles) {
+    addPlannedStructureToMemory(
+      room,
+      PLANNER_KEYS.STAMP_RAMPART_KEY,
+      new RoomPosition(t.x, t.y, room.name)
+    );
+  }
+  if (!room.memory.plannedStructuresMeta) room.memory.plannedStructuresMeta = {} as any;
+  room.memory.plannedStructuresMeta![PLANNER_KEYS.STAMP_RAMPART_KEY] = {
+    createdAt: Game.time,
+  };
+}
+
+// FALLBACK: the original padded bounding-box ring. A solid rectangular curtain that
+// always encloses the core — used when the min-cut returns no tiles, so a room is
+// never left wall-less. Returns the ring tiles (natural-wall tiles skipped, since a
+// wall already seals the tile and a rampart on one is wasted energy).
+function planBoundingBoxRing(
+  room: Room,
+  box: { minX: number; minY: number; maxX: number; maxY: number }
+): Array<{ x: number; y: number }> {
+  const { margin, minEdge, maxEdge } = PERIMETER_PLANNER;
+  const minX = Math.max(minEdge, box.minX - margin);
+  const minY = Math.max(minEdge, box.minY - margin);
+  const maxX = Math.min(maxEdge, box.maxX + margin);
+  const maxY = Math.min(maxEdge, box.maxY + margin);
+  if (minX >= maxX || minY >= maxY) return []; // degenerate box, nothing to wall
+
+  const terrain = room.getTerrain();
+  const tiles: Array<{ x: number; y: number }> = [];
+  const seen = new Set<string>();
+  const place = (x: number, y: number) => {
+    const k = `${x},${y}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    if (terrain.get(x, y) === TERRAIN_MASK_WALL) return;
+    tiles.push({ x, y });
+  };
+
+  // Top and bottom edges.
+  for (let x = minX; x <= maxX; x++) {
+    place(x, minY);
+    place(x, maxY);
+  }
+  // Left and right edges (corners already handled above).
+  for (let y = minY + 1; y < maxY; y++) {
+    place(minX, y);
+    place(maxX, y);
+  }
+  return tiles;
+}
+
 // Compute and store the defensive perimeter. Gated by RCL and throttled so it only
 // recomputes occasionally (the base footprint grows slowly). Reuses the stamp
 // rampart memory key so the rest of the pipeline needs no changes.
@@ -100,56 +198,18 @@ export function planDefensivePerimeter(room: Room): void {
   }
 
   const box = coreBoundingBox(room);
-  if (!box) return;
+  if (!box) return; // no storage/stamp yet — skip until the base exists
 
-  const { margin, minEdge, maxEdge } = PERIMETER_PLANNER;
-  const minX = Math.max(minEdge, box.minX - margin);
-  const minY = Math.max(minEdge, box.minY - margin);
-  const maxX = Math.min(maxEdge, box.maxX + margin);
-  const maxY = Math.min(maxEdge, box.maxY + margin);
-  if (minX >= maxX || minY >= maxY) return; // degenerate box, nothing to wall
-
-  const terrain = room.getTerrain();
-
-  // Rewrite the ring from scratch each replan so a grown base (or a relocated
-  // core) can't leave a stale inner wall behind. The on-top ramparts the
-  // orchestrator adds for built core structures live under RAMPARTS_KEY, not this
-  // key, so clearing here only drops perimeter tiles.
-  mem[PLANNER_KEYS.STAMP_RAMPART_KEY] = [];
-  if (room.memory.plannedStructuresMeta) {
-    delete room.memory.plannedStructuresMeta[PLANNER_KEYS.STAMP_RAMPART_KEY];
+  // The min-cut seals the protected rects from the room exits with the fewest
+  // ramparts, hugging natural walls for free. The mincut already excludes natural
+  // walls (they're impassable cuts), so no manual wall-skip is needed here.
+  const cut = getCutTiles(room.name, protectedRects(room, box));
+  if (cut.length > 0) {
+    storePerimeter(room, cut);
+    return;
   }
 
-  const place = (x: number, y: number, seen: Set<string>) => {
-    const k = `${x},${y}`;
-    if (seen.has(k)) return;
-    seen.add(k);
-    // Natural walls already seal the tile — don't waste a rampart on one.
-    if (terrain.get(x, y) === TERRAIN_MASK_WALL) return;
-    addPlannedStructureToMemory(
-      room,
-      PLANNER_KEYS.STAMP_RAMPART_KEY,
-      new RoomPosition(x, y, room.name)
-    );
-  };
-
-  const seen = new Set<string>();
-  // Top and bottom edges.
-  for (let x = minX; x <= maxX; x++) {
-    place(x, minY, seen);
-    place(x, maxY, seen);
-  }
-  // Left and right edges (corners already handled above).
-  for (let y = minY + 1; y < maxY; y++) {
-    place(minX, y, seen);
-    place(maxX, y, seen);
-  }
-
-  // Stamp createdAt so the throttle above can measure the interval. addPlanned…
-  // only sets createdAt when it first creates the key, and we just cleared it, so
-  // it's fresh — but set it explicitly in case every ring tile was a natural wall.
-  if (!room.memory.plannedStructuresMeta) room.memory.plannedStructuresMeta = {} as any;
-  room.memory.plannedStructuresMeta![PLANNER_KEYS.STAMP_RAMPART_KEY] = {
-    createdAt: Game.time,
-  };
+  // FALLBACK: min-cut found nothing (degenerate, or already sealed by natural
+  // walls). Lay the robust rectangular curtain so the base is never left open.
+  storePerimeter(room, planBoundingBoxRing(room, box));
 }

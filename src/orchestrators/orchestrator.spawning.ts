@@ -179,13 +179,35 @@ function getHarvesterPopulationTarget(room: Room): number {
   return Math.max(0, 2 - minerCount);
 }
 
+// At RCL8 the controller has no per-tick upgrade cap (only GCL grows), so every WORK part
+// on every upgrader keeps converting surplus storage energy into GCL. Above this high-water
+// mark we spin up extra/bigger upgraders to burn the surplus instead of letting it sit at the
+// 1M storage ceiling; below it we drop back to a single maintenance upgrader so a transient dip
+// in income never starves the rest of the economy.
+const RCL8_SURPLUS_HIGH_WATER = 400_000;
+// One extra GCL-farming upgrader per this much storage above the high-water mark. Each surplus
+// upgrader is a big static body (~20 WORK, see buildRcl8UpgraderBody) consuming ~20 e/tick from
+// storage, so 100k of headroom comfortably funds one for a long stretch before the mark is hit.
+const RCL8_ENERGY_PER_SURPLUS_UPGRADER = 100_000;
+const RCL8_MAX_UPGRADERS = 4;
+
 function getUpgraderPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
 
   const phase = getRoomPhase(room);
   const rcl = room.controller?.level ?? 0;
 
-  if (rcl >= 8) return 1;
+  if (rcl >= 8) {
+    const storedEnergy = room.storage?.store[RESOURCE_ENERGY] ?? 0;
+    if (storedEnergy <= RCL8_SURPLUS_HIGH_WATER) return 1;
+    // Scale extra upgraders with how far above the mark we are, capped so we never starve
+    // links/towers/labs that also draw from storage.
+    const surplus = storedEnergy - RCL8_SURPLUS_HIGH_WATER;
+    return Math.min(
+      RCL8_MAX_UPGRADERS,
+      1 + Math.floor(surplus / RCL8_ENERGY_PER_SURPLUS_UPGRADER)
+    );
+  }
 
   const storage = room.storage;
   if (!storage) return phase === "bootstrap" ? 1 : 2;
@@ -305,10 +327,13 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 }
 
 const HAULER_SPAWN = {
-  WORKS_PER_HAULER: 6,
-  DISTANCE_LONG: 20,
   MAX_HAULERS: 6,
   DISTANCE_CACHE_TTL: 500,
+  // A saturated source yields 10 energy/tick. A hauler must cover the full round trip
+  // (container → base → back) before that container backs up, so required CARRY for one
+  // container ≈ output × round_trip_ticks / CARRY_CAPACITY.
+  SOURCE_OUTPUT: 10,
+  CARRY_CAPACITY: CARRY_CAPACITY, // 50 — energy held per CARRY part
 } as const;
 
 // Per-room cache: container id → path length from spawn, refreshed every TTL ticks.
@@ -358,28 +383,43 @@ function shouldSpawnHauler(room: Room): boolean {
     (c) => !c.spawning && (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
-  const totalMinerWork = getCreepsByRoleInRoom(ROLE_MINER, room)
-    .reduce((sum, c) => sum + c.body.filter((p) => p.type === WORK).length, 0);
-
-  const targetFromWork = Math.ceil(totalMinerWork / HAULER_SPAWN.WORKS_PER_HAULER);
+  // Throughput sizing: each miner container drains at the source output (10 e/tick) and a hauler
+  // must complete a round trip (out and back ≈ 2 × path distance) before it overflows. So the
+  // CARRY needed to keep one container clear is output × round_trip / CARRY_CAPACITY. Sum that
+  // across miner containers (upgrade/mineral containers don't need a dedicated hauler), then
+  // divide by the carry one ideal hauler provides to get the hauler count.
+  const minerContainerIds = new Set(room.memory.minerContainerIds ?? []);
+  const minerContainers = containers.filter((c) =>
+    minerContainerIds.has(c.id as Id<StructureContainer>)
+  );
+  const minerContainerCount = minerContainers.length;
 
   const spawn = getSpawnForRoom(room);
-  let extraLong = 0;
+  let requiredCarry = 0;
   if (spawn) {
-    const distances = getContainerDistances(room, spawn, containers);
-    for (const c of containers) {
-      if ((distances[c.id] ?? 0) > HAULER_SPAWN.DISTANCE_LONG) extraLong++;
+    const distances = getContainerDistances(room, spawn, minerContainers);
+    for (const c of minerContainers) {
+      const dist = distances[c.id] ?? 0;
+      const roundTrip = dist * 2;
+      requiredCarry +=
+        (HAULER_SPAWN.SOURCE_OUTPUT * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
     }
   }
 
-  // Floor on miner containers only — upgrade and mineral containers don't need a dedicated hauler.
-  const minerContainerIds = new Set(room.memory.minerContainerIds ?? []);
-  const minerContainerCount = containers.filter((c) =>
-    minerContainerIds.has(c.id as Id<StructureContainer>)
-  ).length;
+  // CARRY one capacity-sized hauler provides (2:1 CARRY:MOVE pattern, 2 CARRY per 150e set).
+  const idealRepeats = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 3),
+    Math.floor((room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) / 150)
+  );
+  const carryPerIdealHauler = Math.max(1, idealRepeats * 2);
+
+  const targetFromThroughput = Math.ceil(requiredCarry / carryPerIdealHauler);
+
   const desired = Math.min(
     HAULER_SPAWN.MAX_HAULERS,
-    Math.max(minerContainerCount, targetFromWork + extraLong)
+    // Floor of one hauler per miner container so a freshly-built room with no distance cache yet
+    // still gets coverage; throughput raises it for long hauls.
+    Math.max(minerContainerCount, targetFromThroughput)
   );
 
   const haulerCount = haulers.length + getRoomSpawningCount(room, ROLE_HAULER);
@@ -387,18 +427,13 @@ function shouldSpawnHauler(room: Room): boolean {
 
   // Allow one extra hauler if the existing ones are collectively undersized —
   // e.g. they were spawned during an energy shortage and have tiny bodies.
-  // The ideal carry per hauler is based on room capacity, not current energy.
   if (haulers.length >= HAULER_SPAWN.MAX_HAULERS) return false;
-  const idealRepeats = Math.min(
-    Math.floor(MAX_BODY_PART_COUNT / 3),
-    Math.floor((room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) / 150)
-  );
-  const carryPerIdealHauler = idealRepeats * 2 * 50;
+  const carryPerIdealHaulerUnits = carryPerIdealHauler * HAULER_SPAWN.CARRY_CAPACITY;
   const totalCurrentCarry = haulers.reduce(
-    (sum, h) => sum + h.body.filter((p) => p.type === CARRY).length * 50,
+    (sum, h) => sum + h.body.filter((p) => p.type === CARRY).length * HAULER_SPAWN.CARRY_CAPACITY,
     0
   );
-  return totalCurrentCarry < desired * carryPerIdealHauler * 0.5;
+  return totalCurrentCarry < desired * carryPerIdealHaulerUnits * 0.5;
 }
 
 function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
@@ -611,14 +646,50 @@ function spawnHarvester(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
+// RCL8 upgrader: WORK-heavy and static. The creep parks on the controller link/container, so it
+// only needs enough MOVE to crawl there once (1 MOVE per ~5 other parts) and a couple of CARRY to
+// buffer between withdrawals. Group = 5×WORK + CARRY + MOVE = 600e, sized to room capacity.
+function buildRcl8UpgraderBody(availableEnergy: number): BodyPartConstant[] {
+  const group: BodyPartConstant[] = [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE];
+  const groupCost = calculateBodyPartCost(group);
+  const maxGroups = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / group.length),
+    Math.floor(availableEnergy / groupCost)
+  );
+  const groups = Math.max(1, maxGroups);
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < groups; i++) body.push(...group);
+  return body;
+}
+
 function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_UPGRADER}${Game.time}`;
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
-  const body = buildScaledBody(ROLE_UPGRADER, allowedEnergy);
+  const rcl = room.controller?.level ?? 0;
+
+  // At RCL8 size against full capacity so each GCL-farming upgrader carries maximum WORK; the
+  // population target already gates the count by surplus, so we want every one of them big.
+  // Below RCL8 keep the existing current-energy scaling so upgraders spawn promptly.
+  const allowedEnergy =
+    rcl >= 8
+      ? Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE))
+      : Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const body =
+    rcl >= 8
+      ? buildRcl8UpgraderBody(allowedEnergy)
+      : buildScaledBody(ROLE_UPGRADER, allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+  // Boost WORK with XGH2O when the labs hold enough stock (RCL7 once XGH2O exists, RCL8 always).
+  // Mirrors the combat boost path: pick the compound here, the upgrader role seeks a lab before
+  // upgrading (seekBoost clears the request on timeout so it never blocks upgrading forever).
+  let queue: string[] = [];
+  if (rcl >= 7) {
+    const workParts = body.filter((p) => p === WORK).length;
+    queue = buildBoostQueue(room, "upgrader", workParts, 0);
+  }
+
   const res = spawn.spawnCreep(body, newName, {
-    memory: { role: ROLE_UPGRADER },
+    memory: { role: ROLE_UPGRADER, ...boostMemory(queue) },
   });
   return res === OK;
 }
@@ -748,6 +819,46 @@ function spawnRemoteMiner(room: Room, spawn: StructureSpawn): boolean {
   return false;
 }
 
+// Approximate one-way path distance (in tiles) from home storage to a remote room. We have no
+// stored per-remote path length, so we estimate from the inter-room linear distance: each room is
+// 50 tiles across, and a source typically sits ~25 tiles in, so linear_distance × 50 + 25 is a
+// reasonable round-number approximation without running PathFinder across rooms here.
+function estimateRemoteDistance(homeRoom: Room, remoteRoomName: string): number {
+  const rooms = Game.map.getRoomLinearDistance(homeRoom.name, remoteRoomName);
+  return rooms * 50 + 25;
+}
+
+// Remote haulers needed for a room, derived from per-remote throughput rather than a flat
+// 2-per-remote. Each remote source drains at the source output; the courier round-trips to home
+// storage, so required CARRY ≈ output × 2 × distance / CARRY_CAPACITY summed over sources, divided
+// by the carry one capacity-sized remote hauler provides.
+function getRemoteHaulerTarget(room: Room): number {
+  const activeRooms = getActiveRemoteRooms(room);
+  if (activeRooms.length === 0) return 0;
+
+  // CARRY one capacity-sized remote hauler provides. Road body is 2:1 CARRY:MOVE
+  // (3 parts/set, 2 CARRY each, 200e/set) — see buildRemoteHaulerRoadBody.
+  const carryPerHauler = Math.max(
+    1,
+    Math.min(
+      Math.floor(MAX_BODY_PART_COUNT / 3),
+      Math.floor((room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) / 200)
+    ) * 2
+  );
+
+  let total = 0;
+  for (const remote of activeRooms) {
+    const sourceCount = remote.sources.length;
+    const dist = estimateRemoteDistance(room, remote.roomName);
+    const requiredCarry =
+      (HAULER_SPAWN.SOURCE_OUTPUT * 2 * dist * sourceCount) / HAULER_SPAWN.CARRY_CAPACITY;
+    // At least one hauler per remote so a remote is never left without a courier.
+    total += Math.max(1, Math.ceil(requiredCarry / carryPerHauler));
+  }
+  // Cap total remote haulers so a far cluster can't monopolise the spawn.
+  return Math.min(total, activeRooms.length * 3);
+}
+
 function shouldSpawnRemoteHauler(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 3) return false;
   const activeRooms = getActiveRemoteRooms(room);
@@ -757,8 +868,7 @@ function shouldSpawnRemoteHauler(room: Room): boolean {
     (c) => c.memory.homeRoom === room.name
   );
 
-  // 2 haulers per active remote room (one filling, one depositing)
-  return haulers.length < activeRooms.length * 2;
+  return haulers.length < getRemoteHaulerTarget(room);
 }
 
 function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
@@ -788,7 +898,7 @@ function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = Math.floor(
     room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
   );
-  const body = buildRemoteHaulerBody(allowedEnergy);
+  const body = buildRemoteHaulerRoadBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const res = spawn.spawnCreep(body, `${ROLE_REMOTE_HAULER}${Game.time}`, {
@@ -802,21 +912,38 @@ function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[] {
-  // Remote miners travel without roads: WORK:MOVE = 1:1
-  const workCost = BODYPART_COST[WORK];
-  const moveCost = BODYPART_COST[MOVE];
+  // Remote miners travel out to a road-connected source and then sit stationary, so they don't
+  // need 1:1 MOVE for sustained movement — only enough to reach the source over the planned roads
+  // (full-speed on roads needs 1 MOVE per 2 non-MOVE parts). Use 2 WORK : 1 MOVE, max 5 WORK.
   const maxWork = 5;
-  const pairCost = workCost + moveCost; // 150e per WORK+MOVE pair
-  const pairs = Math.min(maxWork, Math.max(1, Math.floor(availableEnergy / pairCost)));
+  const groupCost = 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE]; // 250e per 2×WORK + MOVE
+  const maxGroups = Math.max(1, Math.floor(availableEnergy / groupCost));
+  // Cap WORK at maxWork (saturates a 10/tick source), so cap groups accordingly.
+  const groups = Math.min(maxGroups, Math.ceil(maxWork / 2));
+  const work = Math.min(maxWork, groups * 2);
+  const move = groups;
   const body: BodyPartConstant[] = [];
-  for (let i = 0; i < pairs; i++) body.push(WORK);
-  for (let i = 0; i < pairs; i++) body.push(MOVE);
+  for (let i = 0; i < work; i++) body.push(WORK);
+  for (let i = 0; i < move; i++) body.push(MOVE);
   return body;
 }
 
+// Used by SK and deposit haulers (no remote roads): CARRY:MOVE = 1:1.
 function buildRemoteHaulerBody(availableEnergy: number): BodyPartConstant[] {
-  // Remote haulers on plains: CARRY:MOVE = 1:1
   const pattern: BodyPartConstant[] = [CARRY, MOVE];
+  const patternCost = calculateBodyPartCost(pattern);
+  const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
+  const maxByEnergy = Math.floor(availableEnergy / patternCost);
+  const repeats = Math.max(2, Math.min(maxByParts, maxByEnergy));
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < repeats; i++) body.push(...pattern);
+  return body;
+}
+
+// Remote haulers run on the roads planned back to home storage, so 2 CARRY : 1 MOVE keeps them at
+// full speed loaded (loaded fatigue: 2 CARRY = 2, 1 MOVE clears 2 on roads). Set = 200e, 3 parts.
+function buildRemoteHaulerRoadBody(availableEnergy: number): BodyPartConstant[] {
+  const pattern: BodyPartConstant[] = [CARRY, CARRY, MOVE];
   const patternCost = calculateBodyPartCost(pattern);
   const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
   const maxByEnergy = Math.floor(availableEnergy / patternCost);
@@ -883,6 +1010,13 @@ const BOOST_CANDIDATES: Record<string, string[]> = {
   wizard:  ['XKHO2', 'KHO2', 'KO'],   // ranged attack (K-line; U-line boosts harvest, not ranged)
   cleric:  ['XLHO2', 'LHO2', 'LO'],   // heal
   sieger:  ['XZH2O', 'ZH2O', 'ZH'],   // dismantle
+  // Catalyzed ghodium acid (+100% upgrade per WORK). Only the catalyzed tier is worth the
+  // lab time for upgraders — the lower tiers add little controller throughput. We require
+  // the full XGH2O rather than GH2O/GH so a partial reaction chain never half-boosts.
+  upgrader: ['XGH2O'],
+  // TOUGH damage-reduction boost (best tier first). Applied as a second boost to front-line
+  // melee/dismantle creeps (knight, sieger) on top of their primary combat boost.
+  tough:   ['XGHO2', 'GHO2', 'GO'],
 };
 
 // Returns the best available boost compound if there's enough stock in storage/terminal.
@@ -895,6 +1029,35 @@ function pickBoostCompound(room: Room, roleKey: string, boostParts: number): str
     if (getStockForCompound(compound, room) >= minRequired) return compound;
   }
   return undefined;
+}
+
+// Build an ordered list of boost compounds a creep should seek: its primary combat boost
+// first, then a TOUGH boost when the role has TOUGH parts (toughParts > 0). Each entry is
+// only included when there's enough stock for it; an empty list means deploy unboosted.
+function buildBoostQueue(
+  room: Room,
+  roleKey: string,
+  primaryParts: number,
+  toughParts: number
+): string[] {
+  const queue: string[] = [];
+  const primary = pickBoostCompound(room, roleKey, primaryParts);
+  if (primary) queue.push(primary);
+  if (toughParts > 0) {
+    const tough = pickBoostCompound(room, "tough", toughParts);
+    if (tough) queue.push(tough);
+  }
+  return queue;
+}
+
+// Turn a boost queue into spawn memory: the first compound becomes boostCompound (sought
+// immediately), the rest become boostQueue (sought in turn after each is applied).
+function boostMemory(queue: string[]): { boostCompound?: string; boostQueue?: string[] } {
+  if (queue.length === 0) return {};
+  return {
+    boostCompound: queue[0],
+    ...(queue.length > 1 ? { boostQueue: queue.slice(1) } : {}),
+  };
 }
 
 // Knight body: front-loads TOUGH so armor absorbs hits before ATTACK parts die.
@@ -985,9 +1148,10 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
-  const boost = pickBoostCompound(room, 'knight', attackParts);
+  const toughParts = body.filter((p) => p === TOUGH).length;
+  const queue = buildBoostQueue(room, 'knight', attackParts, toughParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}${Game.time}`, {
-    memory: { role: ROLE_KNIGHT, ...(boost ? { boostCompound: boost } : {}) },
+    memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
   });
   return res === OK;
 }
@@ -1001,9 +1165,9 @@ function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
   const body = buildWizardBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
-  const boost = pickBoostCompound(room, 'wizard', rangedParts);
+  const queue = buildBoostQueue(room, 'wizard', rangedParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_WIZARD}${Game.time}`, {
-    memory: { role: ROLE_WIZARD, ...(boost ? { boostCompound: boost } : {}) },
+    memory: { role: ROLE_WIZARD, ...boostMemory(queue) },
   });
   return res === OK;
 }
@@ -1021,9 +1185,9 @@ function spawnCleric(room: Room, spawn: StructureSpawn): boolean {
   const body = buildClericBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
-  const boost = pickBoostCompound(room, 'cleric', healParts);
+  const queue = buildBoostQueue(room, 'cleric', healParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_CLERIC}${Game.time}`, {
-    memory: { role: ROLE_CLERIC, ...(boost ? { boostCompound: boost } : {}) },
+    memory: { role: ROLE_CLERIC, ...boostMemory(queue) },
   });
   return res === OK;
 }
@@ -1158,14 +1322,17 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const combatParts = body.filter((p) => p === combatPartType).length;
-  const boost = pickBoostCompound(room, boostKey, combatParts);
+  // Only knight/sieger carry TOUGH parts, so only they queue a TOUGH boost; wizard/cleric
+  // bodies have no TOUGH and stay single-boosted.
+  const toughParts = body.filter((p) => p === TOUGH).length;
+  const queue = buildBoostQueue(room, boostKey, combatParts, toughParts);
 
   const res = spawn.spawnCreep(body, `${roleToSpawn}_off${Game.time}`, {
     memory: {
       role: roleToSpawn,
       homeRoom: room.name,
       offensiveTarget: op.targetRoom,
-      ...(boost ? { boostCompound: boost } : {}),
+      ...boostMemory(queue),
     },
   });
   if (res === OK) {
@@ -1262,13 +1429,16 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const combatParts = body.filter((p) => p === combatPartType).length;
-  const boost = pickBoostCompound(room, boostKey, combatParts);
+  // Only knight carries TOUGH parts here, so only it queues a TOUGH boost; wizard/cleric
+  // bodies have no TOUGH and stay single-boosted.
+  const toughParts = body.filter((p) => p === TOUGH).length;
+  const queue = buildBoostQueue(room, boostKey, combatParts, toughParts);
   const res = spawn.spawnCreep(body, `${roleToSpawn}_def${Game.time}`, {
     memory: {
       role: roleToSpawn,
       homeRoom: room.name,
       defensiveTarget: room.name,
-      ...(boost ? { boostCompound: boost } : {}),
+      ...boostMemory(queue),
     },
   });
   if (res === OK) {
@@ -1284,13 +1454,14 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
-  const boost = pickBoostCompound(room, "knight", attackParts);
+  const toughParts = body.filter((p) => p === TOUGH).length;
+  const queue = buildBoostQueue(room, "knight", attackParts, toughParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_child${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,
       homeRoom: room.name,
       targetRoom: exp.roomName,
-      ...(boost ? { boostCompound: boost } : {}),
+      ...boostMemory(queue),
     },
   });
   if (res === OK) {
@@ -1332,13 +1503,14 @@ function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
-  const boost = pickBoostCompound(room, "knight", attackParts);
+  const toughParts = body.filter((p) => p === TOUGH).length;
+  const queue = buildBoostQueue(room, "knight", attackParts, toughParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_remote${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,
       homeRoom: room.name,
       targetRoom: target,
-      ...(boost ? { boostCompound: boost } : {}),
+      ...boostMemory(queue),
     },
   });
   if (res === OK) console.log(`[Defense] Spawning remote defender for ${target}`);
@@ -1564,9 +1736,9 @@ function spawnSkGuardian(room: Room, spawn: StructureSpawn, op: SourceKeeperOp):
   const body = buildSkGuardianBody(room.energyCapacityAvailable);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
-  const boost = pickBoostCompound(room, "cleric", healParts);
+  const queue = buildBoostQueue(room, "cleric", healParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_SK_GUARDIAN}${Game.time}`, {
-    memory: { role: ROLE_SK_GUARDIAN, homeRoom: room.name, skOpId: op.id, ...(boost ? { boostCompound: boost } : {}) },
+    memory: { role: ROLE_SK_GUARDIAN, homeRoom: room.name, skOpId: op.id, ...boostMemory(queue) },
   });
   if (res === OK) console.log(`[SK] Spawning guardian for ${op.roomName}`);
   return res === OK;

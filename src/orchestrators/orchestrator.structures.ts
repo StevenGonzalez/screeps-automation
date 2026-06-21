@@ -357,6 +357,8 @@ export function loop() {
 // For each source in a remote room that is currently visible, create a container
 // construction site adjacent to the source if none exists yet.  We write back
 // the planned/found container ID so remote haulers can find it immediately.
+// Once a source container exists we also plan roads from it back toward home storage
+// so remote miners/haulers can run road-weighted bodies (see orchestrator.spawning).
 function planRemoteRoomContainers(homeRoom: Room) {
   for (const remote of homeRoom.memory.remoteRooms ?? []) {
     if (remote.hostile) continue;
@@ -371,7 +373,11 @@ function planRemoteRoomContainers(homeRoom: Room) {
       // Keep cached ID in sync with reality.
       if (sourceData.containerId) {
         const existing = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
-        if (existing) continue;
+        if (existing) {
+          // Container is built — its road back to storage is worth planning now.
+          planRemoteRoad(homeRoom, existing.pos);
+          continue;
+        }
         sourceData.containerId = undefined;
       }
 
@@ -381,6 +387,7 @@ function planRemoteRoomContainers(homeRoom: Room) {
       }) as StructureContainer[];
       if (built.length > 0) {
         sourceData.containerId = built[0].id;
+        planRemoteRoad(homeRoom, built[0].pos);
         continue;
       }
 
@@ -402,6 +409,64 @@ function planRemoteRoomContainers(homeRoom: Room) {
         }
       }
     }
+  }
+}
+
+// Cap on road construction sites planned per call. Construction sites share a small global pool
+// (100) that the local economy must claim first, so we trickle remote roads out a few at a time.
+const REMOTE_ROAD_SITES_PER_CALL = 5;
+
+// Plan roads from a remote source container back toward home storage. Low priority by
+// construction: we only place road sites for tiles whose room is currently visible (so we can
+// confirm nothing is already there) and stop after a small per-call budget so remote roads never
+// crowd out the economy on the global site cap. Idempotent — skips tiles that already hold a
+// road / road site / blocking structure.
+function planRemoteRoad(homeRoom: Room, from: RoomPosition) {
+  const storage = homeRoom.storage;
+  if (!storage) return; // no anchor to path back to yet
+
+  const result = PathFinder.search(
+    from,
+    { pos: storage.pos, range: 1 },
+    {
+      plainCost: 2,
+      swampCost: 10,
+      maxOps: 4000,
+      // Prefer existing roads; treat them as cheap so the path reuses the home road network.
+      roomCallback: (roomName) => {
+        const r = Game.rooms[roomName];
+        if (!r) return new PathFinder.CostMatrix(); // unseen room — default costs
+        const cm = new PathFinder.CostMatrix();
+        for (const s of r.find(FIND_STRUCTURES)) {
+          if (s.structureType === STRUCTURE_ROAD) cm.set(s.pos.x, s.pos.y, 1);
+          else if (
+            s.structureType !== STRUCTURE_CONTAINER &&
+            s.structureType !== STRUCTURE_RAMPART
+          ) {
+            cm.set(s.pos.x, s.pos.y, 255); // block tiles occupied by solid structures
+          }
+        }
+        return cm;
+      },
+    }
+  );
+  if (result.incomplete) return;
+
+  let placed = 0;
+  for (const pos of result.path) {
+    if (placed >= REMOTE_ROAD_SITES_PER_CALL) break;
+    const r = Game.rooms[pos.roomName];
+    if (!r) continue; // can't safely place into an unseen room
+    // Skip if a road / road site already exists here.
+    const here = r.lookAt(pos.x, pos.y);
+    const blocked = here.some(
+      (o) =>
+        (o.type === "structure" && (o.structure as Structure).structureType === STRUCTURE_ROAD) ||
+        (o.type === "constructionSite" &&
+          (o.constructionSite as ConstructionSite).structureType === STRUCTURE_ROAD)
+    );
+    if (blocked) continue;
+    if (r.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD) === OK) placed++;
   }
 }
 

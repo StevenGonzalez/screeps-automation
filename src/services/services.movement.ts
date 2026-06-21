@@ -17,7 +17,10 @@
 import { ROLE_UPGRADER, ROLE_HAULER, ROLE_REMOTE_HAULER } from "../config/config.roles";
 
 const STUCK_THRESHOLD = 3; // ticks without moving (fatigue-free) before intervening
-const COSTMATRIX_TTL = 100;
+// Structure matrices are invalidated explicitly when a structure is destroyed/built (see
+// invalidateCostMatrix, called from the memory orchestrator's event-log scan), so the TTL
+// is only a backstop for changes we don't get an event for. It can therefore run long.
+const COSTMATRIX_TTL = 1000;
 
 const originalMoveTo = Creep.prototype.moveTo as (
   this: Creep,
@@ -25,6 +28,29 @@ const originalMoveTo = Creep.prototype.moveTo as (
 ) => ScreepsReturnCode;
 
 const costMatrixCache: Record<string, { cm: CostMatrix; tick: number }> = {};
+
+// Per-creep stuck-tracking state, keyed by creep name. Deliberately kept in heap
+// (not creep Memory) so it never touches RawMemory: writing _st/_lp/_lpr into every
+// creep's JSON every tick inflated serialize cost (a top hidden CPU sink). Heap is
+// wiped on a global reset, which only costs a few ticks of re-warming the counters.
+// Stale entries for dead creeps are pruned lazily once per tick (see pruneStuckState).
+interface StuckState {
+  st: number; // consecutive ticks stuck (fatigue-free, hasn't moved)
+  lp: number; // last position key (x * 50 + y)
+  lpr: string; // last position's room name
+}
+const stuckState = new Map<string, StuckState>();
+let stuckPruneTick = -1;
+
+// Drop heap entries for creeps that no longer exist. Run once per tick on first access
+// so the map can't grow unbounded across many creep generations.
+function pruneStuckState(): void {
+  if (stuckPruneTick === Game.time) return;
+  stuckPruneTick = Game.time;
+  for (const name of stuckState.keys()) {
+    if (!Game.creeps[name]) stuckState.delete(name);
+  }
+}
 
 /**
  * A road-aware structure cost matrix for a room, cached for COSTMATRIX_TTL ticks
@@ -51,6 +77,16 @@ function getRoomCostMatrix(roomName: string): CostMatrix {
   }
   costMatrixCache[roomName] = { cm, tick: Game.time };
   return cm;
+}
+
+/**
+ * Drop the cached structure matrix for a room so the next pathing call rebuilds it from
+ * live structures. Called whenever a room's structures change (destroyed/built), which
+ * lets the TTL above run long without ever pathing through a wall that's gone or around
+ * a rampart that's new.
+ */
+export function invalidateCostMatrix(roomName: string): void {
+  delete costMatrixCache[roomName];
 }
 
 // The structure matrix alone, for callers that want the "ideal" path ignoring creeps (the shove
@@ -109,24 +145,24 @@ function roadCostCallback(roomName: string): CostMatrix {
   const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
   if (!effectiveOpts.costCallback) effectiveOpts.costCallback = roadCostCallback;
 
+  pruneStuckState();
+
   // Already parked within range — the creep isn't travelling, so it isn't "stuck".
   if (sameRoom && this.pos.getRangeTo(tpos) <= range) {
-    this.memory._st = 0;
+    stuckState.delete(this.name);
     return originalMoveTo.call(this, target as never, effectiveOpts as never);
   }
 
-  const mem = this.memory;
   const posKey = this.pos.x * 50 + this.pos.y;
-  if (mem._lpr === this.pos.roomName && mem._lp === posKey && this.fatigue === 0) {
-    mem._st = (mem._st ?? 0) + 1;
-  } else {
-    mem._st = 0;
+  const prev = stuckState.get(this.name);
+  let st = 0;
+  if (prev && prev.lpr === this.pos.roomName && prev.lp === posKey && this.fatigue === 0) {
+    st = prev.st + 1;
   }
-  mem._lp = posKey;
-  mem._lpr = this.pos.roomName;
+  stuckState.set(this.name, { st, lp: posKey, lpr: this.pos.roomName });
 
-  if ((mem._st ?? 0) >= STUCK_THRESHOLD) {
-    mem._st = 0;
+  if (st >= STUCK_THRESHOLD) {
+    stuckState.set(this.name, { st: 0, lp: posKey, lpr: this.pos.roomName });
     // Register a shove against whoever blocks our next step, resolved authoritatively
     // at end of tick (see resolveTraffic). We still force a fresh path here so we route
     // around the jam if an alternative exists.
@@ -149,7 +185,24 @@ interface ShoveReq {
 let shoveTick = -1;
 let pendingShoves: ShoveReq[] = [];
 
+// Cap the fresh PathFinder.search calls a single room may spend on shove-routing each
+// tick. A gridlocked lane stacks up many stuck creeps in one room, and each used to fire
+// its own maxOps:1000 search — N pathfinds for one jam. Bounding it keeps the CPU spent
+// on unjamming a room flat regardless of how many creeps pile up; the creeps over the cap
+// simply don't register a shove this tick and retry next tick (they're still repathing).
+const MAX_SHOVE_PATHFINDS_PER_ROOM = 3;
+let shovePathfindTick = -1;
+const shovePathfindsThisTick: Record<string, number> = {};
+
 function registerShove(creep: Creep, targetPos: RoomPosition, range: number): void {
+  const roomName = creep.pos.roomName;
+  if (shovePathfindTick !== Game.time) {
+    shovePathfindTick = Game.time;
+    for (const k in shovePathfindsThisTick) delete shovePathfindsThisTick[k];
+  }
+  if ((shovePathfindsThisTick[roomName] ?? 0) >= MAX_SHOVE_PATHFINDS_PER_ROOM) return;
+  shovePathfindsThisTick[roomName] = (shovePathfindsThisTick[roomName] ?? 0) + 1;
+
   // Find the creep on our ACTUAL next path step, not the straight-line direction to the
   // final target. moveTo routes around static obstacles, so the real next tile is usually
   // not the one getDirectionTo(target) points at — shoving by straight line displaces an

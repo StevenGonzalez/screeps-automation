@@ -212,6 +212,8 @@ declare global {
     energySourceId?: Id<AnyStoreStructure>;
     // Lab boosting
     boostCompound?: string;
+    // Remaining compounds to apply after the current boostCompound (e.g. a TOUGH boost).
+    boostQueue?: string[];
     boosted?: boolean;
     // Military offense
     offensiveTarget?: string;
@@ -313,6 +315,28 @@ declare global {
     debugHaulers?: string;
     // When true, the expansion orchestrator auto-claims scouted candidates (default off)
     autoExpand?: boolean;
+    // Empire-wide strategic posture, written by orchestrator.strategy each tick.
+    empire?: EmpireMemory;
+  }
+
+  // ── Central strategy coordinator ────────────────────────────────────────────
+  // Empire-wide posture set once per tick by orchestrator.strategy and READ by the
+  // other systems (expansion, military, spawning) to gate their behavior. Systems
+  // must treat a missing Memory.empire as posture "EXPAND" (the safe default) so the
+  // bot behaves identically to before the coordinator existed when it hasn't run yet.
+  type EmpirePosture = "EXPAND" | "TURTLE" | "WAR" | "RECOVER";
+
+  interface EmpireMemory {
+    posture: EmpirePosture;
+    updatedAt: number;
+    reason?: string;             // human-readable why, for diagnostics/console
+    // Chosen offensive target picked by the WarCouncil (value-based). roomName is the
+    // room to assault; player is its owner (for campaign continuity across rooms).
+    warTargetRoom?: string;
+    warTargetPlayer?: string;
+    // Per-room posture override: a single threatened room can be TURTLE while the
+    // empire as a whole stays EXPAND/WAR. Keyed by owned room name.
+    roomPosture?: Record<string, EmpirePosture>;
   }
 
   interface PowerCreepMemory {

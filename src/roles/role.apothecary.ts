@@ -65,10 +65,12 @@ export function runApothecary(creep: Creep) {
 
   // Build a set of compounds currently being sought for boosts in this room —
   // the apothecary must not drain those from labs or the boost window closes.
-  const pendingBoostCompounds = new Set(
-    creep.room.find(FIND_MY_CREEPS, { filter: (c) => !!c.memory.boostCompound && !c.memory.boosted })
-      .map((c) => c.memory.boostCompound as string)
-  );
+  const pendingBoostCompounds = new Set<string>();
+  for (const c of creep.room.find(FIND_MY_CREEPS, { filter: (c) => !c.memory.boosted })) {
+    if (c.memory.boostCompound) pendingBoostCompounds.add(c.memory.boostCompound);
+    // Reserve queued compounds too (e.g. TOUGH) so a second boost isn't drained first.
+    if (c.memory.boostQueue) for (const q of c.memory.boostQueue) pendingBoostCompounds.add(q);
+  }
 
   // Priority 0: withdraw mineral from storage to pre-load terminal for a pending cross-room send
   const pendingSend = room.memory.pendingSend;

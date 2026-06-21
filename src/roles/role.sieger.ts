@@ -8,7 +8,7 @@ import { getOffensiveOp, runOffensiveSieger } from "../orchestrators/orchestrato
  * fragile to act alone, relying on knights to screen it and clerics to keep it alive.
  */
 export function runSieger(creep: Creep) {
-  if (creep.memory.boostCompound && seekBoost(creep)) return;
+  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
     const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);

@@ -3,6 +3,7 @@ import * as labsSystem from "./orchestrators/orchestrator.labs";
 import * as factorySystem from "./orchestrators/orchestrator.factory";
 import * as linksSystem from "./orchestrators/orchestrator.links";
 import * as memorySystem from "./orchestrators/orchestrator.memory";
+import * as strategySystem from "./orchestrators/orchestrator.strategy";
 import * as expansionSystem from "./orchestrators/orchestrator.expansion";
 import * as pixelsSystem from "./orchestrators/orchestrator.pixels";
 import * as spawningSystem from "./orchestrators/orchestrator.spawning";
@@ -16,6 +17,7 @@ import * as sourceKeeperSystem from "./orchestrators/orchestrator.sourcekeeper";
 import * as powerCreepSystem from "./orchestrators/orchestrator.powercreep";
 import * as observerSystem from "./orchestrators/orchestrator.observer";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
+import { runAllies } from "./services/services.allies";
 import { setupConsole } from "./console";
 import { recordCpu } from "./services/services.profiler";
 // Side-effect import: installs the traffic-managed moveTo override on Creep.prototype.
@@ -41,6 +43,12 @@ export function loop() {
   const cpuFraction = (used: number): number => (limit ? used / limit : 0);
 
   runSafe("memory", () => memorySystem.loop());
+  // Set empire-wide posture immediately after memory cleanup so the systems below
+  // (expansion, military, spawning, towers) all read a fresh posture this same tick.
+  runSafe("strategy", () => strategySystem.loop());
+  // Refresh ally identity and exchange ally requests before any combat/targeting code
+  // (towers, military) reads threat info — so friends are never treated as hostiles.
+  runSafe("allies", () => runAllies());
   runSafe("expansion", () => expansionSystem.loop());
   runSafe("creeps", () => creepRunnerSystem.loop());
   runSafe("spawning", () => spawningSystem.loop());

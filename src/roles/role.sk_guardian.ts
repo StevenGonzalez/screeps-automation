@@ -9,7 +9,7 @@ import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper"
 const KITE_RANGE = 3;
 
 export function runSkGuardian(creep: Creep) {
-  if (creep.memory.boostCompound && seekBoost(creep)) return;
+  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
   const opId = creep.memory.skOpId;
   const op = opId !== undefined ? getSkOp(opId) : undefined;

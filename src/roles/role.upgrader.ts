@@ -5,9 +5,15 @@ import {
   withdrawFromContainer,
   acquireEnergy,
 } from "../services/services.creep";
+import { seekBoost } from "../services/services.combat";
 
 export function runUpgrader(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
+
+  // Get boosted (XGH2O, +100% upgrade per WORK) before working. seekBoost returns true while
+  // still travelling to / waiting on a lab and clears the request on timeout, so this never
+  // blocks upgrading forever — once boosted (or given up) it returns false and we proceed.
+  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
   if (creep.memory.working && isCreepEmpty(creep)) {
     creep.memory.working = false;
