@@ -39,7 +39,9 @@ declare global {
 const REGROUP_HP_THRESHOLD = 0.85; // squad must heal to this avg before re-engaging
 const RALLY_RANGE = 8;             // distance from spawn that counts as "rallied"
 const CLEARED_TICKS_NEEDED = 10;   // ticks a room stays empty before the op completes
-const INTEL_TTL = 20_000;          // drop intel for rooms not seen in this long (memory cap)
+const INTEL_TTL = 6_000;           // drop intel for rooms not seen in this long. Kept short:
+                                   // stale intel just bloats Memory (a per-tick serialize tax)
+                                   // and is re-gathered cheaply by scouts when actually needed.
 const FORMING_TIMEOUT = 1500;      // ticks to assemble a squad before aborting
 const FRAGMENT_TIMEOUT = 300;      // ticks split across rooms before pulling back to regroup
 const KITE_RANGE = 3;              // wizards hold the enemy at this range

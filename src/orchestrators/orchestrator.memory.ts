@@ -80,7 +80,11 @@ const MAX_REMOTE_ROOMS = 3;           // max adjacent rooms to mine per owned ro
 // runs per owned room, expands the frontier through Game.map.describeExits, and stops
 // at SCOUT_BFS_DEPTH rooms out. A room is (re-)queued only when its intel is missing or
 // stale, so fresh rooms aren't re-walked but old ones get refreshed.
-const SCOUT_BFS_DEPTH = 6;            // how many rooms outward the BFS reaches (~2-3 sectors)
+const SCOUT_BFS_DEPTH = 2;            // how many rooms outward the BFS reaches. Kept shallow:
+                                     // each scouted room stores a rich intel record, and a deep
+                                     // sweep (depth 6 = ~100+ rooms) bloats Memory, whose
+                                     // per-tick (de)serialization is a hidden CPU tax. Raise it
+                                     // only with CPU headroom and a real need for far-map intel.
 const SCOUT_REFRESH_INTERVAL = 10_000; // re-scout a room whose intel is older than this
 // Cap concurrent pending rooms low: the spawner raises ~one scout per unclaimed pending
 // room, and each scout now services MANY rooms over its life (chaining through the queue).

@@ -190,6 +190,10 @@ const RCL8_SURPLUS_HIGH_WATER = 400_000;
 // storage, so 100k of headroom comfortably funds one for a long stretch before the mark is hit.
 const RCL8_ENERGY_PER_SURPLUS_UPGRADER = 100_000;
 const RCL8_MAX_UPGRADERS = 4;
+// GCL-farming extra upgraders each add a big creep (extra movement + logistics CPU). Only
+// run them when there's real CPU headroom — on a CPU-constrained account (low bucket) we
+// stay at a single maintenance upgrader. Auto-enables if the account gains CPU.
+const RCL8_SURPLUS_MIN_BUCKET = 9000;
 
 function getUpgraderPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
@@ -199,7 +203,8 @@ function getUpgraderPopulationTarget(room: Room): number {
 
   if (rcl >= 8) {
     const storedEnergy = room.storage?.store[RESOURCE_ENERGY] ?? 0;
-    if (storedEnergy <= RCL8_SURPLUS_HIGH_WATER) return 1;
+    const bucket = typeof Game.cpu.bucket === "number" ? Game.cpu.bucket : 0;
+    if (storedEnergy <= RCL8_SURPLUS_HIGH_WATER || bucket < RCL8_SURPLUS_MIN_BUCKET) return 1;
     // Scale extra upgraders with how far above the mark we are, capped so we never starve
     // links/towers/labs that also draw from storage.
     const surplus = storedEnergy - RCL8_SURPLUS_HIGH_WATER;
@@ -1020,17 +1025,15 @@ const BOOST_CANDIDATES: Record<string, string[]> = {
   wizard:  ['XKHO2', 'KHO2', 'KO'],   // ranged attack (K-line; U-line boosts harvest, not ranged)
   cleric:  ['XLHO2', 'LHO2', 'LO'],   // heal
   sieger:  ['XZH2O', 'ZH2O', 'ZH'],   // dismantle
-  // Catalyzed ghodium acid (+100% upgrade per WORK). Only the catalyzed tier is worth the
-  // lab time for upgraders — the lower tiers add little controller throughput. We require
-  // the full XGH2O rather than GH2O/GH so a partial reaction chain never half-boosts.
-  upgrader: ['XGH2O'],
+  // ECONOMY boosting (upgrader XGH2O, hauler XZHO2) is intentionally DISABLED: on a
+  // CPU-constrained account the extra boost-lab trips each economy creep makes (seekBoost
+  // movement + pathing) cost more CPU than the marginal throughput is worth. Re-add the
+  // `upgrader`/`hauler` keys here to turn it back on when CPU headroom allows.
   // TOUGH damage-reduction boost (best tier first). Applied as a second boost to front-line
   // melee/dismantle creeps (knight, sieger) on top of their primary combat boost.
   tough:   ['XGHO2', 'GHO2', 'GO'],
-  // Catalyzed move boost (XZHO2, -75% fatigue). Lets a hauler run a higher CARRY:MOVE ratio at
-  // full speed, so more of its body is cargo — more throughput per spawned hauler. Also appended
-  // to front-line combat creeps so they reach the fight faster.
-  hauler:  ['XZHO2', 'ZHO2', 'ZO'],
+  // Catalyzed move boost (XZHO2, -75% fatigue). Appended to front-line combat creeps so they
+  // reach the fight faster. (Combat only — economy move-boosting is disabled, see above.)
   move:    ['XZHO2', 'ZHO2', 'ZO'],
 };
 
