@@ -226,32 +226,16 @@ function getRouteRooms(from: string, to: string): Set<string> | undefined {
 
   const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
   if (!effectiveOpts.costCallback) {
-    // For a long-haul creep travelling between rooms, bias multi-room pathing onto the
-    // cached findRoute corridor: rooms off the route return `false` (impassable) so the
-    // engine can't wander off-route, and on-route rooms get the usual creep-aware matrix.
-    // Falls back to the plain callback when there's no useful route (same room, or any
-    // caller that already supplied its own costCallback above keeps full control).
-    const routeRooms =
-      tpos instanceof RoomPosition &&
-      !sameRoom &&
-      LONG_HAUL_ROLES.has(this.memory.role)
-        ? getRouteRooms(this.pos.roomName, tpos.roomName)
-        : undefined;
-
-    if (routeRooms) {
-      // Off-route rooms return `false` to mark the whole room impassable to PathFinder.
-      // The engine's roomCallback honours a `false` return, but @types/screeps types
-      // costCallback as returning only `void | CostMatrix`; the cast keeps us honest
-      // about the engine behaviour we rely on without loosening the field's type.
-      effectiveOpts.costCallback = ((roomName: string) =>
-        routeRooms.has(roomName) ? roadCostCallback(roomName) : false) as MoveToOpts["costCallback"];
-    } else {
-      effectiveOpts.costCallback = roadCostCallback;
-    }
+    // NOTE: an earlier optimization restricted long-haul creeps (remote haulers/miners/
+    // reservers) to a cached findRoute corridor by marking every off-route room impassable
+    // (returning `false`). That stranded creeps whenever the cached route didn't match the
+    // creep's actual position — a stale TTL, or a traffic shove into an adjacent room PathFinder
+    // legitimately needed — boxing them into a room with no walkable exit. We use the plain
+    // creep-aware callback for everyone instead; multi-room pathing is left to the engine.
+    effectiveOpts.costCallback = roadCostCallback;
   }
 
   pruneStuckState();
-  pruneRouteCache();
 
   // Already parked within range — the creep isn't travelling, so it isn't "stuck".
   if (sameRoom && this.pos.getRangeTo(tpos) <= range) {
