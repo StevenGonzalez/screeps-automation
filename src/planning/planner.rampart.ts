@@ -101,11 +101,15 @@ function protectedRects(
     // keep (upgraders work there constantly); enclose a 1-tile margin around it so
     // the upgrade tile is defended too.
     if (Math.max(dx, dy) <= 5) {
+      // Clamp the controller rect to the interior (1..48). A controller hugging the room
+      // edge would otherwise produce a protected rect touching an exit tile, which makes the
+      // min-cut graph connect the source straight to the sink and return a bogus (non-empty)
+      // cut — so the empty-result fallback to the bounding-box ring would never fire.
       rects.push({
-        x1: controller.pos.x - 1,
-        y1: controller.pos.y - 1,
-        x2: controller.pos.x + 1,
-        y2: controller.pos.y + 1,
+        x1: Math.max(1, controller.pos.x - 1),
+        y1: Math.max(1, controller.pos.y - 1),
+        x2: Math.min(48, controller.pos.x + 1),
+        y2: Math.min(48, controller.pos.y + 1),
       });
     }
   }

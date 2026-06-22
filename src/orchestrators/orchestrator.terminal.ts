@@ -148,6 +148,26 @@ function getMarketOrders(filter: (o: Order) => boolean): Order[] {
   return orderBookCache.filter(filter);
 }
 
+// Game.market.getHistory() is also a heavy call (≈14 days of daily records). The sell paths
+// query it per resource and per commodity, potentially every tick — the same CPU-drain class
+// as getAllOrders. Daily history barely changes, so cache the most-recent average per resource
+// in heap for a generous TTL.
+const historyAvgCache: Record<string, number | undefined> = {};
+let historyAvgCacheTick = -Infinity;
+const HISTORY_CACHE_TTL = 100;
+
+function getMarketHistoryAvg(resource: ResourceConstant): number | undefined {
+  if (Game.time - historyAvgCacheTick >= HISTORY_CACHE_TTL) {
+    for (const k in historyAvgCache) delete historyAvgCache[k];
+    historyAvgCacheTick = Game.time;
+  }
+  if (resource in historyAvgCache) return historyAvgCache[resource];
+  const history = Game.market.getHistory(resource);
+  const avg = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
+  historyAvgCache[resource] = avg;
+  return avg;
+}
+
 export function loop() {
   if (Game.time % NETWORK_CONFIG.PLAN_INTERVAL === 0) {
     planNetworkBalancing();
@@ -213,8 +233,15 @@ function processTerminal(room: Room): void {
   }
 
   // Vend factory commodities last, so a steady stream of commodity deals can't keep the
-  // terminal on cooldown and starve the lab/nuker buys above.
-  attemptCommoditySale(room, terminal);
+  // terminal on cooldown and starve the lab/nuker buys above. Throttled: the vend loop scans
+  // every managed commodity (filtering the order book per staged commodity), so running it
+  // every tick across many rooms is needless CPU — a commodity sitting in the terminal can
+  // wait a few ticks to be listed.
+  const lastCommoditySale = room.memory.lastCommoditySaleTick ?? 0;
+  if (Game.time - lastCommoditySale >= COMMODITY_SALE_INTERVAL) {
+    attemptCommoditySale(room, terminal);
+    room.memory.lastCommoditySaleTick = Game.time;
+  }
 
   // Energy market trading: sell true empire-wide surplus / buy when unusually cheap.
   // Throttled and gated so it never fights the inter-room balancer. A market deal cools
@@ -545,8 +572,7 @@ function sellResourceToMarket(
   availableAmount: number,
   maxTradeAmount: number
 ): boolean {
-  const history = Game.market.getHistory(resource);
-  const avgPrice = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
+  const avgPrice = getMarketHistoryAvg(resource);
   if (avgPrice === undefined) return false;
   // Floor = the higher of (a) the market-history fraction we already used and (b) our own
   // recent rolling average — so a transient crash in the order book can't make us dump
@@ -629,6 +655,7 @@ function recentAvgPrice(resource: ResourceConstant): number | undefined {
 
 const COMMODITY_SELL_MIN_LOT = 100;   // don't bother dealing dust
 const COMMODITY_MAX_TRADE = 5_000;    // cap per market deal
+const COMMODITY_SALE_INTERVAL = 20;   // ticks between commodity-vend passes (CPU pacing)
 
 // Vend factory commodities the factory has staged in the terminal (see orchestrator.factory
 // routing evicted product here). One deal per tick — a deal cools the terminal down. Called
@@ -857,8 +884,7 @@ function manageSellOrders(room: Room, terminal: StructureTerminal): void {
 // the market history average when no competing ask exists. undefined → no signal, skip.
 function fairSellPrice(resource: ResourceConstant): number | undefined {
   const floorAvg = recentAvgPrice(resource);
-  const history = Game.market.getHistory(resource);
-  const histAvg = history.length > 0 ? history[history.length - 1].avgPrice : undefined;
+  const histAvg = getMarketHistoryAvg(resource);
 
   // Best (lowest) competing sell order — we undercut it slightly to win the next sale.
   let bestAsk: number | undefined;

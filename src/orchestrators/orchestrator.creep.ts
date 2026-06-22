@@ -91,14 +91,23 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
 };
 
 export function loop() {
+  // Per-role CPU accounting is opt-in (Memory.profileRoles): the two extra Game.cpu.getUsed()
+  // calls per creep are pure instrumentation on the hottest loop in the bot, so off by default.
+  const profile = Memory.profileRoles === true;
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
+    // A still-spawning creep can't act this tick; running its role handler wastes CPU and, worse,
+    // lets seekBoost time out and delete a boost request before the creep is even born.
+    if (creep.spawning) continue;
     const handler = ROLE_HANDLERS[creep.memory.role];
     if (handler) {
-      // Per-role CPU accounting so the expensive role is visible (Game.arca CPU report).
-      const start = Game.cpu.getUsed();
-      handler(creep);
-      recordRole(creep.memory.role, Game.cpu.getUsed() - start);
+      if (profile) {
+        const start = Game.cpu.getUsed();
+        handler(creep);
+        recordRole(creep.memory.role, Game.cpu.getUsed() - start);
+      } else {
+        handler(creep);
+      }
     } else if (Game.time % 100 === 0) {
       // A creep whose role isn't in the map sits inert every tick, burning a population
       // slot. Surface it (throttled) instead of failing silently — usually a renamed or

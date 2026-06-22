@@ -193,6 +193,14 @@ export function runAllies(): void {
 // serialisation failure or segment-cap issue can't break the tick.
 function writeOutgoingSegment(requests: AllyRequest[]): void {
   try {
+    // Stay fully inert (don't consume a segment slot) when the feature is unused — no allies
+    // and nothing to broadcast.
+    if (requests.length === 0 && getAllies().length === 0) return;
+    // A segment must be in the ACTIVE set to be writable; without this the assignment below is
+    // silently dropped and allies never receive our requests. Activation takes effect next
+    // tick, so calling it every tick keeps segment 90 writable in steady state. (Max 10 active
+    // own segments — we use exactly 1.)
+    RawMemory.setActiveSegments([ALLIES_SEGMENT]);
     const payload: OutgoingSegment = {
       v: PROTOCOL_VERSION,
       time: Game.time,

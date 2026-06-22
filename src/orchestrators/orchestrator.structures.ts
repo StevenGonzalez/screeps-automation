@@ -46,10 +46,6 @@ const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
 // economy or roads for the scarce global site cap. 12 = after everything listed.
 const PERIMETER_PRIORITY = 12;
 
-// Pause perimeter expansion while any rampart is still below this, so the ring is paced
-// to repair capacity instead of churning build → decay → rebuild.
-const RAMPART_HEALTH_GATE = 1000;
-
 function buildPriority(key: string): number {
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY) return PERIMETER_PRIORITY;
   const type = structureTypeForKey(key);
@@ -208,23 +204,14 @@ function applyPlannedConstruction(room: Room) {
   );
 
   const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
-  // Pace perimeter expansion to repair capacity by gating on the weakest PERIMETER
-  // rampart only. Reducing over every rampart in the room (including freshly-placed
-  // on-top ramparts over spawns/storage, which start at ~1 hit) let a single new
-  // structure rampart force the cap to 0 and stall the perimeter from ever sealing.
-  const perimeterPosSet = new Set<string>(mem[perimeterKey] ?? []);
-  const builtRamparts = room.find(FIND_MY_STRUCTURES, {
-    filter: (s) => s.structureType === STRUCTURE_RAMPART,
-  }) as StructureRampart[];
-  const weakestPerimeterHits = builtRamparts.reduce(
-    (min, r) =>
-      perimeterPosSet.has(`${r.pos.x},${r.pos.y}`) ? Math.min(min, r.hits) : min,
-    Infinity
-  );
-  const perimeterCap =
-    weakestPerimeterHits < RAMPART_HEALTH_GATE
-      ? 0
-      : STRUCTURE_PLANNER.maxPerimeterConstructionSites;
+  // Pace the perimeter purely by the number of CONCURRENT construction sites, never by
+  // built-rampart HP. The previous HP gate (cap=0 while the weakest perimeter rampart was
+  // below 1000 hits) deadlocked: a rampart completes at 1 hit, so the first one built
+  // instantly pinned the cap to 0 — blocking the rest of the wall AND the replacement of any
+  // rampart that later decayed to nothing. Construction sites don't decay, and the repair
+  // system lifts freshly-built ramparts off 1 hit (findCriticalDefenseTarget prioritises
+  // anything below 1000), so a flat concurrent-site cap is the correct, stall-free pacing.
+  const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
   const rampartSites = sitesByType.get(STRUCTURE_RAMPART);
   let perimeterSiteCount = 0;
   if (rampartSites && mem[perimeterKey]) {

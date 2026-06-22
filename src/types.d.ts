@@ -266,6 +266,8 @@ declare global {
     lastMarketBuyTick?: number;
     // Throttle for nuker-reserve ghodium market buys (orchestrator.terminal.ts)
     lastGhodiumBuyTick?: number;
+    // Throttle for the factory-commodity vend pass (orchestrator.terminal.ts)
+    lastCommoditySaleTick?: number;
     // Inter-room resource transfer
     pendingSend?: PendingTerminalSend;
     // Observer + PowerSpawn
@@ -317,6 +319,8 @@ declare global {
     autoExpand?: boolean;
     // Empire-wide strategic posture, written by orchestrator.strategy each tick.
     empire?: EmpireMemory;
+    // When true, orchestrator.creep records per-role CPU (opt-in; off by default).
+    profileRoles?: boolean;
   }
 
   // ── Central strategy coordinator ────────────────────────────────────────────
