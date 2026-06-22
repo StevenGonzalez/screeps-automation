@@ -27,11 +27,24 @@ import { getThreatSeverity } from "../services/services.combat";
 // so we stop spending on expansion/offense and let the bucket refill.
 const BUCKET_RECOVER_THRESHOLD = 3000;
 
+// Hysteresis: once in RECOVER, stay there until the bucket climbs back above this higher
+// mark, so posture can't flap EXPAND↔RECOVER every few ticks around the entry threshold.
+const BUCKET_RECOVER_EXIT = 6000;
+
+// Posture moves slowly; recompute every few ticks rather than every tick to avoid an
+// every-tick owned-room scan and a Memory.empire rewrite (which dirties Memory — a per-tick
+// serialize cost) on a CPU-constrained account.
+const STRATEGY_INTERVAL = 5;
+
 // Two or more owned rooms under HIGH threat at once is an empire-wide emergency
 // (not a single-room defense), so the whole empire goes RECOVER.
 const MULTI_THREAT_RECOVER_COUNT = 2;
 
 export function loop() {
+  // Throttled: posture is slow-moving, so recompute it every STRATEGY_INTERVAL ticks. The
+  // bucket can't crater within a handful of ticks, so RECOVER still engages in time.
+  if (Game.time % STRATEGY_INTERVAL !== 0) return;
+
   const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
 
   // Per-room threat severity (computed once, reused below).
@@ -47,7 +60,10 @@ export function loop() {
   }
 
   const bucket = typeof Game.cpu.bucket === "number" ? Game.cpu.bucket : Number.POSITIVE_INFINITY;
-  const bucketCritical = bucket < BUCKET_RECOVER_THRESHOLD;
+  // Hysteresis: if we're already recovering, require the bucket to climb past the higher exit
+  // mark before leaving RECOVER — otherwise posture flaps around the 3000 entry line.
+  const wasRecovering = Memory.empire?.posture === "RECOVER";
+  const bucketCritical = bucket < (wasRecovering ? BUCKET_RECOVER_EXIT : BUCKET_RECOVER_THRESHOLD);
   const multiThreat = highThreatRooms.length >= MULTI_THREAT_RECOVER_COUNT;
 
   // WarCouncil sets this on a previous tick; we only READ it here.
