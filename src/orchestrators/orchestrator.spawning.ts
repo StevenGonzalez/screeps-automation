@@ -307,6 +307,15 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
     if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
   }
 
+  // Base maintenance and progress come BEFORE remote expansion and all situational roles:
+  // letting ramparts/containers decay (no repairer) or construction stall (no builder) in
+  // order to keep feeding remote income is backwards — a decaying base is an existential
+  // problem, remote energy is not. Repairer first (decay is relentless), then builder, then
+  // the upgrader that keeps the controller progressing / from downgrading.
+  if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
+  if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
+  if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
+
   // Expansion: conqueror and settlers are spawned by the home room only
   if (Memory.expansion?.homeRoom === room.name) {
     if (shouldSpawnConqueror() && spawnConqueror(room, spawn)) return;
@@ -326,9 +335,6 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
   if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
-  if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
-  if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
-  if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
 }
 
 const HAULER_SPAWN = {
