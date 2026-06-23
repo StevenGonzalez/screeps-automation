@@ -88,8 +88,32 @@ export function selectRoomAttackTarget(roomHostiles: Creep[], room?: Room): Cree
       best = prev;
     }
   }
+
+  // Drain defence: if even the best target out-heals our combined tower damage, firing
+  // makes zero progress and just feeds a drainer the energy it came for (10/shot/tower).
+  // Hold fire — but only when towers are the SOLE damage source and nothing is being
+  // breached. If we have fighters in the room their damage (not counted by isDamageable)
+  // could finish the kill, and a hostile WORK part means an active siege where suppressing
+  // fire still matters; in both cases keep shooting.
+  if (!isDamageable(best, hostiles, towers) && room && !shouldKeepFiring(room, hostiles)) {
+    delete room.memory.lastTowerTargetId;
+    return null;
+  }
+
   if (room) room.memory.lastTowerTargetId = best.id;
   return best;
+}
+
+// When no hostile is killable by towers alone, we normally hold fire (see drain defence
+// above). Override and keep firing if either: we have combat creeps in the room whose
+// damage could tip a kill, or any hostile is dismantling structures (a WORK part) — a real
+// siege rather than a lone kiter, where suppressing fire is still worthwhile.
+function shouldKeepFiring(room: Room, hostiles: Creep[]): boolean {
+  const haveFighters = room
+    .find(FIND_MY_CREEPS)
+    .some((c) => c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK));
+  if (haveFighters) return true;
+  return hostiles.some((c) => c.body.some((p) => p.type === WORK && p.hits > 0));
 }
 
 // Lower score = higher priority. Ordering, most significant first:

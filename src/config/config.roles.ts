@@ -14,6 +14,7 @@ export const ROLE_KNIGHT = "knight";
 export const ROLE_WIZARD = "wizard";
 export const ROLE_CLERIC = "cleric";
 export const ROLE_SIEGER = "sapper";
+export const ROLE_DRAINER = "leech";
 export const ROLE_CONQUEROR = "conqueror";
 export const ROLE_SETTLER = "settler";
 export const ROLE_APOTHECARY = "apothecary";

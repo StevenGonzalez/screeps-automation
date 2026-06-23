@@ -81,6 +81,8 @@ declare global {
     requiredWizards: number;
     requiredClerics: number;
     requiredSiegers: number;
+    // Solo tower-drainers ("leech") that bait the target's towers ahead of the siege.
+    requiredDrainers?: number;
     clearedSince?: number;
     // Set while the squad is split across rooms; drives the regroup watchdog.
     regroupSince?: number;
@@ -171,6 +173,7 @@ declare global {
     requiredWizards: number;
     requiredClerics: number;
     requiredSiegers: number;
+    requiredDrainers?: number;
     queuedAt: number;
   }
 
@@ -217,6 +220,8 @@ declare global {
     boosted?: boolean;
     // Military offense
     offensiveTarget?: string;
+    // Tower-drainer ("leech") hysteresis: true while it's fled out of tower range to heal.
+    drainRetreat?: boolean;
     // Military defense (auto threat response): the owned room this creep defends
     defensiveTarget?: string;
     // Power bank ops

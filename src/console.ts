@@ -23,6 +23,7 @@ import {
   ROLE_WIZARD,
   ROLE_CLERIC,
   ROLE_SIEGER,
+  ROLE_DRAINER,
   ROLE_POWER_ATTACKER,
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
@@ -305,7 +306,7 @@ export function setupConsole() {
       roomName: string,
       formation: SquadFormation = "box",
       tactic: SquadTactic = "assault",
-      composition?: { knights?: number; wizards?: number; clerics?: number; siegers?: number },
+      composition?: { knights?: number; wizards?: number; clerics?: number; siegers?: number; drainers?: number },
       homeRoomName?: string
     ) => {
       if (!roomName) {
@@ -357,6 +358,7 @@ export function setupConsole() {
         wizards: composition?.wizards ?? rec.wizards,
         clerics: composition?.clerics ?? rec.clerics,
         siegers: composition?.siegers ?? rec.siegers,
+        drainers: composition?.drainers ?? rec.drainers,
       };
 
       const err = launchOp(roomName, formation, tactic, comp, homeRoom.name);
@@ -372,7 +374,7 @@ export function setupConsole() {
       }
       console.log(
         `[Military] Op launched: ${homeRoom.name} → ${roomName}  ${formation}/${tactic}  ` +
-        `squad=${comp.knights}K/${comp.wizards}W/${comp.clerics}C/${comp.siegers}S`
+        `squad=${comp.knights}K/${comp.wizards}W/${comp.clerics}C/${comp.siegers}S/${comp.drainers}L`
       );
       console.log(`[Military] Spawning squad... track with Game.arca.squads()`);
     },
@@ -444,7 +446,7 @@ export function setupConsole() {
         );
         console.log(
           `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ` +
-          `${op.requiredClerics}C / ${op.requiredSiegers ?? 0}S`
+          `${op.requiredClerics}C / ${op.requiredSiegers ?? 0}S / ${op.requiredDrainers ?? 0}L`
         );
 
         const members = Object.values(Game.creeps).filter(
@@ -460,6 +462,7 @@ export function setupConsole() {
           [ROLE_WIZARD]: 0,
           [ROLE_CLERIC]: 0,
           [ROLE_SIEGER]: 0,
+          [ROLE_DRAINER]: 0,
         } as Record<string, number>;
         let hpSum = 0;
         for (const c of members) {
@@ -470,7 +473,7 @@ export function setupConsole() {
         const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
         console.log(
           `  Composition: ${counts[ROLE_KNIGHT]}K/${counts[ROLE_WIZARD]}W/` +
-          `${counts[ROLE_CLERIC]}C/${counts[ROLE_SIEGER]}S  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
+          `${counts[ROLE_CLERIC]}C/${counts[ROLE_SIEGER]}S/${counts[ROLE_DRAINER]}L  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
         );
 
         for (const c of members) {
@@ -486,7 +489,7 @@ export function setupConsole() {
         queue.forEach((q, i) => {
           console.log(
             `  ${i + 1}. ${q.targetRoom}${q.homeRoom ? ` (prefer ${q.homeRoom})` : ""}  ${q.formation}/${q.tactic}  ` +
-            `${q.requiredKnights}K/${q.requiredWizards}W/${q.requiredClerics}C/${q.requiredSiegers}S`
+            `${q.requiredKnights}K/${q.requiredWizards}W/${q.requiredClerics}C/${q.requiredSiegers}S/${q.requiredDrainers ?? 0}L`
           );
         });
       }

@@ -15,6 +15,7 @@ import {
   ROLE_WIZARD,
   ROLE_CLERIC,
   ROLE_SIEGER,
+  ROLE_DRAINER,
   ROLE_CONQUEROR,
   ROLE_SETTLER,
   ROLE_APOTHECARY,
@@ -43,6 +44,7 @@ import { runKnight } from "../roles/role.knight";
 import { runWizard } from "../roles/role.wizard";
 import { runCleric } from "../roles/role.cleric";
 import { runSieger } from "../roles/role.sieger";
+import { runDrainer } from "../roles/role.drainer";
 import { runConqueror } from "../roles/role.conqueror";
 import { runSettler } from "../roles/role.settler";
 import { runApothecary } from "../roles/role.apothecary";
@@ -77,6 +79,7 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_WIZARD]: runWizard,
   [ROLE_CLERIC]: runCleric,
   [ROLE_SIEGER]: runSieger,
+  [ROLE_DRAINER]: runDrainer,
   [ROLE_CONQUEROR]: runConqueror,
   [ROLE_SETTLER]: runSettler,
   [ROLE_APOTHECARY]: runApothecary,
