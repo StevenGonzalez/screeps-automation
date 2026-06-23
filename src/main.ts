@@ -29,7 +29,7 @@ const CPU_WARN_THRESHOLD = 0.85;
 // Structures planning runs heavy pathfinding; visuals are cosmetic.
 // Using fractions of cpu.limit keeps thresholds portable across account tiers.
 const CPU_SKIP_STRUCTURES_THRESHOLD = 0.70; // skip structure planner above 70% of limit
-const CPU_SKIP_VISUALS_THRESHOLD = 0.60;    // skip visuals above 60% of limit
+const CPU_SKIP_VISUALS_THRESHOLD = 0.75;    // skip visuals above 75% of limit
 // Heavy, non-time-critical systems (factory/labs/nuker/observer/pixels). They already
 // tolerate being skipped occasionally — labs/factory re-evaluate next tick, the nuker
 // loads over many ticks, the observer scans on a rotating queue, pixels only mint at a
