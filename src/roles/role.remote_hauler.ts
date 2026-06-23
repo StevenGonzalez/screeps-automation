@@ -16,11 +16,31 @@ import {
 } from "../services/services.creep";
 import { getThreatInfo, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 
+// Ticks a peddler waits at home after taking damage in a foreign room before re-probing the
+// remote — see role.remote_miner.ts for the rationale (breaks the heal→re-enter tower drain).
+const REMOTE_DAMAGE_BACKOFF = 300;
+
 export function runRemoteHauler(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
 
   if (!targetRoom || !homeRoom) {
     creep.suicide();
+    return;
+  }
+
+  // Damage-triggered retreat. The per-remote hostile flag below only catches threats we can see
+  // standing IN our target room; a creep camping the border of a transit room is invisible to it,
+  // so without this we'd heal-and-re-enter forever, draining tower energy. Deliver any load on the
+  // way home, then wait out the cooldown — regardless of where the attacker sits.
+  const tookDamage = creep.memory._hp !== undefined && creep.hits < creep.memory._hp;
+  creep.memory._hp = creep.hits;
+  if (tookDamage && creep.room.name !== homeRoom) {
+    creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF;
+    flagRemotePlayer(creep); // abandon the remote too, so the spawner stops feeding haulers in
+  }
+  if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
+    if (creep.store[RESOURCE_ENERGY] > 0) depositEnergy(creep, homeRoom);
+    else if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
     return;
   }
 

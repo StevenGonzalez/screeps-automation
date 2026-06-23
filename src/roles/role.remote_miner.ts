@@ -16,11 +16,31 @@ import {
   clearRemoteInvader,
 } from "../services/services.creep";
 
+// Ticks an outrider waits at home after taking damage in a foreign room before re-probing the
+// remote. Long enough that a persistent border camper costs ~one hit per window instead of a
+// continuous tower-energy drain, short enough to resume promptly once the camper leaves.
+const REMOTE_DAMAGE_BACKOFF = 300;
+
 export function runRemoteMiner(creep: Creep) {
   const { targetRoom, homeRoom, remoteSourceId } = creep.memory;
 
   if (!targetRoom || !homeRoom || !remoteSourceId) {
     creep.suicide();
+    return;
+  }
+
+  // Damage-triggered retreat. The per-remote hostile flag below only catches threats we can see
+  // standing IN our target room; a creep camping the border of a transit room is invisible to it,
+  // so without this we'd heal-and-re-enter forever, draining tower energy. Any HP lost while away
+  // from home parks us home for a cooldown regardless of where the attacker sits.
+  const tookDamage = creep.memory._hp !== undefined && creep.hits < creep.memory._hp;
+  creep.memory._hp = creep.hits;
+  if (tookDamage && creep.room.name !== homeRoom) {
+    creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF;
+    flagRemotePlayer(creep); // abandon the remote too, so the spawner stops feeding miners in
+  }
+  if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
+    if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
     return;
   }
 

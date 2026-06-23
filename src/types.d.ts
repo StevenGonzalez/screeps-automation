@@ -220,6 +220,10 @@ declare global {
     homeRoom?: string;
     targetRoom?: string;
     remoteSourceId?: Id<Source>;
+    // Damage-triggered retreat: hp last tick + a back-off timer that breaks the
+    // heal→re-enter ping-pong against a border camper the per-remote flag can't see.
+    _hp?: number;
+    remoteBackoffUntil?: number;
     // Per-creep target caches to avoid repeated findClosestByPath
     fillTargetId?: string;
     constructionSiteId?: Id<ConstructionSite>;
