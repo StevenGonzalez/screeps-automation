@@ -9,6 +9,9 @@ import {
   recommendComposition,
   setFormation,
   setTactic,
+  launchDrain,
+  stopDrain,
+  getDrainOps,
 } from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity } from "./services/services.combat";
 import { getCpuStats } from "./services/services.profiler";
@@ -387,6 +390,59 @@ export function setupConsole() {
       }
       if (dequeueOp(roomName)) console.log(`[Military] Removed ${roomName} from the offensive queue`);
       else console.log(`[Military] ${roomName} was not in the offensive queue`);
+    },
+
+    // Start a STANDALONE tower-drain: send leeches to bleed a room's tower energy ahead of
+    // (and decoupled from) any assault. Persistent — it runs until you stopDrain it. Only
+    // effective against opponents whose towers fire at un-killable targets; a disciplined
+    // defender holds fire and it achieves nothing.
+    //   Game.arca.drain('W2N1')              → 1 leech, closest capable home
+    //   Game.arca.drain('W2N1', 2)           → 2 leeches
+    //   Game.arca.drain('W2N1', 2, 'W1N1')   → force funding home
+    drain: (roomName: string, count = 1, homeRoomName?: string) => {
+      if (!roomName) {
+        console.log("[Drain] Usage: Game.arca.drain('W2N1', 1)");
+        return;
+      }
+      const err = launchDrain(roomName, homeRoomName, count);
+      if (err) {
+        console.log(`[Drain] Cannot start — ${err}`);
+        return;
+      }
+      const op = getDrainOps().find((o) => o.targetRoom === roomName);
+      console.log(
+        `[Drain] Draining ${roomName} with ${op?.drainers ?? count} leech(es) from ${op?.homeRoom}. ` +
+        `Stop with Game.arca.stopDrain('${roomName}')`
+      );
+    },
+
+    // Stop a standalone drain; its leeches stand down and return home.
+    stopDrain: (roomName: string) => {
+      if (!roomName) {
+        console.log("[Drain] Usage: Game.arca.stopDrain('W2N1')");
+        return;
+      }
+      if (stopDrain(roomName)) console.log(`[Drain] Stopped draining ${roomName}`);
+      else console.log(`[Drain] No active drain on ${roomName}`);
+    },
+
+    // List active standalone drains.
+    drains: () => {
+      const ops = getDrainOps();
+      if (ops.length === 0) {
+        console.log("[Drain] No active drains");
+        return;
+      }
+      console.log(`[Drain] Active drains (${ops.length}):`);
+      for (const op of ops) {
+        const live = Object.values(Game.creeps).filter(
+          (c) => c.memory.role === ROLE_DRAINER && c.memory.offensiveTarget === op.targetRoom
+        ).length;
+        const age = Game.time - op.startedAt;
+        console.log(
+          `  ${op.targetRoom} ← ${op.homeRoom}  leeches=${live}/${op.drainers}  age=${age}t`
+        );
+      }
     },
 
     // Change formation mid-battle: line | box | wedge | scatter. Applies to all active

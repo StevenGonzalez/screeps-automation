@@ -101,6 +101,7 @@ const defensiveRampartCache: Record<string, StructureRampart[]> = {};
 export function loop(): void {
   runWarCouncil();
   runDefenseCouncil();
+  cleanupDrainOps();
 
   migrateMilitaryOps();
 
@@ -573,6 +574,89 @@ export function cancelOp(homeRoom?: string): number {
     count++;
   }
   return count;
+}
+
+// ── Standalone tower-drain ops ────────────────────────────────────────────────────
+//
+// A drain op is a lightweight, persistent operation that keeps N leeches baiting a target
+// room's towers to bleed their energy — decoupled from any siege so you can pre-soften a
+// naive opponent (one whose towers fire at un-killable targets) well ahead of an assault.
+// Against a disciplined defender that holds tower fire it simply achieves nothing, so it's
+// a manual tool (Game.arca.drain), never auto-launched.
+
+const DRAIN_DEFAULT_COUNT = 1;
+const DRAIN_MAX_COUNT = 4;
+
+// The drain op a standalone leech belongs to (by its target room). Returns undefined once
+// the op is stopped, which is the signal for the leech to stand down and go home.
+export function getDrainOp(targetRoom: string): DrainOp | undefined {
+  return Memory.drainOps?.[targetRoom];
+}
+
+// All drain ops funded by a given home room — used by the spawner to top up their leeches.
+export function getDrainOpsForHome(homeRoom: string): DrainOp[] {
+  const ops = Memory.drainOps;
+  if (!ops) return [];
+  return Object.values(ops).filter((o) => o.homeRoom === homeRoom);
+}
+
+// Start (or re-scale) a standalone drain against targetRoom. Picks the closest capable
+// owned room as home unless one is given. Returns an error string, or null on success.
+export function launchDrain(targetRoom: string, homeRoom?: string, count = DRAIN_DEFAULT_COUNT): string | null {
+  if (Game.rooms[targetRoom]?.controller?.my) return `${targetRoom} is your own room`;
+  const drainers = Math.max(1, Math.min(DRAIN_MAX_COUNT, Math.floor(count)));
+
+  let home = homeRoom;
+  if (home) {
+    const r = Game.rooms[home];
+    if (!r?.controller?.my) return `${home} is not a room you own`;
+  } else {
+    let best: Room | undefined;
+    let bestDist = Infinity;
+    for (const rn in Game.rooms) {
+      const room = Game.rooms[rn];
+      if (!isCapableOffensiveHome(room)) continue;
+      const d = Game.map.getRoomLinearDistance(rn, targetRoom);
+      if (d < bestDist) { bestDist = d; best = room; }
+    }
+    home = best?.name;
+  }
+  if (!home) return "no capable home room to fund a drain";
+
+  if (!Memory.drainOps) Memory.drainOps = {};
+  Memory.drainOps[targetRoom] = {
+    targetRoom,
+    homeRoom: home,
+    startedAt: Game.time,
+    drainers,
+  };
+  return null;
+}
+
+// Stop a standalone drain. Its leeches lose their op next tick and head home. Returns true
+// if an op was removed.
+export function stopDrain(targetRoom: string): boolean {
+  if (!Memory.drainOps?.[targetRoom]) return false;
+  delete Memory.drainOps[targetRoom];
+  return true;
+}
+
+export function getDrainOps(): DrainOp[] {
+  return Memory.drainOps ? Object.values(Memory.drainOps) : [];
+}
+
+// Tear down drain ops whose home room is no longer ours (it can't fund leeches) or whose
+// target we've since captured. Called once per tick from the military loop.
+function cleanupDrainOps(): void {
+  const ops = Memory.drainOps;
+  if (!ops) return;
+  for (const targetRoom of Object.keys(ops)) {
+    const op = ops[targetRoom];
+    const home = Game.rooms[op.homeRoom];
+    if (!home?.controller?.my || Game.rooms[targetRoom]?.controller?.my) {
+      delete ops[targetRoom];
+    }
+  }
 }
 
 // Builds a default squad composition scaled to the target's known defenses.
@@ -2137,14 +2221,13 @@ const DRAIN_RESUME_HP = 0.95;    // resume baiting only after healing back to th
 const DRAIN_BAIT_RANGE = 18;     // stand-off from the nearest tower: inside max range (20,
                                  // so it keeps drawing fire) but at minimum-damage falloff.
 
-export function runOffensiveDrainer(creep: Creep, op: MilitaryOp): void {
+// Shared drain behavior: travel to the target, hold at the far edge of tower range to bleed
+// the towers' energy (self-healing the falloff-damage trickle), and kite over the nearest
+// border to recover when worn down. Used by both the siege-attached leech (runOffensive
+// Drainer) and the standalone drain op (runStandaloneDrainer).
+function drainTarget(creep: Creep, targetRoom: string): void {
   // Self-heal whenever hurt — free alongside movement, and the entire point of the body.
   if (creep.hits < creep.hitsMax) creep.heal(creep);
-
-  if (op.phase === "retreating" || op.tactic === "retreat") {
-    retreatToHome(creep, op.homeRoom);
-    return;
-  }
 
   const hpPct = creep.hits / creep.hitsMax;
   // Hysteresis so it doesn't flap on the threshold: once low, commit to a full
@@ -2153,11 +2236,11 @@ export function runOffensiveDrainer(creep: Creep, op: MilitaryOp): void {
   else if (hpPct >= DRAIN_RESUME_HP) creep.memory.drainRetreat = false;
   const recovering = creep.memory.drainRetreat === true;
 
-  if (creep.room.name !== op.targetRoom) {
+  if (creep.room.name !== targetRoom) {
     // Outside the target (in transit, or recovering just over the border). Only push back
     // in once healthy; while recovering, hold in the safe room and let the heal top off.
     if (recovering && hpPct < DRAIN_RESUME_HP) return;
-    creep.moveTo(new RoomPosition(25, 25, op.targetRoom), { reusePath: 20 });
+    creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 20 });
     return;
   }
 
@@ -2177,8 +2260,8 @@ export function runOffensiveDrainer(creep: Creep, op: MilitaryOp): void {
   }) as StructureTower[];
   const tower = creep.pos.findClosestByRange(towers);
   if (!tower) {
-    // No loaded towers left — drain done. Idle near the border, clear of the squad's lane,
-    // until the op advances (siegers commit) or ends.
+    // No loaded towers left — drain done for now. Idle near the border, clear of the squad's
+    // lane, until the towers refill (and it baits again) or the op ends.
     const exit = creep.pos.findClosestByRange(FIND_EXIT);
     if (exit && creep.pos.getRangeTo(exit) > 3) creep.moveTo(exit, { range: 3, reusePath: 10 });
     return;
@@ -2192,6 +2275,23 @@ export function runOffensiveDrainer(creep: Creep, op: MilitaryOp): void {
     // toward safety so we take falloff damage, not point-blank fire.
     fleeFrom(creep, tower.pos);
   }
+}
+
+// Siege-attached leech: drains ahead of the squad, but obeys the op's retreat phase so it
+// pulls home with the rest when the assault is aborted.
+export function runOffensiveDrainer(creep: Creep, op: MilitaryOp): void {
+  if (op.phase === "retreating" || op.tactic === "retreat") {
+    if (creep.hits < creep.hitsMax) creep.heal(creep);
+    retreatToHome(creep, op.homeRoom);
+    return;
+  }
+  drainTarget(creep, op.targetRoom);
+}
+
+// Standalone drain op (Memory.drainOps): no squad, no retreat phase — bleeds the target's
+// towers persistently until the op is stopped (then role.drainer sends the leech home).
+export function runStandaloneDrainer(creep: Creep, op: DrainOp): void {
+  drainTarget(creep, op.targetRoom);
 }
 
 function parkNearHomeSpawn(creep: Creep, homeRoomName: string): void {

@@ -104,6 +104,17 @@ declare global {
     requiredClerics: number;
   }
 
+  // A standalone, persistent tower-drain op against one target room. Unlike an offensive
+  // op it has no squad and no kill objective: it just keeps `drainers` leeches baiting the
+  // target's towers to bleed their energy, decoupled from (and usually well ahead of) any
+  // assault. Runs until manually stopped (Game.arca.stopDrain) or the home room is lost.
+  interface DrainOp {
+    targetRoom: string;
+    homeRoom: string;     // owned room funding the leeches
+    startedAt: number;
+    drainers: number;     // number of live leeches to maintain on the target
+  }
+
   // Intelligence gathered on a non-owned room, used by the WarCouncil to rank targets.
   interface RoomIntelData {
     roomName: string;
@@ -308,6 +319,10 @@ declare global {
     militaryQueue?: QueuedMilitaryOp[];
     // Automatic threat-driven defensive ops, keyed by the owned room under threat.
     defenseOps?: Record<string, DefenseOp>;
+    // Standalone tower-drain ops, keyed by target room. Persistent: leeches bleed the
+    // target's tower energy independent of any siege, until manually stopped. Used to
+    // pre-soften a naive (towers-fire-at-everything) opponent well ahead of an assault.
+    drainOps?: Record<string, DrainOp>;
     warCouncil?: WarCouncilMemory;
     intel?: Record<string, RoomIntelData>;
     powerOps?: PowerBankOp[];

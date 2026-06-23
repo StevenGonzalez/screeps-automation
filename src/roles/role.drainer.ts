@@ -1,5 +1,10 @@
 import { seekBoost } from "../services/services.combat";
-import { getOffensiveOp, runOffensiveDrainer } from "../orchestrators/orchestrator.military";
+import {
+  getOffensiveOp,
+  runOffensiveDrainer,
+  getDrainOp,
+  runStandaloneDrainer,
+} from "../orchestrators/orchestrator.military";
 
 /**
  * Drainer (leech): a solo tower-baiter that deploys ahead of a siege. It slips into the
@@ -13,12 +18,19 @@ export function runDrainer(creep: Creep) {
   if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
+    // Siege-attached leech (part of a militaryOp) takes precedence; otherwise it may belong
+    // to a standalone drain op against the same target room.
     const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);
     if (op) {
       runOffensiveDrainer(creep, op);
       return;
     }
-    delete creep.memory.offensiveTarget; // stale from a completed/cancelled op
+    const drain = getDrainOp(creep.memory.offensiveTarget);
+    if (drain) {
+      runStandaloneDrainer(creep, drain);
+      return;
+    }
+    delete creep.memory.offensiveTarget; // stale from a completed/cancelled/stopped op
   }
 
   // Unassigned drainers gather at the spawn until the next operation claims them.

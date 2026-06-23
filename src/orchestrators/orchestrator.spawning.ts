@@ -29,7 +29,7 @@ import {
   ROLE_SK_HAULER,
 } from "../config/config.roles";
 import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
-import { getDefenseOp, getDefenders } from "./orchestrator.military";
+import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
 import { getSkMembers, isOpPaused } from "./orchestrator.sourcekeeper";
 import { getStockForCompound } from "../services/services.labs";
 import { getRampartTargetHP } from "../services/services.creep";
@@ -324,6 +324,9 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   }
 
   if (shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
+  // Standalone tower-drain leeches (manual Game.arca.drain) — optional offensive harassment,
+  // funded only after economy/defense/expansion/siege above are satisfied.
+  if (shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
   if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
   if (shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;
   if (spawnSkCreeps(room, spawn)) return;
@@ -1338,6 +1341,55 @@ function shouldSpawnOffensiveCreep(room: Room): boolean {
     members.filter((c) => c.memory.role === ROLE_SIEGER).length < (op.requiredSiegers ?? 0) ||
     members.filter((c) => c.memory.role === ROLE_DRAINER).length < (op.requiredDrainers ?? 0)
   );
+}
+
+// ── Standalone drain leeches ──────────────────────────────────────────────────
+//
+// Persistent tower-drainers funded by this room (Game.arca.drain). Counted across BOTH
+// drain-op and siege leeches on the same target so a siege already baiting a room doesn't
+// get doubled up. Lowest spawn priority: it must never starve economy or real defense.
+
+function countDrainLeeches(targetRoom: string, homeRoom: string): number {
+  return Object.values(Game.creeps).filter(
+    (c) =>
+      c.memory.role === ROLE_DRAINER &&
+      c.memory.offensiveTarget === targetRoom &&
+      c.memory.homeRoom === homeRoom
+  ).length;
+}
+
+function firstUnderStrengthDrain(room: Room): DrainOp | null {
+  for (const op of getDrainOpsForHome(room.name)) {
+    if (countDrainLeeches(op.targetRoom, op.homeRoom) < op.drainers) return op;
+  }
+  return null;
+}
+
+function shouldSpawnDrainLeech(room: Room): boolean {
+  return firstUnderStrengthDrain(room) !== null;
+}
+
+function spawnDrainLeech(room: Room, spawn: StructureSpawn): boolean {
+  const op = firstUnderStrengthDrain(room);
+  if (!op) return false;
+
+  const body = buildDrainerBody(room.energyCapacityAvailable);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+
+  const healParts = body.filter((p) => p === HEAL).length;
+  const toughParts = body.filter((p) => p === TOUGH).length;
+  const queue = buildBoostQueue(room, "drainer", healParts, toughParts);
+
+  const res = spawn.spawnCreep(body, `${ROLE_DRAINER}_drain${Game.time}`, {
+    memory: {
+      role: ROLE_DRAINER,
+      homeRoom: room.name,
+      offensiveTarget: op.targetRoom,
+      ...boostMemory(queue),
+    },
+  });
+  if (res === OK) console.log(`[Drain] Spawning leech: ${room.name} → ${op.targetRoom}`);
+  return res === OK;
 }
 
 function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
