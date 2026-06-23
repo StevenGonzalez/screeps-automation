@@ -98,6 +98,9 @@ function returnHome(creep: Creep, homeRoomName: string): void {
     if (spawn) {
       if (!creep.pos.isNearTo(spawn) || creep.room.name !== homeRoomName) {
         creep.moveTo(spawn, { reusePath: 50 });
+      } else {
+        // At spawn with no work — suicide to free the spawn slot
+        creep.suicide();
       }
       return;
     }
