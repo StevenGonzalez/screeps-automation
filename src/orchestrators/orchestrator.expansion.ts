@@ -79,6 +79,13 @@ const W_ENEMY_PENALTY = 20;            // per room inside the danger radius, sca
 const ENEMY_DANGER_RADIUS = 4;         // rooms; enemies further than this don't penalise
 const STRONG_ENEMY_MILITARY = 8;       // PlayerIntelData.militaryStrength ≥ this ⇒ "strong"
 
+// When we still have GCL headroom (room to control another room), don't fully cede the
+// open border rooms a strong neighbour is expanding into — contest them instead of
+// recoiling. The proximity penalty (the SOFT "nearby enemy" signal, not the hard
+// owned/reserved rejection in intelIsHostile) is scaled down so good unclaimed rooms can
+// still win. At/over the GCL cap there's nothing to claim anyway, so the full penalty stands.
+const ENEMY_PENALTY_SCALE_WITH_GCL_HEADROOM = 0.4;
+
 // Swamp ratio (optional, only when terrain is cheaply available): very swampy rooms have
 // expensive hauling and slow building. Penalty scales with how far past "tolerable" the
 // swamp fraction is. Skipped entirely when computing terrain would be too costly.
@@ -185,9 +192,12 @@ export function rankExpansionCandidates(): ExpansionCandidate[] {
   }
 
   // ── Score every gathered candidate with the weighted model. ─────────────────────
+  // Compute the enemy-proximity scale once: with GCL headroom we lean in to contest
+  // border rooms; at the cap we keep the full penalty.
+  const enemyPenaltyScale = expansionEnemyPenaltyScale();
   const candidates: ExpansionCandidate[] = [];
   for (const [roomName, info] of byRoom) {
-    const scored = scoreCandidate(roomName, info.home, info.dist, info.sourceCount, ownedMinerals, terrainBudget);
+    const scored = scoreCandidate(roomName, info.home, info.dist, info.sourceCount, ownedMinerals, terrainBudget, enemyPenaltyScale);
     if (scored) candidates.push(scored);
   }
 
@@ -204,7 +214,8 @@ function scoreCandidate(
   dist: number,
   sourceCount: number,
   ownedMinerals: Set<MineralConstant>,
-  terrainBudget: { remaining: number }
+  terrainBudget: { remaining: number },
+  enemyPenaltyScale: number
 ): ExpansionCandidate | undefined {
   // ── Sources (dominant). 0 sources is a non-starter for a colony. ────────────────
   if (sourceCount <= 0) return undefined;
@@ -232,8 +243,9 @@ function scoreCandidate(
   const remotes = countFreeRemoteNeighbours(roomName);
   score += remotes * W_REMOTE;
 
-  // ── Enemy proximity: penalise nearness to strong enemy centroids. ───────────────
-  score -= enemyProximityPenalty(roomName);
+  // ── Enemy proximity: penalise nearness to strong enemy centroids (scaled down when
+  // we have GCL headroom so we contest, rather than cede, a neighbour's border rooms). ─
+  score -= enemyProximityPenalty(roomName) * enemyPenaltyScale;
 
   // ── Swamp ratio (optional/cheap): only when terrain budget remains. ─────────────
   if (terrainBudget.remaining > 0) {
@@ -335,6 +347,19 @@ function enemyProximityPenalty(roomName: string): number {
     }
   }
   return penalty;
+}
+
+// Scale factor applied to enemyProximityPenalty. With spare GCL (we can still control
+// another room) we lean IN to contest the open border rooms a neighbour is expanding
+// into, instead of recoiling from the whole neighbourhood and letting them box us in.
+// At/over the GCL cap there's nothing to claim, so the full penalty stands.
+function expansionEnemyPenaltyScale(): number {
+  let owned = 0;
+  for (const rn in Game.rooms) {
+    if (Game.rooms[rn].controller?.my) owned++;
+  }
+  const spareGcl = Game.gcl.level - owned;
+  return spareGcl >= 1 ? ENEMY_PENALTY_SCALE_WITH_GCL_HEADROOM : 1;
 }
 
 // Fraction of a room's tiles that are swamp, when terrain is cheaply available. Returns
