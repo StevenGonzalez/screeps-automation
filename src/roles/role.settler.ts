@@ -1,4 +1,5 @@
 import { getThreatInfo } from "../services/services.combat";
+import { pickSignature } from "../config/signatures";
 
 // Settler: seeds a freshly claimed child room. Its job, in priority order:
 //   1. Survive — retreat to the home room if the child is invaded (a dead settler
@@ -88,6 +89,27 @@ export function runSettler(creep: Creep) {
   // 5. Nothing urgent — upgrade controller to keep the room from decaying.
   const ctrl = creep.room.controller;
   if (ctrl) {
+    // On the first tick we find the room self-sufficient / settled, sign once.
+    // lastSigned is stamped on success (here or by the conqueror on claim), so
+    // once the room carries a mark we never re-sign — without this guard the
+    // block fires every tick of the whole bootstrapping phase.
+    const exp = Memory.expansion;
+    const shouldSign =
+      exp &&
+      exp.roomName === creep.room.name &&
+      exp.phase === "bootstrapping" &&
+      creep.room.memory.lastSigned === undefined;
+    if (shouldSign) {
+      try {
+        const sig = pickSignature(creep.room.name);
+        const sres = creep.signController(ctrl, sig);
+        if (sres === OK) {
+          if (!Memory.rooms) Memory.rooms = {} as any;
+          if (!Memory.rooms[creep.room.name]) Memory.rooms[creep.room.name] = {} as any;
+          Memory.rooms[creep.room.name].lastSigned = Game.time;
+        }
+      } catch (e) {}
+    }
     if (creep.upgradeController(ctrl) === ERR_NOT_IN_RANGE) {
       creep.moveTo(ctrl, { reusePath: 20 });
     }

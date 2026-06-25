@@ -1,4 +1,5 @@
 import { getThreatInfo } from "../services/services.combat";
+import { pickSignature } from "../config/signatures";
 
 // Conqueror: travels to the expansion target and claims its controller, flipping
 // Memory.expansion to "bootstrapping" on success. Aborts cleanly if the target
@@ -71,5 +72,17 @@ export function runConqueror(creep: Creep) {
       Memory.expansion.phase = "bootstrapping";
     }
     console.log(`[Expansion] Claimed ${targetRoom}!`);
+    // Sign the controller with the next on-theme signature and record it.
+    try {
+      const sig = pickSignature(creep.room.name);
+      const sres = creep.signController(controller, sig);
+      if (sres === OK) {
+        if (!Memory.rooms) Memory.rooms = {} as any;
+        if (!Memory.rooms[creep.room.name]) Memory.rooms[creep.room.name] = {} as any;
+        Memory.rooms[creep.room.name].lastSigned = Game.time;
+      }
+    } catch (e) {
+      // Signing is best-effort; avoid throwing in-role logic.
+    }
   }
 }

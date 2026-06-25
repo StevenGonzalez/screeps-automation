@@ -3,7 +3,7 @@ import {
   ROLE_HAULER,
   ROLE_MINER,
 } from "../config/config.roles";
-import { baseTownName } from "./services.structures";
+import { pickSignature } from "../config/signatures";
 
 let assignmentCacheTick = -1;
 const assignedContainerIdsByRoomAndRole: Record<string, Set<string>> = {};
@@ -896,20 +896,8 @@ export function signControllerIfNeeded(
   const lastSigned = creep.room.memory.lastSigned;
   if (lastSigned !== undefined && Game.time - lastSigned < SIGN_RECHECK_INTERVAL) return false;
 
-  // Sign in ARCA's name, naming the stronghold by its MU town name (the same
-  // name its spawns carry). The town name is stable for the room's life, so cache
-  // it on memory; fall back to the seat of power before a spawn exists.
-  let townName = creep.room.memory.townName;
-  if (!townName) {
-    const firstSpawn = creep.room.find(FIND_MY_SPAWNS)[0];
-    if (firstSpawn) {
-      townName = baseTownName(firstSpawn.name);
-      creep.room.memory.townName = townName;
-    } else {
-      townName = "Lorencia";
-    }
-  }
-  const desiredSignature = `Held by decree of ARCA — the stronghold of ${townName}`;
+  // Use the rotating, on-theme signature list (no em-dashes).
+  const desiredSignature = pickSignature(creep.room.name);
 
   const currentSign = controller.sign;
 

@@ -256,6 +256,7 @@ declare global {
     spawnId?: Id<StructureSpawn>;
     lastScan?: number;
     lastSigned?: number;
+    lastSignedIndex?: number;
     townName?: string;
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
@@ -310,6 +311,8 @@ declare global {
     sources?: Record<string, Id<Source>[]>;
     sourcesLastScan?: Record<string, number>;
     expansion?: ExpansionData;
+    // Global rotation cursor for controller-sign decrees (config/signatures.ts).
+    sigRotation?: number;
     // Pending expansion targets. Only ONE expansion runs at a time (Memory.expansion);
     // when it clears, the orchestrator pops the head of this queue and starts it.
     expansionQueue?: QueuedExpansion[];
