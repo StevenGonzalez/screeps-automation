@@ -43,9 +43,10 @@ export function loop() {
     // Compute the room-wide attack target once — all towers focus the same creep.
     const attackTarget = selectRoomAttackTarget(hostiles, room);
 
+    const hasHostiles = hostiles.length > 0;
     for (const id of towerIds) {
       const tower = Game.getObjectById(id) as StructureTower | null;
-      if (tower) runTower(tower, attackTarget);
+      if (tower) runTower(tower, attackTarget, hasHostiles);
     }
   }
 }

@@ -15,7 +15,13 @@ const RANGED_HEAL_RANGE  = 3;
 
 // attackTarget is computed once per room by the orchestrator so all towers concentrate fire.
 // healTarget is computed per-tower so each heals the closest friendly (no over-healing one creep).
-export function runTower(tower: StructureTower, attackTarget: Creep | null): void {
+// hasHostiles is the room's once-per-tick hostile scan (orchestrator.tower) — it gates both the
+// heal and the repair branches so towers only spend energy on those when the room is calm/defended.
+export function runTower(
+  tower: StructureTower,
+  attackTarget: Creep | null,
+  hasHostiles: boolean
+): void {
   if (tower.store[RESOURCE_ENERGY] === 0) return;
 
   if (attackTarget) {
@@ -23,22 +29,31 @@ export function runTower(tower: StructureTower, attackTarget: Creep | null): voi
     return;
   }
 
-  // Heal the nearest damaged friendly
-  const wounded = tower.room.find(FIND_MY_CREEPS, {
-    filter: (c) => c.hits < c.hitsMax,
-  });
-  if (wounded.length > 0) {
-    const target = tower.pos.findClosestByRange(wounded);
-    if (target) {
-      tower.heal(target);
-      return;
+  // Heal ONLY during a genuine threat in THIS room. Creeps only lose HP to enemy fire, so a
+  // wounded creep with no hostiles present was hurt elsewhere (a raider/border fighter that
+  // stepped out to fight and back in to "heal up"). Healing it bleeds tower — and therefore
+  // storage — energy into a creep that just walks back out and dies, a slow leak that can drain
+  // the whole economy. Under a real home-room attack we still top up our defenders.
+  if (hasHostiles) {
+    const wounded = tower.room.find(FIND_MY_CREEPS, {
+      filter: (c) => c.hits < c.hitsMax,
+    });
+    if (wounded.length > 0) {
+      const target = tower.pos.findClosestByRange(wounded);
+      if (target) {
+        tower.heal(target);
+        return;
+      }
     }
   }
 
-  // Repair when energy is plentiful — only when no threats present
+  // Repair only when the room is calm AND energy is plentiful. Never bleed defensive energy into
+  // walls during a fight or a tower-drain hold-fire (when attackTarget is null because the drainer
+  // out-heals our shots, the room still has hostiles — so this stays gated off).
   if (
+    !hasHostiles &&
     tower.store[RESOURCE_ENERGY] / (tower.store.getCapacity(RESOURCE_ENERGY) ?? 1) >
-    TOWER_REPAIR_ENERGY_THRESHOLD
+      TOWER_REPAIR_ENERGY_THRESHOLD
   ) {
     const repairTarget = findTowerRepairTarget(tower.room);
     if (repairTarget) tower.repair(repairTarget);
