@@ -29,14 +29,19 @@ export function runTower(
     return;
   }
 
-  // Heal ONLY during a genuine threat in THIS room. Creeps only lose HP to enemy fire, so a
-  // wounded creep with no hostiles present was hurt elsewhere (a raider/border fighter that
-  // stepped out to fight and back in to "heal up"). Healing it bleeds tower — and therefore
-  // storage — energy into a creep that just walks back out and dies, a slow leak that can drain
-  // the whole economy. Under a real home-room attack we still top up our defenders.
+  // Heal ONLY during a genuine threat in THIS room, AND only creeps fighting in the interior —
+  // never ones sitting on/next to a room edge. Creeps only lose HP to enemy fire, so a wounded
+  // creep that's hugging the border is a raider/border fighter ping-ponging out to fight and back
+  // in to "heal up" (an enemy parked at the edge keeps hasHostiles true even though towers can't
+  // shoot it — see the edge filter in selectRoomAttackTarget). Healing those bleeds tower — and
+  // therefore storage — energy into creeps that just walk back out and die, a slow leak that can
+  // drain the whole economy. A genuine home defender fighting the intruder stands in the interior,
+  // so it still gets topped up.
   if (hasHostiles) {
     const wounded = tower.room.find(FIND_MY_CREEPS, {
-      filter: (c) => c.hits < c.hitsMax,
+      filter: (c) =>
+        c.hits < c.hitsMax &&
+        c.pos.x > 2 && c.pos.x < 47 && c.pos.y > 2 && c.pos.y < 47,
     });
     if (wounded.length > 0) {
       const target = tower.pos.findClosestByRange(wounded);
