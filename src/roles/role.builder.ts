@@ -25,7 +25,12 @@ export function runBuilder(creep: Creep) {
     creep.memory.working = true;
   }
   if (!creep.memory.working) {
-    acquireEnergy(creep);
+    // In a storage room, leave the miner containers AND the dropped piles beside them for the
+    // porters — pulling that raw producer energy out from under them starves the tower/extension
+    // refill. Builders eat from the storage buffer instead, so construction keeps going without
+    // outbidding the core's supply, and back off (idle) when the buffer is empty rather than
+    // raiding the miners. Pre-storage rooms have no buffer, so builders still use any container.
+    acquireEnergy(creep, { bufferOnly: !!creep.room.storage });
     return;
   }
 

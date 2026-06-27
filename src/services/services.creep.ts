@@ -250,13 +250,30 @@ export function getSafeSources(room: Room): Source[] {
   return safeSourceCache[room.name];
 }
 
-export function acquireEnergy(creep: Creep): boolean {
+export function acquireEnergy(
+  creep: Creep,
+  opts?: { bufferOnly?: boolean }
+): boolean {
+  // bufferOnly: this is a non-essential consumer (builder/repairer/idle upgrader). Miner
+  // containers AND the dropped piles beside them are raw producer output the porters need to keep
+  // the tower and extensions filled — so a bufferOnly consumer leaves both alone and draws only
+  // from the storage buffer (plus links/tombs). When the buffer is empty there is no surplus, so
+  // it simply gets nothing and backs off rather than starving the core's supply line.
+  const bufferOnly = !!opts?.bufferOnly;
+  const minerIds = bufferOnly
+    ? new Set(getMinerContainerIds(creep.room).map((id) => id as string))
+    : null;
+
   // Re-use the cached container/storage/link target from the previous tick as long
   // as it still exists and still holds energy — avoids the expensive findClosestByPath
   // scan on every tick.
   if (creep.memory.energySourceId) {
     const cached = Game.getObjectById(creep.memory.energySourceId) as AnyStoreStructure | null;
-    if (cached && cached.store[RESOURCE_ENERGY] > 0) {
+    if (
+      cached &&
+      cached.store[RESOURCE_ENERGY] > 0 &&
+      !(minerIds && minerIds.has(cached.id as string))
+    ) {
       const res = creep.withdraw(cached, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
         creep.moveTo(cached, { reusePath: 50 });
@@ -268,9 +285,13 @@ export function acquireEnergy(creep: Creep): boolean {
   }
 
   // Pick up nearby dropped energy — findInRange is O(local area) vs room-wide pathfinding.
-  const droppedInRange = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 8, {
-    filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 0,
-  }) as Resource[];
+  // bufferOnly consumers skip this: dropped piles are mostly miner overflow that the porters are
+  // there to collect for the tower/core.
+  const droppedInRange = bufferOnly
+    ? []
+    : (creep.pos.findInRange(FIND_DROPPED_RESOURCES, 8, {
+        filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount > 0,
+      }) as Resource[]);
   if (droppedInRange.length > 0) {
     const dropped = droppedInRange.reduce((a, b) => (a.amount > b.amount ? a : b));
     const res = creep.pickup(dropped);
@@ -288,7 +309,8 @@ export function acquireEnergy(creep: Creep): boolean {
       (s.structureType === STRUCTURE_CONTAINER ||
         s.structureType === STRUCTURE_STORAGE) &&
       "store" in s &&
-      s.store[RESOURCE_ENERGY] > 0
+      s.store[RESOURCE_ENERGY] > 0 &&
+      !(minerIds && minerIds.has(s.id as string))
   );
 
   const nonUpgrade = upgradeId
