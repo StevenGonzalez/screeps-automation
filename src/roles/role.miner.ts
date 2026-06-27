@@ -40,14 +40,18 @@ export function runMiner(creep: Creep) {
         return;
       }
 
-      // Feed an adjacent link if our store is full or the container is nearly full
-      if (
-        creep.store.getFreeCapacity() === 0 ||
-        container.store.getFreeCapacity(RESOURCE_ENERGY) < 100
-      ) {
+      // Only feed an adjacent link once the miner itself is full. Early offloads
+      // when the container is merely low on space can make carried energy appear to
+      // vanish into the link network before the miner has finished its own load.
+      if (creep.store.getFreeCapacity() === 0) {
         const link = findAdjacentLink(creep);
         if (link && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
           creep.transfer(link, RESOURCE_ENERGY);
+          return;
+        }
+
+        if (container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+          creep.transfer(container, RESOURCE_ENERGY);
           return;
         }
       }
