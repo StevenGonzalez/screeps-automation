@@ -324,9 +324,21 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   )
     return;
 
-  // Non-essential spawns are suppressed during an energy emergency so that
-  // every spare joule goes back into harvesters and miners.
-  if (isEnergyEmergency(room)) return;
+  // Non-essential spawns are suppressed during an energy emergency so that every spare joule
+  // goes back into the core economy. The exception is remote income: remote miners/haulers bring
+  // energy HOME (haulers deposit into storage and refill extensions) and reservers keep those
+  // remotes at full regen, so suppressing them while the room is starving is backwards — it lets
+  // the emergency feed on itself (no remote income -> still starving -> still suppressed). Each
+  // spawn fn has its own affordability gate (energyAvailable < body cost -> skip), so this never
+  // overspends a broke spawn; it only fires once the room can afford the body. Remote defender
+  // first, to clear an Invader before sending miners into it.
+  if (isEnergyEmergency(room)) {
+    if (shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
+    if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
+    if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
+    if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
+    return;
+  }
 
   // Low/medium threat: defenders still get priority over improvements, just not miners.
   if (threatScore > 0 && phase !== "bootstrap") {

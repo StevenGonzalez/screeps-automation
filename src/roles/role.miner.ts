@@ -43,15 +43,15 @@ export function runMiner(creep: Creep) {
       // Only feed an adjacent link once the miner itself is full. Early offloads
       // when the container is merely low on space can make carried energy appear to
       // vanish into the link network before the miner has finished its own load.
+      // With no link (or a full one), fall straight through to harvest: a full store
+      // means the overflow drops into the container the miner stands on at the full
+      // source rate, so an explicit transfer-to-container here would only burn a
+      // harvest tick (transfer + return, no harvest), cutting throughput below the
+      // source's regen rate.
       if (creep.store.getFreeCapacity() === 0) {
         const link = findAdjacentLink(creep);
         if (link && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
           creep.transfer(link, RESOURCE_ENERGY);
-          return;
-        }
-
-        if (container.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-          creep.transfer(container, RESOURCE_ENERGY);
           return;
         }
       }
