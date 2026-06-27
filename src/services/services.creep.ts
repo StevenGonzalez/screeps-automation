@@ -816,11 +816,17 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
     upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
     minerIds.indexOf(upgradeCont.id as string) === -1;
 
-  // Top up the controller container only while it's low, and only if this hauler is one of the
-  // designated fillers — otherwise the whole fleet funnels to it (the upgrader keeps it below the
-  // threshold) and jams the controller. Non-fillers fall through to storage.
+  // Top up the controller container only while it's low, only if this hauler is one of the
+  // designated fillers (otherwise the whole fleet funnels to it — the upgrader keeps it below the
+  // threshold — and jams the controller), and only once the core itself is full. Upgrading is
+  // deferrable; spawning is not, so never feed the controller container ahead of a hungry
+  // spawn/extension. In the storage model the filler pulls from storage to fill the core, so a
+  // hungry core means the hauler's load belongs in storage (below) to keep that buffer stocked,
+  // not in the controller container. Non-fillers / a hungry core fall through to storage.
+  const coreFull = creep.room.energyAvailable >= creep.room.energyCapacityAvailable;
   if (
     upgradeIsDropTarget &&
+    coreFull &&
     (upgradeCont!.store[RESOURCE_ENERGY] ?? 0) < UPGRADE_CONTAINER_REFILL_BELOW &&
     getUpgradeContainerFillerIds(creep.room).has(creep.id)
   ) {
