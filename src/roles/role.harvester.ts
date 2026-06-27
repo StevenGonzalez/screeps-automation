@@ -5,6 +5,7 @@ import {
   transferEnergyTo,
   upgradeController,
   findBalancedSource,
+  getSafeSources,
   harvestFromSource,
   isSourceSafe,
 } from "../services/services.creep";
@@ -45,18 +46,29 @@ export function runHarvester(creep: Creep) {
   }
   if (!source) return;
 
-  // A stationary miner already works this source, so this harvester is redundant —
-  // it would only camp the container's access tile and block haulers from withdrawing
-  // (and can't be shoved aside, since harvesting at a source counts as a working post).
-  // Retire it; its carried load was already delivered in the working branch above.
-  const minerOnSource =
-    source.pos.findInRange(FIND_MY_CREEPS, 1, {
+  const current = source; // narrowed non-null above; stable ref for the closures below
+  const hasMiner = (s: Source) =>
+    s.pos.findInRange(FIND_MY_CREEPS, 1, {
       filter: (c) => c.memory.role === ROLE_MINER,
     }).length > 0;
-  if (minerOnSource) {
+
+  // A stationary miner already works this source, so this harvester is redundant here — it would
+  // only camp the container's access tile and block haulers from withdrawing. But don't blindly
+  // suicide: if ANOTHER source still has no miner, cover that one instead. Suiciding while the
+  // harvester population target is still > 0 (because a different source is uncovered) makes the
+  // spawner rebuild us next tick — a spawn-energy churn loop that bleeds the economy. Only retire
+  // when EVERY source is already miner-covered (genuinely redundant; the target is then 0, so we
+  // won't respawn).
+  if (hasMiner(current)) {
+    const uncovered = getSafeSources(creep.room).find((s) => s.id !== current.id && !hasMiner(s));
+    if (uncovered) {
+      creep.memory.assignedSourceId = uncovered.id;
+      harvestFromSource(creep, uncovered);
+      return;
+    }
     creep.suicide();
     return;
   }
 
-  harvestFromSource(creep, source);
+  harvestFromSource(creep, current);
 }
