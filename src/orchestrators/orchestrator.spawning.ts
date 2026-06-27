@@ -163,6 +163,18 @@ function isEnergyEmergency(room: Room): boolean {
   return room.energyAvailable / cap < 0.25 && room.storage.store[RESOURCE_ENERGY] < 50000;
 }
 
+// A room whose stored-energy buffer is too low to bankroll WAR or EXPANSION — creeps that go fight
+// or settle in ANOTHER room and don't pay their cost back here. Unlike isEnergyEmergency (which also
+// requires the spawn itself to be starved — a state haulers mask by keeping extensions topped while
+// storage quietly bleeds toward zero), this trips on the storage buffer ALONE. So offensive ops,
+// drain leeches and expansion stop being funded the moment the home economy starts losing ground,
+// instead of only once it has already collapsed.
+const ECONOMY_CRITICAL_STORAGE = 25_000;
+function isEconomyCritical(room: Room): boolean {
+  if (!room.storage) return isEnergyEmergency(room);
+  return room.storage.store[RESOURCE_ENERGY] < ECONOMY_CRITICAL_STORAGE;
+}
+
 function getHarvesterPopulationTarget(room: Room): number {
   const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
   const phase = getRoomPhase(room);
@@ -317,16 +329,22 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
 
+  // War and expansion are funded only while the home economy can actually afford them. A room whose
+  // storage buffer is bleeding must never bankroll conquerors/settlers/attackers/drain leeches that
+  // spend their cost in another room while the home itself starves — that is exactly how a slow
+  // energy leak snowballs into total economic collapse. (Real home defense above is NOT gated.)
+  const economyCritical = isEconomyCritical(room);
+
   // Expansion: conqueror and settlers are spawned by the home room only
-  if (Memory.expansion?.homeRoom === room.name) {
+  if (!economyCritical && Memory.expansion?.homeRoom === room.name) {
     if (shouldSpawnConqueror() && spawnConqueror(room, spawn)) return;
     if (shouldSpawnSettler(room) && spawnSettler(room, spawn)) return;
   }
 
-  if (shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
+  if (!economyCritical && shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
   // Standalone tower-drain leeches (manual Game.arca.drain) — optional offensive harassment,
   // funded only after economy/defense/expansion/siege above are satisfied.
-  if (shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
+  if (!economyCritical && shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
   if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
   if (shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;
   if (spawnSkCreeps(room, spawn)) return;
