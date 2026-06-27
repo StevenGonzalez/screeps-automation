@@ -6,9 +6,12 @@ import {
   getRoomBuildTarget,
   findClosestRepairTarget,
   findCriticalDefenseTarget,
+  findCoreFillTarget,
+  transferEnergyTo,
   upgradeController,
   buildAtConstructionSite,
   repairStructure,
+  isEnergyEmergency,
 } from "../services/services.creep";
 
 export function runBuilder(creep: Creep) {
@@ -23,6 +26,17 @@ export function runBuilder(creep: Creep) {
   }
   if (!creep.memory.working) {
     acquireEnergy(creep);
+    return;
+  }
+
+  // While the room is starving for energy, stop spending it on construction, repair and
+  // upgrading — those drain the very buffer the colony needs to keep spawning haulers/miners
+  // back. Spawning already declines to replace builders during an emergency; this stops the
+  // ones already alive from bleeding the room dry in the meantime. Instead, the carried energy
+  // is poured into the starved core (spawn/extensions/towers) to help end the emergency faster.
+  if (isEnergyEmergency(creep.room)) {
+    const fill = findCoreFillTarget(creep);
+    if (fill) transferEnergyTo(creep, fill);
     return;
   }
 

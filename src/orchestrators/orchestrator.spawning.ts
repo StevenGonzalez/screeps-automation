@@ -32,7 +32,7 @@ import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
 import { getSkMembers, isOpPaused } from "./orchestrator.sourcekeeper";
 import { getStockForCompound } from "../services/services.labs";
-import { getRampartTargetHP } from "../services/services.creep";
+import { getRampartTargetHP, isEnergyEmergency } from "../services/services.creep";
 
 import {
   BODY_PATTERNS,
@@ -152,15 +152,6 @@ function hasEnergyGatherers(room: Room): boolean {
   const harvesters = getCreepsByRoleInRoom(ROLE_HARVESTER, room);
   const miners = getCreepsByRoleInRoom(ROLE_MINER, room);
   return harvesters.length + miners.length > 0;
-}
-
-// Energy is critically low when spawn energy is below 25% capacity AND storage has little buffer.
-// Pre-storage rooms use only the spawn energy fraction (no stored energy to fall back on).
-function isEnergyEmergency(room: Room): boolean {
-  const cap = room.energyCapacityAvailable;
-  if (cap === 0) return false;
-  if (!room.storage) return room.energyAvailable / cap < 0.25;
-  return room.energyAvailable / cap < 0.25 && room.storage.store[RESOURCE_ENERGY] < 50000;
 }
 
 // A room whose stored-energy buffer is too low to bankroll WAR or EXPANSION — creeps that go fight

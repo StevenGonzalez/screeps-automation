@@ -489,6 +489,19 @@ let buildTargetTick = -1;
 const buildTargetByRoom: Record<string, Id<ConstructionSite> | null> = {};
 
 /**
+ * Energy is critically low when spawn energy is below 25% capacity AND storage has little
+ * buffer. Pre-storage rooms use only the spawn energy fraction (no stored energy to fall
+ * back on). Drives both spawn suppression (orchestrator.spawning) and runtime backoff —
+ * builders stop spending energy on construction while the room is in this state.
+ */
+export function isEnergyEmergency(room: Room): boolean {
+  const cap = room.energyCapacityAvailable;
+  if (cap === 0) return false;
+  if (!room.storage) return room.energyAvailable / cap < 0.25;
+  return room.energyAvailable / cap < 0.25 && room.storage.store[RESOURCE_ENERGY] < 50000;
+}
+
+/**
  * The single construction site the whole room should focus on, so builders converge
  * on one structure instead of half-finishing many. Ranked by structure-type priority,
  * then most-progressed, then id; cached per tick.
