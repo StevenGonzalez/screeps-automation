@@ -208,7 +208,18 @@ const RCL8_MAX_UPGRADERS = 4;
 // stay at a single maintenance upgrader. Auto-enables if the account gains CPU.
 const RCL8_SURPLUS_MIN_BUCKET = 9000;
 
+// Keep at least one upgrader alive while the controller is this close to downgrading, even during
+// an energy emergency. Letting the timer run out downgrades the controller — and at low RCL that
+// reverts the room to neutral (a permanently lost room). A single upgrade resets the timer to its
+// max, so one upgrader is enough to hold the line; spending a little energy on it always beats
+// losing the room. Generous buffer so a starved room still has time to spawn + walk the upgrader in.
+const CONTROLLER_DOWNGRADE_SAFETY = 5000;
+
 function getUpgraderPopulationTarget(room: Room): number {
+  // Downgrade protection runs BEFORE the emergency cutoff — saving the room outranks saving energy.
+  const controller = room.controller;
+  if (controller?.my && controller.ticksToDowngrade < CONTROLLER_DOWNGRADE_SAFETY) return 1;
+
   if (isEnergyEmergency(room)) return 0;
 
   const phase = getRoomPhase(room);
@@ -308,6 +319,19 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // Fillers distribute storage energy to the keep core; haulers cover it directly until one
   // exists, so a missing filler never stalls spawning.
   if (shouldSpawnFiller(room) && spawnFiller(room, spawn)) return;
+
+  // Downgrade rescue: if the controller is about to downgrade (and at low RCL revert to neutral —
+  // a lost room), spawn one upgrader to reset the timer. Placed AFTER the core economy (miner/
+  // hauler/filler) so survival comes first, but BEFORE the energy-emergency cutoff below — which
+  // would otherwise suppress all upgraders and let the room downgrade out from under us. The
+  // upgrader target already forces 1 in this window (see getUpgraderPopulationTarget).
+  if (
+    room.controller?.my &&
+    room.controller.ticksToDowngrade < CONTROLLER_DOWNGRADE_SAFETY &&
+    shouldSpawnUpgrader(room) &&
+    spawnUpgrader(room, spawn)
+  )
+    return;
 
   // Non-essential spawns are suppressed during an energy emergency so that
   // every spare joule goes back into harvesters and miners.
