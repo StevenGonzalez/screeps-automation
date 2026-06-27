@@ -34,7 +34,12 @@ export function runBuilder(creep: Creep) {
   // back. Spawning already declines to replace builders during an emergency; this stops the
   // ones already alive from bleeding the room dry in the meantime. Instead, the carried energy
   // is poured into the starved core (spawn/extensions/towers) to help end the emergency faster.
-  if (isEnergyEmergency(creep.room)) {
+  //
+  // Limited to rooms WITH storage: there the emergency signal also requires a drained storage
+  // buffer, so it marks a genuine starvation. Pre-storage rooms trip the signal off the raw
+  // spawn fraction alone, which dips under 25% routinely as the spawn drains to make creeps —
+  // backing off there would just stall the early construction those rooms most need.
+  if (creep.room.storage && isEnergyEmergency(creep.room)) {
     const fill = findCoreFillTarget(creep);
     if (fill) transferEnergyTo(creep, fill);
     return;
