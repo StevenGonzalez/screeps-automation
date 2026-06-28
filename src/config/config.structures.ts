@@ -55,6 +55,7 @@ export const PLANNER_KEYS = {
   CONTAINER_SOURCE_PREFIX: "container_source_",
   CONTAINER_CONTROLLER: "container_controller",
   CONTAINER_MINERAL_PREFIX: "container_mineral_",
+  EXTRACTOR_PREFIX: "extractor_",
   LINK_CONTROLLER: "link_controller",
   LINK_SOURCE_PREFIX: "link_source_",
   ROAD_PREFIX: "road_",

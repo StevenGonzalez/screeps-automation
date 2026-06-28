@@ -613,6 +613,17 @@ function processRoomStructures(room: Room) {
     }
   }
 
+  // Extractor — built ON the mineral (RCL6+). Without it the mineral can't be harvested at all,
+  // so the prospector + mineral-sale pipeline never starts. Plan it once; the build loop places
+  // the site (createConstructionSite is a no-op below RCL6) and drops it once built, and the
+  // extractorId guard stops us re-planning afterwards.
+  if (mineral && (room.controller?.level ?? 0) >= 6 && !room.memory.extractorId) {
+    const extractorKey = `${PLANNER_KEYS.EXTRACTOR_PREFIX}${mineral.id}`;
+    if (plannedPositionsFromMemory(room, extractorKey).length === 0) {
+      addPlannedStructureToMemory(room, extractorKey, mineral.pos);
+    }
+  }
+
   // Cardinal arteries + economic connectors
   planCardinalArteries(room);
 

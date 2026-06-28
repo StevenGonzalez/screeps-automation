@@ -642,6 +642,7 @@ export function structureTypeForKey(key: string): StructureConstant | null {
   if (key === PLANNER_KEYS.CONTAINER_CONTROLLER) return STRUCTURE_CONTAINER;
   if (key === PLANNER_KEYS.LINK_CONTROLLER) return STRUCTURE_LINK;
   if (key.startsWith(PLANNER_KEYS.LINK_SOURCE_PREFIX)) return STRUCTURE_LINK;
+  if (key.startsWith(PLANNER_KEYS.EXTRACTOR_PREFIX)) return STRUCTURE_EXTRACTOR;
   // Stamp keys
   if (key.startsWith(PLANNER_KEYS.STAMP_SPAWN_PREFIX))  return STRUCTURE_SPAWN;
   if (key.startsWith(PLANNER_KEYS.STAMP_TOWER_PREFIX))  return STRUCTURE_TOWER;
