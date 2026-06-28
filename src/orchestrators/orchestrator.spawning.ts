@@ -798,14 +798,32 @@ function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
 
 function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINER}${Game.time}`;
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
+  const existingMiners = getCreepsByRoleInRoom(ROLE_MINER, room).length;
+
+  // Size against CAPACITY, not current energy, so a miner is a full source-saturating body
+  // (buildMinerBody caps WORK at 5 = 10 e/tick = a source's 3000/300-tick regen) instead of a
+  // stunted 1-WORK crawler (2 e/tick). Spawning stunted miners during a shortage is what keeps an
+  // energy emergency from ever ending: a 1-WORK miner can't refill the room, so the next miner is
+  // also stunted. Only a cold start with NO miners falls back to current energy, so a fully
+  // collapsed room can still bootstrap something rather than deadlock.
+  const energyBasis =
+    existingMiners === 0 ? room.energyAvailable : room.energyCapacityAvailable;
+  const allowedEnergy = Math.floor(energyBasis * (1 - SPAWN_ENERGY_RESERVE));
   const body = buildMinerBody(allowedEnergy);
-  const res = spawn.spawnCreep(body, newName, {
-    memory: { role: ROLE_MINER },
-  });
-  return res === OK;
+
+  if (room.energyAvailable < calculateBodyPartCost(body)) {
+    // Can't afford the full miner this tick. If a miner is already covering income, WAIT for
+    // energy to accumulate rather than churning out a stunted one that would occupy the source
+    // for ~1500 ticks producing almost nothing. With no miner alive, build the largest affordable
+    // body to bootstrap.
+    if (existingMiners > 0) return false;
+    const affordable = buildMinerBody(
+      Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE))
+    );
+    return spawn.spawnCreep(affordable, newName, { memory: { role: ROLE_MINER } }) === OK;
+  }
+
+  return spawn.spawnCreep(body, newName, { memory: { role: ROLE_MINER } }) === OK;
 }
 
 // ── Remote role helpers ───────────────────────────────────────────────────────
