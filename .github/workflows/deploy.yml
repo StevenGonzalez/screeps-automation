@@ -14,7 +14,11 @@ jobs:
           node-version: 18
           cache: yarn
       - run: yarn install --frozen-lockfile
-      - name: Create screeps.json
+      - name: Deploy to World
         run: |
           echo '{"token":"${{ secrets.SCREEPS_TOKEN }}","protocol":"https","hostname":"screeps.com","port":443,"path":"/","branch":"default"}' > screeps.json
-      - run: yarn deploy
+          yarn deploy
+      - name: Deploy to Season
+        run: |
+          echo '{"token":"${{ secrets.SCREEPS_TOKEN }}","protocol":"https","hostname":"screeps.com","port":443,"path":"/season","branch":"default"}' > screeps.json
+          yarn deploy
