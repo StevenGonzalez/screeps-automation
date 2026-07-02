@@ -358,6 +358,15 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
 
+  // Season-only score collection (see orchestrator.score.ts) ranks ABOVE expansion/offense/
+  // deposit-mining/SK/apothecary/mineral-miner/remote-mining: those are all indirect economy
+  // growth whose only point is funding more of everything else, including score hunting,
+  // while banked score is literally the win condition this season. A hunter costs 50 energy
+  // and spawns in 1 tick, so letting it jump this queue costs the systems below almost
+  // nothing — but leaving it dead-last risked it never getting a turn on a busy spawn.
+  // No-ops entirely on servers without the Score object (e.g. World).
+  if (shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
+
   // War and expansion are funded only while the home economy can actually afford them. A room whose
   // storage buffer is bleeding must never bankroll conquerors/settlers/attackers/drain leeches that
   // spend their cost in another room while the home itself starves — that is exactly how a slow
@@ -386,10 +395,6 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
   if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
-
-  // Dead last: bonus Season-only score collection (see orchestrator.score.ts). Costs 50
-  // energy and no-ops entirely on servers without the Score object (e.g. World).
-  if (shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
 }
 
 const HAULER_SPAWN = {

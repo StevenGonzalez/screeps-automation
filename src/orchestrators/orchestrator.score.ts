@@ -106,20 +106,45 @@ export function getScoreTarget(id: string): ScoreTarget | undefined {
   return Memory.scoreTargets?.[id];
 }
 
-// Claim the nearest unclaimed target for a hunter with no assignment. Returns its id
-// (stored on the creep as memory.targetId) or undefined if nothing is unclaimed.
+// Rough tile-distance estimate between a creep and a target room: each room is 50 tiles
+// across and a Score can land anywhere in it, so linear_room_distance * 50 + 25 approximates
+// travel time without running PathFinder across rooms for every candidate. A score hunter's
+// body is a single MOVE with nothing else on it, so it generates zero fatigue on ANY terrain
+// (fatigue comes from non-MOVE parts) — it always covers 1 tile/tick, making "tiles" and
+// "ticks" the same number and this estimate directly usable as a travel-time bound.
+function estimateTravelTicks(fromRoom: string, toRoom: string): number {
+  if (fromRoom === toRoom) return 0;
+  return Game.map.getRoomLinearDistance(fromRoom, toRoom) * 50 + 25;
+}
+
+// Safety margin over the raw estimate above: real paths bend around terrain/obstacles and
+// the estimate is a straight-line approximation, not an actual PathFinder result.
+const TRAVEL_SAFETY_MARGIN = 1.3;
+
+// Claim the best unclaimed target for a hunter with no assignment: highest value per tick of
+// travel among targets it can actually reach before they decay. Ignoring value would send
+// hunters at whatever's nearest regardless of payoff (a 500-point target two rooms away
+// beating an unclaimed 11,500-point target four rooms away); ignoring decay would let a
+// hunter commit to a target it can never reach in time, locking out any hunter that could.
+// Returns undefined (rather than the impossible-nearest target) when nothing is reachable —
+// the caller keeps patrolling instead of chasing a target it'll never touch.
 export function claimNearestScoreTarget(creep: Creep): string | undefined {
   const targets = Memory.scoreTargets;
   if (!targets) return undefined;
 
   let bestId: string | undefined;
-  let bestDist = Infinity;
+  let bestRate = -Infinity;
   for (const id in targets) {
     const t = targets[id];
     if (t.claimedBy) continue;
-    const dist = Game.map.getRoomLinearDistance(creep.room.name, t.roomName);
-    if (dist < bestDist) {
-      bestDist = dist;
+
+    const travel = estimateTravelTicks(creep.room.name, t.roomName) * TRAVEL_SAFETY_MARGIN;
+    const remaining = t.expiresAt - Game.time;
+    if (travel >= remaining) continue; // can't get there before it decays
+
+    const rate = t.value / Math.max(travel, 1);
+    if (rate > bestRate) {
+      bestRate = rate;
       bestId = id;
     }
   }
