@@ -3,7 +3,7 @@ import {
   isCreepEmpty,
   findEnergyDepositTarget,
   transferEnergyTo,
-  upgradeController,
+  putSurplusEnergyToWork,
   findBalancedSource,
   getSafeSources,
   harvestFromSource,
@@ -26,7 +26,9 @@ export function runHarvester(creep: Creep) {
     if (depositTarget) {
       transferEnergyTo(creep, depositTarget);
     } else {
-      upgradeController(creep);
+      // Nowhere to deposit (spawn/extension/container/storage all full) — put the carried
+      // energy to work instead of idling: build, else repair, else upgrade.
+      putSurplusEnergyToWork(creep);
     }
     return;
   }
