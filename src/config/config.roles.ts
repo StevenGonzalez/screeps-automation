@@ -26,6 +26,9 @@ export const ROLE_DEPOSIT_HAULER = "carter";
 export const ROLE_SK_GUARDIAN = "huntsman";
 export const ROLE_SK_MINER = "delver";
 export const ROLE_SK_HAULER = "wain";
+// Season-only (see orchestrator.score.ts) — chases "Score" objects that only exist on the
+// Screeps Season server. Never spawned on the persistent World server.
+export const ROLE_SCORE_HUNTER = "seeker";
 
 // Deposit order for the early-game harvester (the only role that uses it, via
 // findEnergyDepositTarget). Other roles deposit through their own dedicated logic — haulers

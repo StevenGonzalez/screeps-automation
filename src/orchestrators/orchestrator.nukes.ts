@@ -223,8 +223,10 @@ function evacuate(room: Room, terminal: StructureTerminal): void {
 
     // Non-energy: ensure the terminal has energy to pay the fee, else skip to the next
     // resource (we'd rather evacuate something we CAN pay for than stall on a costly one).
+    // The fee is a pure distance/amount formula (matches Game.market.calcTransactionCost) —
+    // computed locally so evacuation still works on servers with no market (e.g. Season).
     const dist = Game.map.getRoomLinearDistance(room.name, dest);
-    const fee = Game.market.calcTransactionCost(have, room.name, dest);
+    const fee = Math.ceil(have * (1 - Math.exp(-dist / 30)));
     if ((terminal.store[RESOURCE_ENERGY] ?? 0) < fee) {
       // Try a smaller, affordable chunk so we still rescue part of the stock.
       const spareEnergy = terminal.store[RESOURCE_ENERGY] ?? 0;

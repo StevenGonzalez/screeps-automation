@@ -202,6 +202,10 @@ function processTerminal(room: Room): void {
 
   if (terminal.store[RESOURCE_ENERGY] < TERMINAL_CONFIG.MIN_TERMINAL_ENERGY) return;
 
+  // No market on some servers (e.g. Season) — everything below trades on it. The inter-room
+  // send above (our own terminal network) still works fine there and already ran.
+  if (!Game.market) return;
+
   // Sell the room's own mineral surplus from the terminal.
   const mineralId = room.memory.mineralId;
   const mineral = mineralId ? (Game.getObjectById(mineralId) as Mineral | null) : null;

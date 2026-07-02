@@ -27,6 +27,7 @@ import {
   ROLE_SK_GUARDIAN,
   ROLE_SK_MINER,
   ROLE_SK_HAULER,
+  ROLE_SCORE_HUNTER,
 } from "../config/config.roles";
 import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
@@ -41,6 +42,7 @@ import {
 } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
+import { getUnclaimedScoreTargetCount } from "./orchestrator.score";
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -384,6 +386,10 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
   if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
+
+  // Dead last: bonus Season-only score collection (see orchestrator.score.ts). Costs 50
+  // energy and no-ops entirely on servers without the Score object (e.g. World).
+  if (shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
 }
 
 const HAULER_SPAWN = {
@@ -856,6 +862,25 @@ function spawnScout(room: Room, spawn: StructureSpawn): boolean {
 
   const res = spawn.spawnCreep([MOVE], `${ROLE_SCOUT}${Game.time}`, {
     memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
+  });
+  return res === OK;
+}
+
+// ── Score hunter (Season only) ──────────────────────────────────────────────────
+
+const MAX_SCORE_HUNTERS_PER_ROOM = 3;
+
+function shouldSpawnScoreHunter(room: Room): boolean {
+  const unclaimed = getUnclaimedScoreTargetCount();
+  if (unclaimed === 0) return false; // also true on World, where this is always 0
+  return countByRoleInRoom(ROLE_SCORE_HUNTER, room) < Math.min(MAX_SCORE_HUNTERS_PER_ROOM, unclaimed);
+}
+
+function spawnScoreHunter(room: Room, spawn: StructureSpawn): boolean {
+  // Collection is automatic on touch — a single MOVE part is full speed everywhere and all
+  // this role ever needs, so this is the cheapest possible creep (50 energy).
+  const res = spawn.spawnCreep([MOVE], `${ROLE_SCORE_HUNTER}${Game.time}`, {
+    memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
   });
   return res === OK;
 }

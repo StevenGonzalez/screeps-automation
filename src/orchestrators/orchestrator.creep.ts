@@ -27,6 +27,7 @@ import {
   ROLE_SK_GUARDIAN,
   ROLE_SK_MINER,
   ROLE_SK_HAULER,
+  ROLE_SCORE_HUNTER,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
@@ -56,6 +57,7 @@ import { runDepositHauler } from "../roles/role.deposithauler";
 import { runSkGuardian } from "../roles/role.sk_guardian";
 import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
+import { runScoreHunter } from "../roles/role.scoreHunter";
 import { resolveTraffic } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 
@@ -91,6 +93,7 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SK_GUARDIAN]: runSkGuardian,
   [ROLE_SK_MINER]: runSkMiner,
   [ROLE_SK_HAULER]: runSkHauler,
+  [ROLE_SCORE_HUNTER]: runScoreHunter,
 };
 
 export function loop() {

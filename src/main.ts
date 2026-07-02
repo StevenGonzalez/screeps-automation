@@ -7,6 +7,7 @@ import * as strategySystem from "./orchestrators/orchestrator.strategy";
 import * as expansionSystem from "./orchestrators/orchestrator.expansion";
 import * as pixelsSystem from "./orchestrators/orchestrator.pixels";
 import * as spawningSystem from "./orchestrators/orchestrator.spawning";
+import * as scoreSystem from "./orchestrators/orchestrator.score";
 import * as structuresSystem from "./orchestrators/orchestrator.structures";
 import * as towerSystem from "./orchestrators/orchestrator.tower";
 import * as terminalSystem from "./orchestrators/orchestrator.terminal";
@@ -63,6 +64,10 @@ export function loop() {
   // (towers, military) reads threat info — so friends are never treated as hostiles.
   runSafe("allies", () => runAllies());
   runSafe("expansion", () => expansionSystem.loop());
+  // Season-only; no-ops immediately on servers without the Score object (e.g. World). Runs
+  // before creeps/spawning so a score spotted for the first time this tick can be claimed
+  // by an idle hunter the same tick, and spawning sees a fresh unclaimed-target count.
+  runSafe("score", () => scoreSystem.loop());
   runSafe("creeps", () => creepRunnerSystem.loop());
   runSafe("spawning", () => spawningSystem.loop());
 
