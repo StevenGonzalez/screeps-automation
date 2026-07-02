@@ -13,11 +13,10 @@
  *
  * Search (when nothing is claimed): a Score is only visible while a creep stands in its room
  * and decays fast, so discovery is really a COVERAGE problem — keep revisiting nearby rooms
- * so a fresh Score is seen (and thus reachable) before it decays. pickPatrolRoom implements a
- * decentralized, staleness-greedy sweep: each seeker heads to the safe nearby room its fleet
- * has seen least recently, avoiding rooms a peer is already heading to so the seekers spread
- * out and partition the region instead of clumping. Per-room last-vision ticks live in
- * Memory.scorePatrol.seen, stamped below for every room in vision each tick.
+ * so a fresh Score is seen (and thus reachable) before it decays. pickPatrolRoom hands out
+ * disjoint patrol targets via a deterministic sequential assignment across the fleet (see its
+ * comment), so seekers cover different rooms instead of trailing each other. Per-room
+ * last-vision ticks live in Memory.scorePatrol.seen, stamped below for every room in vision.
  */
 
 import { ROLE_SCORE_HUNTER } from "../config/config.roles";
@@ -190,35 +189,70 @@ export function claimNearestScoreTarget(creep: Creep): string | undefined {
 //
 // A Score is only visible while a creep is in its room and decays fast, so the useful thing a
 // seeker with no target can do is refresh vision on the nearby room that's gone stalest — that
-// is where an as-yet-unseen Score is most likely waiting. Doing this greedily across the fleet
-// (each seeker picking the stalest room no peer is already covering) approximates an optimal
-// multi-agent patrol: the seekers spread out to partition the region and drive down the worst
-// revisit interval without any central planner. Returns undefined only when the region has no
-// safe room to visit (home boxed in by hostiles) — the caller parks off the spawn in that case.
+// is where an as-yet-unseen Score is most likely waiting. To make the fleet cover DIFFERENT
+// rooms instead of trailing each other, targets are handed out by a deterministic sequential
+// assignment: every seeker independently replays the same allocation — in a fixed (name) order,
+// each seeker claims its best still-unclaimed room — and reads off its own result. This makes the
+// fleet's patrol targets disjoint BY CONSTRUCTION, even when several are stacked on the spawn
+// (each replay reserves the earlier names' rooms first, so a co-located pair splits immediately
+// rather than both chasing the same stalest room). "Best" is stalest minus travel FROM THAT
+// seeker, so each tends to claim rooms near itself (compact beats) while earlier names win when
+// they contend for the same room.
+//
+// (This coordinates DESTINATIONS, not paths — two seekers with beats on opposite sides of home
+// still cross the same rooms in transit, so occasional co-location mid-journey is expected and
+// harmless; what matters is that their patrol targets are disjoint.)
+//
+// Returns undefined only when the region has no safe room to visit (home boxed in by hostiles) —
+// the caller parks off the spawn in that case.
 export function pickPatrolRoom(creep: Creep): string | undefined {
   const home = creep.memory.homeRoom;
   if (!home) return undefined;
   const myName = Game.rooms[home]?.controller?.owner?.username;
 
-  // Rooms other living seekers are already heading to. Steering away from them makes the fleet
-  // fan out into different sectors instead of stacking several creeps onto one stale room.
-  const taken = new Set<string>();
+  const region = safeRegionRooms(home, myName, PATROL_RADIUS);
+  if (region.length === 0) return undefined;
+
+  // The live fleet sharing this home, in a stable (name) order so every seeker replays the same
+  // allocation sequence — no shared reservation state needed, each just recomputes it locally.
+  const fleet: Creep[] = [];
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
-    if (c.name === creep.name || c.memory.role !== ROLE_SCORE_HUNTER) continue;
-    if (c.memory.targetRoom) taken.add(c.memory.targetRoom);
+    if (c.memory.role === ROLE_SCORE_HUNTER && c.memory.homeRoom === home) fleet.push(c);
   }
+  fleet.sort((a, b) => (a.name < b.name ? -1 : 1));
 
   const seen = Memory.scorePatrol?.seen ?? {};
+  const reserved = new Set<string>();
+  for (const c of fleet) {
+    const pick = bestRoom(region, seen, c.pos.roomName, reserved);
+    if (c.name === creep.name) {
+      // Everyone after us can't change our result, so stop. If the region had fewer free rooms
+      // than seekers we may have got nothing — fall back to the stalest room ignoring
+      // reservations so we still move (this only overlaps when there are genuinely more seekers
+      // than rooms, which no coordination can avoid).
+      return pick ?? bestRoom(region, seen, creep.pos.roomName, new Set());
+    }
+    if (pick) reserved.add(pick);
+  }
+  return undefined; // unreachable: the creep is always a member of its own home's fleet
+}
+
+// Stalest region room reachable from `fromRoom`, skipping the room the seeker is already in and
+// any a higher-priority seeker has reserved. Travel is charged at ~50 ticks/room so a near-stale
+// room beats a far-stale one.
+function bestRoom(
+  region: string[],
+  seen: Record<string, number>,
+  fromRoom: string,
+  reserved: Set<string>
+): string | undefined {
   let best: string | undefined;
   let bestScore = -Infinity;
-  for (const room of safeRegionRooms(home, myName, PATROL_RADIUS)) {
-    if (room === creep.room.name) continue; // already covering the room we're standing in
+  for (const room of region) {
+    if (room === fromRoom || reserved.has(room)) continue;
     const staleness = Game.time - (seen[room] ?? 0); // never seen ⇒ effectively huge ⇒ top pick
-    const dist = Game.map.getRoomLinearDistance(creep.room.name, room);
-    // Prefer the stalest room, charge ~50 ticks of staleness per room of travel to reach it,
-    // and heavily discount rooms a peer already owns so two seekers don't converge.
-    const s = staleness - dist * 50 - (taken.has(room) ? 100000 : 0);
+    const s = staleness - Game.map.getRoomLinearDistance(fromRoom, room) * 50;
     if (s > bestScore) {
       bestScore = s;
       best = room;
