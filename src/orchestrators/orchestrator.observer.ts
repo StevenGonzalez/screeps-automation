@@ -3,6 +3,7 @@ import {
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
 } from "../config/config.roles";
+import { getScoreScanRooms, scoreHunterSupported } from "./orchestrator.score";
 
 const POWER_BANK_MIN_POWER = 2000;
 const POWER_BANK_MIN_TICKS = 3000;
@@ -22,6 +23,12 @@ const COLLECTING_TIMEOUT = 300;
 const SQUAD_ATTACKERS = 2;
 const SQUAD_HEALERS = 3;
 const OBSERVER_SCAN_RANGE = 10;
+// How far out the observer reveals Scores. Past this a seeker can't reach a Score before it
+// decays, so scanning further just wastes the observer's one scan/tick on unreachable rooms.
+const SCORE_SCAN_RANGE = 4;
+// Rebuild the score scan queue this often so it tracks a shifting safe region. A multiple of 2
+// (the observer only reaches scanScoreRegion on even ticks) so the rebuild actually lands.
+const SCORE_SCAN_REBUILD_INTERVAL = 1500;
 // Power processing burns 1 energy + 1 power per cycle and competes with the whole
 // economy for storage energy. Only process when storage is comfortably stocked so a
 // thin colony never starves spawning/upgrading to convert power. Healthy colonies
@@ -45,11 +52,39 @@ function runObserver(room: Room) {
   const observer = Game.getObjectById(room.memory.observerId) as StructureObserver | null;
   if (!observer) { room.memory.observerId = undefined; return; }
 
+  // The observer has one scan/tick. On the Season server, hand every other tick to the reachable
+  // Score region: a Score is only visible while a creep (or the observer) is in its room and
+  // decays fast, so observer vision lets scores be found without every seeker having to walk the
+  // whole region itself — seekers can stage centrally and just sprint to intercept what the
+  // observer reveals. (scoreSystem.loop records Scores from ANY room in vision, including this.)
+  if (scoreHunterSupported() && Game.time % 2 === 0) {
+    if (scanScoreRegion(room, observer)) return;
+  }
+  scanHighways(room, observer);
+}
+
+// Rotate through the safe reachable rooms one at a time, revealing any Score in them to
+// scoreSystem.loop. Returns false (yielding the tick to highway recon) when there's nothing safe
+// to scan — e.g. a home boxed in by hostiles.
+function scanScoreRegion(room: Room, observer: StructureObserver): boolean {
+  let queue = room.memory.scoreScanQueue;
+  // Rebuild when empty, and periodically, so the region adapts as neighbours are claimed/lost
+  // (unlike the static highway queue, the safe region can shift over time).
+  if (!queue || queue.length === 0 || Game.time % SCORE_SCAN_REBUILD_INTERVAL === 0) {
+    queue = room.memory.scoreScanQueue = getScoreScanRooms(room.name, SCORE_SCAN_RANGE);
+    if (queue.length === 0) return false;
+  }
+  const target = queue.shift()!;
+  queue.push(target);
+  observer.observeRoom(target);
+  return true;
+}
+
+function scanHighways(room: Room, observer: StructureObserver): void {
   if (!room.memory.observerScanQueue || room.memory.observerScanQueue.length === 0) {
     room.memory.observerScanQueue = buildHighwayScanQueue(room.name);
     if (room.memory.observerScanQueue.length === 0) return;
   }
-
   const queue = room.memory.observerScanQueue;
   const target = queue.shift()!;
   queue.push(target);

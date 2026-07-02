@@ -874,11 +874,15 @@ function spawnScout(room: Room, spawn: StructureSpawn): boolean {
 // ── Score hunter (Season only) ──────────────────────────────────────────────────
 
 // Kept alive even with zero known targets: with no observer, the only way to ever find a
-// Score is a creep physically standing in the room when one spawns. This is the search arm
-// (see role.scoreHunter's patrol behavior) — without it, hunters could only ever chase
-// targets some OTHER role's incidental vision happened to reveal.
-const BASELINE_SCORE_PATROLLERS = 1;
-const MAX_SCORE_HUNTERS_PER_ROOM = 3;
+// Score is a creep physically standing in the room when one spawns. These are the search arm
+// (see role.scoreHunter's coverage patrol) — without them, hunters could only ever chase
+// targets some OTHER role's incidental vision happened to reveal. Baseline > 1 because coverage
+// is a multi-agent patrol: more seekers partition the region and cut the worst-case revisit
+// interval (how long a room goes unwatched), which is what lets a fast-decaying Score be seen
+// before it's gone. They cost 50 energy and spawn in 1 tick, so a small standing fleet is cheap;
+// raise these if Scores decay before a seeker reaches them, lower them if seekers overlap.
+const BASELINE_SCORE_PATROLLERS = 2;
+const MAX_SCORE_HUNTERS_PER_ROOM = 4;
 
 function shouldSpawnScoreHunter(room: Room): boolean {
   // Explicit gate, independent of the unclaimed count below: the baseline patrol count must

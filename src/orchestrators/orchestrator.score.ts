@@ -10,11 +10,24 @@
  * scout/miner that has since moved on). role.scoreHunter claims the nearest unclaimed
  * remembered target and walks onto it; orchestrator.spawning raises a new (very cheap)
  * hunter whenever unclaimed targets outnumber hunters already chasing one.
+ *
+ * Search (when nothing is claimed): a Score is only visible while a creep stands in its room
+ * and decays fast, so discovery is really a COVERAGE problem — keep revisiting nearby rooms
+ * so a fresh Score is seen (and thus reachable) before it decays. pickPatrolRoom implements a
+ * decentralized, staleness-greedy sweep: each seeker heads to the safe nearby room its fleet
+ * has seen least recently, avoiding rooms a peer is already heading to so the seekers spread
+ * out and partition the region instead of clumping. Per-room last-vision ticks live in
+ * Memory.scorePatrol.seen, stamped below for every room in vision each tick.
  */
+
+import { ROLE_SCORE_HUNTER } from "../config/config.roles";
+import { isAlly } from "../services/services.allies";
+import { isSourceKeeperRoom } from "../services/services.combat";
 
 declare global {
   interface Memory {
     scoreTargets?: Record<string, ScoreTarget>;
+    scorePatrol?: { seen: Record<string, number> };
   }
   // Season-only global constant (value 10031); absent on the World server. Declared here
   // purely so `typeof FIND_SCORES` type-checks — never reference it directly, only through
@@ -56,9 +69,13 @@ export function loop(): void {
   if (findConstant === undefined) return; // Not on this server (e.g. World) — no-op.
 
   const targets = Memory.scoreTargets ?? (Memory.scoreTargets = {});
+  const patrol = Memory.scorePatrol ?? (Memory.scorePatrol = { seen: {} });
 
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
+    // Any room we can see this tick is "covered now" — this is the freshness signal the
+    // coverage sweep in pickPatrolRoom minimizes across the region.
+    patrol.seen[roomName] = Game.time;
     const scores = (room.find as (c: number) => ScoreObject[])(findConstant);
     const seenIds = new Set<string>();
     for (const s of scores) {
@@ -90,7 +107,23 @@ export function loop(): void {
     const claimant = targets[id].claimedBy;
     if (claimant && !Game.creeps[claimant]) targets[id].claimedBy = undefined;
   }
+
+  // Drop coverage records for rooms we've long since stopped patrolling so Memory.scorePatrol
+  // can't grow unbounded as homes come and go. Any room still in a live region is re-stamped
+  // above every time a seeker passes through, so this only ever prunes abandoned rooms.
+  for (const rn in patrol.seen) {
+    if (Game.time - patrol.seen[rn] > SEEN_TTL) delete patrol.seen[rn];
+  }
 }
+
+// How long an unvisited room's coverage timestamp survives before it's pruned. Far longer than
+// any realistic revisit interval, so a room in an active patrol beat is never dropped.
+const SEEN_TTL = 50000;
+
+// How far (in rooms) seekers range from home while covering. Kept short on purpose: a Score can
+// decay in ~100 ticks and a seeker crosses ~1 room per 50 ticks, so a Score more than a room or
+// two away has usually decayed before a seeker sent after it could arrive.
+const PATROL_RADIUS = 2;
 
 // ── Shared with orchestrator.spawning + role.scoreHunter ───────────────────────
 
@@ -141,6 +174,7 @@ export function claimNearestScoreTarget(creep: Creep): string | undefined {
     const travel = estimateTravelTicks(creep.room.name, t.roomName) * TRAVEL_SAFETY_MARGIN;
     const remaining = t.expiresAt - Game.time;
     if (travel >= remaining) continue; // can't get there before it decays
+    if (travel >= (creep.ticksToLive ?? CREEP_LIFE_TIME)) continue; // we'd die en route
 
     const rate = t.value / Math.max(travel, 1);
     if (rate > bestRate) {
@@ -150,4 +184,92 @@ export function claimNearestScoreTarget(creep: Creep): string | undefined {
   }
   if (bestId) targets[bestId].claimedBy = creep.name;
   return bestId;
+}
+
+// ── Coverage search (used by role.scoreHunter when nothing is claimed) ──────────
+//
+// A Score is only visible while a creep is in its room and decays fast, so the useful thing a
+// seeker with no target can do is refresh vision on the nearby room that's gone stalest — that
+// is where an as-yet-unseen Score is most likely waiting. Doing this greedily across the fleet
+// (each seeker picking the stalest room no peer is already covering) approximates an optimal
+// multi-agent patrol: the seekers spread out to partition the region and drive down the worst
+// revisit interval without any central planner. Returns undefined only when the region has no
+// safe room to visit (home boxed in by hostiles) — the caller parks off the spawn in that case.
+export function pickPatrolRoom(creep: Creep): string | undefined {
+  const home = creep.memory.homeRoom;
+  if (!home) return undefined;
+  const myName = Game.rooms[home]?.controller?.owner?.username;
+
+  // Rooms other living seekers are already heading to. Steering away from them makes the fleet
+  // fan out into different sectors instead of stacking several creeps onto one stale room.
+  const taken = new Set<string>();
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.name === creep.name || c.memory.role !== ROLE_SCORE_HUNTER) continue;
+    if (c.memory.targetRoom) taken.add(c.memory.targetRoom);
+  }
+
+  const seen = Memory.scorePatrol?.seen ?? {};
+  let best: string | undefined;
+  let bestScore = -Infinity;
+  for (const room of safeRegionRooms(home, myName, PATROL_RADIUS)) {
+    if (room === creep.room.name) continue; // already covering the room we're standing in
+    const staleness = Game.time - (seen[room] ?? 0); // never seen ⇒ effectively huge ⇒ top pick
+    const dist = Game.map.getRoomLinearDistance(creep.room.name, room);
+    // Prefer the stalest room, charge ~50 ticks of staleness per room of travel to reach it,
+    // and heavily discount rooms a peer already owns so two seekers don't converge.
+    const s = staleness - dist * 50 - (taken.has(room) ? 100000 : 0);
+    if (s > bestScore) {
+      bestScore = s;
+      best = room;
+    }
+  }
+  return best;
+}
+
+// Safe rooms an observer should sweep for Scores: same safe region as the seekers patrol, but
+// out to `range` rooms rather than the patrol radius, since the observer isn't limited by a
+// creep's walking speed. Bounded by seeker reachability though — a Score the observer reveals
+// is only worth anything if a staging seeker can sprint there before it decays (the claim's
+// decay/TTL guards drop the rest). Used by the observer orchestrator.
+export function getScoreScanRooms(homeRoomName: string, range: number): string[] {
+  const myName = Game.rooms[homeRoomName]?.controller?.owner?.username;
+  return safeRegionRooms(homeRoomName, myName, range);
+}
+
+// Rooms within `range` of home that are safe for a 50-energy creep to enter, gathered by BFS
+// over actual room connections (so we never target a room that doesn't border the walk).
+// Hostile-OWNED and SK rooms are excluded; our own rooms, allies', reserved, and unowned rooms
+// are all fair game — the original filter wrongly dropped our own colony's rooms too, which
+// could strand seekers with nowhere to go and leave them idling on the spawn.
+function safeRegionRooms(home: string, myName: string | undefined, range: number): string[] {
+  const result: string[] = [];
+  const visited = new Set<string>([home]);
+  let frontier = [home];
+  for (let depth = 0; depth < range; depth++) {
+    const next: string[] = [];
+    for (const rn of frontier) {
+      const exits = Game.map.describeExits(rn);
+      for (const nb of Object.values(exits)) {
+        if (!nb || visited.has(nb)) continue;
+        visited.add(nb);
+        // Hostile-owned and SK rooms are walls: not a destination, and not expanded through, so
+        // the region only ever contains rooms reachable via a safe corridor. A 50-energy seeker
+        // gains nothing dying to enemy towers or an SK room's lairs.
+        if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb)) continue;
+        result.push(nb);
+        next.push(nb);
+      }
+    }
+    frontier = next;
+  }
+  return result;
+}
+
+function isHostileOwned(roomName: string, myName: string | undefined): boolean {
+  const owner = Memory.intel?.[roomName]?.owner;
+  if (!owner) return false; // unowned or reserved-only — safe to walk
+  if (owner === myName) return false; // our own room
+  if (isAlly(owner)) return false; // ally's room
+  return true;
 }

@@ -10,11 +10,11 @@
  *             creep.memory.homeRoom   = anchors the patrol radius
  */
 
-import { claimNearestScoreTarget, getScoreTarget } from "../orchestrators/orchestrator.score";
-
-// How far (in rooms) a patroller wanders from home while searching. Kept short: a Score can
-// decay in as little as 100 ticks, so ranging far away just means arriving after it's gone.
-const SCORE_PATROL_RADIUS = 2;
+import {
+  claimNearestScoreTarget,
+  getScoreTarget,
+  pickPatrolRoom,
+} from "../orchestrators/orchestrator.score";
 
 export function runScoreHunter(creep: Creep): void {
   let targetId = creep.memory.targetId;
@@ -47,35 +47,26 @@ export function runScoreHunter(creep: Creep): void {
   // the stale assignment and this creep re-claims whatever's next.
 }
 
-// Wander a loop of rooms near home. Passing through refreshes vision, which is all
-// orchestrator.score.ts needs to spot a Score there — the search itself is a side effect of
-// just being present, not an explicit scan.
+// Sweep nearby rooms for Scores. Passing through a room refreshes vision, which is all
+// orchestrator.score.ts needs to spot a Score there — the search is a side effect of being
+// present, not an explicit scan. Which room to head for is decided fleet-wide by pickPatrolRoom
+// (stalest safe room no peer already owns), so the seekers spread out and cover the region
+// rather than trailing each other.
 function patrol(creep: Creep): void {
-  const homeRoomName = creep.memory.homeRoom;
-  if (!homeRoomName) return;
-
   if (!creep.memory.targetRoom || creep.room.name === creep.memory.targetRoom) {
-    creep.memory.targetRoom = pickNextPatrolRoom(creep, homeRoomName) ?? homeRoomName;
+    creep.memory.targetRoom = pickPatrolRoom(creep);
   }
 
-  if (creep.room.name !== creep.memory.targetRoom) {
-    creep.moveTo(new RoomPosition(25, 25, creep.memory.targetRoom), { reusePath: 30 });
+  const dest = creep.memory.targetRoom;
+  if (dest && creep.room.name !== dest) {
+    creep.moveTo(new RoomPosition(25, 25, dest), { reusePath: 30 });
+    return;
   }
-}
 
-function pickNextPatrolRoom(creep: Creep, homeRoomName: string): string | undefined {
-  const exits = Game.map.describeExits(creep.room.name);
-  if (!exits) return undefined;
-
-  const candidates = Object.values(exits).filter((name): name is string => {
-    if (!name) return false;
-    if (Game.map.getRoomLinearDistance(homeRoomName, name) > SCORE_PATROL_RADIUS) return false;
-    // Don't wander into a room a scout has already logged as player-owned — a 50-energy
-    // creep gains nothing dying to that room's defenses.
-    if (Memory.intel?.[name]?.owner) return false;
-    return true;
-  });
-
-  if (candidates.length === 0) return undefined;
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  // No safe room to patrol (home boxed in by hostile-owned neighbours). Don't squat on the
+  // spawn pad blocking it — step off toward the controller and hold until a target frees up.
+  if (!dest) {
+    const ctrl = creep.room.controller;
+    if (ctrl && !creep.pos.inRangeTo(ctrl, 3)) creep.moveTo(ctrl, { range: 3, reusePath: 30 });
+  }
 }

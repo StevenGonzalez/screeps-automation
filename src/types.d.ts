@@ -295,6 +295,9 @@ declare global {
     observerId?: Id<StructureObserver>;
     powerSpawnId?: Id<StructurePowerSpawn>;
     observerScanQueue?: string[];
+    // Season-only: rotating queue of nearby safe rooms the observer scans for Score objects,
+    // sharing the observer's one-scan-per-tick slot with the highway queue above.
+    scoreScanQueue?: string[];
     // Nuke defense: tiles ("x,y") of critical structures in a blast → required rampart HP
     nukeDefense?: { tiles: Record<string, number>; updatedAt: number };
     // Dedup state for incoming-nuke notifications
