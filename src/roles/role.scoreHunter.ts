@@ -1,13 +1,20 @@
 /**
- * Score Hunter (Season only, see orchestrator.score.ts): a single-MOVE creep whose entire
- * job is to walk onto a "Score" object. Collection is automatic on touch — no harvest/pickup
- * call needed, so there's nothing else for this role to do.
+ * Score Hunter (Season only, see orchestrator.score.ts): a single-MOVE creep that either
+ * walks onto a claimed "Score" object (collection is automatic on touch — no harvest/pickup
+ * call needed) or, with nothing claimed, patrols nearby rooms as the search arm: without an
+ * observer, the only way to ever discover a Score is a creep physically standing in the room
+ * when one spawns.
  *
  * Assignment: creep.memory.targetId   = claimed score id (key into Memory.scoreTargets)
- *             creep.memory.homeRoom   = room to idle in while nothing is unclaimed
+ *             creep.memory.targetRoom = current patrol destination while nothing is claimed
+ *             creep.memory.homeRoom   = anchors the patrol radius
  */
 
 import { claimNearestScoreTarget, getScoreTarget } from "../orchestrators/orchestrator.score";
+
+// How far (in rooms) a patroller wanders from home while searching. Kept short: a Score can
+// decay in as little as 100 ticks, so ranging far away just means arriving after it's gone.
+const SCORE_PATROL_RADIUS = 2;
 
 export function runScoreHunter(creep: Creep): void {
   let targetId = creep.memory.targetId;
@@ -23,7 +30,7 @@ export function runScoreHunter(creep: Creep): void {
   if (!targetId) {
     targetId = claimNearestScoreTarget(creep);
     if (!targetId) {
-      idleAtHome(creep);
+      patrol(creep);
       return;
     }
     creep.memory.targetId = targetId;
@@ -40,8 +47,35 @@ export function runScoreHunter(creep: Creep): void {
   // the stale assignment and this creep re-claims whatever's next.
 }
 
-function idleAtHome(creep: Creep): void {
-  const home = creep.memory.homeRoom ? Game.rooms[creep.memory.homeRoom] : undefined;
-  const spawn = home?.find(FIND_MY_SPAWNS)[0];
-  if (spawn && !creep.pos.isNearTo(spawn)) creep.moveTo(spawn, { reusePath: 20 });
+// Wander a loop of rooms near home. Passing through refreshes vision, which is all
+// orchestrator.score.ts needs to spot a Score there — the search itself is a side effect of
+// just being present, not an explicit scan.
+function patrol(creep: Creep): void {
+  const homeRoomName = creep.memory.homeRoom;
+  if (!homeRoomName) return;
+
+  if (!creep.memory.targetRoom || creep.room.name === creep.memory.targetRoom) {
+    creep.memory.targetRoom = pickNextPatrolRoom(creep, homeRoomName) ?? homeRoomName;
+  }
+
+  if (creep.room.name !== creep.memory.targetRoom) {
+    creep.moveTo(new RoomPosition(25, 25, creep.memory.targetRoom), { reusePath: 30 });
+  }
+}
+
+function pickNextPatrolRoom(creep: Creep, homeRoomName: string): string | undefined {
+  const exits = Game.map.describeExits(creep.room.name);
+  if (!exits) return undefined;
+
+  const candidates = Object.values(exits).filter((name): name is string => {
+    if (!name) return false;
+    if (Game.map.getRoomLinearDistance(homeRoomName, name) > SCORE_PATROL_RADIUS) return false;
+    // Don't wander into a room a scout has already logged as player-owned — a 50-energy
+    // creep gains nothing dying to that room's defenses.
+    if (Memory.intel?.[name]?.owner) return false;
+    return true;
+  });
+
+  if (candidates.length === 0) return undefined;
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }

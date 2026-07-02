@@ -42,7 +42,7 @@ import {
 } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
-import { getUnclaimedScoreTargetCount } from "./orchestrator.score";
+import { getUnclaimedScoreTargetCount, scoreHunterSupported } from "./orchestrator.score";
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -868,12 +868,21 @@ function spawnScout(room: Room, spawn: StructureSpawn): boolean {
 
 // ── Score hunter (Season only) ──────────────────────────────────────────────────
 
+// Kept alive even with zero known targets: with no observer, the only way to ever find a
+// Score is a creep physically standing in the room when one spawns. This is the search arm
+// (see role.scoreHunter's patrol behavior) — without it, hunters could only ever chase
+// targets some OTHER role's incidental vision happened to reveal.
+const BASELINE_SCORE_PATROLLERS = 1;
 const MAX_SCORE_HUNTERS_PER_ROOM = 3;
 
 function shouldSpawnScoreHunter(room: Room): boolean {
+  // Explicit gate, independent of the unclaimed count below: the baseline patrol count must
+  // never spawn on a server without the Score object (e.g. World) just because 0 unclaimed
+  // targets also happens to be true there.
+  if (!scoreHunterSupported()) return false;
   const unclaimed = getUnclaimedScoreTargetCount();
-  if (unclaimed === 0) return false; // also true on World, where this is always 0
-  return countByRoleInRoom(ROLE_SCORE_HUNTER, room) < Math.min(MAX_SCORE_HUNTERS_PER_ROOM, unclaimed);
+  const target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed));
+  return countByRoleInRoom(ROLE_SCORE_HUNTER, room) < target;
 }
 
 function spawnScoreHunter(room: Room, spawn: StructureSpawn): boolean {
