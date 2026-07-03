@@ -889,6 +889,13 @@ function shouldSpawnScoreHunter(room: Room): boolean {
   // never spawn on a server without the Score object (e.g. World) just because 0 unclaimed
   // targets also happens to be true there.
   if (!scoreHunterSupported()) return false;
+  // A seeker costs only 50 energy, so it can spawn when the room can't yet afford a ~200-energy
+  // builder/upgrader body. Because it sits BELOW those in the queue, an unaffordable upgrader
+  // falls through to the seeker, which drains the 50 the room was accumulating toward that 200 —
+  // holding energyAvailable perpetually under the upgrader/builder minimum so they NEVER spawn.
+  // Gate it on surplus: only raise a seeker once extensions are essentially topped up, so it can
+  // never snipe energy a higher-priority creep is waiting on.
+  if (room.energyAvailable < room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) return false;
   const unclaimed = getUnclaimedScoreTargetCount();
   const target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed));
   // Count by home ownership, NOT physical presence: seekers patrol out to PATROL_RADIUS every
