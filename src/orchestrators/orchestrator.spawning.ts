@@ -171,7 +171,15 @@ function isEconomyCritical(room: Room): boolean {
 function getHarvesterPopulationTarget(room: Room): number {
   const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
   const phase = getRoomPhase(room);
-  if (phase === "bootstrap") return Math.max(2, 2 - minerCount);
+  // Two harvesters to cold-start a room with no miners yet. Once miners cover the sources,
+  // drop to the number of still-uncovered sources — a harvester on an already-mined source
+  // immediately suicides (role.harvester, "redundant here"), so demanding 2 regardless of
+  // coverage just spawn-loops: spawn peasant -> it suicides -> target still 2 -> respawn,
+  // hogging the spawn (harvester is top priority) and starving builders/upgraders below it.
+  if (phase === "bootstrap") {
+    if (minerCount === 0) return 2;
+    return Math.max(0, getSources(room).length - minerCount);
+  }
   // During an energy emergency with no miners, keep 2 harvesters for direct source coverage.
   // With miners present the distribution problem (containers full, extensions empty) is
   // better solved by haulers — one harvester bridge is enough, not two.
