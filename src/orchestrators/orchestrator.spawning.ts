@@ -891,7 +891,13 @@ function shouldSpawnScoreHunter(room: Room): boolean {
   if (!scoreHunterSupported()) return false;
   const unclaimed = getUnclaimedScoreTargetCount();
   const target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed));
-  return countByRoleInRoom(ROLE_SCORE_HUNTER, room) < target;
+  // Count by home ownership, NOT physical presence: seekers patrol out to PATROL_RADIUS every
+  // tick, so counting only those standing in the home room (countByRoleInRoom) sees ~0 while the
+  // fleet is out searching and re-spawns endlessly. Every other roaming role counts this way.
+  const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter(
+    (c) => !c.spawning && c.memory.homeRoom === room.name
+  );
+  return owned.length + getRoomSpawningCount(room, ROLE_SCORE_HUNTER) < target;
 }
 
 function spawnScoreHunter(room: Room, spawn: StructureSpawn): boolean {
