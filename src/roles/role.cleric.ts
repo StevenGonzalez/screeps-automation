@@ -1,10 +1,22 @@
 import { seekBoost } from "../services/services.combat";
+import { isAlly } from "../services/services.allies";
 import { getDefenseOp, getOffensiveOp, runDefensiveCleric, runOffensiveCleric } from "../orchestrators/orchestrator.military";
 
 const SELF_HEAL_THRESHOLD = 0.5;
 
 export function runCleric(creep: Creep) {
-  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
+  // Skip the boost detour when a hostile is right on top of us: healing the line NOW beats
+  // walking to a lab while the fight is lost. If the threat is still distant, boost first.
+  const underImmediateThreat = creep.pos
+    .findInRange(FIND_HOSTILE_CREEPS, 8)
+    .some((c) => !isAlly(c.owner?.username));
+  if (
+    !underImmediateThreat &&
+    (creep.memory.boostCompound || creep.memory.boostQueue?.length) &&
+    seekBoost(creep)
+  ) {
+    return;
+  }
 
   if (creep.memory.offensiveTarget) {
     const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);

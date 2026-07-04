@@ -284,6 +284,13 @@ function getSpawnForRoom(room: Room): StructureSpawn | null {
 function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // Emergency recovery: if no energy gatherers exist, bypass energy reserve
   if (!hasEnergyGatherers(room)) {
+    // A raid that wiped the soft economy (killed the miners/haulers) is exactly when a lost
+    // spawn becomes permanent. If a standing-defense op is active, raise a DEFENDER before
+    // falling back to a harvester — otherwise the room spits one-shot harvesters forever while
+    // the spawn is dismantled and never fields a defender (a hard deadlock). The defender
+    // attempt no-ops (returns false) when it can't afford or doesn't need a body, so a
+    // peacetime economy collapse still gets its emergency harvester as before.
+    if (shouldSpawnDefender(room) && spawnNextDefender(room, spawn)) return;
     spawnEmergencyHarvester(room, spawn);
     return;
   }
@@ -1669,9 +1676,15 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   let boostKey = "knight";
   let body: BodyPartConstant[];
 
-  // Defenders are urgent — size to currently-available energy so the room isn't left
-  // undefended waiting for full capacity while a raid chews the spawn.
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  // Size defenders to the room's FULL capacity, not currently-available (possibly drained)
+  // energy: a mid-raid trickle would otherwise spit out a 1-trio chaff knight that satisfies
+  // the required-count and blocks a proper body from ever spawning. The affordability gate
+  // below then makes the spawn WAIT (accumulating energy) rather than build chaff. Exception:
+  // until the FIRST defender exists we accept whatever current energy affords — a weak
+  // body-block beats an empty room while the spawn is under attack.
+  const haveDefender = getDefenders(room.name).some((c) => !c.spawning);
+  const energyBudget = haveDefender ? room.energyCapacityAvailable : room.energyAvailable;
+  const allowedEnergy = Math.floor(energyBudget * (1 - SPAWN_ENERGY_RESERVE));
 
   if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredKnights) {
     roleToSpawn = ROLE_KNIGHT;

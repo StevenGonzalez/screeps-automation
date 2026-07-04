@@ -610,6 +610,16 @@ export function findClosestDamagedRampart(
 // RCL target HP) ever reach it — so the builder that just laid it boosts it here first.
 const CRITICAL_DEFENSE_HITS = 1000;
 
+// A wall/rampart below this absolute HP is a real breach risk (structures behind it can be
+// reached soon), so a repairer lifts it BEFORE servicing chipped economy structures. Scaled
+// down for developing rooms (vs half the RCL wall target) so it doesn't starve early economy.
+const BREACH_DANGER_FLOOR = 50_000;
+
+// Under fire, a tower holds any barrier below this HP (capped at the RCL wall target). Higher
+// than the calm tower-repair cap so towers START defending a wall well before it's seconds
+// from death, giving their fast repair a chance to out-pace an active dismantler.
+const TOWER_DEFENSE_REPAIR_FLOOR = 300_000;
+
 export function findCriticalDefenseTarget(creep: Creep): AnyStructure | null {
   const critical = getRoomStructures(creep.room).filter(
     (s): s is AnyStructure =>
@@ -669,6 +679,23 @@ export function findMostCriticalRepairTarget(
   );
   if (dying.length > 0) {
     const result = dying.reduce((a, b) => (a.hits < b.hits ? a : b));
+    criticalRepairByRoom[rn] = result;
+    return result;
+  }
+
+  // Priority 0.5: a barrier at genuine breach risk outranks chipped economy structures — a
+  // breach loses structures, a worn road loses a little CPU. Preempt only for walls under the
+  // danger floor (scaled to half the RCL target so developing rooms don't starve economy);
+  // walls above it wait for Priority 2 as before. This stops ramparts sitting near-failing
+  // while every sub-80% road/container is serviced first.
+  const barrierDanger = Math.min(BREACH_DANGER_FLOOR, wallTarget * 0.5);
+  const criticalBarriers = structures.filter(
+    (st): st is AnyStructure =>
+      (st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART) &&
+      st.hits < barrierDanger
+  );
+  if (criticalBarriers.length > 0) {
+    const result = criticalBarriers.reduce((a, b) => (a.hits < b.hits ? a : b));
     criticalRepairByRoom[rn] = result;
     return result;
   }
@@ -733,6 +760,25 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
     : candidates.reduce((a, b) => (a.hits < b.hits ? a : b));
   towerRepairByRoom[room.name] = result;
   return result;
+}
+
+// The weakest wall/rampart low enough to be a real breach risk this fight — what a tower
+// should reinforce while it is HOLDING FIRE under attack (no killable target). Unlike
+// findTowerRepairTarget (a calm-only path capped at ~50k), this uses a higher floor so towers
+// start holding a wall before it is seconds from death, letting their fast repair out-pace an
+// active dismantler. Returns null when every barrier is healthy, so a lone kiter can't bleed us.
+export function findTowerDefenseRepairTarget(
+  room: Room
+): StructureRampart | StructureWall | null {
+  const rcl = room.controller?.level ?? 0;
+  const floor = Math.min(TOWER_DEFENSE_REPAIR_FLOOR, getRampartTargetHP(rcl));
+  let worst: StructureRampart | StructureWall | null = null;
+  for (const s of getRoomStructures(room)) {
+    if (s.structureType !== STRUCTURE_RAMPART && s.structureType !== STRUCTURE_WALL) continue;
+    if (s.hits >= floor) continue;
+    if (!worst || s.hits < worst.hits) worst = s as StructureRampart | StructureWall;
+  }
+  return worst;
 }
 
 export function getClosestContainerOrStorage(creep: Creep): Structure | null {

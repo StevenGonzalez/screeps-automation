@@ -51,10 +51,13 @@ export function loop() {
   const highThreatRooms: string[] = [];
   let crippled = false;
   for (const room of ownedRooms) {
-    // A room that is mine but has lost its last spawn is critically crippled: it can
-    // no longer raise creeps to defend or rebuild itself.
+    // A DEVELOPED room that lost its last spawn is critically crippled — it can no longer raise
+    // creeps to defend or rebuild. Gate on RCL >= 2: a room can't climb past RCL 1 without ever
+    // having had a spawn (upgrading needs a spawned upgrader), so "RCL >= 2 and no spawn" means
+    // it lost one. "RCL 1 and no spawn" is just a freshly-claimed room building its first spawn
+    // — normal expansion, not an emergency — and must NOT flip the whole empire to RECOVER.
     const spawns = room.find(FIND_MY_SPAWNS);
-    if (spawns.length === 0) crippled = true;
+    if (spawns.length === 0 && (room.controller?.level ?? 0) >= 2) crippled = true;
 
     if (getThreatSeverity(room) === "high") highThreatRooms.push(room.name);
   }

@@ -14,6 +14,7 @@ g.WORK = "work";
 g.ATTACK_POWER = 30;
 g.RANGED_ATTACK_POWER = 10;
 g.HEAL_POWER = 12;
+g.DISMANTLE_POWER = 50;
 g.FIND_HOSTILE_CREEPS = 113; // arbitrary; our mock room.find keys off it
 g.Game = { time: 1 };
 g.Memory = {};
@@ -23,6 +24,7 @@ import {
   formationOffset,
   getThreatInfo,
   getThreatSeverity,
+  structureDamagePerTick,
 } from "../src/services/services.combat";
 
 // ── Threat-scoring test helpers ──────────────────────────────────────────────────
@@ -208,5 +210,60 @@ describe("getThreatSeverity calibration", () => {
     // Three attackers (120) + a healer (45) ≈ 165 ≥ SEVERITY_HIGH (160).
     const room = makeRoom("W1N1", [attacker(), attacker(), attacker(), healer()]);
     expect(getThreatSeverity(room)).toBe("high");
+  });
+});
+
+describe("dismantle threat scoring", () => {
+  it("counts a WORK dismantler's damage so it is no longer invisible", () => {
+    // 20 WORK (50 dismantle each) + 20 MOVE:
+    //   10 + (20×50)/30 + 0 + (40×100)/1000 = 10 + 33.333 + 4 = 47.333
+    const room = makeRoom("W1N1", [
+      makeCreep([{ type: "work", count: 20 }, { type: "move", count: 20 }]),
+    ]);
+    expect(getThreatInfo(room).score).toBeCloseTo(47.333, 2);
+  });
+
+  it("scores a boosted dismantler far above the same body unboosted", () => {
+    const plain = getThreatInfo(
+      makeRoom("W1N1", [makeCreep([{ type: "work", count: 20 }])])
+    ).score;
+    const boosted = getThreatInfo(
+      makeRoom("W2N2", [makeCreep([{ type: "work", count: 20, boost: "XZH2O" }])])
+    ).score;
+    expect(boosted).toBeGreaterThan(plain);
+  });
+});
+
+describe("structureDamagePerTick (safe-mode lethality)", () => {
+  it("sums boost-aware ATTACK + RANGED + WORK dismantle over live parts", () => {
+    // 10 ATTACK (300) + 5 RANGED (50) + 10 WORK (500) = 850
+    const creep = makeCreep([
+      { type: "attack", count: 10 },
+      { type: "ranged_attack", count: 5 },
+      { type: "work", count: 10 },
+    ]);
+    expect(structureDamagePerTick([creep])).toBeCloseTo(850, 5);
+  });
+
+  it("flags a lethal boosted RANGED raid the severity buckets under-rate as low", () => {
+    // 40 RANGED XKHO2 (×4) = 40×10×4 = 1600 dmg/tick — reads 'low' on the score scale but is
+    // plainly lethal; well above the 400 safe-mode lethality threshold.
+    const raider = makeCreep([{ type: "ranged_attack", count: 40, boost: "XKHO2" }]);
+    expect(getThreatSeverity(makeRoom("W1N1", [raider]))).toBe("low");
+    expect(structureDamagePerTick([raider])).toBeCloseTo(1600, 5);
+    expect(structureDamagePerTick([raider])).toBeGreaterThan(400);
+  });
+
+  it("ignores destroyed parts", () => {
+    const creep = {
+      body: [
+        { type: "attack", hits: 0 },
+        { type: "work", hits: 0 },
+        { type: "ranged_attack", hits: 100 },
+      ],
+      owner: { username: "Enemy" },
+    } as unknown as Creep;
+    // Only the live RANGED part contributes: 1×10 = 10
+    expect(structureDamagePerTick([creep])).toBeCloseTo(10, 5);
   });
 });

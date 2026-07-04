@@ -71,8 +71,10 @@ const BOOST_GRACE_TICKS = 80;
 // is 10/creep + 5/ATTACK + 5/RANGED_ATTACK + 8/HEAL part, so this corresponds to a
 // healer-backed raid that towers alone can't comfortably out-damage (SEVERITY_HIGH=150).
 const DEFENSE_THREAT_SCORE = 150;
-// Heavy threat re-evaluation is throttled; cheap per-creep behavior still runs each tick.
-const DEFENSE_SCAN_INTERVAL = 5;
+// Threat re-evaluation cadence. Kept low (was 5) so a DefenseOp — the sole trigger for
+// defender spawning — is declared within a tick or two of a raid appearing rather than up to
+// 5 ticks later; the scan is cheap (per-tick-cached getThreatInfo over owned rooms).
+const DEFENSE_SCAN_INTERVAL = 2;
 // Once the room has been clear of meaningful threats for this long, stand the squad down.
 const DEFENSE_CLEAR_TICKS = 25;
 // Defenders hold within this range of the threatened room's spawn cluster / rally point
@@ -1455,13 +1457,20 @@ function runDefenseCouncil(): void {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
 
-    const { score } = getThreatInfo(room);
+    const { score, hostiles } = getThreatInfo(room);
     const severity = getThreatSeverity(room);
     const existing = ops[roomName];
 
+    // A hostile CLAIM creep in an owned room is a controller-downgrade attacker: it scores
+    // "low" (no attack/heal mass) so the severity gate ignores it, yet left alone it strips
+    // controller progress / RCL. Treat its presence as meaningful so a knight is raised to kill
+    // it (safe mode would also stop it, but burning a charge on a lone claimer is waste).
+    const controllerAttacker = hostiles.some((c) => c.body.some((p) => p.type === CLAIM));
+
     // A meaningful threat is one that warrants a standing squad: a high-severity raid
-    // (healer-backed / out-damages towers). Lower threats are left to towers alone.
-    const meaningful = severity === "high" || score >= DEFENSE_THREAT_SCORE;
+    // (healer-backed / out-damages towers), a controller-downgrade attacker, or a score over
+    // the standing-defense line. Lower threats are left to towers alone.
+    const meaningful = severity === "high" || score >= DEFENSE_THREAT_SCORE || controllerAttacker;
 
     if (meaningful) {
       if (existing) {
@@ -1500,9 +1509,17 @@ function recommendDefense(score: number): {
   requiredWizards: number;
   requiredClerics: number;
 } {
-  const requiredKnights = Math.min(4, 2 + Math.floor((score - DEFENSE_THREAT_SCORE) / 80));
-  const requiredClerics = Math.min(2, 1 + Math.floor((score - DEFENSE_THREAT_SCORE) / 120));
-  const requiredWizards = score >= DEFENSE_THREAT_SCORE + 60 ? 1 : 0;
+  // Caps raised (knights 4→6, clerics 2→3, wizards 1→2) so a heavy boosted assault — whose
+  // score reaches many hundreds — is answered with a real squad, not a hard-capped handful.
+  // Floors ensure a below-threshold-but-meaningful op (e.g. a lone controller-downgrade
+  // claimer, score < DEFENSE_THREAT_SCORE) still raises at least one knight to kill it rather
+  // than declaring an op with zero/negative required counts.
+  const requiredKnights = Math.max(1, Math.min(6, 2 + Math.floor((score - DEFENSE_THREAT_SCORE) / 70)));
+  const requiredClerics = Math.max(0, Math.min(3, 1 + Math.floor((score - DEFENSE_THREAT_SCORE) / 110)));
+  const requiredWizards =
+    score >= DEFENSE_THREAT_SCORE + 60
+      ? Math.min(2, 1 + Math.floor((score - DEFENSE_THREAT_SCORE - 60) / 150))
+      : 0;
   return { requiredKnights, requiredWizards, requiredClerics };
 }
 
@@ -1656,9 +1673,17 @@ export function runDefensiveKnight(creep: Creep, roomName: string): void {
   const target = selectDefenseTarget(creep, rally, hostiles);
   if (target) {
     if (creep.pos.isNearTo(target)) creep.attack(target);
-    // Fight from a rampart adjacent to the target; open-field advance if no ramparts.
+    // Fight from a rampart adjacent to the target. If none is in striking range but the room
+    // HAS defensive ramparts, fall back onto the nearest one and hold cover (anchor range 0)
+    // rather than charging into the open — a ranged+heal raider parked outside rampart range
+    // would otherwise kite an exposed melee knight to death with no return fire. Only advance
+    // in the open when the room is genuinely wall-less (low RCL), where cover isn't an option.
     if (!anchorOnRampart(creep, target.pos, 1)) {
-      defenseMoveToward(creep, rally, target, 1);
+      if (getDefensiveRamparts(creep.room).length > 0) {
+        anchorOnRampart(creep, target.pos, 0);
+      } else {
+        defenseMoveToward(creep, rally, target, 1);
+      }
     }
     return;
   }

@@ -1,5 +1,6 @@
 import { runTower, selectRoomAttackTarget } from "../roles/role.tower";
-import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
+import { getThreatInfo, getThreatSeverity, structureDamagePerTick } from "../services/services.combat";
+import { isAlly } from "../services/services.allies";
 
 const THREAT_NOTIFY_COOLDOWN = 200;
 
@@ -24,6 +25,12 @@ const SAFEMODE_LOW_CHARGE = 1;            // "this is our last charge" — be co
 // AND defenders can't stop it, fire BEFORE the spawn reaches 50% rather than after.
 const SAFEMODE_SPAWN_PREDICT_TICKS = 12;  // fire if a spawn will die within this many ticks
 const SAFEMODE_SPAWN_PREDICT_HP_RATIO = 0.80; // ...and it's already taking real damage (<80% HP)
+// Absolute incoming structure DPS (boost-aware, includes ranged + WORK dismantle) at or above
+// which a threat is treated as a genuine assault regardless of its severity BUCKET. A spawn
+// has ~5000 HP, so ≥400/tick destroys it inside the predictive window — the severity
+// thresholds under-rate lethal ranged/dismantle/boosted forces, and this closes that gap so a
+// last safe-mode charge is never conserved-against a force that can actually take the room.
+const SAFEMODE_LETHAL_DPS = 400;
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -32,7 +39,11 @@ export function loop() {
 
     // One hostile scan per room per tick, shared by notification, safe-mode checks,
     // and tower targeting — these previously ran three separate FIND_HOSTILE_CREEPS.
-    const hostiles = room.find(FIND_HOSTILE_CREEPS);
+    // Allies are excluded here (Screeps lists allied creeps under FIND_HOSTILE_CREEPS): we
+    // must never shoot them or count them toward the "overwhelmed" safe-mode trigger.
+    const hostiles = room.find(FIND_HOSTILE_CREEPS, {
+      filter: (c) => !isAlly(c.owner?.username),
+    });
 
     notifyOnHostiles(room, hostiles);
     checkSafeMode(room, hostiles);
@@ -72,15 +83,23 @@ function checkSafeMode(room: Room, hostiles: Creep[]): void {
   // boosts, so a small-but-deadly boosted squad still reads "high" and is allowed through.
   const lastCharge = controller.safeModeAvailable <= SAFEMODE_LOW_CHARGE;
   const severity = getThreatSeverity(room);
-  const trivialThreat = severity === "low" || severity === "medium";
-  // On the final charge, only a "high" threat (real assault) may consume it.
+  // Absolute incoming structure DPS (boost-aware, includes ranged + WORK dismantle). The
+  // severity BUCKETS under-rate lethal ranged/dismantle/boosted forces (a 3000-dps boosted
+  // melee reads "medium", a 1600-dps ranged raid reads "low"), so a genuinely lethal DPS
+  // overrides the "trivial" classification and is never conserved-against on the last charge.
+  const incomingDps = structureDamagePerTick(attackers);
+  const lethalDps = incomingDps >= SAFEMODE_LETHAL_DPS;
+  const trivialThreat = (severity === "low" || severity === "medium") && !lethalDps;
+  // On the final charge, only a real assault may consume it — where "real" is now a "high"
+  // severity OR a lethal raw DPS, so a small boosted ranged/dismantle raid can't slip through.
   const conserve = lastCharge && trivialThreat;
 
   // A force that can actually breach: enough bodies plus the dismantle/melee power to
-  // chew through ramparts, OR a high boost-aware severity. A pure tower-drainer (a few
-  // RANGED_ATTACK kiters with no breaching mass) won't clear this bar, so it can chip
-  // towers all day without inducing a wasted safe mode.
+  // chew through ramparts, a high boost-aware severity, OR a lethal raw DPS. A pure
+  // tower-drainer (a few RANGED_ATTACK kiters with no breaching mass and low total DPS)
+  // won't clear this bar, so it can chip towers all day without inducing a wasted safe mode.
   const breaching = isBreachingForce(room, attackers, severity);
+  const forceThatCanFinish = breaching || lethalDps;
 
   // Trigger 1: any spawn critically damaged
   for (const spawn of room.find(FIND_MY_SPAWNS)) {
@@ -94,7 +113,7 @@ function checkSafeMode(room: Room, hostiles: Creep[]): void {
   // Trigger 1b (predictive): a spawn is already taking damage and projected incoming
   // hostile DPS (boost-aware, via getThreatInfo) will destroy it within the next several
   // ticks faster than defenders can intervene. Fire EARLY rather than waiting for 50%.
-  if (!conserve && breaching) {
+  if (!conserve && forceThatCanFinish) {
     for (const spawn of room.find(FIND_MY_SPAWNS)) {
       if (spawn.hits >= spawn.hitsMax * SAFEMODE_SPAWN_PREDICT_HP_RATIO) continue;
       const ticksToDie = ticksUntilDestroyed(room, spawn);
@@ -113,7 +132,7 @@ function checkSafeMode(room: Room, hostiles: Creep[]): void {
   // but a drain-attacker that merely chips towers (no force that can finish the room)
   // must NOT be able to trick us into spending a charge — gate on a real breaching force.
   const towerIds = room.memory.towerIds ?? [];
-  if (breaching && !conserve) {
+  if (forceThatCanFinish && !conserve) {
     for (const id of towerIds) {
       const tower = Game.getObjectById(id) as StructureTower | null;
       if (tower && tower.hits < tower.hitsMax * SAFEMODE_TOWER_HP_RATIO) {
@@ -189,11 +208,14 @@ function isBreachingForce(room: Room, attackers: Creep[], severity: string): boo
   return breachParts >= 10 && attackers.length >= SAFEMODE_OVERWHELMED_COUNT;
 }
 
-// Estimate how many ticks until `target` is destroyed by sustained hostile fire, net of
-// the repair our towers can throw at it. Returns undefined if the structure isn't dying
-// (incoming DPS ≤ achievable repair). Uses the boost-aware room threat DPS so a boosted
-// squad's true output is respected. Conservative: tower repair is discounted because the
-// towers are also splitting effort between attacking and repairing under fire.
+// Estimate how many ticks until `target` is destroyed by sustained hostile fire. Returns
+// undefined only when there is no incoming damage at all. Uses the boost-aware room DPS
+// (ATTACK + RANGED + WORK dismantle) so a boosted squad's true output is respected.
+//
+// No tower-repair credit is applied: whenever a spawn is under fire there IS an attack target,
+// and a tower that fires cannot also repair the same tick (runTower attacks and returns). The
+// previous version credited ~400 HP/tower/tick of phantom repair that never happens during a
+// fight, so it concluded the spawn was "not dying" and this predictive trigger never fired.
 function ticksUntilDestroyed(
   room: Room,
   target: { hits: number; pos: RoomPosition }
@@ -201,37 +223,9 @@ function ticksUntilDestroyed(
   const { hostiles } = getThreatInfo(room);
   if (hostiles.length === 0) return undefined;
 
-  // Raw boost-aware damage-per-tick from live ATTACK/RANGED parts in the room.
-  let dps = 0;
-  for (const c of hostiles) {
-    for (const p of c.body) {
-      if (p.hits <= 0) continue;
-      if (p.type === ATTACK) dps += ATTACK_POWER * boostMult(p);
-      else if (p.type === RANGED_ATTACK) dps += RANGED_ATTACK_POWER * boostMult(p);
-    }
-  }
+  const dps = structureDamagePerTick(hostiles);
   if (dps <= 0) return undefined;
-
-  // Achievable tower repair on the target (TOWER_POWER_REPAIR per tower, halved as a
-  // conservative discount for split attack/repair duty + range falloff + energy limits).
-  const towerIds = room.memory.towerIds ?? [];
-  const liveTowers = towerIds
-    .map((id) => Game.getObjectById(id) as StructureTower | null)
-    .filter((t): t is StructureTower => !!t && t.store[RESOURCE_ENERGY] >= 10).length;
-  const repairPerTick = liveTowers * TOWER_POWER_REPAIR * 0.5;
-
-  const netDps = dps - repairPerTick;
-  if (netDps <= 0) return undefined; // we can out-repair the incoming fire — not dying
-  return Math.ceil(target.hits / netDps);
-}
-
-// Boost multiplier for an ATTACK/RANGED_ATTACK part (1 when unboosted). Mirrors the
-// boost-aware tables in services.combat without re-exporting its internals.
-function boostMult(part: BodyPartDefinition): number {
-  if (!part.boost) return 1;
-  const attackBoosts: Record<string, number> = { UH: 2, UH2O: 3, XUH2O: 4 };
-  const rangedBoosts: Record<string, number> = { KO: 2, KHO2: 3, XKHO2: 4 };
-  return attackBoosts[part.boost] ?? rangedBoosts[part.boost] ?? 1;
+  return Math.ceil(target.hits / dps);
 }
 
 function activateSafeMode(room: Room, controller: StructureController, reason: string): void {

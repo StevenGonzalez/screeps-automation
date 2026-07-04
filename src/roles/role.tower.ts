@@ -1,6 +1,9 @@
-import { findTowerRepairTarget } from "../services/services.creep";
+import { findTowerRepairTarget, findTowerDefenseRepairTarget } from "../services/services.creep";
 
 const TOWER_REPAIR_ENERGY_THRESHOLD = 0.25;
+// Under fire, repair the breached wall only while keeping this much energy in reserve, so a
+// killable target appearing next tick still gets shot. Above this, surplus holds the wall.
+const TOWER_DEFENSE_REPAIR_MIN_ENERGY = 400;
 
 // Official tower damage falloff: full TOWER_POWER_ATTACK at range <= TOWER_OPTIMAL_RANGE,
 // dropping linearly by TOWER_FALLOFF (75%) out to TOWER_FALLOFF_RANGE, where it bottoms out.
@@ -38,10 +41,13 @@ export function runTower(
   // drain the whole economy. A genuine home defender fighting the intruder stands in the interior,
   // so it still gets topped up.
   if (hasHostiles) {
+    // Interior filter matches the target zone in selectRoomAttackTarget (x/y 2..47), so a home
+    // defender fighting anywhere towers can still shoot is also eligible for heals — the tighter
+    // 3..46 zone used to strand a defender body-blocking on column/row 2 with no heal.
     const wounded = tower.room.find(FIND_MY_CREEPS, {
       filter: (c) =>
         c.hits < c.hitsMax &&
-        c.pos.x > 2 && c.pos.x < 47 && c.pos.y > 2 && c.pos.y < 47,
+        c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48,
     });
     if (wounded.length > 0) {
       const target = tower.pos.findClosestByRange(wounded);
@@ -49,6 +55,19 @@ export function runTower(
         tower.heal(target);
         return;
       }
+    }
+  }
+
+  // Under active threat with no killable target (a drain hold-fire, or a siege we can't
+  // out-damage this tick), spend SURPLUS energy holding the wall rather than sitting idle: a
+  // dismantler grinding a rampart is beaten by out-repairing it. findTowerDefenseRepairTarget
+  // only returns a barrier that's genuinely low (below the danger floor), so a lone kiter at
+  // full walls can't bleed us; the energy reserve keeps fire available for a target next tick.
+  if (hasHostiles && tower.store[RESOURCE_ENERGY] >= TOWER_DEFENSE_REPAIR_MIN_ENERGY) {
+    const barrier = findTowerDefenseRepairTarget(tower.room);
+    if (barrier) {
+      tower.repair(barrier);
+      return;
     }
   }
 
@@ -133,7 +152,12 @@ function shouldKeepFiring(room: Room, hostiles: Creep[]): boolean {
     .find(FIND_MY_CREEPS)
     .some((c) => c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK));
   if (haveFighters) return true;
-  return hostiles.some((c) => c.body.some((p) => p.type === WORK && p.hits > 0));
+  // Keep suppressing anything that can grind our structures at close range: a live WORK
+  // (dismantler) OR a live ATTACK part (melee has to stand ON our ramparts/spawn to hit them).
+  // A pure ranged kiter has neither, so genuine drain hold-fire still applies to it alone.
+  return hostiles.some((c) =>
+    c.body.some((p) => (p.type === WORK || p.type === ATTACK) && p.hits > 0)
+  );
 }
 
 // Lower score = higher priority. Ordering, most significant first:
@@ -193,14 +217,20 @@ function activeTowers(room?: Room): StructureTower[] {
   const towers: StructureTower[] = [];
   for (const id of towerIds) {
     const tower = Game.getObjectById(id);
-    if (tower && tower.store[RESOURCE_ENERGY] > 0) towers.push(tower);
+    // A tower needs at least TOWER_ENERGY_COST (10) to actually fire; counting one with 1–9
+    // energy as a full-damage contributor overstates our reach during a drain (isDamageable
+    // stays true against a target we can't hurt) and feeds the drainer the last few shots.
+    if (tower && tower.store[RESOURCE_ENERGY] >= TOWER_ENERGY_COST) towers.push(tower);
   }
   return towers;
 }
 
 function hostileTier(creep: Creep): number {
-  if (creep.body.some((p) => p.type === HEAL)) return 0;           // healers: must die first
-  if (creep.body.some((p) => p.type === RANGED_ATTACK)) return 1;  // ranged: dangerous at distance
-  if (creep.body.some((p) => p.type === ATTACK)) return 2;         // melee
-  return 3;                                                          // support (dismantlers, etc.)
+  // Only LIVE parts count — a creep whose HEAL/ATTACK parts are already shot off is no longer
+  // that class and must not keep top priority (nor lock the hysteresis, which keys on this).
+  if (creep.body.some((p) => p.type === HEAL && p.hits > 0)) return 0;          // healers: die first
+  if (creep.body.some((p) => p.type === RANGED_ATTACK && p.hits > 0)) return 1; // ranged: dangerous at distance
+  if (creep.body.some((p) => p.type === ATTACK && p.hits > 0)) return 2;        // melee
+  if (creep.body.some((p) => p.type === WORK && p.hits > 0)) return 2;          // dismantlers: the real breach threat, not last
+  return 3;                                                                      // unarmed (claimers, haulers, scouts)
 }

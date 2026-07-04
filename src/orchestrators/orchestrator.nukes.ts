@@ -173,6 +173,15 @@ function canReinforceInTime(
     .lookFor(LOOK_STRUCTURES)
     .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
   const currentHp = rampart?.hits ?? 0;
+
+  // A rampart can never exceed its RCL cap (RAMPART_HITS_MAX), so if the survival HP the tile
+  // needs is above that ceiling — e.g. stacked nukes on a low-RCL store structure — no amount
+  // of repair can save it. Report "can't reinforce" so the caller evacuates the contents
+  // instead of trusting a physically-unreachable HP target and losing everything at impact.
+  const rcl = room.controller?.level ?? 0;
+  const rampartCap = RAMPART_HITS_MAX[rcl] ?? 0;
+  if (required > rampartCap) return false;
+
   const deficit = required - currentHp;
   if (deficit <= 0) return true; // already strong enough
 

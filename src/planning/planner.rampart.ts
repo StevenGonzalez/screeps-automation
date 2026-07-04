@@ -90,7 +90,19 @@ function protectedRects(
   room: Room,
   box: { minX: number; minY: number; maxX: number; maxY: number }
 ): Rect[] {
-  const rects: Rect[] = [{ x1: box.minX, y1: box.minY, x2: box.maxX, y2: box.maxY }];
+  // Clamp the core rect to the interior (1..48), like the controller rect below. A core
+  // structure adjacent to an exit (coord 0/49) would otherwise connect the min-cut source
+  // straight to the sink, collapsing the cut to empty — after which the fallback ring (clamped
+  // to 2..47) walls that structure OUT, leaving the base unsealed. Clamping keeps the protected
+  // region off the exit ring so the min-cut stays well-posed.
+  const rects: Rect[] = [
+    {
+      x1: Math.max(1, box.minX),
+      y1: Math.max(1, box.minY),
+      x2: Math.min(48, box.maxX),
+      y2: Math.min(48, box.maxY),
+    },
+  ];
 
   const controller = room.controller;
   if (controller) {

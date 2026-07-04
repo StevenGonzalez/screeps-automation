@@ -1,11 +1,23 @@
 import { seekBoost, findInvaderCore } from "../services/services.combat";
+import { isAlly } from "../services/services.allies";
 import { clearRemoteInvader } from "../services/services.creep";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
 
 const RETREAT_THRESHOLD = 0.2;
 
 export function runKnight(creep: Creep) {
-  if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
+  // Skip the boost detour when a hostile is right on top of us: fighting NOW unboosted beats
+  // walking to a lab and waiting while the spawn burns. If the threat is still distant, boost.
+  const underImmediateThreat = creep.pos
+    .findInRange(FIND_HOSTILE_CREEPS, 8)
+    .some((c) => !isAlly(c.owner?.username));
+  if (
+    !underImmediateThreat &&
+    (creep.memory.boostCompound || creep.memory.boostQueue?.length) &&
+    seekBoost(creep)
+  ) {
+    return;
+  }
 
   // Offensive squad: tagged creep follows military orchestrator orders
   if (creep.memory.offensiveTarget) {
@@ -42,7 +54,9 @@ export function runKnight(creep: Creep) {
     }
   }
 
-  const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+  const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
+    filter: (c) => !isAlly(c.owner?.username),
+  });
   if (hostile) {
     if (creep.attack(hostile) === ERR_NOT_IN_RANGE) {
       creep.moveTo(hostile, { reusePath: 3 });

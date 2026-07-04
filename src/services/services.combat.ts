@@ -102,6 +102,9 @@ const ATTACK_BOOST_MULT: Record<string, number> = { UH: 2, UH2O: 3, XUH2O: 4 };
 const RANGED_BOOST_MULT: Record<string, number> = { KO: 2, KHO2: 3, XKHO2: 4 };
 const HEAL_BOOST_MULT: Record<string, number> = { LO: 2, LHO2: 3, XLHO2: 4 };
 const TOUGH_DAMAGE_MULT: Record<string, number> = { GO: 0.7, GHO2: 0.5, XGHO2: 0.3 };
+// Dismantle boost (ZH ×2, ZH2O ×3, XZH2O ×4). A WORK part removes DISMANTLE_POWER (50)
+// hits/tick from a structure; boosted dismantlers are the fastest wall-breakers in the game.
+const DISMANTLE_BOOST_MULT: Record<string, number> = { ZH: 2, ZH2O: 3, XZH2O: 4 };
 
 // Score weights tuned so a unit's contribution tracks its real DPS + effective HP.
 // See SEVERITY_MEDIUM/SEVERITY_HIGH for how these map onto severity thresholds.
@@ -120,6 +123,7 @@ const threatCache: Record<string, ThreatInfo> = {};
 function creepThreatScore(c: Creep): number {
   let attackPower = 0;   // melee damage per tick
   let rangedPower = 0;   // ranged damage per tick
+  let dismantlePower = 0; // WORK dismantle damage per tick (structures/barriers)
   let healPower = 0;     // heal per tick
   let effectiveHp = 0;   // raw HP scaled up by TOUGH boosts
 
@@ -134,6 +138,12 @@ function creepThreatScore(c: Creep): number {
         rangedPower += RANGED_ATTACK_POWER * (part.boost ? RANGED_BOOST_MULT[part.boost] ?? 1 : 1);
         effectiveHp += 100;
         break;
+      case WORK:
+        // A WORK part can dismantle our ramparts/structures. Count its dismantle output so a
+        // pure dismantler (no ATTACK/RANGED) still registers as a real threat instead of "low".
+        dismantlePower += DISMANTLE_POWER * (part.boost ? DISMANTLE_BOOST_MULT[part.boost] ?? 1 : 1);
+        effectiveHp += 100;
+        break;
       case HEAL:
         healPower += HEAL_POWER * (part.boost ? HEAL_BOOST_MULT[part.boost] ?? 1 : 1);
         effectiveHp += 100;
@@ -145,17 +155,38 @@ function creepThreatScore(c: Creep): number {
         break;
       }
       default:
-        effectiveHp += 100; // MOVE/CARRY/WORK/CLAIM still soak 100 HP before dying
+        effectiveHp += 100; // MOVE/CARRY/CLAIM still soak 100 HP before dying
         break;
     }
   }
 
   return (
     THREAT_BASE_PER_CREEP +
-    (attackPower + rangedPower) / DAMAGE_DIVISOR +
+    (attackPower + rangedPower + dismantlePower) / DAMAGE_DIVISOR +
     healPower * HEAL_WEIGHT +
     effectiveHp / EHP_DIVISOR
   );
+}
+
+// Raw boost-aware damage-per-tick that a set of hostiles can inflict on our STRUCTURES this
+// tick — melee ATTACK, RANGED_ATTACK, and WORK dismantle summed over live parts. Unlike the
+// calibrated threat SCORE (tuned for severity buckets and defender scaling), this is an
+// absolute physical rate used by the safe-mode logic to answer "can this force actually
+// destroy a spawn/wall fast?" regardless of how the severity thresholds classify it. This is
+// what closes the gap where a lethal ranged or dismantle force scores below "high".
+export function structureDamagePerTick(hostiles: Creep[]): number {
+  let dps = 0;
+  for (const c of hostiles) {
+    for (const p of c.body) {
+      if (p.hits <= 0) continue;
+      if (p.type === ATTACK) dps += ATTACK_POWER * (p.boost ? ATTACK_BOOST_MULT[p.boost] ?? 1 : 1);
+      else if (p.type === RANGED_ATTACK)
+        dps += RANGED_ATTACK_POWER * (p.boost ? RANGED_BOOST_MULT[p.boost] ?? 1 : 1);
+      else if (p.type === WORK)
+        dps += DISMANTLE_POWER * (p.boost ? DISMANTLE_BOOST_MULT[p.boost] ?? 1 : 1);
+    }
+  }
+  return dps;
 }
 
 // Returns a threat score for the room: 0 = no hostiles.
