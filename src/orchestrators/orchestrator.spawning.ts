@@ -269,10 +269,18 @@ function getBuilderPopulationTarget(room: Room): number {
   if (siteCount === 0) return 0;
   const phase = getRoomPhase(room);
   if (phase === "bootstrap") return Math.min(3, siteCount);
-  // Scale with workload: 1 builder per 10 sites.
-  // Cap lower for developing rooms to avoid starving essential roles.
-  const cap = phase === "developing" ? 2 : 5;
-  return Math.min(cap, Math.ceil(siteCount / 10));
+  // Scale with workload: 1 builder per 5 sites, so a real buildout backlog (a fresh extension
+  // ring + roads) gets more than a lone builder crawling through it.
+  const target = Math.ceil(siteCount / 5);
+  // But construction is energy-THROUGHPUT limited, not builder-count limited: one ~4-WORK builder
+  // already consumes ~20 e/tick, roughly a two-source room's entire gross income. Without a storage
+  // buffer to burn (storage unlocks at RCL4), extra builders just idle waiting on the miners — and
+  // they sit ABOVE upgraders in the queue, so idle builders would starve RCL progression for
+  // nothing. So only burst past 2 when there's a surplus buffer to actually fund the extra hands;
+  // that buffer drains fast to finish the push, then siteCount → 0 auto-despawns them.
+  const buffer = room.storage?.store[RESOURCE_ENERGY] ?? 0;
+  const cap = buffer > 30_000 ? 5 : 2;
+  return Math.min(cap, Math.max(1, target));
 }
 
 function getSpawnForRoom(room: Room): StructureSpawn | null {
