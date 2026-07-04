@@ -391,18 +391,26 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // Standalone tower-drain leeches (manual Game.arca.drain) — optional offensive harassment,
   // funded only after economy/defense/expansion/siege above are satisfied.
   if (!economyCritical && shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
-  if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
-  if (shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;
-  if (spawnSkCreeps(room, spawn)) return;
-  if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
-  if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
-  // Remote roles after local economy is stable
+  // Remote mining is BASELINE economy — usually the single largest energy multiplier in the
+  // mid-game — so it ranks ABOVE the opportunistic advanced ops below (power/deposit/SK/apothecary/
+  // mineral), which are either op-declared and temporary or low-yield polish. This also aligns the
+  // healthy-state order with the energy-emergency branch above, which already spawns remotes first
+  // because remote income is what digs a starving room back out. Scout leads the cluster: it's a
+  // 50-energy creep whose intel populates pendingScoutRooms and drives remote/expansion discovery,
+  // so starving it stalls the whole pipeline that feeds these remotes.
   if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   // Clear an Invader out of a remote before sending more miners into it.
   if (shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
   if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
   if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
+
+  // Advanced / opportunistic ops — all ranked BELOW baseline remote income above.
+  if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
+  if (shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;
+  if (spawnSkCreeps(room, spawn)) return;
+  if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
+  if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
 }
 
 const HAULER_SPAWN = {
