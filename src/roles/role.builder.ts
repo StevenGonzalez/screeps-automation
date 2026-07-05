@@ -4,6 +4,7 @@ import {
   isCreepEmpty,
   isCreepFull,
   getRoomBuildTarget,
+  findClosestConstructionSite,
   findClosestRepairTarget,
   findCriticalDefenseTarget,
   findCoreFillTarget,
@@ -55,25 +56,42 @@ export function runBuilder(creep: Creep) {
   // past the decay amount — and the builder's generic repair fallback excludes ramparts — so
   // without this a mason that just built a rampart abandons it at 1 hit and it dies, looping
   // build→decay→rebuild forever. Once it's past the floor, towers/repairers maintain it.
+  // Each step below targets a single structure. If that target can't be reached
+  // (ERR_NO_PATH — the tile is walled off, behind wall construction sites, or on
+  // unreachable terrain) we must NOT return, or the creep stands still holding full
+  // energy forever while other reachable work goes undone. Fall through to the next
+  // kind of work instead; ERR_NO_PATH means "couldn't get close enough", every other
+  // result (built/repaired/moving/out-of-energy) is real progress, so we return on it.
   const critical = findCriticalDefenseTarget(creep);
   if (critical) {
     const r = repairStructure(creep, critical);
     if (r === ERR_NOT_ENOUGH_RESOURCES) creep.memory.working = false;
-    return;
+    if (r !== ERR_NO_PATH) return;
   }
 
   const site = getRoomBuildTarget(creep.room);
   if (site) {
     const res = buildAtConstructionSite(creep, site);
-    if (res === ERR_NOT_ENOUGH_RESOURCES) creep.memory.working = false;
-    return;
+    if (res === ERR_NOT_ENOUGH_RESOURCES) {
+      creep.memory.working = false;
+      return;
+    }
+    if (res !== ERR_NO_PATH) return;
+    // The room's focus-fire site is unreachable from here — build the closest site we
+    // CAN path to instead of idling, so construction still makes progress.
+    const reachable = findClosestConstructionSite(creep);
+    if (reachable && reachable.id !== site.id) {
+      const r2 = buildAtConstructionSite(creep, reachable);
+      if (r2 === ERR_NOT_ENOUGH_RESOURCES) creep.memory.working = false;
+      if (r2 !== ERR_NO_PATH) return;
+    }
   }
 
   const repairTarget = findClosestRepairTarget(creep);
   if (repairTarget) {
     const r = repairStructure(creep, repairTarget);
     if (r === ERR_NOT_ENOUGH_RESOURCES) creep.memory.working = false;
-    return;
+    if (r !== ERR_NO_PATH) return;
   }
 
   upgradeController(creep);
