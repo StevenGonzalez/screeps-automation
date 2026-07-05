@@ -202,6 +202,15 @@ function getDangerPositions(room: Room): RoomPosition[] {
     for (const k in dangerByRoom) delete dangerByRoom[k];
   }
   if (!dangerByRoom[room.name]) {
+    // Under safe mode the room is fully protected — hostiles can't attack our creeps or
+    // structures — so there is no danger to route around. Treating an enemy parked in the base
+    // as a no-go zone here freezes ALL nearby construction and harvesting (isPositionSafe blanks
+    // out a range-5 circle around every hostile), stranding masons/miners next to a creep that
+    // cannot touch them. Report no danger so the economy keeps working right through the siege.
+    if (room.controller?.safeMode) {
+      dangerByRoom[room.name] = [];
+      return dangerByRoom[room.name];
+    }
     const positions: RoomPosition[] = [];
     for (const c of room.find(FIND_HOSTILE_CREEPS)) positions.push(c.pos);
     for (const s of room.find(FIND_STRUCTURES)) {
