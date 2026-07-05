@@ -125,6 +125,17 @@ function roadCostCallback(roomName: string): CostMatrix {
   if (!room) return base;
 
   const cm = base.clone();
+  // Obstacle-type construction sites (extension/tower/spawn/wall/lab/…) block movement — a creep
+  // cannot step onto them — but the structure matrix only knows about BUILT structures. Without
+  // marking them, PathFinder routes creeps straight through their own unbuilt extensions; the
+  // creep aims at a tile it can never enter, moveTo returns OK, and it wedges there forever. In a
+  // base with many sites this permanently strands builders among the very structures they're
+  // trying to build. Roads/ramparts/containers stay walkable (not in OBSTACLE_OBJECT_TYPES).
+  for (const s of room.find(FIND_MY_CONSTRUCTION_SITES)) {
+    if ((OBSTACLE_OBJECT_TYPES as string[]).includes(s.structureType)) {
+      cm.set(s.pos.x, s.pos.y, 0xff);
+    }
+  }
   for (const c of room.find(FIND_CREEPS)) cm.set(c.pos.x, c.pos.y, 0xff);
   for (const pc of room.find(FIND_POWER_CREEPS)) cm.set(pc.pos.x, pc.pos.y, 0xff);
   creepAwareCache[roomName] = cm;
