@@ -493,7 +493,23 @@ const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_ROAD]: 11,
 };
 
+// Containers aren't interchangeable, but a construction site only exposes its structureType, so
+// the flat table above can't tell them apart — leaving every container tied at priority 1, ahead
+// of extensions. That's why masons focus-fire a mineral container (useless until RCL6) before the
+// extensions that grow the whole creep economy. Classify by what the site sits next to:
+//   source container  → static mining, the biggest early payoff → keep ahead of extensions
+//   controller container → an upgrade convenience → after extensions/tower
+//   mineral container → nothing uses it until RCL6+ → build it last, after roads
+const SOURCE_CONTAINER_PRIORITY = 1;
+const CONTROLLER_CONTAINER_PRIORITY = 4;
+const MINERAL_CONTAINER_PRIORITY = 12;
+
 function sitePriority(s: ConstructionSite): number {
+  if (s.structureType === STRUCTURE_CONTAINER) {
+    if (s.pos.findInRange(FIND_SOURCES, 1).length > 0) return SOURCE_CONTAINER_PRIORITY;
+    if (s.pos.findInRange(FIND_MINERALS, 1).length > 0) return MINERAL_CONTAINER_PRIORITY;
+    return CONTROLLER_CONTAINER_PRIORITY;
+  }
   return SITE_BUILD_PRIORITY[s.structureType] ?? 11;
 }
 

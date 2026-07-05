@@ -31,8 +31,14 @@ export function runBuilder(creep: Creep) {
     // refill. Builders eat from the storage buffer instead, so construction keeps going without
     // outbidding the core's supply, and back off (idle) when the buffer is empty rather than
     // raiding the miners. Pre-storage rooms have no buffer, so builders still use any container.
-    acquireEnergy(creep, { bufferOnly: !!creep.room.storage });
-    return;
+    const acquired = acquireEnergy(creep, { bufferOnly: !!creep.room.storage });
+    // If nothing could be drawn (drained buffer, miners reserved for porters) but we're already
+    // carrying some energy, go spend that partial load instead of idling forever waiting for a
+    // full top-up the buffer can't give — otherwise the creep is stranded half-full, never full
+    // enough to flip to working and unwilling to raid the miners. Empty-handed with no source:
+    // genuinely nothing to do, so wait.
+    if (acquired || isCreepEmpty(creep)) return;
+    creep.memory.working = true;
   }
 
   // While the room is starving for energy, stop spending it on construction, repair and
