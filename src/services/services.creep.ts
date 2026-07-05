@@ -212,7 +212,15 @@ function getDangerPositions(room: Room): RoomPosition[] {
       return dangerByRoom[room.name];
     }
     const positions: RoomPosition[] = [];
-    for (const c of room.find(FIND_HOSTILE_CREEPS)) positions.push(c.pos);
+    // Only combat creeps threaten our economy. A scout, claimer, hauler or any creep with no
+    // ATTACK/RANGED_ATTACK part can't damage a builder or miner, so it must not blank out a
+    // range-5 no-go circle and freeze all work around it. getActiveBodyparts ignores parts that
+    // have already been destroyed, so a disarmed attacker stops counting as a threat too.
+    for (const c of room.find(FIND_HOSTILE_CREEPS)) {
+      if (c.getActiveBodyparts(ATTACK) > 0 || c.getActiveBodyparts(RANGED_ATTACK) > 0) {
+        positions.push(c.pos);
+      }
+    }
     for (const s of room.find(FIND_STRUCTURES)) {
       if (s.structureType === STRUCTURE_KEEPER_LAIR) positions.push(s.pos);
     }
