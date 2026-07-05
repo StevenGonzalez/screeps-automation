@@ -192,12 +192,16 @@ function planBoundingBoxRing(
   return tiles;
 }
 
+export function shouldPlanDefensivePerimeter(rcl: number): boolean {
+  return rcl >= PERIMETER_PLANNER.minRcl;
+}
+
 // Compute and store the defensive perimeter. Gated by RCL and throttled so it only
 // recomputes occasionally (the base footprint grows slowly). Reuses the stamp
 // rampart memory key so the rest of the pipeline needs no changes.
 export function planDefensivePerimeter(room: Room): void {
   const rcl = room.controller?.level ?? 0;
-  if (rcl < PERIMETER_PLANNER.minRcl) return;
+  if (!shouldPlanDefensivePerimeter(rcl)) return;
 
   // Throttle: only replan when the plan is missing or the interval has elapsed.
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;

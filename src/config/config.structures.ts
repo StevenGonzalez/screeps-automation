@@ -88,8 +88,9 @@ export const STAMP_PLANNER = {
 // Defensive perimeter: a sealed ring of ramparts enclosing the whole base core
 // (stamp structures + the Merchant Ring extensions), not just the stamp box.
 export const PERIMETER_PLANNER = {
-  // Don't wall off the base until it's worth defending (storage exists at RCL 4).
-  minRcl: 4,
+  // Start a compact defensive ring as soon as the core exists. This helps RCL 2/3
+  // rooms survive early raids without waiting for a full storage-backed economy.
+  minRcl: 2,
   // Tiles of breathing room added around the bounding box of all core structures,
   // so the wall doesn't sit flush against extensions/towers and creeps can still
   // path along the inside edge.
