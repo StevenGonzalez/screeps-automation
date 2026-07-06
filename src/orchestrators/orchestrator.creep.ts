@@ -93,19 +93,25 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SCORE_HUNTER]: runScoreHunter,
 };
 
-const GENERAL_CHATTER = ["capisce?", "just biz", "nothin'", "fuhgeddit", "respect", "you square"];
+const GENERAL_CHATTER = ["ooh dirt", "walk walk", "wall :(", "bonk", "food?", "shiny!", "where go", "wiggle"];
 const ROLE_CHATTER: Record<string, string[]> = {
-  [ROLE_KNIGHT]: ["*cracks*", "boss says", "break it", "knuckles"],
-  [ROLE_WIZARD]: ["from here", "pop pop", "no witness"],
-  [ROLE_CLERIC]: ["hold still", "patch up", "breathe"],
-  [ROLE_SIEGER]: ["wreckin'", "open up", "demo time"],
-  [ROLE_DRAINER]: ["hey ugly", "over here", "catch me"],
-  [ROLE_CONQUEROR]: ["ours now", "moving in", "new turf"],
-  [ROLE_SETTLER]: ["new joint", "settin' up", "our block"],
-  [ROLE_HAULER]: ["the goods", "the drop", "cash run"],
-  [ROLE_UPGRADER]: ["laundry", "clean cash", "washin'"],
-  [ROLE_MINER]: ["diggin'", "the vein"],
-  [ROLE_RESERVER]: ["protection", "we collect"],
+  [ROLE_MINER]: ["nom rock", "my rock", "chew chew", "tasty"],
+  [ROLE_HARVESTER]: ["nibble", "om nom", "food!"],
+  [ROLE_HAULER]: ["heavy", "carry it", "drag drag", "oof"],
+  [ROLE_FILLER]: ["stuff it", "top up", "more!"],
+  [ROLE_UPGRADER]: ["poke", "poke it", "bonk it"],
+  [ROLE_BUILDER]: ["stack!", "block go", "wobble"],
+  [ROLE_REPAIRER]: ["fix it", "patch", "sticky"],
+  [ROLE_MINERAL_MINER]: ["gnaw", "weird rock", "salty"],
+  [ROLE_SCOUT]: ["wobble", "ooh", "what dat"],
+  [ROLE_RESERVER]: ["my spot", "squat", "mine!"],
+  [ROLE_KNIGHT]: ["bite!", "grr", "chomp", "angy"],
+  [ROLE_WIZARD]: ["ptooey", "spit!", "pew pew"],
+  [ROLE_CLERIC]: ["lick", "better?", "you ok"],
+  [ROLE_SIEGER]: ["chew wall", "gnaw", "crunch"],
+  [ROLE_DRAINER]: ["look me", "over here", "wiggle!"],
+  [ROLE_CONQUEROR]: ["new dirt", "mine now", "sprawl"],
+  [ROLE_SETTLER]: ["new nest", "home?", "settle"],
 };
 
 const SAY_PERIOD = 30;

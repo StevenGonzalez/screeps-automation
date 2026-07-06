@@ -14,7 +14,7 @@ g.HEAL_POWER = 12;
 import { pickPatrolRoom } from "../src/orchestrators/orchestrator.score";
 
 const HOME = "W1N1";
-const SEEKER = "grifter";
+const SEEKER = "snatcher";
 
 function coords(name: string): [number, number] {
   const m = name.match(/^([WE])(\d+)([NS])(\d+)$/)!;

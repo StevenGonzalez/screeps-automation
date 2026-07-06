@@ -1,16 +1,17 @@
+// Dumb-little-bug notices for controller signing. Simple, small, sincere. Keep under 100 chars.
 export const SIGNATURES: string[] = [
-  "Nice room. Real nice. Be a shame if anything happened to it.",
-  "This block is spoken for. Nothing personal - it's just business.",
-  "Under new management. We'd hate for there to be a misunderstanding.",
-  "The Family thanks you for your cooperation. You've been very cooperative.",
-  "We're not saying leave. We're just saying it'd be smart.",
-  "This is a nice neighborhood. Let's keep it that way, capisce?",
-  "Everything here is accounted for. Everything.",
-  "You didn't see anything. Good. Neither did we.",
-  "Territory of the Family. Enquiries handled personally.",
-  "We take care of our own. We also take care of problems.",
-  "Consider this a friendly reminder. There won't be a second one.",
-  "This room pays its respects on time. Every time.",
+  "bug lives here. this good dirt.",
+  "we found the shiny. it is ours now.",
+  "many legs live here. please no step.",
+  "we chewed this room. it is home now.",
+  "beware: bugs. not smart, but many.",
+  "the pile is ours. do not touch the pile.",
+  "we do not know what we do, but we do it here.",
+  "found food. stayed. this home now.",
+  "us bugs live here. thank you. bye.",
+  "big rock good. we stay by big rock.",
+  "this our room. we forget why. but ours.",
+  "no boot please. we are small and we try.",
 ];
 
 export function pickSignature(roomName: string): string {
