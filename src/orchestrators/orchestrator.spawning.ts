@@ -29,7 +29,7 @@ import {
   ROLE_SK_HAULER,
   ROLE_SCORE_HUNTER,
 } from "../config/config.roles";
-import { getThreatInfo, getThreatSeverity } from "../services/services.combat";
+import { getThreatInfo, getThreatSeverity, refreshBlockade, isBlockaded } from "../services/services.combat";
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
 import { getSkMembers, isOpPaused } from "./orchestrator.sourcekeeper";
 import { getStockForCompound } from "../services/services.labs";
@@ -42,12 +42,15 @@ import {
 } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
-import { getUnclaimedScoreTargetCount, scoreHunterSupported } from "./orchestrator.score";
+import { getUnclaimedScoreTargetCount, pickPatrolRoom, scoreHunterSupported } from "./orchestrator.score";
 
 export function loop() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
+    // Arm/refresh/expire the exit-blockade flag every tick (even while a spawn is busy) so
+    // the outbound-role gate in processRoomSpawning reads a current state.
+    refreshBlockade(room);
     const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
     for (const spawn of spawns) {
       if (!spawn.spawning) processRoomSpawning(room, spawn);
@@ -308,6 +311,15 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   const threatSeverity = getThreatSeverity(room);
   const phase = getRoomPhase(room);
 
+  // Exit blockade: armed hostiles are camping the room's exits (in the adjacent rooms),
+  // killing anything that leaves. While blockaded we suppress EVERY role whose job is to
+  // path out of the room — scouts, remotes, reservers, expansion, offense, drain, score,
+  // power/deposit/SK ops — so we stop feeding the besiegers easy kills and pour all energy
+  // into the home economy below (miners/haulers/upgraders/builders are untouched), racing
+  // to RCL3 and towers. Home defense (defenders/knights/wizards/clerics) is NOT gated: if
+  // the siege breaches, we still raise a garrison to fight inside our own walls.
+  const blockaded = isBlockaded(room);
+
   // Core economy — harvesters always first: cheapest path back from energy collapse.
   if (shouldSpawnHarvester(room) && spawnHarvester(room, spawn)) return;
 
@@ -358,10 +370,12 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // overspends a broke spawn; it only fires once the room can afford the body. Remote defender
   // first, to clear an Invader before sending miners into it.
   if (isEnergyEmergency(room)) {
-    if (shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
-    if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
-    if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
-    if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
+    if (!blockaded) {
+      if (shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
+      if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
+      if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
+      if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
+    }
     return;
   }
 
@@ -388,7 +402,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // and spawns in 1 tick, so letting it jump this queue costs the systems below almost
   // nothing — but leaving it dead-last risked it never getting a turn on a busy spawn.
   // No-ops entirely on servers without the Score object (e.g. World).
-  if (shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
+  if (!blockaded && shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
 
   // War and expansion are funded only while the home economy can actually afford them. A room whose
   // storage buffer is bleeding must never bankroll conquerors/settlers/attackers/drain leeches that
@@ -397,15 +411,15 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   const economyCritical = isEconomyCritical(room);
 
   // Expansion: conqueror and settlers are spawned by the home room only
-  if (!economyCritical && Memory.expansion?.homeRoom === room.name) {
+  if (!blockaded && !economyCritical && Memory.expansion?.homeRoom === room.name) {
     if (shouldSpawnConqueror() && spawnConqueror(room, spawn)) return;
     if (shouldSpawnSettler(room) && spawnSettler(room, spawn)) return;
   }
 
-  if (!economyCritical && shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
+  if (!blockaded && !economyCritical && shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
   // Standalone tower-drain leeches (manual Game.arca.drain) — optional offensive harassment,
   // funded only after economy/defense/expansion/siege above are satisfied.
-  if (!economyCritical && shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
+  if (!blockaded && !economyCritical && shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
   // Remote mining is BASELINE economy — usually the single largest energy multiplier in the
   // mid-game — so it ranks ABOVE the opportunistic advanced ops below (power/deposit/SK/apothecary/
   // mineral), which are either op-declared and temporary or low-yield polish. This also aligns the
@@ -413,17 +427,17 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // because remote income is what digs a starving room back out. Scout leads the cluster: it's a
   // 50-energy creep whose intel populates pendingScoutRooms and drives remote/expansion discovery,
   // so starving it stalls the whole pipeline that feeds these remotes.
-  if (shouldSpawnScout(room) && spawnScout(room, spawn)) return;
+  if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   // Clear an Invader out of a remote before sending more miners into it.
-  if (shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
-  if (shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
-  if (shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
-  if (shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
+  if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
+  if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
+  if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
+  if (!blockaded && shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
 
   // Advanced / opportunistic ops — all ranked BELOW baseline remote income above.
-  if (shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
-  if (shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;
-  if (spawnSkCreeps(room, spawn)) return;
+  if (!blockaded && shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
+  if (!blockaded && shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;
+  if (!blockaded && spawnSkCreeps(room, spawn)) return;
   if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
 }
@@ -922,6 +936,14 @@ function shouldSpawnScoreHunter(room: Room): boolean {
   if (!scoreHunterSupported()) return false;
   // Avoid raising cheap seekers when the home room is already under threat.
   if (getThreatInfo(room).score > 0) return false;
+  // Avoid spawning if there is nowhere safe for a seeker to patrol.
+  const patrolDestination = pickPatrolRoom({
+    name: room.name,
+    pos: { roomName: room.name } as RoomPosition,
+    room: room as unknown as Room,
+    memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
+  } as Creep);
+  if (!patrolDestination) return false;
   // A seeker costs only 50 energy, so it can spawn when the room can't yet afford a ~200-energy
   // builder/upgrader body. Because it sits BELOW those in the queue, an unaffordable upgrader
   // falls through to the seeker, which drains the 50 the room was accumulating toward that 200 —

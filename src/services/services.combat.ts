@@ -215,6 +215,107 @@ export function getThreatInfo(room: Room): ThreatInfo {
   return info;
 }
 
+// ── Exit blockade detection ──────────────────────────────────────────────────────
+//
+// A common grief against a low-RCL room is to park armed creeps in the ROOMS ADJACENT to
+// it, on the tiles by the shared border, so anything that leaves is killed on the way out.
+// getThreatInfo only scans the home room, so it never sees these guards. Here we scan every
+// adjacent room we currently have vision of for hostile PLAYER combat creeps sitting in the
+// border band facing home, and arm a sticky flag (room.memory.blockade). The flag refreshes
+// while a guard is seen and expires BLOCKADE_STICKY_TICKS after the last sighting — so once
+// the griefer leaves, the room naturally resumes sending creeps out (the first probe re-arms
+// it if they're still there). A manual override (Game.arca.lockdown) holds it on regardless.
+
+// How long the blockade stays armed after the last confirmed guard sighting. ~one creep
+// lifetime: long enough that we don't repeatedly bleed probe creeps into a standing siege,
+// short enough that the room resumes normal outbound ops soon after the guards leave.
+const BLOCKADE_STICKY_TICKS = 1500;
+// A guard counts only if it sits within this many tiles of the border shared with home —
+// a combatant deep in the adjacent room on its own business isn't camping our exit.
+const BLOCKADE_BORDER_BAND = 3;
+
+// Is a hostile creep an armed threat to a creep leaving the room? Pure movers (claimers,
+// haulers, scouts) and lone healers can't kill on their own, so they don't count as guards.
+function isArmedHostile(c: Creep): boolean {
+  if (!isPlayerCreep(c)) return false; // NPC (SK/Invader) and allies handled elsewhere / never
+  return c.body.some((p) => p.hits > 0 && (p.type === ATTACK || p.type === RANGED_ATTACK));
+}
+
+// Given the home-exit direction, is position (x,y) in the ADJACENT room within the border
+// band on the side facing home? Home's TOP exit leads north; in that north room the shared
+// edge is its BOTTOM (y≈49), so a guard there sits at high y. And so on for each direction.
+function inBorderBandFacingHome(exitDir: string, x: number, y: number): boolean {
+  const b = BLOCKADE_BORDER_BAND;
+  switch (exitDir) {
+    case "1": // FIND_EXIT_TOP → north room, its bottom edge
+      return y >= 49 - b;
+    case "5": // FIND_EXIT_BOTTOM → south room, its top edge
+      return y <= b;
+    case "3": // FIND_EXIT_RIGHT → east room, its left edge
+      return x <= b;
+    case "7": // FIND_EXIT_LEFT → west room, its right edge
+      return x >= 49 - b;
+    default:
+      return false;
+  }
+}
+
+// Counts armed hostiles camping the exits of `room`, using only rooms we currently have
+// vision of. Cheap: a handful of describeExits lookups + a find in each visible neighbour.
+function countExitGuards(room: Room): number {
+  const exits = Game.map.describeExits(room.name) ?? {};
+  let guards = 0;
+  for (const dir in exits) {
+    const adjName = exits[dir as unknown as keyof ExitsInformation];
+    if (!adjName) continue;
+    const adj = Game.rooms[adjName];
+    if (!adj) continue; // no vision of this neighbour this tick
+    for (const c of adj.find(FIND_HOSTILE_CREEPS)) {
+      if (isArmedHostile(c) && inBorderBandFacingHome(dir, c.pos.x, c.pos.y)) guards++;
+    }
+  }
+  return guards;
+}
+
+// Arms / refreshes / expires the blockade flag for an owned room. Call once per tick per
+// owned room (before spawning) so the sticky window and manual override stay current.
+export function refreshBlockade(room: Room): void {
+  const guards = countExitGuards(room);
+  const existing = room.memory.blockade;
+
+  if (guards > 0) {
+    if (existing) {
+      existing.until = Game.time + BLOCKADE_STICKY_TICKS;
+      existing.guards = guards;
+    } else {
+      room.memory.blockade = {
+        detectedAt: Game.time,
+        until: Game.time + BLOCKADE_STICKY_TICKS,
+        guards,
+      };
+      console.log(
+        `[Blockade] ${room.name}: ${guards} hostile(s) camping the exits — suppressing all outbound roles`
+      );
+    }
+    return;
+  }
+
+  // No guards seen this tick. Keep a manual lockdown; drop an auto flag once its sticky
+  // window lapses (the griefer is gone — resume normal outbound operations).
+  if (existing && !existing.manual && Game.time >= existing.until) {
+    delete room.memory.blockade;
+    console.log(`[Blockade] ${room.name}: exits clear — resuming outbound roles`);
+  }
+}
+
+// Pure read: is the room currently blockaded? Manual lockdown ignores the timer; an auto
+// blockade holds until its sticky window expires. Used by spawning to gate outbound roles.
+export function isBlockaded(room: Room): boolean {
+  const b = room.memory.blockade;
+  if (!b) return false;
+  return b.manual === true || Game.time < b.until;
+}
+
 // ── Hostile creep target selection ─────────────────────────────────────────────
 //
 // All squad members concentrate fire by scoring hostiles consistently. Lower score

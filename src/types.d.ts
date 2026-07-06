@@ -302,6 +302,18 @@ declare global {
     nukeDefense?: { tiles: Record<string, number>; updatedAt: number };
     // Dedup state for incoming-nuke notifications
     nukeAlert?: { count: number; land: number };
+    // Exit blockade: hostile combat creeps camping the room's exits (in the adjacent rooms),
+    // killing our creeps as they leave. While active, spawning suppresses every role that
+    // paths out of the room so we stop feeding kills and pour all energy into the home
+    // economy (racing to RCL3 / towers). `until` is refreshed each tick a guard is still
+    // seen and auto-expires afterwards; `manual` (set via Game.arca.lockdown) holds
+    // indefinitely until the user clears it.
+    blockade?: {
+      detectedAt: number;
+      until: number;
+      manual?: boolean;
+      guards?: number;
+    };
   }
 
   interface Memory {

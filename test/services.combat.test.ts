@@ -25,6 +25,8 @@ import {
   getThreatInfo,
   getThreatSeverity,
   structureDamagePerTick,
+  refreshBlockade,
+  isBlockaded,
 } from "../src/services/services.combat";
 
 // ── Threat-scoring test helpers ──────────────────────────────────────────────────
@@ -231,6 +233,100 @@ describe("dismantle threat scoring", () => {
       makeRoom("W2N2", [makeCreep([{ type: "work", count: 20, boost: "XZH2O" }])])
     ).score;
     expect(boosted).toBeGreaterThan(plain);
+  });
+});
+
+describe("exit blockade detection", () => {
+  const STICKY = 1500; // BLOCKADE_STICKY_TICKS (mirrors the module constant)
+
+  // A hostile with a position, for the border-band check. Home is always W1N1 here, whose
+  // TOP (north) exit is W1N2; a guard camping that exit sits at the NORTH room's bottom edge.
+  function makeGuard(
+    x: number,
+    y: number,
+    parts: Array<{ type: string; count: number }>,
+    username = "Enemy"
+  ): Creep {
+    const c = makeCreep(parts, username);
+    (c as unknown as { pos: { x: number; y: number } }).pos = { x, y };
+    return c;
+  }
+
+  function makeHome(memory: Record<string, unknown> = {}): Room {
+    return { name: "W1N1", controller: { my: true }, memory } as unknown as Room;
+  }
+
+  // Wire up W1N1's north exit → W1N2, giving W1N2 the supplied hostiles (or no vision if null).
+  function setNorthNeighbour(hostiles: Creep[] | null): void {
+    (g.Game as { map?: unknown }).map = {
+      describeExits: () => ({ "1": "W1N2" }),
+    };
+    (g.Game as { rooms?: unknown }).rooms =
+      hostiles === null ? {} : { W1N2: makeRoom("W1N2", hostiles) };
+  }
+
+  const armed = [{ type: "attack", count: 5 }, { type: "move", count: 5 }];
+  const unarmed = [{ type: "move", count: 1 }]; // a scout — no ATTACK/RANGED
+
+  it("arms the blockade when an armed hostile camps the exit border facing home", () => {
+    setNorthNeighbour([makeGuard(25, 48, armed)]); // y=48 is inside the north room's bottom band
+    const home = makeHome();
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(true);
+    expect(home.memory.blockade?.guards).toBe(1);
+  });
+
+  it("ignores unarmed hostiles (a scout at the border is not a guard)", () => {
+    setNorthNeighbour([makeGuard(25, 48, unarmed)]);
+    const home = makeHome();
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(false);
+  });
+
+  it("ignores an armed hostile that is NOT in the border band facing home", () => {
+    setNorthNeighbour([makeGuard(25, 20, armed)]); // deep in the north room, not by our exit
+    const home = makeHome();
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(false);
+  });
+
+  it("does not arm from a neighbour we have no vision of", () => {
+    setNorthNeighbour(null);
+    const home = makeHome();
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(false);
+  });
+
+  it("stays armed within the sticky window after the guards vanish, then expires", () => {
+    const startTick = (g.Game as { time: number }).time;
+    setNorthNeighbour([makeGuard(25, 49, armed)]);
+    const home = makeHome();
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(true);
+
+    // Guards gone, but still inside the sticky window → remains blockaded.
+    setNorthNeighbour([]);
+    (g.Game as { time: number }).time = startTick + STICKY - 1;
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(true);
+
+    // Past the window with no fresh sighting → auto-clears.
+    (g.Game as { time: number }).time = startTick + STICKY + 1;
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(false);
+    expect(home.memory.blockade).toBeUndefined();
+  });
+
+  it("a manual lockdown holds regardless of the timer or absent guards", () => {
+    setNorthNeighbour([]); // no guards in sight
+    const home = makeHome({
+      blockade: { detectedAt: 1, until: 1, manual: true },
+    });
+    expect(isBlockaded(home)).toBe(true);
+    // A refresh with no guards must NOT drop a manual lockdown.
+    refreshBlockade(home);
+    expect(isBlockaded(home)).toBe(true);
+    expect(home.memory.blockade?.manual).toBe(true);
   });
 });
 

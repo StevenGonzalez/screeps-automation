@@ -13,7 +13,7 @@ import {
   stopDrain,
   getDrainOps,
 } from "./orchestrators/orchestrator.military";
-import { getThreatInfo, getThreatSeverity } from "./services/services.combat";
+import { getThreatInfo, getThreatSeverity, isBlockaded } from "./services/services.combat";
 import { getCpuStats } from "./services/services.profiler";
 import {
   launchSkOp,
@@ -619,6 +619,53 @@ export function setupConsole() {
       }
     },
 
+    // Force (or lift) an exit-blockade LOCKDOWN on a room. When besieged — armed hostiles
+    // camping your exits, killing every creep that leaves — this suppresses all outbound
+    // roles (scouts/remotes/expansion/offense/ops) and pours energy into the home economy
+    // to race for RCL3 + towers. Auto-detection also arms this, but a manual lockdown holds
+    // until you clear it (useful when you have no vision of the guards).
+    //   Game.arca.lockdown()             → list blockade status of all owned rooms
+    //   Game.arca.lockdown('W1N1')       → force lockdown ON
+    //   Game.arca.lockdown('W1N1', false)→ lift lockdown (manual + auto)
+    lockdown: (roomName?: string, on = true) => {
+      if (!roomName) {
+        let any = false;
+        for (const rn in Game.rooms) {
+          const room = Game.rooms[rn];
+          if (!room.controller?.my) continue;
+          any = true;
+          const b = room.memory.blockade;
+          if (!b) {
+            console.log(`[Lockdown] ${rn}: clear`);
+            continue;
+          }
+          const kind = b.manual ? "MANUAL" : `auto (expires in ${Math.max(0, b.until - Game.time)}t)`;
+          console.log(`[Lockdown] ${rn}: BLOCKADED ${kind}  guards=${b.guards ?? "?"}`);
+        }
+        if (!any) console.log("[Lockdown] No owned rooms");
+        console.log("[Lockdown] Set with Game.arca.lockdown('W1N1')  |  lift with Game.arca.lockdown('W1N1', false)");
+        return;
+      }
+      const room = Game.rooms[roomName];
+      if (!room?.controller?.my) {
+        console.log(`[Lockdown] ${roomName} is not a room you own or is not in vision`);
+        return;
+      }
+      if (on) {
+        const existing = room.memory.blockade;
+        room.memory.blockade = {
+          detectedAt: existing?.detectedAt ?? Game.time,
+          until: Game.time, // irrelevant while manual holds it
+          manual: true,
+          guards: existing?.guards,
+        };
+        console.log(`[Lockdown] ${roomName}: LOCKED DOWN — all outbound roles suppressed until you lift it`);
+      } else {
+        delete room.memory.blockade;
+        console.log(`[Lockdown] ${roomName}: lifted — outbound roles resume`);
+      }
+    },
+
     // Show threat status across all owned rooms
     threat: () => {
       let found = false;
@@ -638,9 +685,12 @@ export function setupConsole() {
           : room.controller.safeModeAvailable
           ? `ready (${room.controller.safeModeAvailable} charge${room.controller.safeModeAvailable !== 1 ? "s" : ""})`
           : "unavailable";
+        const blockadeStatus = isBlockaded(room)
+          ? `  BLOCKADED${room.memory.blockade?.manual ? "(manual)" : ""}`
+          : "";
         console.log(
           `[Threat] ${rn}: severity=${severity} score=${score} hostiles=${hostiles.length}` +
-          `  towers=${towerIds.length} energy=${towerEnergy}  safemode=${safemodeStatus}`
+          `  towers=${towerIds.length} energy=${towerEnergy}  safemode=${safemodeStatus}${blockadeStatus}`
         );
         if (hostiles.length > 0) {
           for (const h of hostiles) {
