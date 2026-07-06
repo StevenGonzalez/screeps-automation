@@ -121,7 +121,11 @@ function maybeChatter(creep: Creep): void {
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
   if ((Game.time + hash) % SAY_PERIOD !== 0) return;
   const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;
-  creep.say(lines[Math.abs(hash + Game.time) % lines.length], true);
+  // Index off the say-EVENT counter, not (Game.time + hash) directly: at this point that sum is
+  // an exact multiple of SAY_PERIOD, so `% lines.length` would collapse to 0 almost every time
+  // (30 is divisible by common list lengths) and every creep would repeat the first line.
+  const eventNo = (Game.time + hash) / SAY_PERIOD;
+  creep.say(lines[Math.abs(eventNo + hash) % lines.length], true);
 }
 
 export function loop() {
