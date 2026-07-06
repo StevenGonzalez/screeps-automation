@@ -273,9 +273,8 @@ export function getScoreScanRooms(homeRoomName: string, range: number): string[]
 
 // Rooms within `range` of home that are safe for a 50-energy creep to enter, gathered by BFS
 // over actual room connections (so we never target a room that doesn't border the walk).
-// Hostile-OWNED and SK rooms are excluded; our own rooms, allies', reserved, and unowned rooms
-// are all fair game — the original filter wrongly dropped our own colony's rooms too, which
-// could strand seekers with nowhere to go and leave them idling on the spawn.
+// Hostile-OWNED, threatened, and SK rooms are excluded; our own rooms, allies', reserved,
+// and otherwise quiet unowned rooms are still fair game.
 function safeRegionRooms(home: string, myName: string | undefined, range: number): string[] {
   const result: string[] = [];
   const visited = new Set<string>([home]);
@@ -287,10 +286,10 @@ function safeRegionRooms(home: string, myName: string | undefined, range: number
       for (const nb of Object.values(exits)) {
         if (!nb || visited.has(nb)) continue;
         visited.add(nb);
-        // Hostile-owned and SK rooms are walls: not a destination, and not expanded through, so
-        // the region only ever contains rooms reachable via a safe corridor. A 50-energy seeker
-        // gains nothing dying to enemy towers or an SK room's lairs.
-        if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb)) continue;
+        // Hostile-owned, currently threatened, and SK rooms are walls: not a destination,
+        // and not expanded through, so the region only ever contains rooms reachable via a
+        // safe corridor.
+        if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb) || isThreatenedRoom(nb)) continue;
         result.push(nb);
         next.push(nb);
       }
@@ -298,6 +297,11 @@ function safeRegionRooms(home: string, myName: string | undefined, range: number
     frontier = next;
   }
   return result;
+}
+
+function isThreatenedRoom(roomName: string): boolean {
+  const intel = Memory.intel?.[roomName];
+  return (intel?.hostileCreeps ?? 0) > 0 || (intel?.threatLevel ?? 0) > 0;
 }
 
 function isHostileOwned(roomName: string, myName: string | undefined): boolean {

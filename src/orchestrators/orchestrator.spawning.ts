@@ -920,6 +920,8 @@ function shouldSpawnScoreHunter(room: Room): boolean {
   // never spawn on a server without the Score object (e.g. World) just because 0 unclaimed
   // targets also happens to be true there.
   if (!scoreHunterSupported()) return false;
+  // Avoid raising cheap seekers when the home room is already under threat.
+  if (getThreatInfo(room).score > 0) return false;
   // A seeker costs only 50 energy, so it can spawn when the room can't yet afford a ~200-energy
   // builder/upgrader body. Because it sits BELOW those in the queue, an unaffordable upgrader
   // falls through to the seeker, which drains the 50 the room was accumulating toward that 200 —
