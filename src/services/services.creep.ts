@@ -446,8 +446,8 @@ export function findClosestConstructionSite(
 
 const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_SPAWN]: 0,
-  [STRUCTURE_CONTAINER]: 1,
-  [STRUCTURE_EXTENSION]: 2,
+  [STRUCTURE_EXTENSION]: 1,
+  [STRUCTURE_CONTAINER]: 2,
   [STRUCTURE_TOWER]: 3,
   [STRUCTURE_STORAGE]: 4,
   [STRUCTURE_TERMINAL]: 5,
@@ -461,7 +461,7 @@ const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_ROAD]: 11,
 };
 
-const SOURCE_CONTAINER_PRIORITY = 1;
+const SOURCE_CONTAINER_PRIORITY = 2;
 const CONTROLLER_CONTAINER_PRIORITY = 4;
 const MINERAL_CONTAINER_PRIORITY = 12;
 

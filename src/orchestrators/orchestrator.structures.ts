@@ -20,8 +20,8 @@ import { isSourceSafe } from "../services/services.creep";
 
 const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_SPAWN]: 0,
-  [STRUCTURE_CONTAINER]: 1,
-  [STRUCTURE_EXTENSION]: 2,
+  [STRUCTURE_EXTENSION]: 1,
+  [STRUCTURE_CONTAINER]: 2,
   [STRUCTURE_TOWER]: 3,
   [STRUCTURE_STORAGE]: 4,
   [STRUCTURE_TERMINAL]: 5,
