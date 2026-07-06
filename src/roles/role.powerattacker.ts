@@ -18,11 +18,7 @@ export function runPowerAttacker(creep: Creep) {
       return;
     }
     const bank = op.bankId ? Game.getObjectById(op.bankId) as StructurePowerBank | null : null;
-    if (!bank) return; // bank gone, orchestrator will transition phase
-    // Power banks reflect half the damage dealt back at the attacker. Don't start trading
-    // hits until a squad healer is in heal range to cover it — attacking solo gets the lead
-    // attacker killed before the healers arrive and cascades into a squad wipe. Stage
-    // adjacent to the bank and wait.
+    if (!bank) return;
     const healerInRange = creep.pos.findInRange(FIND_MY_CREEPS, 3, {
       filter: (c) => c.memory.role === ROLE_POWER_HEALER && c.memory.powerOpId === opId,
     }).length > 0;
@@ -56,9 +52,6 @@ function parkNearHomeSpawn(creep: Creep, homeRoomName: string) {
 
 function travelToRoom(creep: Creep, roomName: string) {
   if (creep.room.name === roomName) return;
-  // Route to the room centre via PathFinder's multi-room pathing. Aiming moveTo at a bare exit
-  // tile (findExitTo + findClosestByRange) parks creeps on the border or bounces them between
-  // two rooms — see role.reserver.ts / role.remote_miner.ts.
   creep.moveTo(new RoomPosition(25, 25, roomName), {
     reusePath: 10,
     range: 20,

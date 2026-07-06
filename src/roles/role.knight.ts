@@ -6,8 +6,6 @@ import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } 
 const RETREAT_THRESHOLD = 0.2;
 
 export function runKnight(creep: Creep) {
-  // Skip the boost detour when a hostile is right on top of us: fighting NOW unboosted beats
-  // walking to a lab and waiting while the spawn burns. If the threat is still distant, boost.
   const underImmediateThreat = creep.pos
     .findInRange(FIND_HOSTILE_CREEPS, 8)
     .some((c) => !isAlly(c.owner?.username));
@@ -19,33 +17,28 @@ export function runKnight(creep: Creep) {
     return;
   }
 
-  // Offensive squad: tagged creep follows military orchestrator orders
   if (creep.memory.offensiveTarget) {
     const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);
     if (op) {
       runOffensiveKnight(creep, op);
       return;
     }
-    delete creep.memory.offensiveTarget; // stale from a completed/cancelled op
+    delete creep.memory.offensiveTarget;
   }
 
-  // Standing defense: assigned to an auto-declared defensive op for an owned room
   if (creep.memory.defensiveTarget) {
     if (getDefenseOp(creep.memory.defensiveTarget)) {
       runDefensiveKnight(creep, creep.memory.defensiveTarget);
       return;
     }
-    delete creep.memory.defensiveTarget; // op ended (threat cleared)
+    delete creep.memory.defensiveTarget;
   }
 
-  // Child-room bootstrap defender: travel to the assigned room and clear it. Once
-  // there it falls through to the generic engage-nearest-hostile logic below.
   if (creep.memory.targetRoom && creep.room.name !== creep.memory.targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, creep.memory.targetRoom), { reusePath: 20 });
     return;
   }
 
-  // Defensive: retreat to spawn when critically injured so towers/medics can heal
   if (creep.hits < creep.hitsMax * RETREAT_THRESHOLD) {
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn) {
@@ -64,9 +57,6 @@ export function runKnight(creep: Creep) {
     return;
   }
 
-  // No hostile creeps left, but an Invader Core keeps re-reserving the room and re-spawning
-  // defenders — destroy it too, or the remote stays bricked. (Pre-deploy it's invulnerable;
-  // attacking simply parks the enforcer on it until the deploy timer elapses.)
   const core = findInvaderCore(creep.room);
   if (core) {
     if (creep.attack(core) === ERR_NOT_IN_RANGE) {
@@ -75,9 +65,6 @@ export function runKnight(creep: Creep) {
     return;
   }
 
-  // Reached the assigned room and it's truly clear (no creeps, no core) — lift the Invader
-  // flag and let the miners/haulers come back (no-op for a child-room defender, which has no
-  // remote-room entry).
   if (creep.memory.targetRoom === creep.room.name) clearRemoteInvader(creep);
   const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
   if (spawn && !creep.pos.isNearTo(spawn)) {

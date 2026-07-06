@@ -61,9 +61,6 @@ import { runScoreHunter } from "../roles/role.scoreHunter";
 import { resolveTraffic } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 
-// Role → handler lookup. A single map dispatch per creep replaces a 20-branch
-// if/else chain that, for late-listed roles, re-compared the role string up to
-// 20 times every tick.
 const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_HARVESTER]: runHarvester,
   [ROLE_UPGRADER]: runUpgrader,
@@ -96,8 +93,6 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SCORE_HUNTER]: runScoreHunter,
 };
 
-// Flavor speech bubbles for the crime-family theme. Screeps only renders ~10 chars, so keep
-// every line short. Roles without a dedicated list fall back to GENERAL_CHATTER.
 const GENERAL_CHATTER = ["capisce?", "just biz", "nothin'", "fuhgeddit", "respect", "you square"];
 const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_KNIGHT]: ["*cracks*", "boss says", "break it", "knuckles"],
@@ -113,29 +108,20 @@ const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_RESERVER]: ["protection", "we collect"],
 };
 
-// Occasional, cheap chatter: at most one bubble per creep per SAY_PERIOD ticks, spread across
-// the window by a stable per-name offset so the whole fleet doesn't shout in unison.
 const SAY_PERIOD = 30;
 function maybeChatter(creep: Creep): void {
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
   if ((Game.time + hash) % SAY_PERIOD !== 0) return;
   const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;
-  // Index off the say-EVENT counter, not (Game.time + hash) directly: at this point that sum is
-  // an exact multiple of SAY_PERIOD, so `% lines.length` would collapse to 0 almost every time
-  // (30 is divisible by common list lengths) and every creep would repeat the first line.
   const eventNo = (Game.time + hash) / SAY_PERIOD;
   creep.say(lines[Math.abs(eventNo + hash) % lines.length], true);
 }
 
 export function loop() {
-  // Per-role CPU accounting is opt-in (Memory.profileRoles): the two extra Game.cpu.getUsed()
-  // calls per creep are pure instrumentation on the hottest loop in the bot, so off by default.
   const profile = Memory.profileRoles === true;
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
-    // A still-spawning creep can't act this tick; running its role handler wastes CPU and, worse,
-    // lets seekBoost time out and delete a boost request before the creep is even born.
     if (creep.spawning) continue;
     const handler = ROLE_HANDLERS[creep.memory.role];
     if (handler) {
@@ -148,13 +134,8 @@ export function loop() {
       }
       maybeChatter(creep);
     } else if (Game.time % 100 === 0) {
-      // A creep whose role isn't in the map sits inert every tick, burning a population
-      // slot. Surface it (throttled) instead of failing silently — usually a renamed or
-      // never-wired role constant.
       console.log(`[creep] no handler for role "${creep.memory.role}" on ${name}`);
     }
   }
-  // After every role has issued its moves, resolve queued shoves authoritatively so
-  // stuck creeps and their blockers swap places instead of gridlocking the lane.
   resolveTraffic();
 }

@@ -38,35 +38,35 @@ correctly too.
 `rankExpansionCandidates()` scores each non-owned, non-contested scouted remote:
 
 ```
-score = sources × 40 − distance × 5
+score = sources x 40 - distance x 5
 ```
 
-Contested rooms are skipped — both from scout data (`hostile` / `hostileUntil`
+Contested rooms are skipped - both from scout data (`hostile` / `hostileUntil`
 flags) and from a live check (owned/reserved by another player, or hostiles
 present right now).
 
 ### Funding-home gate
 
 A room may only seed a colony when it is healthy:
-- RCL ≥ 4 (storage + ≥1300 energy capacity),
-- storage energy ≥ 50,000,
+- RCL >= 4 (storage + >=1300 energy capacity),
+- storage energy >= 50,000,
 - not itself under threat.
 
-The CPU bucket must also be ≥ 5,000 before a multi-hundred-tick op starts.
+The CPU bucket must also be >= 5,000 before a multi-hundred-tick op starts.
 
 ### Phases (`Memory.expansion`)
 
-`claiming → bootstrapping → established`
+`claiming -> bootstrapping -> established`
 
-1. **Claiming** — a **capo** travels to the target and claims the controller.
+1. **Claiming** - a **capo** travels to the target and claims the controller.
    Aborts cleanly if the room turns out to be owned by another player or fresh
    scout intel flags it hostile.
-2. **Bootstrapping** — **transplants** establish the spawn and economy. During this
+2. **Bootstrapping** - **transplants** establish the spawn and economy. During this
    phase the orchestrator:
    - **Pauses** transplant spawning for ~200 ticks and flags `needsDefender` if the
      child room is invaded (transplants retreat; a home spawn rule raises a defender).
    - **Times out** after 6,000 ticks if the bootstrap never completes.
-3. **Established** — declared self-sufficient (see completion criteria), kept around
+3. **Established** - declared self-sufficient (see completion criteria), kept around
    ~1,000 ticks for inspection, then cleared so the next queued target can start.
 
 ### Bootstrap-completion criteria
@@ -76,9 +76,9 @@ the room is visible):
 
 1. We own its controller.
 2. It has at least one **built** own spawn (not just a construction site).
-3. Controller RCL ≥ 3.
+3. Controller RCL >= 3.
 4. Its economy can sustain itself: a working digger + hauler pair native to the
-   room, **or** its own storage holds ≥ 10,000 energy.
+   room, **or** its own storage holds >= 10,000 energy.
 
 ---
 
@@ -86,7 +86,7 @@ the room is visible):
 
 Only **one** expansion is active at a time. The queue (`Memory.expansionQueue`)
 holds further targets and auto-advances: when the active expansion completes or
-aborts, the next viable queued target begins claiming — no further console input
+aborts, the next viable queued target begins claiming - no further console input
 needed. The advance step skips already-owned or contested entries and any target
 with no healthy funding room (re-queuing it to try later).
 
@@ -106,4 +106,4 @@ Game.arca.cancel()                  // abort the active expansion
 Game.arca.ops()                     // overview of all pipelines (expansion + offensive + SK)
 ```
 
-The family's territory grows — block by block, room by room.
+The family's territory grows - block by block, room by room.

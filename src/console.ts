@@ -51,11 +51,10 @@ const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "ret
 
 export function setupConsole() {
   (Game as any).arca = {
-    // Show ranked expansion candidates from lookout scout data
     expand: () => {
       const candidates = rankExpansionCandidates();
       if (candidates.length === 0) {
-        console.log("[ARCA] No expansion candidates in scout data — send lookouts first");
+        console.log("[ARCA] No expansion candidates in scout data - send lookouts first");
         return;
       }
       console.log("[ARCA] Top expansion candidates:");
@@ -67,10 +66,6 @@ export function setupConsole() {
       console.log("[ARCA] Claim now with Game.arca.claim('ROOM_NAME') or line up with Game.arca.queueExpand('ROOM_NAME')");
     },
 
-    // Add a target to the expansion PIPELINE. Only one expansion runs at a time; the
-    // queue auto-advances to the next target when the active one completes/aborts.
-    //   Game.arca.queueExpand('W5N5')            → closest healthy home funds it at pop time
-    //   Game.arca.queueExpand('W5N5', 'W1N1')    → prefer a specific funding home
     queueExpand: (roomName: string, homeRoom?: string) => {
       if (!roomName) {
         console.log("[ARCA] Usage: Game.arca.queueExpand('W5N5')  or  Game.arca.queueExpand('W5N5', 'W1N1')");
@@ -78,13 +73,12 @@ export function setupConsole() {
       }
       const err = enqueueExpansion(roomName, homeRoom);
       if (err) {
-        console.log(`[ARCA] Cannot queue ${roomName} — ${err}`);
+        console.log(`[ARCA] Cannot queue ${roomName} - ${err}`);
         return;
       }
-      console.log(`[ARCA] Queued expansion to ${roomName}${homeRoom ? ` (prefer ${homeRoom})` : ""} — ${getExpansionQueue().length} queued`);
+      console.log(`[ARCA] Queued expansion to ${roomName}${homeRoom ? ` (prefer ${homeRoom})` : ""} - ${getExpansionQueue().length} queued`);
     },
 
-    // Remove a target from the expansion queue.
     dequeueExpand: (roomName: string) => {
       if (!roomName) {
         console.log("[ARCA] Usage: Game.arca.dequeueExpand('W5N5')");
@@ -94,9 +88,6 @@ export function setupConsole() {
       else console.log(`[ARCA] ${roomName} was not in the expansion queue`);
     },
 
-    // Toggle / inspect automatic GCL-driven expansion. When ON, the bot claims the
-    // best scouted candidate on its own whenever GCL frees a slot and a healthy
-    // home room can fund it — no manual claim() needed.
     autoexpand: (enabled?: boolean) => {
       if (enabled === undefined) {
         console.log(`[AutoExpand] ${Memory.autoExpand ? "ON" : "OFF"}`);
@@ -106,7 +97,6 @@ export function setupConsole() {
       console.log(`[AutoExpand] ${enabled ? "ENABLED" : "DISABLED"}`);
     },
 
-    // Trigger expansion to a target room
     claim: (roomName: string) => {
       if (!roomName) {
         console.log("[ARCA] Usage: Game.arca.claim('W2N1')");
@@ -115,23 +105,21 @@ export function setupConsole() {
 
       if (Memory.expansion) {
         console.log(
-          `[ARCA] Already expanding to ${Memory.expansion.roomName} — cancel first with Game.arca.cancel()`
+          `[ARCA] Already expanding to ${Memory.expansion.roomName} - cancel first with Game.arca.cancel()`
         );
         return;
       }
 
-      // GCL check
       const myRoomCount = Object.values(Game.rooms).filter(
         (r) => r.controller?.my
       ).length;
       if (Game.gcl.level <= myRoomCount) {
         console.log(
-          `[ARCA] GCL ${Game.gcl.level} does not allow another room (have ${myRoomCount}) — need GCL ${myRoomCount + 1}`
+          `[ARCA] GCL ${Game.gcl.level} does not allow another room (have ${myRoomCount}) - need GCL ${myRoomCount + 1}`
         );
         return;
       }
 
-      // Target room validation (only possible if room is in vision)
       const targetRoom = Game.rooms[roomName];
       if (targetRoom) {
         if (targetRoom.controller?.my) {
@@ -146,7 +134,6 @@ export function setupConsole() {
         }
       }
 
-      // Pick the closest owned room to fund the operation
       const ownedRooms = Object.values(Game.rooms).filter(
         (r) => r.controller?.my
       );
@@ -167,11 +154,10 @@ export function setupConsole() {
         startedAt: Game.time,
       };
       console.log(
-        `[ARCA] Expansion to ${roomName} queued — funded by ${homeRoom} (GCL ${Game.gcl.level}/${myRoomCount + 1})`
+        `[ARCA] Expansion to ${roomName} queued - funded by ${homeRoom} (GCL ${Game.gcl.level}/${myRoomCount + 1})`
       );
     },
 
-    // Show current expansion status + the queued pipeline.
     status: () => {
       const e = Memory.expansion;
       if (e) {
@@ -193,7 +179,6 @@ export function setupConsole() {
       });
     },
 
-    // Abort an active expansion
     cancel: () => {
       if (!Memory.expansion) {
         console.log("[ARCA] No active expansion to cancel");
@@ -204,7 +189,6 @@ export function setupConsole() {
       console.log(`[ARCA] Expansion to ${room} cancelled`);
     },
 
-    // Show lab system status for all owned rooms
     labs: () => {
       let found = false;
       for (const rn in Game.rooms) {
@@ -226,9 +210,8 @@ export function setupConsole() {
           console.log(`  Reagents: ${ls.inputCompounds[0]} + ${ls.inputCompounds[1]}`);
         }
         if (ls.queue.length > 0) {
-          console.log(`  Queue: ${ls.queue.map((e) => `${e.compound}×${e.amount}`).join(", ")}`);
+          console.log(`  Queue: ${ls.queue.map((e) => `${e.compound}x${e.amount}`).join(", ")}`);
         }
-        // Stock report for auto-production compounds
         const targets: Record<string, number> = {
           XUH2O: 3000, XUHO2: 3000, XKHO2: 3000,
           XZHO2: 2000, XGH2O: 3000, OH: 10000, G: 5000,
@@ -241,7 +224,6 @@ export function setupConsole() {
       if (!found) console.log("[Labs] No owned rooms found");
     },
 
-    // Queue production of a compound in the specified room (or best available)
     produce: (compound: string, amount: number, roomName?: string) => {
       if (!compound || !amount) {
         console.log("[Labs] Usage: Game.arca.produce('XUHO2', 3000)  or  Game.arca.produce('XUHO2', 3000, 'W1N1')");
@@ -258,17 +240,16 @@ export function setupConsole() {
       if (!room.memory.labSystem) room.memory.labSystem = { queue: [] };
       const chain = resolveChain(compound, amount, room.storage ?? null);
       if (chain.length === 0) {
-        console.log(`[Labs] ${room.name}: Nothing to queue — stock may already be sufficient`);
+        console.log(`[Labs] ${room.name}: Nothing to queue - stock may already be sufficient`);
         return;
       }
       room.memory.labSystem.queue.push(...chain);
       console.log(
-        `[Labs] ${room.name}: Queued ${chain.length} reaction(s) → ${compound}×${amount}: ` +
-        chain.map((e) => `${e.compound}×${e.amount}`).join(", ")
+        `[Labs] ${room.name}: Queued ${chain.length} reaction(s) -> ${compound}x${amount}: ` +
+        chain.map((e) => `${e.compound}x${e.amount}`).join(", ")
       );
     },
 
-    // Show inter-room resource network status
     network: () => {
       const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
       if (ownedRooms.length === 0) { console.log("[Network] No owned rooms"); return; }
@@ -280,7 +261,7 @@ export function setupConsole() {
         const cooldown = room.terminal?.cooldown ?? -1;
         const pending = room.memory.pendingSend;
         const pendingStr = pending
-          ? `  PENDING: ${pending.amount} ${pending.resource} → ${pending.to} (loaded ${
+          ? `  PENDING: ${pending.amount} ${pending.resource} -> ${pending.to} (loaded ${
               room.terminal?.store.getUsedCapacity(pending.resource as ResourceConstant) ?? 0
             }/${pending.loadTarget})`
           : "";
@@ -288,7 +269,6 @@ export function setupConsole() {
           `  ${room.name}: storage=${storageEnergy}  terminal=${terminalEnergy} (cd=${cooldown})${pendingStr}`
         );
 
-        // Mineral stocks relevant to lab chains
         const minerals = ['H','O','Z','K','U','L','X'] as const;
         const stockParts = minerals.map((m) => {
           const s = (room.storage?.store.getUsedCapacity(m) ?? 0) + (room.terminal?.store.getUsedCapacity(m) ?? 0);
@@ -298,13 +278,6 @@ export function setupConsole() {
       }
     },
 
-    // Launch an offensive military operation against a target room. Concurrency is one
-    // op per home room: if the closest capable home is already busy, the op is QUEUED
-    // and auto-starts when a home frees up. Pass an explicit homeRoom to force one.
-    //   Game.arca.attack('W2N1')                      → box / assault, auto-scaled squad
-    //   Game.arca.attack('W2N1', 'wedge', 'siege')    → pick formation + tactic
-    //   Game.arca.attack('W2N1', 'box', 'assault', { enforcers: 4, medics: 2 })  → override crew
-    //   Game.arca.attack('W2N1', 'box', 'assault', undefined, 'W1N1')  → force funding home
     attack: (
       roomName: string,
       formation: SquadFormation = "box",
@@ -337,7 +310,6 @@ export function setupConsole() {
         return;
       }
 
-      // Resolve the funding home: explicit if given, else the closest owned room.
       let homeRoom: Room;
       if (homeRoomName) {
         const r = Game.rooms[homeRoomName];
@@ -354,7 +326,6 @@ export function setupConsole() {
         });
       }
 
-      // Intelligent default composition scaled to known defenses, overridable per role.
       const rec = recommendComposition(roomName, tactic);
       const comp = {
         enforcers: composition?.enforcers ?? rec.enforcers,
@@ -366,23 +337,21 @@ export function setupConsole() {
 
       const err = launchOp(roomName, formation, tactic, comp, homeRoom.name);
       if (err) {
-        // Home busy (or otherwise unavailable) → queue it to auto-start later.
         const qErr = enqueueOp(roomName, formation, tactic, comp, homeRoomName);
         if (qErr) {
-          console.log(`[Military] Cannot launch or queue — ${err}; ${qErr}`);
+          console.log(`[Military] Cannot launch or queue - ${err}; ${qErr}`);
           return;
         }
-        console.log(`[Military] ${err} — queued ${roomName} to auto-start when a home frees up`);
+        console.log(`[Military] ${err} - queued ${roomName} to auto-start when a home frees up`);
         return;
       }
       console.log(
-        `[Military] Op launched: ${homeRoom.name} → ${roomName}  ${formation}/${tactic}  ` +
+        `[Military] Op launched: ${homeRoom.name} -> ${roomName}  ${formation}/${tactic}  ` +
         `crew=${comp.enforcers}E/${comp.triggermen}T/${comp.medics}M/${comp.wreckers}R/${comp.decoys}D`
       );
       console.log(`[Military] Spawning squad... track with Game.arca.squads()`);
     },
 
-    // Remove a queued offensive target.
     dequeueAttack: (roomName: string) => {
       if (!roomName) {
         console.log("[Military] Usage: Game.arca.dequeueAttack('W2N1')");
@@ -392,13 +361,6 @@ export function setupConsole() {
       else console.log(`[Military] ${roomName} was not in the offensive queue`);
     },
 
-    // Start a STANDALONE tower-drain: send decoys to bleed a room's tower energy ahead of
-    // (and decoupled from) any assault. Persistent — it runs until you stopDrain it. Only
-    // effective against opponents whose towers fire at un-killable targets; a disciplined
-    // defender holds fire and it achieves nothing.
-    //   Game.arca.drain('W2N1')              → 1 decoy, closest capable home
-    //   Game.arca.drain('W2N1', 2)           → 2 decoys
-    //   Game.arca.drain('W2N1', 2, 'W1N1')   → force funding home
     drain: (roomName: string, count = 1, homeRoomName?: string) => {
       if (!roomName) {
         console.log("[Drain] Usage: Game.arca.drain('W2N1', 1)");
@@ -406,7 +368,7 @@ export function setupConsole() {
       }
       const err = launchDrain(roomName, homeRoomName, count);
       if (err) {
-        console.log(`[Drain] Cannot start — ${err}`);
+        console.log(`[Drain] Cannot start - ${err}`);
         return;
       }
       const op = getDrainOps().find((o) => o.targetRoom === roomName);
@@ -416,7 +378,6 @@ export function setupConsole() {
       );
     },
 
-    // Stop a standalone drain; its decoys stand down and return home.
     stopDrain: (roomName: string) => {
       if (!roomName) {
         console.log("[Drain] Usage: Game.arca.stopDrain('W2N1')");
@@ -426,7 +387,6 @@ export function setupConsole() {
       else console.log(`[Drain] No active drain on ${roomName}`);
     },
 
-    // List active standalone drains.
     drains: () => {
       const ops = getDrainOps();
       if (ops.length === 0) {
@@ -440,13 +400,11 @@ export function setupConsole() {
         ).length;
         const age = Game.time - op.startedAt;
         console.log(
-          `  ${op.targetRoom} ← ${op.homeRoom}  decoys=${live}/${op.drainers}  age=${age}t`
+          `  ${op.targetRoom} <- ${op.homeRoom}  decoys=${live}/${op.drainers}  age=${age}t`
         );
       }
     },
 
-    // Change formation mid-battle: line | box | wedge | scatter. Applies to all active
-    // ops, or just the op funded by `homeRoom` if given.
     formation: (name: SquadFormation, homeRoom?: string) => {
       if (!VALID_FORMATIONS.includes(name)) {
         console.log(`[Military] Unknown formation '${name}'. Use: ${VALID_FORMATIONS.join(", ")}`);
@@ -457,11 +415,9 @@ export function setupConsole() {
         console.log("[Military] No matching active operation");
         return;
       }
-      console.log(`[Military] Formation → ${name} (${n} op${n !== 1 ? "s" : ""})`);
+      console.log(`[Military] Formation -> ${name} (${n} op${n !== 1 ? "s" : ""})`);
     },
 
-    // Change tactic mid-battle: assault | siege | raid | defend | retreat. Applies to
-    // all active ops, or just the op funded by `homeRoom` if given.
     tactic: (name: SquadTactic, homeRoom?: string) => {
       if (!VALID_TACTICS.includes(name)) {
         console.log(`[Military] Unknown tactic '${name}'. Use: ${VALID_TACTICS.join(", ")}`);
@@ -472,10 +428,9 @@ export function setupConsole() {
         console.log("[Military] No matching active operation");
         return;
       }
-      console.log(`[Military] Tactic → ${name} (${n} op${n !== 1 ? "s" : ""})`);
+      console.log(`[Military] Tactic -> ${name} (${n} op${n !== 1 ? "s" : ""})`);
     },
 
-    // Recall and stand down operations. No arg → all ops; a home room → just that one.
     recall: (homeRoom?: string) => {
       const n = cancelOp(homeRoom);
       if (n === 0) {
@@ -485,7 +440,6 @@ export function setupConsole() {
       console.log(`[Military] Stood down ${n} operation${n !== 1 ? "s" : ""}${homeRoom ? ` (${homeRoom})` : ""}`);
     },
 
-    // Show all active offensive ops + the offensive queue.
     squads: () => {
       const ops = getOffensiveOps();
       const queue = getMilitaryQueue();
@@ -496,7 +450,7 @@ export function setupConsole() {
 
       for (const op of ops) {
         const age = Game.time - op.startedAt;
-        console.log(`[Military] Op: ${op.homeRoom} → ${op.targetRoom}`);
+        console.log(`[Military] Op: ${op.homeRoom} -> ${op.targetRoom}`);
         console.log(
           `  Phase: ${op.phase}  |  Formation: ${op.formation}  |  Tactic: ${op.tactic}  |  Age: ${age}t`
         );
@@ -551,18 +505,15 @@ export function setupConsole() {
       }
     },
 
-    // Aliases retained for backwards compatibility.
     retreat: () => (Game as any).arca.recall(),
     military: () => (Game as any).arca.squads(),
 
-    // One-shot overview of all multi-op pipelines: expansion, offensive, SK.
     ops: () => {
-      // Expansion
       const exp = Memory.expansion;
       const expQueue = getExpansionQueue();
       console.log("[ARCA] === Operations Overview ===");
       if (exp) {
-        console.log(`  Expansion ACTIVE: ${exp.roomName} (${exp.phase}) ← ${exp.homeRoom}`);
+        console.log(`  Expansion ACTIVE: ${exp.roomName} (${exp.phase}) <- ${exp.homeRoom}`);
       } else {
         console.log("  Expansion: idle");
       }
@@ -570,26 +521,23 @@ export function setupConsole() {
         console.log(`    queue (${expQueue.length}): ${expQueue.map((q) => q.roomName).join(", ")}`);
       }
 
-      // Offensive
       const mOps = getOffensiveOps();
       const mQueue = getMilitaryQueue();
       if (mOps.length === 0) console.log("  Offensive: none active");
       for (const op of mOps) {
-        console.log(`  Offensive: ${op.homeRoom} → ${op.targetRoom} (${op.phase}, ${op.tactic})`);
+        console.log(`  Offensive: ${op.homeRoom} -> ${op.targetRoom} (${op.phase}, ${op.tactic})`);
       }
       if (mQueue.length > 0) {
         console.log(`    queue (${mQueue.length}): ${mQueue.map((q) => q.targetRoom).join(", ")}`);
       }
 
-      // Source Keeper
       const skOps = Memory.skOps ?? [];
       if (skOps.length === 0) console.log("  Source Keeper: none active");
       for (const op of skOps) {
-        console.log(`  Source Keeper: #${op.id} ${op.homeRoom} → ${op.roomName} (${op.phase})`);
+        console.log(`  Source Keeper: #${op.id} ${op.homeRoom} -> ${op.roomName} (${op.phase})`);
       }
     },
 
-    // Toggle / inspect the WarCouncil auto-attack and list ranked targets.
     warcouncil: (autoAttack?: boolean) => {
       if (!Memory.warCouncil) Memory.warCouncil = { autoAttack: false };
       if (autoAttack !== undefined) {
@@ -606,7 +554,7 @@ export function setupConsole() {
         .sort((a, b) => a.threatLevel - b.threatLevel)
         .slice(0, 10);
       if (targets.length === 0) {
-        console.log("[WarCouncil] No enemy rooms in intel yet — scout or use an observer.");
+        console.log("[WarCouncil] No enemy rooms in intel yet - scout or use an observer.");
         return;
       }
       console.log("[WarCouncil] Known enemy rooms (lowest threat first):");
@@ -619,14 +567,6 @@ export function setupConsole() {
       }
     },
 
-    // Force (or lift) an exit-blockade LOCKDOWN on a room. When besieged — armed hostiles
-    // camping your exits, killing every creep that leaves — this suppresses all outbound
-    // roles (scouts/remotes/expansion/offense/ops) and pours energy into the home economy
-    // to race for RCL3 + towers. Auto-detection also arms this, but a manual lockdown holds
-    // until you clear it (useful when you have no vision of the guards).
-    //   Game.arca.lockdown()             → list blockade status of all owned rooms
-    //   Game.arca.lockdown('W1N1')       → force lockdown ON
-    //   Game.arca.lockdown('W1N1', false)→ lift lockdown (manual + auto)
     lockdown: (roomName?: string, on = true) => {
       if (!roomName) {
         let any = false;
@@ -655,18 +595,17 @@ export function setupConsole() {
         const existing = room.memory.blockade;
         room.memory.blockade = {
           detectedAt: existing?.detectedAt ?? Game.time,
-          until: Game.time, // irrelevant while manual holds it
+          until: Game.time,
           manual: true,
           guards: existing?.guards,
         };
-        console.log(`[Lockdown] ${roomName}: LOCKED DOWN — all outbound roles suppressed until you lift it`);
+        console.log(`[Lockdown] ${roomName}: LOCKED DOWN - all outbound roles suppressed until you lift it`);
       } else {
         delete room.memory.blockade;
-        console.log(`[Lockdown] ${roomName}: lifted — outbound roles resume`);
+        console.log(`[Lockdown] ${roomName}: lifted - outbound roles resume`);
       }
     },
 
-    // Show threat status across all owned rooms
     threat: () => {
       let found = false;
       for (const rn in Game.rooms) {
@@ -702,7 +641,6 @@ export function setupConsole() {
       if (!found) console.log("[Threat] No owned rooms");
     },
 
-    // Show inbound-nuke status and rampart reinforcement progress across owned rooms
     nukes: () => {
       let found = false;
       for (const rn in Game.rooms) {
@@ -712,7 +650,7 @@ export function setupConsole() {
         if (nukes.length === 0) continue;
         found = true;
         const earliest = nukes.reduce((m, n) => Math.min(m, n.timeToLand), Infinity);
-        console.log(`[Nuke] ${rn}: ${nukes.length} inbound — first impact in ${earliest} ticks`);
+        console.log(`[Nuke] ${rn}: ${nukes.length} inbound - first impact in ${earliest} ticks`);
         const def = room.memory.nukeDefense;
         if (!def) continue;
         for (const key in def.tiles) {
@@ -733,7 +671,6 @@ export function setupConsole() {
       if (!found) console.log("[Nuke] No inbound nukes detected");
     },
 
-    // Show OFFENSIVE nuker load status per owned room (energy %, ghodium %, cooldown, ready).
     nuker: () => {
       const statuses = describeNukers();
       if (statuses.length === 0) {
@@ -753,28 +690,23 @@ export function setupConsole() {
       console.log("[Nuker] Launch with: Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)  or  Game.arca.launchNuke('W1N1', 'FLAG_NAME')");
     },
 
-    // Launch a nuke from `fromRoom` at a target. Target is either an (x,y) in a room name,
-    // or the name of a flag (its position is used). DESTRUCTIVE and MANUAL ONLY — never auto.
-    //   Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)
-    //   Game.arca.launchNuke('W1N1', 'NUKE_HERE')   // target a flag by name
     launchNuke: (fromRoom: string, target: string, x?: number, y?: number) => {
       if (!fromRoom || !target) {
         console.log("[Nuker] Usage: Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)  or  Game.arca.launchNuke('W1N1', 'FLAG_NAME')");
         return;
       }
 
-      // Resolve the target position: a flag name, or (roomName, x, y).
       let pos: RoomPosition;
       const flag = Game.flags[target];
       if (flag) {
         pos = flag.pos;
       } else {
         if (x === undefined || y === undefined) {
-          console.log(`[Nuker] '${target}' is not a flag — provide x and y: Game.arca.launchNuke('${fromRoom}', '${target}', 25, 25)`);
+          console.log(`[Nuker] '${target}' is not a flag - provide x and y: Game.arca.launchNuke('${fromRoom}', '${target}', 25, 25)`);
           return;
         }
         if (x < 0 || x > 49 || y < 0 || y > 49) {
-          console.log(`[Nuker] Invalid coordinates (${x},${y}) — must be 0..49`);
+          console.log(`[Nuker] Invalid coordinates (${x},${y}) - must be 0..49`);
           return;
         }
         pos = new RoomPosition(x, y, target);
@@ -782,17 +714,16 @@ export function setupConsole() {
 
       const err = launchNukeFrom(fromRoom, pos);
       if (err) {
-        console.log(`[Nuker] Launch ABORTED — ${err}`);
+        console.log(`[Nuker] Launch ABORTED - ${err}`);
         return;
       }
       const msg =
-        `[Nuker] LAUNCHED from ${fromRoom} → ${pos.roomName} (${pos.x},${pos.y}) — ` +
+        `[Nuker] LAUNCHED from ${fromRoom} -> ${pos.roomName} (${pos.x},${pos.y}) - ` +
         `impact in ${NUKE_LAND_TIME} ticks`;
       console.log(msg);
       Game.notify(msg, 0);
     },
 
-    // Manually activate safemode in a room
     safemode: (roomName: string) => {
       if (!roomName) {
         console.log("[SafeMode] Usage: Game.arca.safemode('W1N1')");
@@ -820,7 +751,6 @@ export function setupConsole() {
       }
     },
 
-    // Show power bank operation status
     power: () => {
       const ops = Memory.powerOps;
       if (!ops || ops.length === 0) {
@@ -834,7 +764,7 @@ export function setupConsole() {
         const healers = members.filter((c) => c.memory.role === ROLE_POWER_HEALER).length;
         const carriers = members.filter((c) => c.memory.role === ROLE_POWER_CARRIER).length;
         console.log(
-          `[Power] Op #${op.id}: ${op.homeRoom} → ${op.roomName}` +
+          `[Power] Op #${op.id}: ${op.homeRoom} -> ${op.roomName}` +
           `  phase=${op.phase}  power=${op.power}  age=${age}`
         );
         console.log(
@@ -845,7 +775,6 @@ export function setupConsole() {
           console.log(`  ${c.name}  role=${c.memory.role}  room=${c.room.name}  hp=${hpPct}%`);
         }
       }
-      // PowerSpawn status
       let foundPs = false;
       for (const rn in Game.rooms) {
         const room = Game.rooms[rn];
@@ -860,7 +789,6 @@ export function setupConsole() {
       if (!foundPs) console.log("[Power] No PowerSpawn structures found (RCL 8 required)");
     },
 
-    // Show highway deposit mining operation status
     deposits: () => {
       const ops = Memory.depositOps;
       if (!ops || ops.length === 0) {
@@ -873,7 +801,7 @@ export function setupConsole() {
         const miners = members.filter((c) => c.memory.role === ROLE_DEPOSIT_MINER).length;
         const haulers = members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length;
         console.log(
-          `[Deposit] Op #${op.id}: ${op.homeRoom} → ${op.roomName}` +
+          `[Deposit] Op #${op.id}: ${op.homeRoom} -> ${op.roomName}` +
           `  type=${op.depositType}  phase=${op.phase}  cooldown=${op.lastCooldown}  age=${age}`
         );
         console.log(
@@ -885,11 +813,10 @@ export function setupConsole() {
       }
     },
 
-    // Source Keeper mining. No arg → status; with a room → start an op; skstop → cancel.
     sk: (roomName?: string) => {
       if (roomName) {
         const err = launchSkOp(roomName);
-        if (err) console.log(`[SK] Cannot mine ${roomName} — ${err}`);
+        if (err) console.log(`[SK] Cannot mine ${roomName} - ${err}`);
         else console.log(`[SK] Operation started against ${roomName}`);
         return;
       }
@@ -908,7 +835,7 @@ export function setupConsole() {
         }
         const paused = isOpPaused(op) ? "  PAUSED(contested)" : "";
         console.log(
-          `[SK] #${op.id} ${op.homeRoom} → ${op.roomName}  phase=${op.phase}  ` +
+          `[SK] #${op.id} ${op.homeRoom} -> ${op.roomName}  phase=${op.phase}  ` +
           `sources=${op.sourceIds.length}  squad=${JSON.stringify(counts)}${paused}`
         );
       }
@@ -923,8 +850,6 @@ export function setupConsole() {
       else console.log(`[SK] No operation found for ${roomName}`);
     },
 
-    // Toggle the traffic manager (stuck-repath + guarded shove). Kill-switch if it
-    // ever misbehaves — falls back to vanilla moveTo.
     traffic: (enabled?: boolean) => {
       if (enabled === undefined) {
         console.log(`[Traffic] manager is ${Memory.trafficDisabled ? "OFF" : "ON"}`);
@@ -934,7 +859,6 @@ export function setupConsole() {
       console.log(`[Traffic] manager ${enabled ? "ENABLED" : "DISABLED"}`);
     },
 
-    // Per-subsystem CPU breakdown (rolling average, last tick, peak), highest first.
     cpu: () => {
       const stats = getCpuStats();
       const rows = Object.entries(stats).sort((a, b) => b[1].ema - a[1].ema);
@@ -949,12 +873,11 @@ export function setupConsole() {
       }
     },
 
-    // Show power creep (Operator) status: level, location, ops, and known powers.
     powercreeps: () => {
       const names = Object.keys(Game.powerCreeps);
       if (names.length === 0) {
         console.log(
-          `[Power] No power creeps. GPL ${Game.gpl.level} — one will be created automatically when GPL >= 1.`
+          `[Power] No power creeps. GPL ${Game.gpl.level} - one will be created automatically when GPL >= 1.`
         );
         return;
       }
@@ -974,7 +897,6 @@ export function setupConsole() {
       console.log(`[Power] GPL ${Game.gpl.level} (${Game.gpl.progress}/${Game.gpl.progressTotal})`);
     },
 
-    // Enable or disable auto-production for a room's lab system
     autoLabs: (roomName: string, enabled: boolean) => {
       const room = Game.rooms[roomName];
       if (!room?.controller?.my) {
@@ -986,7 +908,6 @@ export function setupConsole() {
       console.log(`[Labs] ${roomName}: Auto-production ${enabled ? "ENABLED" : "DISABLED"}`);
     },
 
-    // Show factory / commodity production status for all owned rooms with a factory.
     factory: () => {
       const lines = describeFactories();
       if (lines.length === 0) {
@@ -996,8 +917,6 @@ export function setupConsole() {
       for (const line of lines) console.log(line);
     },
 
-    // Force a room's factory to produce a specific commodity until the next auto-plan.
-    //   Game.arca.produceCommodity('W1N1', 'battery')
     produceCommodity: (roomName: string, commodity: string) => {
       if (!roomName || !commodity) {
         console.log("[Factory] Usage: Game.arca.produceCommodity('W1N1', 'battery')");
@@ -1011,7 +930,6 @@ export function setupConsole() {
       console.log(`[Factory] ${roomName}: now producing ${commodity}`);
     },
 
-    // Enable or disable auto-production for a room's factory.
     autoFactory: (roomName: string, enabled: boolean) => {
       if (!roomName || enabled === undefined) {
         console.log("[Factory] Usage: Game.arca.autoFactory('W1N1', true)");

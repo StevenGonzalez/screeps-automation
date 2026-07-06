@@ -7,7 +7,7 @@
 This is a Screeps automation bot built around an organized-crime "family" theme.
 Runners and diggers bring in the earnings, launderers and contractors build out
 the operation, and enforcers and triggermen handle anyone who gets ideas. The
-flavor is mob; the architecture is a flat, pragmatic set of per-system loops —
+flavor is mob; the architecture is a flat, pragmatic set of per-system loops -
 no central AI object, no class hierarchy.
 
 ### Core Philosophy
@@ -27,7 +27,7 @@ no central AI object, no class hierarchy.
 ## Execution Model
 
 `main.ts` runs every system through a `runSafe(name, fn)` wrapper that catches and
-logs any thrown error. The order matters — some systems intentionally run after
+logs any thrown error. The order matters - some systems intentionally run after
 others (e.g. the factory and nuker borrow an idle hauler *after* the creep
 orchestrator has dispatched roles, so their move/transfer intents win for the tick).
 
@@ -39,26 +39,26 @@ The loop is gated by two CPU mechanisms:
 
 Run order each tick (from `main.ts`):
 
-1. `memory` — memory cleanup + per-room ID caching + deep-scout BFS queue
-2. `strategy` — sets empire-wide posture (EXPAND/TURTLE/WAR/RECOVER) the rest of the tick reads
-3. `allies` — refresh SimpleAllies identity + exchange ally segment requests (before combat)
-4. `expansion` — GCL-driven claiming + multi-factor room scoring + expansion queue
-5. `creeps` — dispatch every creep to its role handler
-6. `spawning` — per-room spawn priority
-7. `structures` — core stamp / road / min-cut rampart-perimeter planning *(CPU-gated)*
-8. `labs` — reaction chains, T4 auto-production, boosting
-9. `factory` — commodity production incl. deep Tier 3-5 chains (borrows a hauler as a courier)
-10. `links` — link energy distribution
-11. `towers` — tower targeting + safe-mode triggers (conservation-aware)
-12. `terminal` — market making (sell orders), energy trading, inter-room balancing
-13. `military` — value-based WarCouncil, DefenseCouncil, formation offense + queue
-14. `nukes` — **defense** against incoming nukes (rampart reinforcement + terminal evac)
-15. `nuker` — **offensive** nuker loading (energy + ghodium)
-16. `sourcekeeper` — Source Keeper room mining ops
-17. `powercreep` — per-room Operator spawning + power use (REGEN_SOURCE etc.)
-18. `observer` — highway power-bank scanning + power-spawn processing
-19. `pixels` — pixel generation from spare CPU
-20. `visuals` — room visuals *(CPU-gated)*
+1. `memory` - memory cleanup + per-room ID caching + deep-scout BFS queue
+2. `strategy` - sets empire-wide posture (EXPAND/TURTLE/WAR/RECOVER) the rest of the tick reads
+3. `allies` - refresh SimpleAllies identity + exchange ally segment requests (before combat)
+4. `expansion` - GCL-driven claiming + multi-factor room scoring + expansion queue
+5. `creeps` - dispatch every creep to its role handler
+6. `spawning` - per-room spawn priority
+7. `structures` - core stamp / road / min-cut rampart-perimeter planning *(CPU-gated)*
+8. `labs` - reaction chains, T4 auto-production, boosting
+9. `factory` - commodity production incl. deep Tier 3-5 chains (borrows a hauler as a courier)
+10. `links` - link energy distribution
+11. `towers` - tower targeting + safe-mode triggers (conservation-aware)
+12. `terminal` - market making (sell orders), energy trading, inter-room balancing
+13. `military` - value-based WarCouncil, DefenseCouncil, formation offense + queue
+14. `nukes` - **defense** against incoming nukes (rampart reinforcement + terminal evac)
+15. `nuker` - **offensive** nuker loading (energy + ghodium)
+16. `sourcekeeper` - Source Keeper room mining ops
+17. `powercreep` - per-room Operator spawning + power use (REGEN_SOURCE etc.)
+18. `observer` - highway power-bank scanning + power-spawn processing
+19. `pixels` - pixel generation from spare CPU
+20. `visuals` - room visuals *(CPU-gated)*
 
 A side-effect import of `services/services.movement` installs a traffic-managed
 `moveTo` override on `Creep.prototype` before the loop runs.
@@ -69,7 +69,7 @@ A side-effect import of `services/services.movement` installs a traffic-managed
 
 The bot exposes a console namespace at `Game.arca.*` (set up by `console.ts`).
 See [QUICKSTART.md](QUICKSTART.md) for the full command list. There is no
-`Game.arca.showPlan()`, `intel()`, `threats()`, or `sendEnergy()` — those were
+`Game.arca.showPlan()`, `intel()`, `threats()`, or `sendEnergy()` - those were
 never built. The real commands include `expand`, `queueExpand`, `claim`,
 `status`, `ops`, `labs`, `produce`, `network`, `attack`, `squads`, `warcouncil`,
 `threat`, `nukes`, `nuker`, `launchNuke`, `factory`, `sk`, `power`, `deposits`, and more.
@@ -81,18 +81,18 @@ never built. The real commands include `expand`, `queueExpand`, `claim`,
 Automatic structure placement (`planning/planner.stamp.ts`,
 `planning/planner.room.ts`) follows a fixed compound layout:
 
-**THE VAULT** — Storage at the heart of the compound (the stash). Terminal, Factory,
+**THE VAULT** - Storage at the heart of the compound (the stash). Terminal, Factory,
 Power Spawn, Nuker, and Observer sit around it.
 
-**THE SOCIAL CLUB** — Spawns placed within the stamp, where new crew is made.
+**THE SOCIAL CLUB** - Spawns placed within the stamp, where new crew is made.
 
-**THE RACKETS** — Extensions in concentric rings representing the family's
+**THE RACKETS** - Extensions in concentric rings representing the family's
 territory, growing outward as RCL rises.
 
-**GUN TOWERS** — Towers placed around the vault (count scales with RCL: 1 at
+**GUN TOWERS** - Towers placed around the vault (count scales with RCL: 1 at
 RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
 
-**THE LAB** — Labs clustered so reaction chains stay in range.
+**THE LAB** - Labs clustered so reaction chains stay in range.
 
 ### Defense layers
 
@@ -101,9 +101,9 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
   observer, containers) so a nuke can't one-shot them.
 - **Defensive perimeter** (`planning/planner.rampart.ts`). At RCL 4+ a **min-cut**
   rampart wall is computed (`services/services.mincut.ts`, max-flow/min-cut on the
-  50×50 grid) to seal the core structures (the core stamp + Rackets extensions,
+  50x50 grid) to seal the core structures (the core stamp + Rackets extensions,
   plus the controller when it sits near the vault) from the room exits with the
-  *fewest* tiles — concentrating HP on far fewer ramparts than a bounding box. It
+  *fewest* tiles - concentrating HP on far fewer ramparts than a bounding box. It
   hugs natural walls automatically and re-plans only every ~1500 ticks. If the
   min-cut is degenerate (already sealed by terrain), it falls back to the old
   padded bounding-box ring so a room is never left wall-less. Stored under the
@@ -122,76 +122,76 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
 
 ```
 src/
-├── main.ts                          # Entry point: run order + CPU budgeting
-├── console.ts                       # Game.arca.* console API
-├── types.d.ts                       # Global type declarations
-├── config/
-│   ├── config.roles.ts              # Role-name constants + deposit priorities
-│   ├── config.spawning.ts           # Body patterns and spawn energy reserve
-│   ├── config.structures.ts         # Stamp / planner config, perimeter, towers
-│   └── config.factory.ts            # Commodity tiers + factory tunables
-├── orchestrators/
-│   ├── orchestrator.creep.ts        # Dispatches creep roles each tick (lookup map)
-│   ├── orchestrator.spawning.ts     # Spawn priority logic per room
-│   ├── orchestrator.structures.ts   # Stamp + road + rampart-perimeter planning
-│   ├── orchestrator.tower.ts        # Tower targeting + safe-mode triggers
-│   ├── orchestrator.links.ts        # Link energy distribution
-│   ├── orchestrator.labs.ts         # Reaction chains, T4 auto-production, boosting
-│   ├── orchestrator.factory.ts      # Commodity production (borrowed courier)
-│   ├── orchestrator.terminal.ts     # Market trades + inter-room energy/mineral/ghodium balancing
-│   ├── orchestrator.military.ts     # WarCouncil, DefenseCouncil, offensive squads + queue
-│   ├── orchestrator.nukes.ts        # DEFENSE: incoming-nuke rampart reinforcement
-│   ├── orchestrator.nuker.ts        # OFFENSE: keep our nuker loaded (energy + ghodium)
-│   ├── orchestrator.sourcekeeper.ts # Source Keeper room mining operations
-│   ├── orchestrator.powercreep.ts   # Power creep spawning + power usage
-│   ├── orchestrator.observer.ts     # Highway power-bank scan + power-spawn processing
-│   ├── orchestrator.expansion.ts    # GCL-driven claiming + multi-factor room scoring + queue
-│   ├── orchestrator.strategy.ts     # Central posture coordinator (EXPAND/TURTLE/WAR/RECOVER)
-│   ├── orchestrator.memory.ts       # Memory cleanup, ID caching, deep-scout BFS + intel/player model
-│   ├── orchestrator.visuals.ts      # Room visuals
-│   └── orchestrator.pixels.ts       # Pixel generation
-├── roles/
-│   ├── role.harvester.ts            # runner — early energy gathering
-│   ├── role.miner.ts                # digger — stationary source miner
-│   ├── role.hauler.ts               # bagman — energy logistics
-│   ├── role.filler.ts               # busboy — storage → keep-core distribution (RCL 4+)
-│   ├── role.upgrader.ts             # launderer — controller upgrading
-│   ├── role.builder.ts              # contractor — construction
-│   ├── role.repairer.ts             # fixer — structure repair
-│   ├── role.mineral_miner.ts        # cooker — mineral extraction
-│   ├── role.apothecary.ts           # chemist — lab compound logistics
-│   ├── role.scout.ts                # lookout — room scouting
-│   ├── role.remote_miner.ts         # stringer — remote source mining
-│   ├── role.remote_hauler.ts        # mule — remote energy hauling
-│   ├── role.reserver.ts             # collector — remote room reservation
-│   ├── role.conqueror.ts            # capo — room claiming
-│   ├── role.settler.ts              # transplant — new-room bootstrap
-│   ├── role.knight.ts               # enforcer — melee (offense + defense)
-│   ├── role.wizard.ts               # triggerman — ranged (offense + defense)
-│   ├── role.cleric.ts               # medic — healing (offense + defense)
-│   ├── role.sieger.ts               # wrecker — boosted dismantler/breacher
-│   ├── role.tower.ts                # tower targeting + safe-mode helpers
-│   ├── role.sk_miner.ts             # Source Keeper room miner
-│   ├── role.sk_hauler.ts            # Source Keeper room hauler
-│   ├── role.sk_guardian.ts          # Source Keeper killer / guardian
-│   ├── role.powerattacker.ts        # legbreaker — PowerBank assault
-│   ├── role.powerhealer.ts          # sawbones — PowerBank squad healing
-│   ├── role.powercarrier.ts         # courier — power collection
-│   ├── role.depositminer.ts         # wildcatter — highway deposit harvesting
-│   └── role.deposithauler.ts        # trucker — highway deposit hauling
-├── planning/
-│   ├── planner.stamp.ts             # Core stamp layout generation
-│   ├── planner.room.ts              # Road planning and structure placement
-│   └── planner.rampart.ts           # Defensive rampart perimeter (RCL 4+)
-└── services/
-    ├── services.memory.ts           # Room memory helpers
-    ├── services.creep.ts            # Creep utilities + shared find caches
-    ├── services.combat.ts           # Boost-aware threat scoring, target/formation/breach helpers
-    ├── services.allies.ts           # SimpleAllies diplomacy (ally list + segment requests)
-    ├── services.mincut.ts           # Min-cut max-flow utility (defensive wall planning)
-    ├── services.labs.ts             # Compound stock + reaction-chain helpers
-    ├── services.structures.ts       # Structure planning helpers
-    └── services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache)
++-- main.ts                          # Entry point: run order + CPU budgeting
++-- console.ts                       # Game.arca.* console API
++-- types.d.ts                       # Global type declarations
++-- config/
+|   +-- config.roles.ts              # Role-name constants + deposit priorities
+|   +-- config.spawning.ts           # Body patterns and spawn energy reserve
+|   +-- config.structures.ts         # Stamp / planner config, perimeter, towers
+|   +-- config.factory.ts            # Commodity tiers + factory tunables
++-- orchestrators/
+|   +-- orchestrator.creep.ts        # Dispatches creep roles each tick (lookup map)
+|   +-- orchestrator.spawning.ts     # Spawn priority logic per room
+|   +-- orchestrator.structures.ts   # Stamp + road + rampart-perimeter planning
+|   +-- orchestrator.tower.ts        # Tower targeting + safe-mode triggers
+|   +-- orchestrator.links.ts        # Link energy distribution
+|   +-- orchestrator.labs.ts         # Reaction chains, T4 auto-production, boosting
+|   +-- orchestrator.factory.ts      # Commodity production (borrowed courier)
+|   +-- orchestrator.terminal.ts     # Market trades + inter-room energy/mineral/ghodium balancing
+|   +-- orchestrator.military.ts     # WarCouncil, DefenseCouncil, offensive squads + queue
+|   +-- orchestrator.nukes.ts        # DEFENSE: incoming-nuke rampart reinforcement
+|   +-- orchestrator.nuker.ts        # OFFENSE: keep our nuker loaded (energy + ghodium)
+|   +-- orchestrator.sourcekeeper.ts # Source Keeper room mining operations
+|   +-- orchestrator.powercreep.ts   # Power creep spawning + power usage
+|   +-- orchestrator.observer.ts     # Highway power-bank scan + power-spawn processing
+|   +-- orchestrator.expansion.ts    # GCL-driven claiming + multi-factor room scoring + queue
+|   +-- orchestrator.strategy.ts     # Central posture coordinator (EXPAND/TURTLE/WAR/RECOVER)
+|   +-- orchestrator.memory.ts       # Memory cleanup, ID caching, deep-scout BFS + intel/player model
+|   +-- orchestrator.visuals.ts      # Room visuals
+|   +-- orchestrator.pixels.ts       # Pixel generation
++-- roles/
+|   +-- role.harvester.ts            # runner - early energy gathering
+|   +-- role.miner.ts                # digger - stationary source miner
+|   +-- role.hauler.ts               # bagman - energy logistics
+|   +-- role.filler.ts               # busboy - storage -> keep-core distribution (RCL 4+)
+|   +-- role.upgrader.ts             # launderer - controller upgrading
+|   +-- role.builder.ts              # contractor - construction
+|   +-- role.repairer.ts             # fixer - structure repair
+|   +-- role.mineral_miner.ts        # cooker - mineral extraction
+|   +-- role.apothecary.ts           # chemist - lab compound logistics
+|   +-- role.scout.ts                # lookout - room scouting
+|   +-- role.remote_miner.ts         # stringer - remote source mining
+|   +-- role.remote_hauler.ts        # mule - remote energy hauling
+|   +-- role.reserver.ts             # collector - remote room reservation
+|   +-- role.conqueror.ts            # capo - room claiming
+|   +-- role.settler.ts              # transplant - new-room bootstrap
+|   +-- role.knight.ts               # enforcer - melee (offense + defense)
+|   +-- role.wizard.ts               # triggerman - ranged (offense + defense)
+|   +-- role.cleric.ts               # medic - healing (offense + defense)
+|   +-- role.sieger.ts               # wrecker - boosted dismantler/breacher
+|   +-- role.tower.ts                # tower targeting + safe-mode helpers
+|   +-- role.sk_miner.ts             # Source Keeper room miner
+|   +-- role.sk_hauler.ts            # Source Keeper room hauler
+|   +-- role.sk_guardian.ts          # Source Keeper killer / guardian
+|   +-- role.powerattacker.ts        # legbreaker - PowerBank assault
+|   +-- role.powerhealer.ts          # sawbones - PowerBank squad healing
+|   +-- role.powercarrier.ts         # courier - power collection
+|   +-- role.depositminer.ts         # wildcatter - highway deposit harvesting
+|   +-- role.deposithauler.ts        # trucker - highway deposit hauling
++-- planning/
+|   +-- planner.stamp.ts             # Core stamp layout generation
+|   +-- planner.room.ts              # Road planning and structure placement
+|   +-- planner.rampart.ts           # Defensive rampart perimeter (RCL 4+)
++-- services/
+    +-- services.memory.ts           # Room memory helpers
+    +-- services.creep.ts            # Creep utilities + shared find caches
+    +-- services.combat.ts           # Boost-aware threat scoring, target/formation/breach helpers
+    +-- services.allies.ts           # SimpleAllies diplomacy (ally list + segment requests)
+    +-- services.mincut.ts           # Min-cut max-flow utility (defensive wall planning)
+    +-- services.labs.ts             # Compound stock + reaction-chain helpers
+    +-- services.structures.ts       # Structure planning helpers
+    +-- services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache)
 ```
 
 ---
@@ -205,7 +205,7 @@ in creep names and `Game.arca` output; the right is what it does.
 |------|-----------|----------------|
 | **runner** | `role.harvester.ts` | Early energy gathering (phases out once diggers are up) |
 | **digger** | `role.miner.ts` | Stationary source miner on a container |
-| **bagman** | `role.hauler.ts` | Source → storage hauling (fills the keep core directly until a busboy exists; also borrowed by factory/nuker as a courier) |
+| **bagman** | `role.hauler.ts` | Source -> storage hauling (fills the keep core directly until a busboy exists; also borrowed by factory/nuker as a courier) |
 | **busboy** | `role.filler.ts` | Distributes storage energy to spawn/extensions/towers; spawned once storage exists (RCL 4+) |
 | **launderer** | `role.upgrader.ts` | Controller upgrading |
 | **contractor** | `role.builder.ts` | Construction |
@@ -235,12 +235,12 @@ in creep names and `Game.arca` output; the right is what it does.
 
 ## Further Reading
 
-- [QUICKSTART.md](QUICKSTART.md) — getting started + full console command list
-- [LAB_SYSTEM.md](LAB_SYSTEM.md) — compound production and boosting
-- [FACTORY_SYSTEM.md](FACTORY_SYSTEM.md) — commodity production
-- [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md) — market trading + inter-room balancing
-- [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md) — autonomous claiming + expansion queue
-- [MILITARY_GUIDE.md](MILITARY_GUIDE.md) — offense, defense, WarCouncil/DefenseCouncil
-- [NUKER_SYSTEM.md](NUKER_SYSTEM.md) — offensive nuker loading + launch
-- [OBSERVER_SYSTEM.md](OBSERVER_SYSTEM.md) — scouting + observer power-bank hunting
-- [CPU_OPTIMIZATION.md](CPU_OPTIMIZATION.md) — performance tuning
+- [QUICKSTART.md](QUICKSTART.md) - getting started + full console command list
+- [LAB_SYSTEM.md](LAB_SYSTEM.md) - compound production and boosting
+- [FACTORY_SYSTEM.md](FACTORY_SYSTEM.md) - commodity production
+- [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md) - market trading + inter-room balancing
+- [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md) - autonomous claiming + expansion queue
+- [MILITARY_GUIDE.md](MILITARY_GUIDE.md) - offense, defense, WarCouncil/DefenseCouncil
+- [NUKER_SYSTEM.md](NUKER_SYSTEM.md) - offensive nuker loading + launch
+- [OBSERVER_SYSTEM.md](OBSERVER_SYSTEM.md) - scouting + observer power-bank hunting
+- [CPU_OPTIMIZATION.md](CPU_OPTIMIZATION.md) - performance tuning

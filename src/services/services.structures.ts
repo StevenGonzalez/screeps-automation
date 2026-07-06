@@ -7,10 +7,8 @@ import {
   MU_TOWN_NAMES,
 } from "../config/config.structures";
 
-// Roman-numeral suffixes for the 2nd/3rd/... spawn sharing one room's town name.
 const SPAWN_SUFFIXES = ["", "-II", "-III", "-IV"];
 
-// Strip a "-II"/"-III"/... suffix to recover a room's base town name.
 export function baseTownName(spawnName: string): string {
   const dash = spawnName.lastIndexOf("-");
   if (dash > 0 && /^(II|III|IV|\d+)$/.test(spawnName.slice(dash + 1))) {
@@ -19,9 +17,6 @@ export function baseTownName(spawnName: string): string {
   return spawnName;
 }
 
-// Themed, globally-unique name for a spawn about to be built in `room`.
-// A room that already has a spawn keeps its town name and the new spawn gets a
-// Roman-numeral suffix; a brand-new room claims the next unused MU town name.
 export function nextSpawnName(room: Room): string | undefined {
   const existing = room.find(FIND_MY_SPAWNS);
   const pendingSites = room.find(FIND_MY_CONSTRUCTION_SITES, {
@@ -30,11 +25,10 @@ export function nextSpawnName(room: Room): string | undefined {
 
   if (existing.length > 0) {
     const base = baseTownName(existing[0].name);
-    const slot = existing.length + pendingSites; // 0-based slot for the new spawn
+    const slot = existing.length + pendingSites;
     return `${base}${SPAWN_SUFFIXES[slot] ?? `-${slot + 1}`}`;
   }
 
-  // New room: first MU town name not already used by any spawn in the empire.
   const used = new Set<string>();
   for (const name in Game.spawns) used.add(baseTownName(Game.spawns[name].name));
   return MU_TOWN_NAMES.find((t) => !used.has(t));
@@ -175,14 +169,12 @@ export function planMineralContainer(
           roomCallback: (roomName: string): boolean | CostMatrix => {
             if (roomName !== room.name) return false;
             const costMatrix = new PathFinder.CostMatrix();
-            // Mark walls as impassable
             for (let x = 0; x < 50; x++) {
               for (let y = 0; y < 50; y++) {
                 const terrain = room.getTerrain().get(x, y);
                 if (terrain === TERRAIN_MASK_WALL) costMatrix.set(x, y, 255);
               }
             }
-            // Mark structures as impassable (except roads)
             const structures = room.find(FIND_STRUCTURES) as Structure[];
             for (const struct of structures) {
               if (struct.structureType === STRUCTURE_ROAD) {
@@ -236,8 +228,6 @@ export function planMineralContainer(
   return null;
 }
 
-// Miner container for a source: a built container within range 1, else the planned
-// one in memory. The source link anchors off this so the stationary miner can reach it.
 function sourceContainerPos(room: Room, source: Source): RoomPosition | null {
   const built = source.pos.findInRange(FIND_STRUCTURES, 1, {
     filter: (s) => s.structureType === STRUCTURE_CONTAINER,
@@ -250,9 +240,6 @@ function sourceContainerPos(room: Room, source: Source): RoomPosition | null {
   return planned[0] ?? null;
 }
 
-// A source link sits beside the miner container so the stationary miner can transfer
-// into it (range 1) and the link engine classifies it as an energy "source". Prefer a
-// tile that doesn't also border the source, keeping the miner's stand tile walkable.
 export function planSourceLink(room: Room, source: Source): RoomPosition | null {
   const container = sourceContainerPos(room, source);
   if (!container) return null;
@@ -272,9 +259,6 @@ export function planSourceLink(room: Room, source: Source): RoomPosition | null 
   return fallback;
 }
 
-// The controller link is a "sink": upgraders withdraw from it and the link engine
-// fills it. Place it beside the upgrade container (so upgraders draw in place) while
-// staying within link/scan range 3 of the controller; fall back to a ring around it.
 export function planControllerLink(
   room: Room,
   controller: StructureController
@@ -498,12 +482,6 @@ export function getOrPlanRoad(
   return path;
 }
 
-// Tear down the legacy "wrap a road around every structure" carpet. That scheme
-// laid a road on every orthogonal neighbour of every structure, which is redundant
-// with the merchant-ring spokes/rings (those already give creeps lane access) and
-// a perpetual decay/repair tax. Destroys any built road and removes any pending
-// road site on a former wrap tile, then drops the key so it never regenerates.
-// Self-noops once the key is gone, so it is cheap to leave in the plan pass.
 export function removeRoadsAroundStructures(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
@@ -541,7 +519,6 @@ export function pruneRoadsUnderStructures(room: Room) {
   );
   if (roadKeys.length === 0) return;
 
-  // Precompute structure positions from Screeps-cached find — avoids lookForAt per road tile.
   const nonRoadPosSet = new Set<string>();
   const roadsByPos = new Map<string, Structure[]>();
   for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
@@ -550,10 +527,6 @@ export function pruneRoadsUnderStructures(room: Room) {
       if (!roadsByPos.has(k)) roadsByPos.set(k, []);
       roadsByPos.get(k)!.push(s);
     } else if (
-      // Ramparts and containers are walkable, so a road beneath them is useful, not
-      // buried. Source containers sit on cardinal-connector endpoints and the perimeter
-      // ring / on-top ramparts overlap arteries — pruning those roads tore up the very
-      // lanes the haulers depend on and churned them every plan pass.
       s.structureType !== STRUCTURE_RAMPART &&
       s.structureType !== STRUCTURE_CONTAINER
     ) {
@@ -581,13 +554,6 @@ export function pruneRoadsUnderStructures(room: Room) {
   }
 }
 
-// Tear down the legacy cluster-connector road web. connectRoadClusters used to link
-// every pair of nearby road fragments (all-pairs, not a spanning tree) under unstable
-// index-based keys that accumulated across passes — a redundant mesh of roads sprawling
-// over open terrain outside the base. The cardinal arteries already connect the base to
-// its sources/controller/remotes, so these connectors are pure overhead. Destroys any
-// built connector road, removes any pending connector site, and drops the keys so they
-// never regenerate. Self-noops once the keys are gone.
 export function removeConnectorRoads(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
@@ -643,7 +609,6 @@ export function structureTypeForKey(key: string): StructureConstant | null {
   if (key === PLANNER_KEYS.LINK_CONTROLLER) return STRUCTURE_LINK;
   if (key.startsWith(PLANNER_KEYS.LINK_SOURCE_PREFIX)) return STRUCTURE_LINK;
   if (key.startsWith(PLANNER_KEYS.EXTRACTOR_PREFIX)) return STRUCTURE_EXTRACTOR;
-  // Stamp keys
   if (key.startsWith(PLANNER_KEYS.STAMP_SPAWN_PREFIX))  return STRUCTURE_SPAWN;
   if (key.startsWith(PLANNER_KEYS.STAMP_TOWER_PREFIX))  return STRUCTURE_TOWER;
   if (key === PLANNER_KEYS.STAMP_EXTENSION_KEY)         return STRUCTURE_EXTENSION;

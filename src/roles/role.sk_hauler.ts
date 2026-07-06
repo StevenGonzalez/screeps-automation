@@ -2,12 +2,6 @@ import { ROLE_SK_GUARDIAN } from "../config/config.roles";
 import { isSourceKeeper } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
-/**
- * Carrier: hauls energy from a Source Keeper room back to the home storage. Collects
- * dropped energy and from any containers near the sources, and falls back to home
- * (carrying whatever it has) when a keeper closes in without a guardian, or when an
- * enemy player contests the room. It has no combat parts.
- */
 const KEEPER_DANGER_RANGE = 5;
 const GUARDIAN_GUARD_RANGE = 6;
 
@@ -15,7 +9,6 @@ export function runSkHauler(creep: Creep) {
   const opId = creep.memory.skOpId;
   const op = opId !== undefined ? getSkOp(opId) : undefined;
   if (!op) {
-    // Op gone — deliver any cargo home before retiring, don't throw it away.
     delete creep.memory.skOpId;
     if (creep.store.getUsedCapacity(RESOURCE_ENERGY) > 0 && creep.memory.homeRoom) {
       deposit(creep, creep.memory.homeRoom);
@@ -25,7 +18,6 @@ export function runSkHauler(creep: Creep) {
     return;
   }
 
-  // Contested — get the cargo (and the creep) home.
   if (isOpPaused(op)) {
     deposit(creep, op.homeRoom);
     return;
@@ -44,7 +36,6 @@ function collect(creep: Creep, op: SourceKeeperOp): void {
     return;
   }
 
-  // Flee the room when a keeper closes in and no guardian is covering us.
   const keeper = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
     filter: (c) => isSourceKeeper(c),
   });
@@ -60,7 +51,6 @@ function collect(creep: Creep, op: SourceKeeperOp): void {
     }
   }
 
-  // Containers near sources first, then dropped piles.
   const container = creep.pos.findClosestByPath(FIND_STRUCTURES, {
     ignoreCreeps: true,
     filter: (s): s is StructureContainer =>
@@ -83,7 +73,6 @@ function collect(creep: Creep, op: SourceKeeperOp): void {
     return;
   }
 
-  // Nothing to grab yet — wait near the centre, clear of the lairs.
   const center = new RoomPosition(25, 25, op.roomName);
   if (!creep.pos.inRangeTo(center, 6)) creep.moveTo(center, { range: 6, reusePath: 20 });
 }
@@ -111,9 +100,6 @@ function deposit(creep: Creep, homeRoom: string): void {
     }
     return;
   }
-  // Storage and all containers are full — offload into a spawn that still has room so the
-  // hauler doesn't park beside a spawn holding a full load forever (which stalls the whole
-  // SK haul). If everything is full too, idle (rare; nothing to do but wait).
   const spawn = creep.room
     .find(FIND_MY_SPAWNS)
     .find((s) => s.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
@@ -125,8 +111,5 @@ function deposit(creep: Creep, homeRoom: string): void {
 }
 
 function moveToRoom(creep: Creep, targetRoom: string): void {
-  // Route to the target room centre via PathFinder's multi-room pathing. Aiming moveTo at a
-  // bare exit tile (findExitTo + findClosestByRange) parks creeps on the border or bounces
-  // them between two rooms — see role.reserver.ts / role.remote_miner.ts.
   creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }

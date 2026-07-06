@@ -22,7 +22,7 @@ Per owned room with a built factory, each tick:
 
 The factory loop runs **after** the creep orchestrator in `main.ts`, so its
 move/withdraw/transfer intents override whatever the borrowed hauler queued that
-tick. There is no dedicated factory-hauler role — it reuses a bagman.
+tick. There is no dedicated factory-hauler role - it reuses a bagman.
 
 ---
 
@@ -35,9 +35,9 @@ for each.
 
 | Tier | Level gate | Commodities | Target |
 |------|-----------|-------------|--------|
-| 0 — energy compaction | any | `battery` | 10,000 |
-| 1 — compressed base minerals | any | `utrium_bar`, `lemergium_bar`, `zynthium_bar`, `keanium_bar`, `oxidant`, `reductant`, `purifier`, `ghodium_melt` | 2–3,000 |
-| 2 — basic deposit commodities | **level 1+** | `wire`, `cell`, `alloy`, `condensate` | 2,000 |
+| 0 - energy compaction | any | `battery` | 10,000 |
+| 1 - compressed base minerals | any | `utrium_bar`, `lemergium_bar`, `zynthium_bar`, `keanium_bar`, `oxidant`, `reductant`, `purifier`, `ghodium_melt` | 2-3,000 |
+| 2 - basic deposit commodities | **level 1+** | `wire`, `cell`, `alloy`, `condensate` | 2,000 |
 
 The orchestrator walks this list and makes the first target that is under-stocked,
 has its ingredients available, and clears its level gate.
@@ -61,7 +61,7 @@ Battery and the compressed-mineral bars consume energy. A storage reserve of 50,
 (`FACTORY_MIN_RESERVE_ENERGY`) is never touched, so making commodities can't starve
 the colony economy.
 
-> Note: selling commodities on the market is **not** handled here — the factory just
+> Note: selling commodities on the market is **not** handled here - the factory just
 > builds a stockpile. Vending is left to the terminal.
 
 ---

@@ -44,11 +44,6 @@ function getAssignedContainerIdsByRole(room: Room, role: string): Set<string> {
   return assignedContainerIdsByRoomAndRole[cacheKey];
 }
 
-// Closest target by PATH, ignoring creeps. Target selection MUST ignore creeps: with
-// the default (ignoreCreeps:false) a creep boxed in by its neighbours gets null from
-// findClosestByPath and gives up — idling instead of moving. We pick the target by
-// terrain distance and let the traffic manager (services.movement) squeeze the creep
-// through congestion on the way there. Used by every "nearest target" finder below.
 function closestByPath<T extends RoomObject>(
   pos: RoomPosition,
   targets: T[]
@@ -56,10 +51,6 @@ function closestByPath<T extends RoomObject>(
   return (pos.findClosestByPath(targets, { ignoreCreeps: true }) as T | null) ?? null;
 }
 
-// Single per-tick FIND_STRUCTURES scan shared by every helper below. With dozens
-// of creeps each calling these finders per tick, scanning once per room and
-// filtering the cached array in JS is dramatically cheaper than one room.find
-// per creep. findClosestByPath accepts the filtered arrays unchanged.
 export function getRoomStructures(room: Room): AnyStructure[] {
   if (roomStructuresCacheTick !== Game.time) {
     roomStructuresCacheTick = Game.time;
@@ -113,7 +104,6 @@ export function findBalancedSource(creep: Creep): Source | null {
     }
   }
 
-  // Pick the source with fewest assigned creeps; break ties by proximity
   let best: Source | null = null;
   let bestCount = Infinity;
   for (const source of sources) {
@@ -135,7 +125,6 @@ export function findEnergyDepositTarget(
 
   const typeSet = new Set<StructureConstant>(priorityList);
 
-  // Filter the shared per-tick scan instead of one room.find per priority type.
   const all = getRoomStructures(creep.room).filter(
     (s): s is AnyStoreStructure =>
       typeSet.has(s.structureType) &&
@@ -202,20 +191,11 @@ function getDangerPositions(room: Room): RoomPosition[] {
     for (const k in dangerByRoom) delete dangerByRoom[k];
   }
   if (!dangerByRoom[room.name]) {
-    // Under safe mode the room is fully protected — hostiles can't attack our creeps or
-    // structures — so there is no danger to route around. Treating an enemy parked in the base
-    // as a no-go zone here freezes ALL nearby construction and harvesting (isPositionSafe blanks
-    // out a range-5 circle around every hostile), stranding contractors/diggers next to a creep that
-    // cannot touch them. Report no danger so the economy keeps working right through the siege.
     if (room.controller?.safeMode) {
       dangerByRoom[room.name] = [];
       return dangerByRoom[room.name];
     }
     const positions: RoomPosition[] = [];
-    // Only combat creeps threaten our economy. A scout, claimer, hauler or any creep with no
-    // ATTACK/RANGED_ATTACK part can't damage a builder or digger, so it must not blank out a
-    // range-5 no-go circle and freeze all work around it. getActiveBodyparts ignores parts that
-    // have already been destroyed, so a disarmed attacker stops counting as a threat too.
     for (const c of room.find(FIND_HOSTILE_CREEPS)) {
       if (c.getActiveBodyparts(ATTACK) > 0 || c.getActiveBodyparts(RANGED_ATTACK) > 0) {
         positions.push(c.pos);
@@ -229,11 +209,6 @@ function getDangerPositions(room: Room): RoomPosition[] {
   return dangerByRoom[room.name];
 }
 
-/**
- * Whether a tile is clear of nearby hostiles and Source Keeper lairs. Economy creeps
- * that approach a dangerous tile (to harvest or to build) get killed, so they must
- * stay away from it.
- */
 export function isPositionSafe(room: Room, pos: RoomPosition): boolean {
   const dangers = getDangerPositions(room);
   if (dangers.length === 0) return true;
@@ -250,10 +225,6 @@ export function isSourceSafe(source: Source): boolean {
 let safeSourceTick = -1;
 const safeSourceCache: Record<string, Source[]> = {};
 
-/**
- * The room's sources that are safe to harvest, cached per tick. Falls back to all
- * sources when none are safe, so a creep still has somewhere to go.
- */
 export function getSafeSources(room: Room): Source[] {
   if (safeSourceTick !== Game.time) {
     safeSourceTick = Game.time;
@@ -271,19 +242,11 @@ export function acquireEnergy(
   creep: Creep,
   opts?: { bufferOnly?: boolean }
 ): boolean {
-  // bufferOnly: this is a non-essential consumer (builder/repairer/idle upgrader). Digger
-  // containers AND the dropped piles beside them are raw producer output the bagmen need to keep
-  // the tower and extensions filled — so a bufferOnly consumer leaves both alone and draws only
-  // from the storage buffer (plus links/tombs). When the buffer is empty there is no surplus, so
-  // it simply gets nothing and backs off rather than starving the core's supply line.
   const bufferOnly = !!opts?.bufferOnly;
   const minerIds = bufferOnly
     ? new Set(getMinerContainerIds(creep.room).map((id) => id as string))
     : null;
 
-  // Re-use the cached container/storage/link target from the previous tick as long
-  // as it still exists and still holds energy — avoids the expensive findClosestByPath
-  // scan on every tick.
   if (creep.memory.energySourceId) {
     const cached = Game.getObjectById(creep.memory.energySourceId) as AnyStoreStructure | null;
     if (
@@ -301,9 +264,6 @@ export function acquireEnergy(
     creep.memory.energySourceId = undefined;
   }
 
-  // Pick up nearby dropped energy — findInRange is O(local area) vs room-wide pathfinding.
-  // bufferOnly consumers skip this: dropped piles are mostly digger overflow that the bagmen are
-  // there to collect for the tower/core.
   const droppedInRange = bufferOnly
     ? []
     : (creep.pos.findInRange(FIND_DROPPED_RESOURCES, 8, {
@@ -319,7 +279,6 @@ export function acquireEnergy(
     return res === OK;
   }
 
-  // Containers and storage — cache the chosen target.
   const upgradeId = creep.room.memory.upgradeContainerId;
   const storeTargets = getRoomStructures(creep.room).filter(
     (s): s is AnyStoreStructure =>
@@ -350,7 +309,6 @@ export function acquireEnergy(
     return res === OK;
   }
 
-  // Links with energy — cache the chosen one.
   const links = getRoomStructures(creep.room).filter(
     (s): s is StructureLink =>
       s.structureType === STRUCTURE_LINK &&
@@ -369,7 +327,6 @@ export function acquireEnergy(
     }
   }
 
-  // Tombstones — ephemeral, not cached.
   const tomb = creep.pos.findClosestByPath(FIND_TOMBSTONES, {
     ignoreCreeps: true,
     filter: (t) => t.store && t.store[RESOURCE_ENERGY] > 0,
@@ -383,7 +340,6 @@ export function acquireEnergy(
     return res === OK;
   }
 
-  // Last resort: harvest directly from a safe active source (avoid Source Keepers).
   const activeSafe = getSafeSources(creep.room).filter((s) => s.energy > 0);
   const source = closestByPath(creep.pos, activeSafe) as Source | null;
   if (source) {
@@ -470,11 +426,6 @@ export function isCreepFull(creep: Creep): boolean {
 
 export function transferEnergyTo(creep: Creep, target: Structure): void {
   if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-    // Short reuse window on the delivery approach: deposit targets (controller container, spawn,
-    // extensions) get ringed by parked upgraders/haulers. A long cached path keeps re-issuing a
-    // move onto the occupied tile every tick — the engine silently drops it and the hauler stalls
-    // behind the blocker for the life of the cache. A short window forces a creep-aware repath
-    // (moveTo's default ignoreCreeps:false routes around the parked creep) within a tick or two.
     creep.moveTo(target, { reusePath: 5 });
   }
 }
@@ -510,13 +461,6 @@ const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_ROAD]: 11,
 };
 
-// Containers aren't interchangeable, but a construction site only exposes its structureType, so
-// the flat table above can't tell them apart — leaving every container tied at priority 1, ahead
-// of extensions. That's why contractors focus-fire a mineral container (useless until RCL6) before the
-// extensions that grow the whole creep economy. Classify by what the site sits next to:
-//   source container  → static mining, the biggest early payoff → keep ahead of extensions
-//   controller container → an upgrade convenience → after extensions/tower
-//   mineral container → nothing uses it until RCL6+ → build it last, after roads
 const SOURCE_CONTAINER_PRIORITY = 1;
 const CONTROLLER_CONTAINER_PRIORITY = 4;
 const MINERAL_CONTAINER_PRIORITY = 12;
@@ -543,12 +487,6 @@ function isHigherBuildPriority(a: ConstructionSite, b: ConstructionSite): boolea
 let buildTargetTick = -1;
 const buildTargetByRoom: Record<string, Id<ConstructionSite> | null> = {};
 
-/**
- * Energy is critically low when spawn energy is below 25% capacity AND storage has little
- * buffer. Pre-storage rooms use only the spawn energy fraction (no stored energy to fall
- * back on). Drives both spawn suppression (orchestrator.spawning) and runtime backoff —
- * builders stop spending energy on construction while the room is in this state.
- */
 export function isEnergyEmergency(room: Room): boolean {
   const cap = room.energyCapacityAvailable;
   if (cap === 0) return false;
@@ -556,11 +494,6 @@ export function isEnergyEmergency(room: Room): boolean {
   return room.energyAvailable / cap < 0.25 && room.storage.store[RESOURCE_ENERGY] < 50000;
 }
 
-/**
- * The single construction site the whole room should focus on, so builders converge
- * on one structure instead of half-finishing many. Ranked by structure-type priority,
- * then most-progressed, then id; cached per tick.
- */
 export function getRoomBuildTarget(room: Room): ConstructionSite | null {
   if (buildTargetTick !== Game.time) {
     buildTargetTick = Game.time;
@@ -578,7 +511,6 @@ export function getRoomBuildTarget(room: Room): ConstructionSite | null {
   return id ? Game.getObjectById(id) : null;
 }
 
-// HP targets for ramparts/walls by RCL — creeps repair up to this level.
 const RAMPART_TARGET_HP: Record<number, number> = {
   2:        10_000,
   3:        20_000,
@@ -597,11 +529,6 @@ function isDamaged(s: AnyStructure): boolean {
   return s.hits < s.hitsMax;
 }
 
-/**
- * Hits below which a decaying structure is close enough to being removed that
- * rescuing it should preempt routine maintenance. Returns 0 for structures that
- * do not decay.
- */
 function decayRescueFloor(s: AnyStructure): number {
   switch (s.structureType) {
     case STRUCTURE_RAMPART:
@@ -637,20 +564,10 @@ export function findClosestDamagedRampart(
   return closestByPath(creep.pos, ramparts) || null;
 }
 
-// A rampart/wall complete at 1 hit and is destroyed at its first decay tick (−300 hits
-// every 100 ticks) unless lifted past the decay amount quickly. Below this floor a defense
-// is at risk of decaying away before the towers/repairers (which maintain the much higher
-// RCL target HP) ever reach it — so the builder that just laid it boosts it here first.
 const CRITICAL_DEFENSE_HITS = 1000;
 
-// A wall/rampart below this absolute HP is a real breach risk (structures behind it can be
-// reached soon), so a repairer lifts it BEFORE servicing chipped economy structures. Scaled
-// down for developing rooms (vs half the RCL wall target) so it doesn't starve early economy.
 const BREACH_DANGER_FLOOR = 50_000;
 
-// Under fire, a tower holds any barrier below this HP (capped at the RCL wall target). Higher
-// than the calm tower-repair cap so towers START defending a wall well before it's seconds
-// from death, giving their fast repair a chance to out-pace an active dismantler.
 const TOWER_DEFENSE_REPAIR_FLOOR = 300_000;
 
 export function findCriticalDefenseTarget(creep: Creep): AnyStructure | null {
@@ -663,8 +580,6 @@ export function findCriticalDefenseTarget(creep: Creep): AnyStructure | null {
   return closestByPath(creep.pos, critical) || null;
 }
 
-// When a nuke is inbound, the rampart over a threatened critical structure that is
-// furthest below its survival HP takes top repair priority — over everything else.
 export function getNukeRampartTarget(room: Room): StructureRampart | null {
   const def = room.memory.nukeDefense;
   if (!def) return null;
@@ -716,11 +631,6 @@ export function findMostCriticalRepairTarget(
     return result;
   }
 
-  // Priority 0.5: a barrier at genuine breach risk outranks chipped economy structures — a
-  // breach loses structures, a worn road loses a little CPU. Preempt only for walls under the
-  // danger floor (scaled to half the RCL target so developing rooms don't starve economy);
-  // walls above it wait for Priority 2 as before. This stops ramparts sitting near-failing
-  // while every sub-80% road/container is serviced first.
   const barrierDanger = Math.min(BREACH_DANGER_FLOOR, wallTarget * 0.5);
   const criticalBarriers = structures.filter(
     (st): st is AnyStructure =>
@@ -733,10 +643,6 @@ export function findMostCriticalRepairTarget(
     return result;
   }
 
-  // Priority 1: non-defensive structures below 80% HP. Rank by HP fraction
-  // (hits/hitsMax), not absolute hits — otherwise low-cap structures like roads
-  // (5k max) always beat containers (250k max) and starve their repairs. Within
-  // that, service containers/storage before roads so critical infra never dies.
   const nonDefensive = structures.filter(
     (st): st is AnyStructure =>
       st.structureType !== STRUCTURE_WALL &&
@@ -754,7 +660,6 @@ export function findMostCriticalRepairTarget(
     return result;
   }
 
-  // Priority 2: walls/ramparts below RCL-scaled target HP (most critical first)
   const belowTarget = structures.filter(
     (st): st is AnyStructure =>
       (st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART) &&
@@ -779,7 +684,6 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
   if (room.name in towerRepairByRoom) return towerRepairByRoom[room.name];
 
   const rcl = room.controller?.level ?? 0;
-  // Towers handle emergencies — cap at 50k so they don't burn all energy on healthy walls.
   const towerWallThreshold = Math.min(50_000, Math.max(5_000, getRampartTargetHP(rcl) * 0.05));
 
   const candidates = getRoomStructures(room).filter((st): st is AnyStructure => {
@@ -795,11 +699,6 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
   return result;
 }
 
-// The weakest wall/rampart low enough to be a real breach risk this fight — what a tower
-// should reinforce while it is HOLDING FIRE under attack (no killable target). Unlike
-// findTowerRepairTarget (a calm-only path capped at ~50k), this uses a higher floor so towers
-// start holding a wall before it is seconds from death, letting their fast repair out-pace an
-// active dismantler. Returns null when every barrier is healthy, so a lone kiter can't bleed us.
 export function findTowerDefenseRepairTarget(
   room: Room
 ): StructureRampart | StructureWall | null {
@@ -865,20 +764,8 @@ export function findClosestMinerContainerWithEnergy(
   return closestByPath(creep.pos, withEnergy) || null;
 }
 
-// How low the controller container may get before a hauler tops it up. Gated this low (rather
-// than "any free space") so haulers drop the bulk of their load into storage instead of all
-// funnelling to the small controller container — which jammed a queue at the controller and,
-// because their energy never reached storage, left the busboys nothing to distribute.
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
 
-// How many haulers may top up the controller container at once. The "<1000" gate above is not
-// enough on its own: a hungry upgrader keeps the small container permanently below the threshold,
-// so the gate never closes and the ENTIRE fleet funnels to that one tile — they jam a queue at
-// the controller and stand there unable to reach it while storage sits with room. Restrict the
-// top-up to a fixed, deterministically chosen subset (the N lowest-id haulers in the room);
-// every other hauler drops into storage. The pick is id-based so it is stable tick to tick with
-// no memory races, and one filler keeps the buffer supplied because upgraders also pull straight
-// from storage and the controller link.
 const UPGRADE_CONTAINER_FILLERS = 1;
 
 let upgradeFillerTick = -1;
@@ -900,11 +787,6 @@ function getUpgradeContainerFillerIds(room: Room): Set<string> {
   return upgradeFillerIdsByRoom[room.name];
 }
 
-// Where a full hauler drops energy once spawn/extension/tower are topped up. Storage is the bulk
-// sink and comes first; the controller container only gets a top-up while it's actually running
-// low, so upgraders keep a local supply without every bagman funnelling to it (upgraders also
-// pull straight from storage / the controller link when their container empties). Digger
-// containers are excluded — they are pickup sources, not drop-offs.
 export function findDepositTargetExcludingMiner(creep: Creep): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
 
@@ -917,13 +799,6 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
     upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
     minerIds.indexOf(upgradeCont.id as string) === -1;
 
-  // Top up the controller container only while it's low, only if this hauler is one of the
-  // designated fillers (otherwise the whole fleet funnels to it — the upgrader keeps it below the
-  // threshold — and jams the controller), and only once the core itself is full. Upgrading is
-  // deferrable; spawning is not, so never feed the controller container ahead of a hungry
-  // spawn/extension. In the storage model the filler pulls from storage to fill the core, so a
-  // hungry core means the hauler's load belongs in storage (below) to keep that buffer stocked,
-  // not in the controller container. Non-fillers / a hungry core fall through to storage.
   const coreFull = creep.room.energyAvailable >= creep.room.energyCapacityAvailable;
   if (
     upgradeIsDropTarget &&
@@ -939,8 +814,6 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
     return storage;
   }
 
-  // Storage full — fall back to the controller container (even if not low), then any other
-  // non-digger container, rather than stranding the load.
   if (upgradeIsDropTarget) {
     return upgradeCont;
   }
@@ -957,9 +830,6 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
   return null;
 }
 
-// The tower with the most free energy capacity (i.e. emptiest) that still needs filling, or
-// null if every tower is topped up. Used as a defensive priority — under attack, towers drain
-// ~10 energy/shot and must be kept loaded ahead of spawn/extensions.
 export function findEmptiestTower(room: Room): StructureTower | null {
   const towers = getRoomStructures(room).filter(
     (s): s is StructureTower =>
@@ -972,8 +842,6 @@ export function findEmptiestTower(room: Room): StructureTower | null {
   );
 }
 
-// The closest spawn/extension/tower with free energy capacity — the core structures a hauler
-// or filler tops up. Returns null when the whole core is full.
 export function findCoreFillTarget(creep: Creep): AnyStoreStructure | null {
   const targets = getRoomStructures(creep.room).filter(
     (s): s is AnyStoreStructure =>
@@ -991,10 +859,6 @@ export function upgradeController(creep: Creep): void {
   const controller = creep.room.controller;
   if (!controller) return;
 
-  // Upgrade FIRST — signing must never block it. When already in range, optionally edge toward
-  // range 1 to lay our mark; the upgrade intent for this tick is already issued, so signing
-  // runs alongside it and, if range 1 can't be reached, the creep just keeps upgrading from
-  // here instead of standing idle.
   if (creep.upgradeController(controller) === ERR_NOT_IN_RANGE) {
     creep.moveTo(controller, { reusePath: 50 });
     return;
@@ -1003,28 +867,19 @@ export function upgradeController(creep: Creep): void {
   signControllerIfNeeded(creep, controller);
 }
 
-const SIGN_RECHECK_INTERVAL = 5000; // ticks before re-attempting a controller signature
+const SIGN_RECHECK_INTERVAL = 5000;
 
 export function signControllerIfNeeded(
   creep: Creep,
   controller: StructureController
 ): boolean {
-  // Back off for a while after each attempt. Signing is purely cosmetic, and a sign whose
-  // stored text doesn't byte-match our desired text (server-side normalisation, an em-dash
-  // round-trip, a length cap) would otherwise read as "still needs signing" forever and pull
-  // the upgrader back to the controller every tick. One attempt, then leave it for a long while.
   const lastSigned = creep.room.memory.lastSigned;
   if (lastSigned !== undefined && Game.time - lastSigned < SIGN_RECHECK_INTERVAL) return false;
 
-  // Use the rotating, on-theme signature list (no em-dashes).
   const desiredSignature = pickSignature(creep.room.name);
 
   const currentSign = controller.sign;
 
-  // Leave a server sign in place. When a Novice/Respawn area is being planned the server signs
-  // every controller in the sector ("...make sure all important rooms are reserved." — Screeps)
-  // and that sign cannot be overridden, so trying would just send the upgrader on an endless
-  // futile detour to the controller.
   if (currentSign?.username === "Screeps") return false;
 
   const myUsername = controller.owner?.username;
@@ -1034,11 +889,6 @@ export function signControllerIfNeeded(
     currentSign.text !== desiredSignature;
   if (!needsSign) return false;
 
-  // signController requires adjacency, but upgraders work from up to range 3 (parked by the
-  // controller link/container). Edge in to range 1 to lay the mark; the caller has already
-  // issued this tick's upgrade, so this never blocks. Stamp lastSigned on the attempt itself
-  // (not just on OK) so the back-off above engages even if the stored text never matches —
-  // one detour, not an endless loop.
   if (creep.pos.getRangeTo(controller.pos) > 1) {
     creep.moveTo(controller, { range: 1, reusePath: 5 });
     return true;
@@ -1064,11 +914,6 @@ export function repairStructure(creep: Creep, target: AnyStructure): number {
   return res;
 }
 
-/**
- * Spend a carrier's leftover energy when there's nowhere to deliver it, rather
- * than idling: build the nearest site, else repair the nearest damaged
- * structure, else upgrade the controller. Operates on the creep's current room.
- */
 export function putSurplusEnergyToWork(creep: Creep): void {
   const site = getRoomBuildTarget(creep.room);
   if (site) {
@@ -1113,9 +958,6 @@ export function findUnclaimedMinerAssignment(
 export function findUnclaimedHaulerAssignment(
   room: Room
 ): StructureContainer | null {
-  // Only assign digger (producer) containers. The hauler treats its assignment as a
-  // source to drain, so handing it the upgrade or mineral container would have it
-  // siphon energy away from upgraders straight back into spawn/extensions.
   const minerIds = new Set(getMinerContainerIds(room).map((id) => id.toString()));
   if (minerIds.size === 0) return null;
   const containers = getRoomContainers(room).filter((c) => minerIds.has(c.id.toString()));
@@ -1129,14 +971,8 @@ export function findUnclaimedHaulerAssignment(
   return null;
 }
 
-// How long an Invader sighting keeps a remote flagged for defence (cleared early once a
-// remote creep works the room unmolested again), and how long a player sighting keeps it
-// flagged hostile (matches the scout's SCOUT_HOSTILE_DURATION).
 const REMOTE_INVADER_WINDOW = 1500;
 const REMOTE_PLAYER_WINDOW = 2000;
-// Player avoidance escalates: each re-detection without the room being seen clear doubles the
-// window, capped here. A player who parks in our remote is thus abandoned for longer and
-// longer instead of us re-probing and re-feeding miners every REMOTE_PLAYER_WINDOW.
 const REMOTE_PLAYER_WINDOW_MAX = 20000;
 
 function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
@@ -1146,11 +982,6 @@ function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
   return Memory.rooms[home]?.remoteRooms?.find((r) => r.roomName === target);
 }
 
-// True when this creep's assigned remote is contested — a player has it flagged hostile, OR
-// an Invader was seen recently. Remote miners/haulers must NOT re-enter while this holds, or
-// they ping-pong: in → attacked → flee home → towers heal → back in, draining tower energy
-// and accomplishing nothing. They wait at home until the flag clears (Invader killed by a
-// defender, or the window elapses).
 export function isAssignedRemoteContested(creep: Creep): boolean {
   const entry = assignedRemoteEntry(creep);
   if (!entry) return false;
@@ -1158,23 +989,16 @@ export function isAssignedRemoteContested(creep: Creep): boolean {
   return entry.invaderUntil !== undefined && entry.invaderUntil > Game.time;
 }
 
-// Flag this creep's remote room as Invader-contested so the home raises a defender.
 export function flagRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
   if (entry) entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
 }
 
-// Flag this creep's remote room as player-hostile so we avoid it (we don't pick fights with
-// players over a remote — no defender is raised, the room is simply abandoned).
 export function flagRemotePlayer(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
   if (entry) markRemotePlayerHostile(entry);
 }
 
-// Mark a remote player-hostile with escalating backoff. The first sighting parks it for
-// REMOTE_PLAYER_WINDOW; each fresh re-detection (after the prior window lapsed) doubles the
-// window up to REMOTE_PLAYER_WINDOW_MAX. Re-flagging within an active window only refreshes
-// the expiry — it doesn't escalate — so one contested episode counts as a single strike.
 export function markRemotePlayerHostile(entry: RemoteRoomData): void {
   const avoided =
     entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
@@ -1187,16 +1011,12 @@ export function markRemotePlayerHostile(entry: RemoteRoomData): void {
   entry.hostileUntil = Game.time + window;
 }
 
-// Remote confirmed clear of players — lift avoidance and reset the backoff so mining resumes
-// and the next player sighting starts the escalation from scratch.
 export function clearRemotePlayerHostile(entry: RemoteRoomData): void {
   entry.hostile = false;
   entry.hostileUntil = undefined;
   entry.hostileStrikes = 0;
 }
 
-// Clear the Invader flag once a remote creep is working the room unmolested again, so the
-// home stops spawning defenders and mining resumes promptly.
 export function clearRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
   if (entry && entry.invaderUntil !== undefined) entry.invaderUntil = undefined;

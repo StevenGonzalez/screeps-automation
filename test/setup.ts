@@ -1,7 +1,3 @@
-// Minimal Screeps global shim for unit tests. Source modules reference a handful of game
-// constants in module-level lookup tables (e.g. the structure attack-priority map in
-// services.combat). Node has no Screeps runtime, so define just those constants — with their
-// real game values — before the modules under test are imported.
 const STRUCTURE_CONSTANTS: Record<string, string> = {
   STRUCTURE_SPAWN: "spawn",
   STRUCTURE_EXTENSION: "extension",

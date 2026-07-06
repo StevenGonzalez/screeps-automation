@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
-// services.combat references several ambient Screeps globals inside getThreatInfo
-// (body-part constants, power constants, Game.time, Memory.allies). Node has no Screeps
-// runtime, so define them here — with their real game values — before importing the
-// module under test.
 const g = globalThis as Record<string, unknown>;
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
@@ -15,7 +11,7 @@ g.ATTACK_POWER = 30;
 g.RANGED_ATTACK_POWER = 10;
 g.HEAL_POWER = 12;
 g.DISMANTLE_POWER = 50;
-g.FIND_HOSTILE_CREEPS = 113; // arbitrary; our mock room.find keys off it
+g.FIND_HOSTILE_CREEPS = 113;
 g.Game = { time: 1 };
 g.Memory = {};
 
@@ -29,12 +25,8 @@ import {
   isBlockaded,
 } from "../src/services/services.combat";
 
-// ── Threat-scoring test helpers ──────────────────────────────────────────────────
-
 type TestPart = { type: string; hits?: number; boost?: string };
 
-// Build a mock creep with a body of [count×type] parts. `boost` applies to every part
-// of the given combat type. Parts default to full hits (100) so they all count.
 function makeCreep(
   parts: Array<{ type: string; count: number; boost?: string }>,
   username = "Enemy"
@@ -48,7 +40,6 @@ function makeCreep(
   return { body, owner: { username } } as unknown as Creep;
 }
 
-// Minimal room whose find(FIND_HOSTILE_CREEPS) returns the given creeps.
 function makeRoom(name: string, hostiles: Creep[]): Room {
   return {
     name,
@@ -56,7 +47,6 @@ function makeRoom(name: string, hostiles: Creep[]): Room {
   } as unknown as Room;
 }
 
-// Bump Game.time each test so getThreatInfo's per-tick cache never returns stale data.
 let tick = 100;
 beforeEach(() => {
   tick++;
@@ -65,7 +55,7 @@ beforeEach(() => {
 });
 
 describe("isSourceKeeperRoom", () => {
-  it("flags the full 3×3 keeper cluster (coords 4–6), including the coord-6 rooms", () => {
+  it("flags the full 3x3 keeper cluster (coords 4-6), including the coord-6 rooms", () => {
     for (const name of ["W4N4", "W5N4", "W6N4", "W4N5", "W6N5", "W4N6", "W5N6", "W6N6"]) {
       expect(isSourceKeeperRoom(name)).toBe(true);
     }
@@ -73,12 +63,12 @@ describe("isSourceKeeperRoom", () => {
 
   it("excludes the sector centre (5,5), which is the central/portal room", () => {
     expect(isSourceKeeperRoom("W5N5")).toBe(false);
-    expect(isSourceKeeperRoom("E15N25")).toBe(false); // 15%10=5, 25%10=5
+    expect(isSourceKeeperRoom("E15N25")).toBe(false);
   });
 
   it("excludes normal and highway rooms", () => {
     expect(isSourceKeeperRoom("W1N1")).toBe(false);
-    expect(isSourceKeeperRoom("W10N10")).toBe(false); // 0,0 → highway
+    expect(isSourceKeeperRoom("W10N10")).toBe(false);
     expect(isSourceKeeperRoom("W0N0")).toBe(false);
   });
 
@@ -96,7 +86,7 @@ describe("formationOffset", () => {
   });
 
   it("stacks members beyond the template further back so large squads still cohere", () => {
-    const box = formationOffset("box", 9); // first slot past the 9-entry box template
+    const box = formationOffset("box", 9);
     expect(box[1]).toBeGreaterThanOrEqual(3);
   });
 });
@@ -107,8 +97,6 @@ describe("getThreatInfo scoring", () => {
   });
 
   it("scores an unboosted melee attacker by its DPS and effective HP", () => {
-    // 10 ATTACK (30 dmg each) + 10 MOVE:
-    //   10 + (10×30)/30 + 0 + (20×100)/1000 = 10 + 10 + 2 = 22
     const room = makeRoom("W1N1", [
       makeCreep([{ type: "attack", count: 10 }, { type: "move", count: 10 }]),
     ]);
@@ -116,7 +104,6 @@ describe("getThreatInfo scoring", () => {
   });
 
   it("scores a healer by its (weighted) heal output and effective HP", () => {
-    // 5 HEAL (12 each) + 5 MOVE: 10 + 0 + (5×12)×0.10 + (10×100)/1000 = 10 + 6 + 1 = 17
     const room = makeRoom("W1N1", [
       makeCreep([{ type: "heal", count: 5 }, { type: "move", count: 5 }]),
     ]);
@@ -131,27 +118,23 @@ describe("getThreatInfo scoring", () => {
         makeCreep([{ type: "attack", count: 10, boost: "XUH2O" }, { type: "move", count: 10 }]),
       ])
     ).score;
-    // XUH2O is ×4 attack damage: 10 + (10×30×4)/30 + (20×100)/1000 = 10 + 40 + 2 = 52
     expect(boosted).toBeCloseTo(52, 5);
     expect(unboosted).toBeCloseTo(22, 5);
     expect(boosted).toBeGreaterThan(unboosted * 1.5);
   });
 
-  it("counts TOUGH boost as extra effective HP (tankier ⇒ higher score)", () => {
+  it("counts TOUGH boost as extra effective HP (tankier => higher score)", () => {
     const plain = getThreatInfo(
       makeRoom("W1N1", [makeCreep([{ type: "tough", count: 5 }])])
     ).score;
     const armored = getThreatInfo(
       makeRoom("W2N2", [makeCreep([{ type: "tough", count: 5, boost: "XGHO2" }])])
     ).score;
-    // plain: 10 + (5×100)/1000 = 10.5
-    // XGHO2 takes ×0.3 damage ⇒ EHP ×(1/0.3): 10 + (5×100/0.3)/1000 ≈ 11.667
     expect(plain).toBeCloseTo(10.5, 5);
     expect(armored).toBeGreaterThan(plain);
   });
 
   it("ignores destroyed parts (hits === 0)", () => {
-    // A melee attacker whose ATTACK parts are all chewed off scores like a bare frame.
     const room = makeRoom("W1N1", [
       {
         body: [
@@ -162,7 +145,6 @@ describe("getThreatInfo scoring", () => {
         owner: { username: "Enemy" },
       } as unknown as Creep,
     ]);
-    // Only the live MOVE contributes EHP: 10 + 0 + 0 + 100/1000 = 10.1
     expect(getThreatInfo(room).score).toBeCloseTo(10.1, 5);
   });
 
@@ -191,25 +173,21 @@ describe("getThreatInfo scoring", () => {
 });
 
 describe("getThreatSeverity calibration", () => {
-  // A full unboosted melee attacker: 25 ATTACK + 25 MOVE ⇒ 10 + 25 + 5 = 40.
   const attacker = () =>
     makeCreep([{ type: "attack", count: 25 }, { type: "move", count: 25 }]);
-  // A full unboosted healer: 25 HEAL + 25 MOVE ⇒ 10 + 30 + 5 = 45.
   const healer = () =>
     makeCreep([{ type: "heal", count: 25 }, { type: "move", count: 25 }]);
 
   it("rates a lone attacker as low", () => {
-    expect(getThreatSeverity(makeRoom("W1N1", [attacker()]))).toBe("low"); // 40 < 80
+    expect(getThreatSeverity(makeRoom("W1N1", [attacker()]))).toBe("low");
   });
 
   it("rates a small unhealed squad as medium", () => {
-    // Three attackers ≈ 120: ≥ SEVERITY_MEDIUM (80), < SEVERITY_HIGH (160).
     const room = makeRoom("W1N1", [attacker(), attacker(), attacker()]);
     expect(getThreatSeverity(room)).toBe("medium");
   });
 
   it("rates a healer-backed raid as high", () => {
-    // Three attackers (120) + a healer (45) ≈ 165 ≥ SEVERITY_HIGH (160).
     const room = makeRoom("W1N1", [attacker(), attacker(), attacker(), healer()]);
     expect(getThreatSeverity(room)).toBe("high");
   });
@@ -217,8 +195,6 @@ describe("getThreatSeverity calibration", () => {
 
 describe("dismantle threat scoring", () => {
   it("counts a WORK dismantler's damage so it is no longer invisible", () => {
-    // 20 WORK (50 dismantle each) + 20 MOVE:
-    //   10 + (20×50)/30 + 0 + (40×100)/1000 = 10 + 33.333 + 4 = 47.333
     const room = makeRoom("W1N1", [
       makeCreep([{ type: "work", count: 20 }, { type: "move", count: 20 }]),
     ]);
@@ -237,10 +213,8 @@ describe("dismantle threat scoring", () => {
 });
 
 describe("exit blockade detection", () => {
-  const STICKY = 1500; // BLOCKADE_STICKY_TICKS (mirrors the module constant)
+  const STICKY = 1500;
 
-  // A hostile with a position, for the border-band check. Home is always W1N1 here, whose
-  // TOP (north) exit is W1N2; a guard camping that exit sits at the NORTH room's bottom edge.
   function makeGuard(
     x: number,
     y: number,
@@ -256,7 +230,6 @@ describe("exit blockade detection", () => {
     return { name: "W1N1", controller: { my: true }, memory } as unknown as Room;
   }
 
-  // Wire up W1N1's north exit → W1N2, giving W1N2 the supplied hostiles (or no vision if null).
   function setNorthNeighbour(hostiles: Creep[] | null): void {
     (g.Game as { map?: unknown }).map = {
       describeExits: () => ({ "1": "W1N2" }),
@@ -266,10 +239,10 @@ describe("exit blockade detection", () => {
   }
 
   const armed = [{ type: "attack", count: 5 }, { type: "move", count: 5 }];
-  const unarmed = [{ type: "move", count: 1 }]; // a scout — no ATTACK/RANGED
+  const unarmed = [{ type: "move", count: 1 }];
 
   it("arms the blockade when an armed hostile camps the exit border facing home", () => {
-    setNorthNeighbour([makeGuard(25, 48, armed)]); // y=48 is inside the north room's bottom band
+    setNorthNeighbour([makeGuard(25, 48, armed)]);
     const home = makeHome();
     refreshBlockade(home);
     expect(isBlockaded(home)).toBe(true);
@@ -284,7 +257,7 @@ describe("exit blockade detection", () => {
   });
 
   it("ignores an armed hostile that is NOT in the border band facing home", () => {
-    setNorthNeighbour([makeGuard(25, 20, armed)]); // deep in the north room, not by our exit
+    setNorthNeighbour([makeGuard(25, 20, armed)]);
     const home = makeHome();
     refreshBlockade(home);
     expect(isBlockaded(home)).toBe(false);
@@ -304,13 +277,11 @@ describe("exit blockade detection", () => {
     refreshBlockade(home);
     expect(isBlockaded(home)).toBe(true);
 
-    // Guards gone, but still inside the sticky window → remains blockaded.
     setNorthNeighbour([]);
     (g.Game as { time: number }).time = startTick + STICKY - 1;
     refreshBlockade(home);
     expect(isBlockaded(home)).toBe(true);
 
-    // Past the window with no fresh sighting → auto-clears.
     (g.Game as { time: number }).time = startTick + STICKY + 1;
     refreshBlockade(home);
     expect(isBlockaded(home)).toBe(false);
@@ -318,12 +289,11 @@ describe("exit blockade detection", () => {
   });
 
   it("a manual lockdown holds regardless of the timer or absent guards", () => {
-    setNorthNeighbour([]); // no guards in sight
+    setNorthNeighbour([]);
     const home = makeHome({
       blockade: { detectedAt: 1, until: 1, manual: true },
     });
     expect(isBlockaded(home)).toBe(true);
-    // A refresh with no guards must NOT drop a manual lockdown.
     refreshBlockade(home);
     expect(isBlockaded(home)).toBe(true);
     expect(home.memory.blockade?.manual).toBe(true);
@@ -332,7 +302,6 @@ describe("exit blockade detection", () => {
 
 describe("structureDamagePerTick (safe-mode lethality)", () => {
   it("sums boost-aware ATTACK + RANGED + WORK dismantle over live parts", () => {
-    // 10 ATTACK (300) + 5 RANGED (50) + 10 WORK (500) = 850
     const creep = makeCreep([
       { type: "attack", count: 10 },
       { type: "ranged_attack", count: 5 },
@@ -342,8 +311,6 @@ describe("structureDamagePerTick (safe-mode lethality)", () => {
   });
 
   it("flags a lethal boosted RANGED raid the severity buckets under-rate as low", () => {
-    // 40 RANGED XKHO2 (×4) = 40×10×4 = 1600 dmg/tick — reads 'low' on the score scale but is
-    // plainly lethal; well above the 400 safe-mode lethality threshold.
     const raider = makeCreep([{ type: "ranged_attack", count: 40, boost: "XKHO2" }]);
     expect(getThreatSeverity(makeRoom("W1N1", [raider]))).toBe("low");
     expect(structureDamagePerTick([raider])).toBeCloseTo(1600, 5);
@@ -359,7 +326,6 @@ describe("structureDamagePerTick (safe-mode lethality)", () => {
       ],
       owner: { username: "Enemy" },
     } as unknown as Creep;
-    // Only the live RANGED part contributes: 1×10 = 10
     expect(structureDamagePerTick([creep])).toBeCloseTo(10, 5);
   });
 });

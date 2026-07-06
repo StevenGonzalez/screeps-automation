@@ -11,8 +11,8 @@
 Each owned room with a terminal:
 
 - **Sells** excess minerals to nearby buy orders: when terminal stock of the room's
-  mineral type is ≥ 1,000, up to 1,000/transaction, within 10 rooms, priced above
-  0.5 credits/unit. Requires ≥ 1,000 energy in the terminal to cover the fee.
+  mineral type is >= 1,000, up to 1,000/transaction, within 10 rooms, priced above
+  0.5 credits/unit. Requires >= 1,000 energy in the terminal to cover the fee.
 - **Buys** base minerals for lab chains (rooms with active labs) when stock runs
   low: every 500 ticks, tops up toward 3,000 each (`H O Z K U L X`), capped at
   1,000/deal and a max price of 50.
@@ -40,11 +40,11 @@ at most one transfer per category by writing a `room.memory.pendingSend`, which 
 owning room's terminal executes once loaded and off cooldown (and, for non-energy,
 once it has the energy to pay the fee).
 
-- **Energy** — donors (storage > 200k) send 30k to the poorest receivers
+- **Energy** - donors (storage > 200k) send 30k to the poorest receivers
   (storage < 50k). One energy transfer queued per pass.
-- **Minerals** — lab rooms short on a base mineral (< 500 combined) pull up to
-  1,000 from a donor with a genuine surplus (≥ 2,000 + the amount).
-- **Ghodium** — rooms below their ghodium target pull up to 1,000 from a donor that
+- **Minerals** - lab rooms short on a base mineral (< 500 combined) pull up to
+  1,000 from a donor with a genuine surplus (>= 2,000 + the amount).
+- **Ghodium** - rooms below their ghodium target pull up to 1,000 from a donor that
   can spare it without dropping below its own target (lab target + nuker reserve).
 
 All transfers skip pairs more than 10 rooms apart.
@@ -57,7 +57,7 @@ All transfers skip pairs more than 10 rooms apart.
 Game.arca.network()   // per-room storage/terminal energy, pending sends, and mineral stocks
 ```
 
-(There is no `Game.arca.sendEnergy()` — inter-room energy moves are planned
+(There is no `Game.arca.sendEnergy()` - inter-room energy moves are planned
 automatically by the balancing pass, not commanded manually.)
 
 The family's money moves to every corner of the operation.

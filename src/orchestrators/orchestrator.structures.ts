@@ -18,10 +18,6 @@ import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room
 import { planDefensivePerimeter } from "../planning/planner.rampart";
 import { isSourceSafe } from "../services/services.creep";
 
-// Lower number = placed first. The global construction-site cap (100) is scarce
-// and roads vastly outnumber everything else, so economy structures must claim
-// site slots before roads/ramparts or they starve. Anything unlisted defaults to
-// road-tier priority.
 const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_SPAWN]: 0,
   [STRUCTURE_CONTAINER]: 1,
@@ -39,11 +35,6 @@ const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_ROAD]: 11,
 };
 
-// Priority for the build queue, keyed on the planner key (not just the structure
-// type) so the defensive PERIMETER (STAMP_RAMPART_KEY) can sit BELOW roads while
-// the on-top ramparts protecting critical structures (RAMPARTS_KEY) stay high.
-// The perimeter is a large, purely-defensive ring; it must never out-compete the
-// economy or roads for the scarce global site cap. 12 = after everything listed.
 const PERIMETER_PRIORITY = 12;
 
 function buildPriority(key: string): number {
@@ -116,11 +107,8 @@ function applyPlannedConstruction(room: Room) {
   const mem = room.memory.plannedStructures as Record<string, string[]>;
   const terrain = room.getTerrain();
 
-  // Precompute structure and construction-site positions grouped by type.
-  // Avoids two lookForAt calls per planned position (which is O(positions) lookForAt calls).
   const builtByType = new Map<StructureConstant, Set<string>>();
   const sitesByType = new Map<StructureConstant, Set<string>>();
-  // Roads tracked as objects so leftover roads under planned obstacles can be cleared.
   const roadByPos = new Map<string, Structure>();
   const roadSiteByPos = new Map<string, ConstructionSite>();
   for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
@@ -140,11 +128,6 @@ function applyPlannedConstruction(room: Room) {
     STRUCTURE_PLANNER.rampartOnTopFor as StructureConstant[]
   );
 
-  // Resolve road↔obstacle tile conflicts. An extension/spawn/tower/etc. cannot
-  // share a tile with a road, so when a planned obstacle lands on a leftover road
-  // (e.g. after a layout change), clear that road — built or site — and drop the
-  // tile from every planned road key so it isn't rebuilt. The obstacle's own
-  // site goes down on a later pass, once the tile is free.
   const roadCompatible = new Set<StructureConstant>([
     STRUCTURE_ROAD,
     STRUCTURE_RAMPART,
@@ -153,10 +136,6 @@ function applyPlannedConstruction(room: Room) {
   const roadKeys = Object.keys(mem).filter(
     (k) => structureTypeForKey(k) === STRUCTURE_ROAD
   );
-  // Road keys that lost a tile to an obstacle. We drop the WHOLE key (not just the
-  // conflicting tile) so the road planners re-derive/re-path it around the obstacle
-  // next pass. Splicing a single tile out of a pathed artery would leave a permanent
-  // gap — planRoadKey only re-paths a key whose list is empty.
   const conflictedRoadKeys = new Set<string>();
   for (const key of Object.keys(mem)) {
     const type = structureTypeForKey(key);
@@ -179,11 +158,6 @@ function applyPlannedConstruction(room: Room) {
     }
   }
 
-  // Trim untouched road sites that exceed the per-room cap so they stop hogging
-  // the global construction-site limit (MAX_CONSTRUCTION_SITES). Roads with energy
-  // already invested are left alone; trimmed ones get re-placed once structures are
-  // down. This is what lets an already-saturated room recover and start placing
-  // extensions again.
   const roadCap = STRUCTURE_PLANNER.maxRoadConstructionSites;
   let roadSiteCount = roadSiteByPos.size;
   if (roadSiteCount > roadCap) {
@@ -196,21 +170,12 @@ function applyPlannedConstruction(room: Room) {
     }
   }
 
-  // Global site budget: never exceed the player-wide cap, and place economy
-  // structures before roads/ramparts so roads can't monopolise the slots.
   let budget = MAX_CONSTRUCTION_SITES - Object.keys(Game.constructionSites).length;
   const keys = Object.keys(mem).sort(
     (a, b) => buildPriority(a) - buildPriority(b)
   );
 
   const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
-  // Pace the perimeter purely by the number of CONCURRENT construction sites, never by
-  // built-rampart HP. The previous HP gate (cap=0 while the weakest perimeter rampart was
-  // below 1000 hits) deadlocked: a rampart completes at 1 hit, so the first one built
-  // instantly pinned the cap to 0 — blocking the rest of the wall AND the replacement of any
-  // rampart that later decayed to nothing. Construction sites don't decay, and the repair
-  // system lifts freshly-built ramparts off 1 hit (findCriticalDefenseTarget prioritises
-  // anything below 1000), so a flat concurrent-site cap is the correct, stall-free pacing.
   const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
   const rampartSites = sitesByType.get(STRUCTURE_RAMPART);
   let perimeterSiteCount = 0;
@@ -235,20 +200,19 @@ function applyPlannedConstruction(room: Room) {
           addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, new RoomPosition(x, y, room.name));
           room.createConstructionSite(x, y, STRUCTURE_RAMPART);
         }
-        continue; // already built — don't keep in planned list
+        continue;
       }
       const comma = posStr.indexOf(",");
       const x = +posStr.slice(0, comma);
       const y = +posStr.slice(comma + 1);
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-      keep.push(posStr); // retain the position even if no site is placed this tick
+      keep.push(posStr);
       if (sites?.has(posStr)) continue;
-      if (budget <= 0) continue; // global cap reached — try again next pass
-      if (isRoad && roadSiteCount >= roadCap) continue; // roads leave headroom
+      if (budget <= 0) continue;
+      if (isRoad && roadSiteCount >= roadCap) continue;
       if (key === perimeterKey && perimeterSiteCount >= perimeterCap) continue;
       let result: ScreepsReturnCode;
       if (type === STRUCTURE_SPAWN) {
-        // Give every bot-built spawn an MU-themed name (Lorencia, Devias, …).
         const name = nextSpawnName(room);
         result = name
           ? room.createConstructionSite(x, y, STRUCTURE_SPAWN, name)
@@ -272,7 +236,6 @@ function cleanupUnplannedConstructionSites(room: Room) {
   if (sites.length === 0) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
 
-  // Build type → planned-position set once, not once per construction site.
   const plannedByType = new Map<StructureConstant, Set<string>>();
   for (const key of Object.keys(mem)) {
     const type = structureTypeForKey(key);
@@ -286,8 +249,6 @@ function cleanupUnplannedConstructionSites(room: Room) {
   for (const site of sites) {
     const set = plannedByType.get(site.structureType as StructureConstant);
     if (set?.has(`${site.pos.x},${site.pos.y}`)) continue;
-    // Don't scrap a site that already has energy invested (e.g. an extension
-    // relocating during a layout change) — only clear untouched stray sites.
     if (site.progress > 0) continue;
     site.remove();
   }
@@ -298,7 +259,6 @@ function ensureRampartsForExistingStructures(room: Room) {
     []) as StructureConstant[];
   const structures = room.find(FIND_STRUCTURES) as Structure[];
 
-  // Precompute existing rampart positions and planned-rampart set — avoids lookForAt per structure.
   const existingRampSet = new Set<string>();
   for (const s of structures) {
     if (s.structureType === STRUCTURE_RAMPART) existingRampSet.add(`${s.pos.x},${s.pos.y}`);
@@ -325,7 +285,6 @@ function ensureRampartsForExistingStructures(room: Room) {
 
 export function loop() {
   cleanupPlannedStructuresGlobal();
-  // Construction site management doesn't need to run every tick — once per 5 ticks is plenty.
   const applyConstruction = Game.time % 5 === 0;
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
@@ -336,16 +295,10 @@ export function loop() {
       cleanupUnplannedConstructionSites(room);
       ensureRampartsForExistingStructures(room);
     }
-    // Place container sites in visible remote rooms so miners have somewhere to deposit.
     if (Game.time % 100 === 0) planRemoteRoomContainers(room);
   }
 }
 
-// For each source in a remote room that is currently visible, create a container
-// construction site adjacent to the source if none exists yet.  We write back
-// the planned/found container ID so remote haulers can find it immediately.
-// Once a source container exists we also plan roads from it back toward home storage
-// so remote miners/haulers can run road-weighted bodies (see orchestrator.spawning).
 function planRemoteRoomContainers(homeRoom: Room) {
   for (const remote of homeRoom.memory.remoteRooms ?? []) {
     if (remote.hostile) continue;
@@ -357,18 +310,15 @@ function planRemoteRoomContainers(homeRoom: Room) {
       const source = Game.getObjectById(sourceData.sourceId) as Source | null;
       if (!source) continue;
 
-      // Keep cached ID in sync with reality.
       if (sourceData.containerId) {
         const existing = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
         if (existing) {
-          // Container is built — its road back to storage is worth planning now.
           planRemoteRoad(homeRoom, existing.pos);
           continue;
         }
         sourceData.containerId = undefined;
       }
 
-      // Check for a container already built near the source.
       const built = source.pos.findInRange(FIND_STRUCTURES, 1, {
         filter: (s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER,
       }) as StructureContainer[];
@@ -378,13 +328,11 @@ function planRemoteRoomContainers(homeRoom: Room) {
         continue;
       }
 
-      // Check for an in-progress construction site.
       const site = source.pos.findInRange(FIND_CONSTRUCTION_SITES, 1, {
         filter: (s) => s.structureType === STRUCTURE_CONTAINER,
       });
       if (site.length > 0) continue;
 
-      // Place a site on the first walkable tile adjacent to the source.
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
           if (dx === 0 && dy === 0) continue;
@@ -399,18 +347,11 @@ function planRemoteRoomContainers(homeRoom: Room) {
   }
 }
 
-// Cap on road construction sites planned per call. Construction sites share a small global pool
-// (100) that the local economy must claim first, so we trickle remote roads out a few at a time.
 const REMOTE_ROAD_SITES_PER_CALL = 5;
 
-// Plan roads from a remote source container back toward home storage. Low priority by
-// construction: we only place road sites for tiles whose room is currently visible (so we can
-// confirm nothing is already there) and stop after a small per-call budget so remote roads never
-// crowd out the economy on the global site cap. Idempotent — skips tiles that already hold a
-// road / road site / blocking structure.
 function planRemoteRoad(homeRoom: Room, from: RoomPosition) {
   const storage = homeRoom.storage;
-  if (!storage) return; // no anchor to path back to yet
+  if (!storage) return;
 
   const result = PathFinder.search(
     from,
@@ -419,10 +360,9 @@ function planRemoteRoad(homeRoom: Room, from: RoomPosition) {
       plainCost: 2,
       swampCost: 10,
       maxOps: 4000,
-      // Prefer existing roads; treat them as cheap so the path reuses the home road network.
       roomCallback: (roomName) => {
         const r = Game.rooms[roomName];
-        if (!r) return new PathFinder.CostMatrix(); // unseen room — default costs
+        if (!r) return new PathFinder.CostMatrix();
         const cm = new PathFinder.CostMatrix();
         for (const s of r.find(FIND_STRUCTURES)) {
           if (s.structureType === STRUCTURE_ROAD) cm.set(s.pos.x, s.pos.y, 1);
@@ -430,7 +370,7 @@ function planRemoteRoad(homeRoom: Room, from: RoomPosition) {
             s.structureType !== STRUCTURE_CONTAINER &&
             s.structureType !== STRUCTURE_RAMPART
           ) {
-            cm.set(s.pos.x, s.pos.y, 255); // block tiles occupied by solid structures
+            cm.set(s.pos.x, s.pos.y, 255);
           }
         }
         return cm;
@@ -443,8 +383,7 @@ function planRemoteRoad(homeRoom: Room, from: RoomPosition) {
   for (const pos of result.path) {
     if (placed >= REMOTE_ROAD_SITES_PER_CALL) break;
     const r = Game.rooms[pos.roomName];
-    if (!r) continue; // can't safely place into an unseen room
-    // Skip if a road / road site already exists here.
+    if (!r) continue;
     const here = r.lookAt(pos.x, pos.y);
     const blocked = here.some(
       (o) =>
@@ -462,12 +401,10 @@ function processRoomStructures(room: Room) {
   if (Game.time - last < STRUCTURE_PLANNER.planInterval) return;
   ensureMemoryRoomStructures(room);
 
-  // Prune stale road keys that never got built
   const meta = room.memory.plannedStructuresMeta ?? {};
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
   const pruneAge = STRUCTURE_PLANNER.plannedRoadPruneTicks;
   if (pruneAge > 0) {
-    // Precompute occupied positions once instead of calling lookForAt per road tile.
     const occupiedPos = new Set<string>();
     for (const s of room.find(FIND_STRUCTURES) as Structure[]) occupiedPos.add(`${s.pos.x},${s.pos.y}`);
     for (const s of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) occupiedPos.add(`${s.pos.x},${s.pos.y}`);
@@ -494,16 +431,10 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  // Castle stamp: place RCL-appropriate structures
   applyCastleStamp(room);
 
-  // Seal the base behind a defensive rampart curtain enclosing the stamp + the
-  // freshly-planned extension rings. Self-gates on RCL and throttles its own
-  // recompute; its tiles share STAMP_RAMPART_KEY so they inherit the low build
-  // priority and existing rampart repair handling.
   planDefensivePerimeter(room);
 
-  // Source containers
   const sources = room.find(FIND_SOURCES);
   for (const source of sources) {
     if (!isSourceSafe(source)) continue;
@@ -521,7 +452,6 @@ function processRoomStructures(room: Room) {
       );
   }
 
-  // Controller container
   if (room.controller) {
     const planned = plannedPositionsFromMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER);
     let hasControllerContainer = false;
@@ -558,15 +488,9 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  // Energy links. The link engine only *sends* from digger-adjacent links to
-  // controller/storage sinks, so a link is useless until it has a partner — there's no
-  // value in the lone RCL5 link, so the first functional pair (source link + controller
-  // link) lands together at RCL6. Per-RCL cap rollout: source link + controller @6,
-  // storage-hub (placed by the castle stamp) @7, 2nd source link @8.
   if (room.controller) {
     const rcl = room.controller.level;
 
-    // Controller link (sink) from RCL6.
     if (rcl >= 6) {
       const plannedLink = plannedPositionsFromMemory(room, PLANNER_KEYS.LINK_CONTROLLER);
       const builtNearController =
@@ -579,8 +503,6 @@ function processRoomStructures(room: Room) {
       }
     }
 
-    // Source links (senders). Rank sources by distance from storage so the farthest
-    // (longest hauls saved) gets the first link @RCL6; remaining sources wait until RCL8.
     const ref = room.storage?.pos ?? room.find(FIND_MY_SPAWNS)[0]?.pos;
     if (ref) {
       const ranked = room
@@ -602,7 +524,6 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  // Mineral container
   const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
   if (mineral) {
     const containerKey = `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`;
@@ -613,10 +534,6 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  // Extractor — built ON the mineral (RCL6+). Without it the mineral can't be harvested at all,
-  // so the cooker + mineral-sale pipeline never starts. Plan it once; the build loop places
-  // the site (createConstructionSite is a no-op below RCL6) and drops it once built, and the
-  // extractorId guard stops us re-planning afterwards.
   if (mineral && (room.controller?.level ?? 0) >= 6 && !room.memory.extractorId) {
     const extractorKey = `${PLANNER_KEYS.EXTRACTOR_PREFIX}${mineral.id}`;
     if (plannedPositionsFromMemory(room, extractorKey).length === 0) {
@@ -624,7 +541,6 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  // Cardinal arteries + economic connectors
   planCardinalArteries(room);
 
   removeRoadsAroundStructures(room);
@@ -632,5 +548,4 @@ function processRoomStructures(room: Room) {
   removeConnectorRoads(room);
 
   room.memory.lastStructurePlanTick = Game.time;
-  // Ramparts for existing structures are handled by ensureRampartsForExistingStructures (runs every 5t).
 }

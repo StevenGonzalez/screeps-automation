@@ -11,8 +11,6 @@ import {
   stampMemoryKeyFor,
 } from "./planner.stamp";
 
-// ── Anchor selection ──────────────────────────────────────────────────────────
-
 export function findOptimalAnchor(
   room: Room
 ): { x: number; y: number } | null {
@@ -29,7 +27,6 @@ export function findOptimalAnchor(
 
   for (let cx = lo; cx <= hi; cx++) {
     for (let cy = lo; cy <= hi; cy++) {
-      // Ensure the full stamp fits inside room boundaries
       if (
         cx - halfSize < 1 ||
         cx + halfSize > 48 ||
@@ -40,7 +37,6 @@ export function findOptimalAnchor(
 
       let score = 0;
 
-      // Walkable seed cells
       for (const cell of seedCells) {
         const ax = cx + cell.dx;
         const ay = cy + cell.dy;
@@ -48,11 +44,9 @@ export function findOptimalAnchor(
         if (terrain.get(ax, ay) !== TERRAIN_MASK_WALL) score++;
       }
 
-      // Prefer positions closer to room center
       const edgeDist = Math.min(cx, cy, 49 - cx, 49 - cy);
       score += edgeDist * 0.3;
 
-      // Penalise positions too close to sources (interference with containers)
       for (const source of sources) {
         const dist = Math.max(
           Math.abs(cx - source.pos.x),
@@ -86,8 +80,6 @@ export function getOrFindAnchor(
   return anchor;
 }
 
-// ── Stamp application ─────────────────────────────────────────────────────────
-
 export function applyCastleStamp(room: Room): void {
   const anchor = getOrFindAnchor(room);
   if (!anchor) return;
@@ -96,20 +88,16 @@ export function applyCastleStamp(room: Room): void {
   const cells = getStampCellsForRcl(rcl);
   const terrain = room.getTerrain();
 
-  // Build occupiedSet from all existing non-road planned positions
   const occupiedSet = new Set<string>();
   if (room.memory.plannedStructures) {
     const mem = room.memory.plannedStructures as Record<string, string[]>;
     for (const key of Object.keys(mem)) {
       if (isRoadKey(key)) continue;
-      // Extensions are regenerated each run by planMerchantRingExtensions, so
-      // don't let the prior ring block the fresh one.
       if (key === PLANNER_KEYS.STAMP_EXTENSION_KEY) continue;
       for (const p of mem[key]) occupiedSet.add(p);
     }
   }
 
-  // Track tower count for capping
   let towerCount = 0;
   const towerCap = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][rcl] ?? 0;
 
@@ -120,12 +108,8 @@ export function applyCastleStamp(room: Room): void {
 
     const posKey = `${absX},${absY}`;
 
-    // Skip any cell whose tile is already claimed by a planned structure — roads included,
-    // so we don't plan a road on top of a (possibly wall-relocated) spawn/storage/etc. tile
-    // (only structures are added to occupiedSet, so road-on-road is unaffected).
     if (occupiedSet.has(posKey)) continue;
 
-    // Cap towers at the RCL limit
     if (cell.type === "tower") {
       if (towerCount >= towerCap) continue;
       towerCount++;
@@ -160,16 +144,9 @@ export function applyCastleStamp(room: Room): void {
     }
   }
 
-  // Extensions: concentric Merchant Rings around the keep (replaces hand-placed cells).
   planMerchantRingExtensions(room, anchor, occupiedSet, rcl);
 }
 
-// Lays out extensions as the "Merchant Rings" — concentric tiers radiating from
-// the anchor (noble quarter → craftsmen's ward → commoner streets). The ring
-// geometry is canonical (MERCHANT_RING_EXTENSION_OFFSETS); here we anchor it,
-// drop tiles on natural walls, respect any wall-relocated core, and cap the
-// count to what the current RCL allows. The list is rewritten each run so a code
-// change or relocation can't leave stale extension positions behind.
 function planMerchantRingExtensions(
   room: Room,
   anchor: { x: number; y: number },
@@ -192,9 +169,9 @@ function planMerchantRingExtensions(
     const x = anchor.x + dx;
     const y = anchor.y + dy;
     if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-    if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue; // non-critical: skip walls
+    if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
     const key = `${x},${y}`;
-    if (occupiedSet.has(key)) continue; // tile claimed by a wall-relocated core structure
+    if (occupiedSet.has(key)) continue;
     positions.push(key);
   }
 
@@ -249,20 +226,12 @@ function findNearestBuildable(
   return null;
 }
 
-// ── Arteries + economic connectors ────────────────────────────────────────────
-//
-// Single shared cost matrix used by every artery/connector path in a given run.
-// Walls and planned non-road structures are impassable (255); already-planned
-// road tiles cost 1 so subsequent paths merge onto earlier ones instead of
-// taking parallel routes. plainCost/swampCost keep PathFinder's defaults.
-
 export function planCardinalArteries(room: Room): void {
   const anchor = getOrFindAnchor(room);
   if (!anchor) return;
 
   const cm = buildSharedRoadCostMatrix(room);
 
-  // 1) Economic connectors first — every base needs them.
   const anchorPos = new RoomPosition(anchor.x, anchor.y, room.name);
 
   for (const source of room.find(FIND_SOURCES)) {
@@ -290,8 +259,6 @@ export function planCardinalArteries(room: Room): void {
     planRoadKey(room, `cardinal_connector_mineral_${mineral.id}`, anchorPos, target, cm);
   }
 
-  // 2) Cardinal arteries to room edges only when an active remote room lies
-  //    in that direction — otherwise they're long roads to nowhere.
   planCardinalArteriesToRemotes(room, anchor, cm);
 }
 
@@ -334,9 +301,6 @@ function remoteDirectionsFor(room: Room): Set<"N" | "S" | "E" | "W"> {
   return out;
 }
 
-// Parses Screeps room coordinates ("W12N7", "E3S4") and returns the cardinal
-// from `from` to `to` when they are direct neighbors. Returns null for
-// diagonals or non-adjacent rooms (those reach the remote via an intermediate).
 function roomExitDirection(
   from: string,
   to: string
@@ -399,7 +363,6 @@ function planRoadKey(
 ): void {
   const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
   if (mem && mem[key] && mem[key].length > 0) {
-    // Already planned — fold it into the shared matrix so later paths reuse it.
     for (const p of mem[key]) {
       const comma = p.indexOf(",");
       const px = +p.slice(0, comma);
@@ -427,8 +390,6 @@ function planRoadKey(
     if (cm.get(step.x, step.y) !== 255) cm.set(step.x, step.y, 1);
   }
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function isRoadKey(key: string): boolean {
   return (

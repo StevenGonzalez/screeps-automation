@@ -1,11 +1,6 @@
 import { seekBoost, isSourceKeeper } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
-/**
- * Muscle: the Source Keeper room guardian. A boosted ranged+heal creep that kills
- * keepers as they appear and camps the lair about to spawn, keeping the sources clear
- * so Tunnelers can mine in safety. It kites melee keepers at range 3 and self-heals.
- */
 const KITE_RANGE = 3;
 
 export function runSkGuardian(creep: Creep) {
@@ -19,7 +14,6 @@ export function runSkGuardian(creep: Creep) {
     return;
   }
 
-  // Room contested by an enemy player — pull back home rather than trade with a player.
   if (isOpPaused(op)) {
     if (creep.hits < creep.hitsMax) creep.heal(creep);
     if (creep.room.name !== op.homeRoom) moveToRoom(creep, op.homeRoom);
@@ -32,8 +26,6 @@ export function runSkGuardian(creep: Creep) {
     return;
   }
 
-  // Hostiles worth fighting: keepers and invaders (ignore player creeps — the
-  // orchestrator pauses the op when a player contests the room).
   const hostiles = creep.room.find(FIND_HOSTILE_CREEPS, {
     filter: (c) => isSourceKeeper(c) || c.owner.username === "Invader",
   });
@@ -52,7 +44,6 @@ export function runSkGuardian(creep: Creep) {
     return;
   }
 
-  // No hostiles — camp the lair that will spawn a keeper soonest.
   const lairs = creep.room.find(FIND_STRUCTURES, {
     filter: (s): s is StructureKeeperLair => s.structureType === STRUCTURE_KEEPER_LAIR,
   });
@@ -63,7 +54,6 @@ export function runSkGuardian(creep: Creep) {
     return;
   }
 
-  // Nothing pending — hold near the room centre.
   const center = new RoomPosition(25, 25, op.roomName);
   if (!creep.pos.inRangeTo(center, 5)) creep.moveTo(center, { range: 5, reusePath: 20 });
 }
@@ -87,8 +77,5 @@ function idleAtSpawn(creep: Creep): void {
 }
 
 function moveToRoom(creep: Creep, targetRoom: string): void {
-  // Route to the target room centre via PathFinder's multi-room pathing. Aiming moveTo at a
-  // bare exit tile (findExitTo + findClosestByRange) parks creeps on the border or bounces
-  // them between two rooms — see role.reserver.ts / role.remote_miner.ts.
   creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }

@@ -30,7 +30,6 @@ function drawRoomHUD(room: Room) {
   const total = room.controller!.progressTotal;
   const phase = getRoomPhase(rcl);
 
-  // HUD background panel at top-left
   const x = 0.5;
   let y = 0.8;
   const lineH = 0.85;
@@ -41,7 +40,6 @@ function drawRoomHUD(room: Room) {
   v.text(`RCL ${rcl}  ${PHASE_LABEL[phase]}`, x, y, { ...style, font: 0.6, color: "#ffffff" });
   y += lineH;
 
-  // Controller progress bar
   if (rcl < 8 && total > 0) {
     const pct = progress / total;
     const barW = 6;
@@ -51,7 +49,6 @@ function drawRoomHUD(room: Room) {
     y += lineH;
   }
 
-  // Energy
   const energy = room.energyAvailable;
   const energyCap = room.energyCapacityAvailable;
   const energyPct = energyCap > 0 ? energy / energyCap : 0;
@@ -59,14 +56,12 @@ function drawRoomHUD(room: Room) {
   v.text(`Energy: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
   y += lineH;
 
-  // Storage
   if (room.storage) {
     const stored = room.storage.store[RESOURCE_ENERGY];
     v.text(`Storage: ${formatK(stored)}`, x, y, dimStyle);
     y += lineH;
   }
 
-  // Creep counts
   const counts = countCreepsByRole(room);
   const roleOrder = [ROLE_MINER, ROLE_HAULER, ROLE_HARVESTER, ROLE_UPGRADER, ROLE_BUILDER, ROLE_REPAIRER, ROLE_MINERAL_MINER];
   const roleShort: Record<string, string> = {
@@ -89,14 +84,12 @@ function drawRoomHUD(room: Room) {
     y += lineH;
   }
 
-  // Threat warning
   const hostiles = room.find(FIND_HOSTILE_CREEPS);
   if (hostiles.length > 0) {
     v.text(`THREAT: ${hostiles.length} hostile creep${hostiles.length > 1 ? "s" : ""}`, x, y, warnStyle);
     y += lineH;
   }
 
-  // Spawn status
   const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) as StructureSpawn | null : null;
   if (spawn?.spawning) {
     const remaining = spawn.spawning.remainingTime;

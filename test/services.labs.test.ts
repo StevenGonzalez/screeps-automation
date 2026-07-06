@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolveChain, REACTION_RECIPES } from "../src/services/services.labs";
 
-// resolveChain takes a StructureStorage | null; null means "no existing stock", so the full
-// chain is produced. Passing null keeps these tests free of any Screeps runtime objects.
 const NO_STORAGE = null;
 
 function compounds(chain: { compound: string; amount: number }[]): string[] {
@@ -18,9 +16,7 @@ describe("resolveChain", () => {
   it("expands a tier-4 compound into its full reaction chain", () => {
     const chain = resolveChain("XUH2O", 3000, NO_STORAGE);
     const names = compounds(chain);
-    // Every intermediate reaction, base minerals excluded.
     expect(new Set(names)).toEqual(new Set(["OH", "UH", "UH2O", "XUH2O"]));
-    // No base minerals leak into the reaction list.
     for (const n of names) expect(REACTION_RECIPES[n]).toBeDefined();
   });
 
@@ -38,8 +34,6 @@ describe("resolveChain", () => {
   });
 
   it("does not double-count stock for a shared intermediate (synthetic recipe)", () => {
-    // Build a tiny DAG where one intermediate (M) feeds two parents (A, B) of a root R.
-    // With Math.max this would under-produce M; summed demand gives M = needA + needB.
     const recipes: Record<string, [string, string]> = {
       R: ["A", "B"],
       A: ["M", "x"],
@@ -55,7 +49,6 @@ describe("resolveChain", () => {
       const chain = resolveChain("R", 100, NO_STORAGE);
       const m = chain.find((c) => c.compound === "M");
       expect(m).toBeDefined();
-      // A needs 100 M and B needs 100 M → 200 total, not 100.
       expect(m!.amount).toBe(200);
     } finally {
       for (const k of Object.keys(recipes)) {

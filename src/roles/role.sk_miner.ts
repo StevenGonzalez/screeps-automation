@@ -2,12 +2,6 @@ import { ROLE_SK_GUARDIAN } from "../config/config.roles";
 import { isSourceKeeper } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
-/**
- * Tunneler: mines a single source in a Source Keeper room. Carries no CARRY parts, so
- * harvested energy drops where it stands for Carriers to collect. Keeps mining while a
- * Muscle is nearby to kill spawning keepers; only when no guardian is protecting it
- * (or the room is contested) does it fall all the way back home.
- */
 const KEEPER_DANGER_RANGE = 4;
 const GUARDIAN_GUARD_RANGE = 6;
 
@@ -21,7 +15,6 @@ export function runSkMiner(creep: Creep) {
     return;
   }
 
-  // Contested by an enemy player — abandon the room until it clears.
   if (isOpPaused(op)) {
     moveToRoom(creep, op.homeRoom);
     return;
@@ -32,8 +25,6 @@ export function runSkMiner(creep: Creep) {
     return;
   }
 
-  // Back off only when a keeper is closing in AND no guardian is here to kill it —
-  // otherwise trust the Muscle and keep mining (avoids respawn-cycle oscillation).
   const keeper = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
     filter: (c) => isSourceKeeper(c),
   });
@@ -43,11 +34,8 @@ export function runSkMiner(creep: Creep) {
         filter: (c) => c.memory.role === ROLE_SK_GUARDIAN && c.memory.skOpId === op.id,
       })
       .length > 0;
-    // Trust the guardian and keep mining — UNLESS we're actually losing the fight. If HP
-    // has dropped below 40% the guardian isn't killing the keeper fast enough, so retreat
-    // rather than sit at range 1 and die (a respawn is cheaper than feeding the keeper).
     if (!guardianNear || creep.hits < creep.hitsMax * 0.4) {
-      moveToRoom(creep, op.homeRoom); // fully retreat rather than corner-dance
+      moveToRoom(creep, op.homeRoom);
       return;
     }
   }
@@ -56,7 +44,6 @@ export function runSkMiner(creep: Creep) {
     ? (Game.getObjectById(creep.memory.skSourceId) as Source | null)
     : null;
   if (!source) {
-    // No assignment yet, or not enough vision — drift to the centre to gain it.
     const center = new RoomPosition(25, 25, op.roomName);
     if (!creep.pos.inRangeTo(center, 5)) creep.moveTo(center, { range: 5, reusePath: 20 });
     return;
@@ -68,8 +55,5 @@ export function runSkMiner(creep: Creep) {
 }
 
 function moveToRoom(creep: Creep, targetRoom: string): void {
-  // Route to the target room centre via PathFinder's multi-room pathing. Aiming moveTo at a
-  // bare exit tile (findExitTo + findClosestByRange) parks creeps on the border or bounces
-  // them between two rooms — see role.reserver.ts / role.remote_miner.ts.
   creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }

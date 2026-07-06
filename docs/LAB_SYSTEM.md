@@ -1,7 +1,7 @@
 # Lab System
 
 > **Status**: Implemented. `orchestrators/orchestrator.labs.ts` runs full compound
-> production — multi-tier reaction chains, T4 boost auto-production, and creep
+> production - multi-tier reaction chains, T4 boost auto-production, and creep
 > boosting. Cookers (`role.mineral_miner.ts`) supply the raw minerals; the
 > chemist (`role.apothecary.ts`) ferries reagents into the labs and product out.
 
@@ -24,7 +24,7 @@ Per owned room, every tick:
    labs and, if the queue is empty and auto-production is on, queue the next
    under-stocked auto-production target.
 2. **Boosting** (`runBoosts`): any creep with `memory.boostCompound` set and not
-   yet boosted is boosted at an output lab holding ≥30 of that compound (used by
+   yet boosted is boosted at an output lab holding >=30 of that compound (used by
    the military system to boost combat creeps).
 3. **Reactions**: advance the queue and run `runReaction()` on every output lab
    while both input labs hold their reagents.
@@ -32,17 +32,17 @@ Per owned room, every tick:
 ### Lab identity
 
 Labs are split by proximity to storage:
-- **2 input labs** — the two closest to storage (easiest for the chemist to
+- **2 input labs** - the two closest to storage (easiest for the chemist to
   load with reagents).
-- **Output labs** — all remaining labs, each running `runReaction()`.
+- **Output labs** - all remaining labs, each running `runReaction()`.
 
 IDs are cached in `room.memory.labSystem` and only recomputed when invalid.
 
 ### Reaction-chain resolution
 
 `services/services.labs.ts` (`resolveChain`) expands a requested compound into the
-full ordered list of reactions needed, accounting for existing stock — e.g.
-`XUH2O` resolves to whatever subset of `UH → UH2O → XUH2O` is still missing. Each
+full ordered list of reactions needed, accounting for existing stock - e.g.
+`XUH2O` resolves to whatever subset of `UH -> UH2O -> XUH2O` is still missing. Each
 queue entry is `{ compound, amount }`; the orchestrator works the queue head until
 the produced amount meets the target, then pops it.
 

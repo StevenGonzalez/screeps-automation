@@ -1,6 +1,3 @@
-// MU Online map/town names, in expansion order. A bot-built spawn in a room
-// with no spawn yet claims the first name here not already in use; additional
-// spawns in an already-named room get a Roman-numeral suffix (see nextSpawnName).
 export const MU_TOWN_NAMES = [
   "Lorencia", "Devias", "Noria", "Atlans", "Tarkan", "Icarus",
   "Aida", "Kanturu", "Crywolf", "Vulcanus", "Elbeland", "Karutan",
@@ -19,18 +16,7 @@ export const STRUCTURE_PLANNER = {
     { x: 0, y: -2 },
   ],
   planInterval: 50,
-  // Screeps caps total construction sites per player at MAX_CONSTRUCTION_SITES (100).
-  // Roads outnumber every other planned structure, so bound how many road sites a
-  // room may have pending at once — this leaves headroom under the global cap for
-  // economy structures (extensions especially) to get a site.
   maxRoadConstructionSites: 15,
-  // The perimeter is now a MIN-CUT seal (tens of tiles, not a full rectangular
-  // curtain), so raising the concurrent-site cap from 4 → 10 lets the whole wall
-  // come up in a few build cycles instead of trickling in four tiles at a time.
-  // The build queue still ranks the perimeter last (PERIMETER_PRIORITY) and the
-  // weakest-rampart health gate still paces expansion to repair capacity, so this
-  // only speeds the initial PLACEMENT of low-HP ramparts — economy/roads keep
-  // their slots first, and the existing repair system tiers the walls up to full HP.
   maxPerimeterConstructionSites: 10,
   plannedCleanupInterval: 1000,
   plannedCleanupUnseenAge: 10000,
@@ -61,7 +47,6 @@ export const PLANNER_KEYS = {
   ROAD_PREFIX: "road_",
   CONNECTOR_PREFIX: "connector_",
   RAMPARTS_KEY: "ramparts",
-  // Castle stamp keys
   CASTLE_STAMP_KEY:      "castle_stamp",
   STAMP_SPAWN_PREFIX:    "stamp_spawn_",
   STAMP_STORAGE_KEY:     "stamp_storage",
@@ -85,23 +70,11 @@ export const STAMP_PLANNER = {
   bfsMaxRadius: 5,
 };
 
-// Defensive perimeter: a sealed ring of ramparts enclosing the whole base core
-// (stamp structures + the Merchant Ring extensions), not just the stamp box.
 export const PERIMETER_PLANNER = {
-  // Start a compact defensive ring as soon as the core exists. This helps RCL 2/3
-  // rooms survive early raids without waiting for a full storage-backed economy.
   minRcl: 2,
-  // Tiles of breathing room added around the bounding box of all core structures,
-  // so the wall doesn't sit flush against extensions/towers and creeps can still
-  // path along the inside edge.
   margin: 2,
-  // Keep the ring off the room border (creeps standing on edge tiles can leave the
-  // room) — exit tiles are 0 and 49; clamp the box to a usable interior.
   minEdge: 2,
   maxEdge: 47,
-  // Recompute the perimeter only this often. The base footprint grows slowly (a
-  // ring of extensions per RCL), so a wide interval keeps CPU near zero while still
-  // expanding the wall as the base does.
   replanInterval: 1500,
 };
 

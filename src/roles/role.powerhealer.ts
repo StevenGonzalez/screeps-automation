@@ -17,7 +17,6 @@ export function runPowerHealer(creep: Creep) {
       (c) => c.memory.powerOpId === opId && c.memory.role === ROLE_POWER_ATTACKER
     );
 
-    // Heal most-injured attacker within range, otherwise move toward lead attacker
     let healTarget: Creep | null = null;
     let lowestRatio = 1;
     for (const a of attackers) {
@@ -32,13 +31,11 @@ export function runPowerHealer(creep: Creep) {
         creep.moveTo(healTarget, { reusePath: 3, visualizePathStyle: {} });
       }
     } else if (attackers.length > 0) {
-      // Lead attacker — stay adjacent
       creep.moveTo(attackers[0], { reusePath: 3, visualizePathStyle: {} });
     } else if (creep.room.name !== op.roomName) {
       travelToRoom(creep, op.roomName);
     }
 
-    // Heal self if injured and no one else needs it
     if (!healTarget && creep.hits < creep.hitsMax) {
       creep.heal(creep);
     }
@@ -46,7 +43,6 @@ export function runPowerHealer(creep: Creep) {
   }
 
   if (op.phase === "collecting") {
-    // Heal self if needed on the way home
     if (creep.hits < creep.hitsMax) creep.heal(creep);
     travelToRoom(creep, op.homeRoom);
   }
@@ -65,9 +61,6 @@ function parkNearHomeSpawn(creep: Creep, homeRoomName: string) {
 
 function travelToRoom(creep: Creep, roomName: string) {
   if (creep.room.name === roomName) return;
-  // Route to the room centre via PathFinder's multi-room pathing. Aiming moveTo at a bare exit
-  // tile (findExitTo + findClosestByRange) parks creeps on the border or bounces them between
-  // two rooms — see role.reserver.ts / role.remote_miner.ts.
   creep.moveTo(new RoomPosition(25, 25, roomName), {
     reusePath: 10,
     range: 20,

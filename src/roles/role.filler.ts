@@ -5,34 +5,20 @@ import {
 } from "../services/services.creep";
 import { getThreatInfo } from "../services/services.combat";
 
-/**
- * Busboy (filler): distributes energy from the treasury (storage) out to the keep — spawn,
- * extensions, and towers. Decouples core-filling from the bagmen that restock storage, so the
- * spawn and defenses are fed from the always-stocked buffer instead of waiting on a hauler's
- * arrival. Only spawned once a room has storage to draw from (see getFillerPopulationTarget).
- *
- * Assignment: creep.memory.homeRoom = owning room name (it never leaves it).
- */
 export function runFiller(creep: Creep) {
   const storage = creep.room.storage;
   const underThreat = getThreatInfo(creep.room).hostiles.length > 0;
 
-  // Where energy needs to go this tick: emptiest tower first under attack (defense), otherwise
-  // the closest spawn/extension/tower that needs topping up. Null when the core is full.
   const target =
     (underThreat ? findEmptiestTower(creep.room) : null) ?? findCoreFillTarget(creep);
 
   if (creep.store[RESOURCE_ENERGY] === 0) {
-    // Nothing to deliver and we're empty — idle on the storage so we're ready the instant the
-    // core needs filling (avoids a pointless storage→storage shuffle when the keep is full).
     if (!target) {
       if (storage && !creep.pos.isNearTo(storage)) {
         creep.moveTo(storage, { range: 1, reusePath: 20 });
       }
       return;
     }
-    // Draw energy to deliver: a storage-adjacent link (fast top-up at RCL 5+), then storage,
-    // then a digger container as a fallback when the buffer is momentarily dry.
     const source = findFillerSource(creep, storage);
     if (source) {
       if (creep.withdraw(source, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
@@ -51,7 +37,6 @@ export function runFiller(creep: Creep) {
     return;
   }
 
-  // Core is full but we're still holding energy — return it to the treasury rather than idle.
   if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
     if (creep.transfer(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
       creep.moveTo(storage, { reusePath: 20 });
@@ -59,10 +44,6 @@ export function runFiller(creep: Creep) {
   }
 }
 
-// Prefer a storage-adjacent link (kept fed by the link network at RCL 5+) so its energy is
-// consumed and it stays clear to receive more; fall back to storage, then — only when the
-// buffer is dry — a digger container so the core never starves. The upgrade container is left
-// alone so upgraders keep their supply.
 function findFillerSource(
   creep: Creep,
   storage: StructureStorage | undefined

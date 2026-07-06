@@ -1,4 +1,3 @@
-// Minimum free capacity in an input lab before bothering to refill it.
 const MIN_REFILL_AMOUNT = 200;
 
 export function runApothecary(creep: Creep) {
@@ -24,11 +23,9 @@ export function runApothecary(creep: Creep) {
     (r) => creep.store.getUsedCapacity(r) > 0
   );
 
-  // ── DELIVERING ──────────────────────────────────────────────────────────────
   if (carrying.length > 0) {
     const resource = carrying[0];
 
-    // If carrying a mineral earmarked for a cross-room transfer, fill the terminal first
     const pendingSend = room.memory.pendingSend;
     if (pendingSend && pendingSend.resource === resource && pendingSend.resource !== RESOURCE_ENERGY) {
       const termId = room.memory.terminalId;
@@ -41,7 +38,6 @@ export function runApothecary(creep: Creep) {
       }
     }
 
-    // If it's an active input reagent, fill the correct input lab
     if (ls.inputCompounds) {
       for (let i = 0; i < 2; i++) {
         if (ls.inputCompounds[i] === resource) {
@@ -54,25 +50,18 @@ export function runApothecary(creep: Creep) {
       }
     }
 
-    // Anything else (product from output labs, wrong compounds) → storage
     if (creep.transfer(storage, resource) === ERR_NOT_IN_RANGE) {
       creep.moveTo(storage, { reusePath: 5 });
     }
     return;
   }
 
-  // ── LOADING ─────────────────────────────────────────────────────────────────
-
-  // Build a set of compounds currently being sought for boosts in this room —
-  // the chemist must not drain those from labs or the boost window closes.
   const pendingBoostCompounds = new Set<string>();
   for (const c of creep.room.find(FIND_MY_CREEPS, { filter: (c) => !c.memory.boosted })) {
     if (c.memory.boostCompound) pendingBoostCompounds.add(c.memory.boostCompound);
-    // Reserve queued compounds too (e.g. TOUGH) so a second boost isn't drained first.
     if (c.memory.boostQueue) for (const q of c.memory.boostQueue) pendingBoostCompounds.add(q);
   }
 
-  // Priority 0: withdraw mineral from storage to pre-load terminal for a pending cross-room send
   const pendingSend = room.memory.pendingSend;
   if (pendingSend && pendingSend.resource !== RESOURCE_ENERGY) {
     const termId = room.memory.terminalId;
@@ -99,7 +88,6 @@ export function runApothecary(creep: Creep) {
     }
   }
 
-  // Priority 1: drain output labs that are nearly full so reactions don't stall
   for (const outputLab of outputLabs) {
     const used = outputLab.store.getUsedCapacity() ?? 0;
     const cap = outputLab.store.getCapacity() ?? 0;
@@ -119,7 +107,6 @@ export function runApothecary(creep: Creep) {
     }
   }
 
-  // Priority 2: remove wrong compounds from input labs so they can accept reagents
   for (let i = 0; i < 2; i++) {
     if (!ls.inputCompounds) break;
     const expected = ls.inputCompounds[i] as ResourceConstant;
@@ -135,7 +122,6 @@ export function runApothecary(creep: Creep) {
     }
   }
 
-  // Priority 3: fill input labs with the correct reagents
   if (ls.inputCompounds) {
     for (let i = 0; i < 2; i++) {
       const compound = ls.inputCompounds[i] as ResourceConstant;
@@ -151,8 +137,6 @@ export function runApothecary(creep: Creep) {
     }
   }
 
-  // Priority 4: drain any remaining output lab product to storage (skip boost-reserved
-  // and lab energy — energy in a lab is needed to run reactions/boosts, not a product).
   for (const outputLab of outputLabs) {
     const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
       (r) =>
@@ -168,6 +152,5 @@ export function runApothecary(creep: Creep) {
     }
   }
 
-  // Idle — park near storage
   if (!creep.pos.isNearTo(storage)) creep.moveTo(storage, { reusePath: 20 });
 }

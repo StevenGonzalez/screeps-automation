@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Welcome to **the Family** — an organized-crime-themed Screeps bot. The flavor is a
+Welcome to **the Family** - an organized-crime-themed Screeps bot. The flavor is a
 mob outfit (runners and diggers bring in the earnings, launderers and contractors
 build out the operation, enforcers and triggermen handle trouble), but the
 architecture is plain: a set of per-system `loop()` modules run in order from
@@ -10,12 +10,12 @@ architecture is plain: a set of per-system `loop()` modules run in order from
 ## How It's Organized
 
 ```
-main.ts  →  runs each orchestrator in order, wrapped in try/catch (runSafe)
-   ├── orchestrators/  per-system loops (spawning, structures, labs, military, …)
-   ├── roles/          per-creep behavior (one file per role)
-   ├── services/       shared helpers (combat, labs, movement, structures)
-   ├── planning/       stamp / road / rampart planners
-   └── config/         role names, spawn bodies, structure + factory config
+main.ts  ->  runs each orchestrator in order, wrapped in try/catch (runSafe)
+   +-- orchestrators/  per-system loops (spawning, structures, labs, military, ...)
+   +-- roles/          per-creep behavior (one file per role)
+   +-- services/       shared helpers (combat, labs, movement, structures)
+   +-- planning/       stamp / road / rampart planners
+   +-- config/         role names, spawn bodies, structure + factory config
 ```
 
 ## Getting Started
@@ -70,11 +70,11 @@ expands. It reports CPU and creep counts every 100 ticks.
 - Adaptive spawn priorities: core economy first, remote roles after local stability
 - Scaled creep bodies: bigger bodies when more energy is available
 - Energy-emergency detection: shed non-critical spawns to recover
-- Remote mining: lookouts scout → stringers mine → mules haul → collectors reserve
+- Remote mining: lookouts scout -> stringers mine -> mules haul -> collectors reserve
 - Traffic manager: stuck-repath + guarded shove (toggle with `Game.arca.traffic`)
 
 ### RCL 6+ / 7+ / 8 Systems
-- **Links**: instant energy transfer (source → storage → controller)
+- **Links**: instant energy transfer (source -> storage -> controller)
 - **Labs**: automatic compound production, multi-tier reaction chains, and boosting
 - **Terminal network**: market trades + inter-room energy/mineral/ghodium balancing
 - **Factory** (RCL 7+): commodity production with factory-level gating
@@ -82,7 +82,7 @@ expands. It reports CPU and creep counts every 100 ticks.
 - **Nuker** (RCL 8): kept loaded automatically; manual launch only
 
 ### Military & Defense
-- Offensive squads with 4 formations × 5 tactics, run concurrently (one per home room)
+- Offensive squads with 4 formations x 5 tactics, run concurrently (one per home room)
   plus an offensive queue
 - WarCouncil: threat scanning + optional auto-attack on soft targets
 - DefenseCouncil: auto-raises a standing defensive squad when an owned room is threatened
@@ -162,16 +162,16 @@ Game.arca.traffic(true)             // toggle the traffic manager
 
 ## Further Reading
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — system architecture + source tree
-- [LAB_SYSTEM.md](LAB_SYSTEM.md) — lab automation and compound production
-- [FACTORY_SYSTEM.md](FACTORY_SYSTEM.md) — commodity production
-- [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md) — trading + inter-room balancing
-- [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md) — autonomous expansion
-- [MILITARY_GUIDE.md](MILITARY_GUIDE.md) — combat, defense, WarCouncil/DefenseCouncil
-- [NUKER_SYSTEM.md](NUKER_SYSTEM.md) — offensive nuker
-- [OBSERVER_SYSTEM.md](OBSERVER_SYSTEM.md) — scouting + observer
-- [CPU_OPTIMIZATION.md](CPU_OPTIMIZATION.md) — performance tuning
-- [Screeps API Docs](https://docs.screeps.com/) — game mechanics
+- [ARCHITECTURE.md](ARCHITECTURE.md) - system architecture + source tree
+- [LAB_SYSTEM.md](LAB_SYSTEM.md) - lab automation and compound production
+- [FACTORY_SYSTEM.md](FACTORY_SYSTEM.md) - commodity production
+- [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md) - trading + inter-room balancing
+- [EXPANSION_SYSTEM.md](EXPANSION_SYSTEM.md) - autonomous expansion
+- [MILITARY_GUIDE.md](MILITARY_GUIDE.md) - combat, defense, WarCouncil/DefenseCouncil
+- [NUKER_SYSTEM.md](NUKER_SYSTEM.md) - offensive nuker
+- [OBSERVER_SYSTEM.md](OBSERVER_SYSTEM.md) - scouting + observer
+- [CPU_OPTIMIZATION.md](CPU_OPTIMIZATION.md) - performance tuning
+- [Screeps API Docs](https://docs.screeps.com/) - game mechanics
 
 ---
 

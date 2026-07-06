@@ -1,11 +1,11 @@
-﻿# Compound Boost Reference
+# Compound Boost Reference
 
 Complete reference of all compounds, their production chains, and boost effects.
 
 ## Tier 4 - Catalyzed (Ultimate Boosts)
 
-### 🗡️ XUH2O - Catalyzed Utrium Acid
-**Production Chain:** U + H → UH → UH2O → XUH2O  
+### XUH2O - Catalyzed Utrium Acid
+**Production Chain:** U + H -> UH -> UH2O -> XUH2O  
 **Ingredients:** UH2O + X (catalyst)  
 **Boost:** ATTACK +300%  
 **Priority:** 100 (highest)  
@@ -13,8 +13,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### 💚 XUHO2 - Catalyzed Utrium Alkalide
-**Production Chain:** U + O → UO → UHO2 → XUHO2  
+### XUHO2 - Catalyzed Utrium Alkalide
+**Production Chain:** U + O -> UO -> UHO2 -> XUHO2  
 **Ingredients:** UHO2 + X (catalyst)  
 **Boost:** HEAL +300%  
 **Priority:** 90  
@@ -22,8 +22,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### 🏹 XKHO2 - Catalyzed Keanium Alkalide
-**Production Chain:** K + O → KO → KHO2 → XKHO2  
+### XKHO2 - Catalyzed Keanium Alkalide
+**Production Chain:** K + O -> KO -> KHO2 -> XKHO2  
 **Ingredients:** KHO2 + X (catalyst)  
 **Boost:** RANGED_ATTACK +300%  
 **Priority:** 85  
@@ -31,8 +31,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### 🏗️ XLH2O - Catalyzed Lemergium Acid
-**Production Chain:** L + H → LH → LH2O → XLH2O  
+### XLH2O - Catalyzed Lemergium Acid
+**Production Chain:** L + H -> LH -> LH2O -> XLH2O  
 **Ingredients:** LH2O + X (catalyst)  
 **Boost:** BUILD +100%  
 **Priority:** 80  
@@ -40,8 +40,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### 🔧 XLHO2 - Catalyzed Lemergium Alkalide
-**Production Chain:** L + O → LO → LHO2 → XLHO2  
+### XLHO2 - Catalyzed Lemergium Alkalide
+**Production Chain:** L + O -> LO -> LHO2 -> XLHO2  
 **Ingredients:** LHO2 + X (catalyst)  
 **Boost:** REPAIR +100%  
 **Priority:** 75  
@@ -49,8 +49,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### ⛏️ XZH2O - Catalyzed Zynthium Acid
-**Production Chain:** Z + H → ZH → ZH2O → XZH2O  
+### XZH2O - Catalyzed Zynthium Acid
+**Production Chain:** Z + H -> ZH -> ZH2O -> XZH2O  
 **Ingredients:** ZH2O + X (catalyst)  
 **Boost:** DISMANTLE +300%  
 **Priority:** 70  
@@ -58,8 +58,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### 🏃 XZHO2 - Catalyzed Zynthium Alkalide
-**Production Chain:** Z + O → ZO → ZHO2 → XZHO2  
+### XZHO2 - Catalyzed Zynthium Alkalide
+**Production Chain:** Z + O -> ZO -> ZHO2 -> XZHO2  
 **Ingredients:** ZHO2 + X (catalyst)  
 **Boost:** MOVE -100% fatigue (2x speed)  
 **Priority:** 65  
@@ -67,8 +67,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### ⚡ XGH2O - Catalyzed Ghodium Acid
-**Production Chain:** Z + K → G → GH → GH2O → XGH2O  
+### XGH2O - Catalyzed Ghodium Acid
+**Production Chain:** Z + K -> G -> GH -> GH2O -> XGH2O  
 **Ingredients:** GH2O + X (catalyst)  
 **Boost:** UPGRADE_CONTROLLER +100%  
 **Priority:** 60  
@@ -76,8 +76,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### 🛡️ XGHO2 - Catalyzed Ghodium Alkalide
-**Production Chain:** Z + K → G → GO → GHO2 → XGHO2  
+### XGHO2 - Catalyzed Ghodium Alkalide
+**Production Chain:** Z + K -> G -> GO -> GHO2 -> XGHO2  
 **Ingredients:** GHO2 + X (catalyst)  
 **Boost:** TOUGH +300%  
 **Priority:** 55  
@@ -85,8 +85,8 @@ Complete reference of all compounds, their production chains, and boost effects.
 
 ---
 
-### 📦 XKH2O - Catalyzed Keanium Acid
-**Production Chain:** K + H → KH → KH2O → XKH2O  
+### XKH2O - Catalyzed Keanium Acid
+**Production Chain:** K + H -> KH -> KH2O -> XKH2O  
 **Ingredients:** KH2O + X (catalyst)  
 **Boost:** CARRY +100%  
 **Priority:** 50  
@@ -291,12 +291,12 @@ Assuming 6 labs (2 input, 4 output), no cooldowns:
 With 4 output labs: ~16 units/tick = ~960 units/minute
 
 To produce 3000 units of XUH2O (all tiers):
-- OH: 3000 units ≈ 188 ticks ≈ 3 minutes
-- UH: 3000 units ≈ 188 ticks ≈ 3 minutes  
-- UH2O: 3000 units ≈ 188 ticks ≈ 3 minutes
-- XUH2O: 3000 units ≈ 188 ticks ≈ 3 minutes
+- OH: 3000 units ~ 188 ticks ~ 3 minutes
+- UH: 3000 units ~ 188 ticks ~ 3 minutes  
+- UH2O: 3000 units ~ 188 ticks ~ 3 minutes
+- XUH2O: 3000 units ~ 188 ticks ~ 3 minutes
 
-**Total:** ~750 ticks ≈ 12 minutes for full chain
+**Total:** ~750 ticks ~ 12 minutes for full chain
 
 ---
 

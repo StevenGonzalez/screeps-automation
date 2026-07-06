@@ -1,5 +1,4 @@
 export function runPowerCarrier(creep: Creep) {
-  // Always deposit power first, regardless of op state
   if ((creep.store.getUsedCapacity(RESOURCE_POWER) ?? 0) > 0) {
     if (creep.room.name !== creep.memory.homeRoom) {
       travelToRoom(creep, creep.memory.homeRoom!);
@@ -26,12 +25,10 @@ export function runPowerCarrier(creep: Creep) {
   }
 
   if (op.phase === "cracking") {
-    // Pre-position near the bank room while attackers crack it
     if (creep.room.name !== op.roomName) {
       travelToRoom(creep, op.roomName);
       return;
     }
-    // Stay near room center, out of the way
     const center = new RoomPosition(25, 25, op.roomName);
     if (creep.pos.getRangeTo(center) > 5) {
       creep.moveTo(center, { reusePath: 10, visualizePathStyle: {} });
@@ -50,7 +47,6 @@ export function runPowerCarrier(creep: Creep) {
       return;
     }
 
-    // Grab dropped power
     const dropped = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
       filter: (r) => r.resourceType === RESOURCE_POWER,
     });
@@ -61,7 +57,6 @@ export function runPowerCarrier(creep: Creep) {
       return;
     }
 
-    // Power in ruins (fallback)
     const ruins = creep.room.find(FIND_RUINS);
     for (const ruin of ruins) {
       if ((ruin.store.getUsedCapacity(RESOURCE_POWER) ?? 0) > 0) {
@@ -72,7 +67,6 @@ export function runPowerCarrier(creep: Creep) {
       }
     }
 
-    // Nothing left to collect — head home
     travelToRoom(creep, op.homeRoom);
   }
 }
@@ -90,9 +84,6 @@ function parkNearHomeSpawn(creep: Creep, homeRoomName: string) {
 
 function travelToRoom(creep: Creep, roomName: string | undefined) {
   if (!roomName || creep.room.name === roomName) return;
-  // Route to the room centre via PathFinder's multi-room pathing. Aiming moveTo at a bare exit
-  // tile (findExitTo + findClosestByRange) parks creeps on the border or bounces them between
-  // two rooms — see role.reserver.ts / role.remote_miner.ts.
   creep.moveTo(new RoomPosition(25, 25, roomName), {
     reusePath: 10,
     range: 20,

@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
-// pickPatrolRoom pulls in services.combat (isSourceKeeperRoom) and services.allies (isAlly)
-// through its import chain. services.combat reads a few body-part constants; define them (with
-// real values) the same way services.combat.test.ts does. Game/Memory are set up per test below
-// — the import itself touches neither at load time.
 const g = globalThis as Record<string, unknown>;
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
@@ -18,10 +14,8 @@ g.HEAL_POWER = 12;
 import { pickPatrolRoom } from "../src/orchestrators/orchestrator.score";
 
 const HOME = "W1N1";
-const SEEKER = "grifter"; // ROLE_SCORE_HUNTER
+const SEEKER = "grifter";
 
-// Parse a room name to signed world coords and take the Chebyshev room distance — matches how
-// Screeps' Game.map.getRoomLinearDistance measures (max of the two axis deltas).
 function coords(name: string): [number, number] {
   const m = name.match(/^([WE])(\d+)([NS])(\d+)$/)!;
   const x = m[1] === "E" ? +m[2] : -(+m[2] + 1);
@@ -34,8 +28,6 @@ function linearDist(a: string, b: string): number {
   return Math.max(Math.abs(ax - bx), Math.abs(ay - by));
 }
 
-// Home has four unowned neighbours; each neighbour is a leaf (no further exits), so the safe
-// region at radius 2 is exactly those four rooms.
 const NEIGHBOURS = ["W1N2", "W2N1", "W1N0", "W0N1"];
 const EXITS: Record<string, Record<string, string>> = {
   [HOME]: { "1": "W1N2", "3": "W2N1", "5": "W1N0", "7": "W0N1" },
@@ -73,7 +65,6 @@ beforeEach(() => {
 describe("pickPatrolRoom", () => {
   it("gives a lone seeker the stalest reachable room", () => {
     const now = (g.Game as { time: number }).time;
-    // Three rooms seen recently, one left stale — the stale one should win.
     seen.W1N2 = now - 5;
     seen.W2N1 = now - 5;
     seen.W1N0 = now - 5000;
@@ -99,19 +90,16 @@ describe("pickPatrolRoom", () => {
     const names = ["s1", "s2", "s3", "s4"];
     for (const n of names) creeps[n] = seeker(n, HOME);
     const picks = names.map((n) => pickPatrolRoom(creeps[n]));
-    expect(new Set(picks).size).toBe(4); // one room each, no overlap
+    expect(new Set(picks).size).toBe(4);
     for (const p of picks) expect(NEIGHBOURS).toContain(p);
   });
 
   it("agrees on its own pick regardless of which seeker computes the allocation", () => {
-    // Each seeker replays the same sequential assignment, so s1's pick is stable no matter that
-    // s2 also exists and computes the same sequence.
     const a = seeker("s1", HOME);
     const b = seeker("s2", HOME);
     creeps.s1 = a;
     creeps.s2 = b;
     const firstPick = pickPatrolRoom(a);
-    // Recompute after b has "moved" — a still owns its slot.
     expect(pickPatrolRoom(a)).toBe(firstPick);
   });
 

@@ -5,8 +5,6 @@ import { getDefenseOp, getOffensiveOp, runDefensiveCleric, runOffensiveCleric } 
 const SELF_HEAL_THRESHOLD = 0.5;
 
 export function runCleric(creep: Creep) {
-  // Skip the boost detour when a hostile is right on top of us: healing the line NOW beats
-  // walking to a lab while the fight is lost. If the threat is still distant, boost first.
   const underImmediateThreat = creep.pos
     .findInRange(FIND_HOSTILE_CREEPS, 8)
     .some((c) => !isAlly(c.owner?.username));
@@ -35,7 +33,6 @@ export function runCleric(creep: Creep) {
     delete creep.memory.defensiveTarget;
   }
 
-  // Defensive: self-preservation when critically injured
   if (creep.hits < creep.hitsMax * SELF_HEAL_THRESHOLD) {
     creep.heal(creep);
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];

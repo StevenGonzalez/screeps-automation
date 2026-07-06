@@ -1,11 +1,11 @@
 # Nuker System (Offensive)
 
 > **Status**: Implemented. `orchestrators/orchestrator.nuker.ts` keeps the nuker
-> (built at RCL 8) loaded so it can fire. Launching is **manual only** —
+> (built at RCL 8) loaded so it can fire. Launching is **manual only** -
 > `Game.arca.launchNuke(...)`. Nothing ever auto-launches.
 
 > **Not to be confused with** `orchestrator.nukes.ts`, which is the *defensive*
-> side — reinforcing ramparts on impact tiles when an **incoming** nuke is
+> side - reinforcing ramparts on impact tiles when an **incoming** nuke is
 > detected. This page is about loading and firing **our own** nuker.
 
 ---
@@ -22,9 +22,9 @@ so ghodium that was just transferred in is available to load the same tick.
 Fill rules:
 
 - **Ghodium first.** G (capacity 5,000) is the scarce ingredient and a nuke needs
-  both, so it's loaded before energy — no surplus gate, take whatever is in stores.
+  both, so it's loaded before energy - no surplus gate, take whatever is in stores.
 - **Energy** (capacity 300,000) is loaded only while **storage energy exceeds
-  250,000**, and never drawn below that line — so a 300k fill can't starve
+  250,000**, and never drawn below that line - so a 300k fill can't starve
   spawns/upgraders. Capped at 1,000/tick.
 
 Ghodium acquisition (market buys + inter-room transfers) happens in the **terminal**

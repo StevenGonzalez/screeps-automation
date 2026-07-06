@@ -1,6 +1,6 @@
 # The Family Business - Screeps Automation
 
-An organized-crime-family-themed Screeps automation project focused on modular systems, stable logistics, and iterative strategy. The empire runs like an outfit — earners bring in the money, muscle handles problems, and the controllers you take get a polite little note.
+An organized-crime-family-themed Screeps automation project focused on modular systems, stable logistics, and iterative strategy. The empire runs like an outfit - earners bring in the money, muscle handles problems, and the controllers you take get a polite little note.
 
 ## Features
 

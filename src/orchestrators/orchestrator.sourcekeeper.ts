@@ -1,44 +1,22 @@
-/**
- * Source Keeper mining. SK rooms hold 2-3 sources (4000 energy, ~3× a normal remote)
- * plus a mineral, guarded by Source Keepers that respawn from lairs. This orchestrator
- * runs persistent operations: a Muscle guardian clears and camps the keeper lairs
- * while Tunnelers mine the sources and Carriers haul the energy home.
- *
- * Operations are commanded from the console (Game.arca.sk) rather than auto-started —
- * SK rooms vary wildly in difficulty and committing blind is how squads get fed to
- * keepers. The orchestrator only manages lifecycle: source discovery, phase, and
- * pausing when an enemy player contests the room.
- */
 import { ROLE_SK_GUARDIAN } from "../config/config.roles";
 import { isSourceKeeperRoom } from "../services/services.combat";
 
-// Min ticks an op pauses spawning after spotting an enemy player in the room.
 export const SK_CONTEST_COOLDOWN = 1000;
-// Abandon an op that can't even get eyes on the room (guardian never arrives) so it
-// stops blocking re-launch and burning guardian spawns into a death trap.
 const SK_DISCOVERY_TIMEOUT = 3000;
 const SK_MIN_HOME_RCL = 7;
 const SK_MIN_HOME_ENERGY = 40_000;
-// The guardian body has a 5-group floor (RANGED_ATTACK+HEAL+2×MOVE = 500/group, see
-// buildSkGuardianBody), so a home whose energy capacity can't reach 2500 can never spawn
-// one and the op would silently stall until SK_DISCOVERY_TIMEOUT. Refuse up front instead.
 const SK_MIN_HOME_CAPACITY = 2_500;
 
-// Concurrency bounds. SK ops are funded per home room and never conflict across
-// different homes, so multiple run in parallel — but each op spawns a guardian +
-// a tunneler/carrier per source, so we cap the total empire-wide (CPU/spawn pressure)
-// and per home room (one home can't sustain three SK squads at once).
-export const SK_MAX_CONCURRENT = 4;       // empire-wide ceiling
-export const SK_MAX_PER_HOME = 2;         // ceiling per funding home room
+export const SK_MAX_CONCURRENT = 4;
+export const SK_MAX_PER_HOME = 2;
 
 export function loop(): void {
   const ops = Memory.skOps;
   if (!ops || ops.length === 0) return;
   for (const op of ops) updateOp(op);
-  // Drop ops that never gained vision of their room within the timeout.
   const survivors = ops.filter((op) => {
     if (op.discovered || Game.time - op.startedAt <= SK_DISCOVERY_TIMEOUT) return true;
-    console.log(`[SK] ${op.roomName}: never reached the room within ${SK_DISCOVERY_TIMEOUT} ticks — abandoning`);
+    console.log(`[SK] ${op.roomName}: never reached the room within ${SK_DISCOVERY_TIMEOUT} ticks - abandoning`);
     for (const name in Game.creeps) {
       if (Game.creeps[name].memory.skOpId === op.id) {
         delete Game.creeps[name].memory.skOpId;
@@ -53,14 +31,12 @@ export function loop(): void {
 function updateOp(op: SourceKeeperOp): void {
   const room = Game.rooms[op.roomName];
 
-  // Discover sources the first time we can see the room.
   if (room && !op.discovered) {
     op.sourceIds = room.find(FIND_SOURCES).map((s) => s.id);
     op.discovered = true;
     console.log(`[SK] ${op.roomName}: discovered ${op.sourceIds.length} sources`);
   }
 
-  // Pause the op while an enemy player contests the room (keepers/invaders are fine).
   if (room) {
     const playerHostiles = room.find(FIND_HOSTILE_CREEPS, {
       filter: (c) =>
@@ -91,10 +67,6 @@ export function getSkOp(id: number): SourceKeeperOp | undefined {
   return Memory.skOps?.find((o) => o.id === id);
 }
 
-// ── Console API ─────────────────────────────────────────────────────────────────
-
-// Starts an SK mining op against `roomName`, funded by the nearest capable owned room.
-// Returns an error string, or null on success.
 export function launchSkOp(roomName: string): string | null {
   if (!isSourceKeeperRoom(roomName)) return `${roomName} is not a Source Keeper room`;
 
@@ -103,12 +75,10 @@ export function launchSkOp(roomName: string): string | null {
     return `already mining ${roomName}`;
   }
 
-  // Empire-wide concurrency ceiling.
   if (Memory.skOps.length >= SK_MAX_CONCURRENT) {
-    return `at the empire-wide SK op limit (${SK_MAX_CONCURRENT}) — cancel one first`;
+    return `at the empire-wide SK op limit (${SK_MAX_CONCURRENT}) - cancel one first`;
   }
 
-  // Count active ops per home room so we can skip homes already at their cap.
   const opsPerHome: Record<string, number> = {};
   for (const o of Memory.skOps) opsPerHome[o.homeRoom] = (opsPerHome[o.homeRoom] ?? 0) + 1;
 

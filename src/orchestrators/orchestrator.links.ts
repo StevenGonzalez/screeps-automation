@@ -1,18 +1,6 @@
-/**
- * Link energy routing: each tick, drain "source" links (near energy containers)
- * into "sink" links (near the controller or storage). This eliminates the need
- * for haulers to carry energy from sources to the upgrade/storage area once
- * links are built at RCL 5+.
- *
- * Classification:
- *   source link — within 2 tiles of a miner container
- *   sink link   — within 3 tiles of the controller OR within 2 tiles of storage
- *   neutral     — transfer from any link with energy to any link that needs it
- */
-
-const LINK_TRANSFER_THRESHOLD = 400; // classification fallback: energy above which an unclassified link counts as a source
-const LINK_MIN_TRANSFER = 150;       // never send less than this (3% loss makes tiny dribbles wasteful)
-const LINK_SINK_HEADROOM = 100;      // sink must have at least this much free capacity
+const LINK_TRANSFER_THRESHOLD = 400;
+const LINK_MIN_TRANSFER = 150;
+const LINK_SINK_HEADROOM = 100;
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -40,24 +28,16 @@ function processRoomLinks(room: Room) {
     const available = src.store[RESOURCE_ENERGY];
     if (available < LINK_MIN_TRANSFER) continue;
 
-    // Find the neediest sink, then send as soon as we can meaningfully fill its
-    // deficit rather than always waiting for a fixed threshold — lower latency and
-    // less idle energy, while LINK_MIN_TRANSFER guards against wasteful micro-sends.
     const sink = pickSink(sinks, src);
     if (!sink) continue;
 
     const deficit = sink.store.getFreeCapacity(RESOURCE_ENERGY);
-    // Send what will actually land in the sink: min(available, deficit). Only hold off
-    // if even that lands below the minimum (the receiver is nearly full).
     if (Math.min(available, deficit) < LINK_MIN_TRANSFER) continue;
 
     src.transferEnergy(sink);
   }
 }
 
-// Structural role of each link — fixed by position, so it only changes when the
-// link set or storage changes. Cached per room and recomputed on signature change
-// instead of re-running getRangeTo for every link every tick.
 type LinkRole = "source" | "sink" | "neutral";
 const linkRoleCache: Record<
   string,
@@ -116,8 +96,6 @@ function classifyLinks(
     } else if (role === "sink") {
       sinks.push(link);
     } else {
-      // Unclassified: treat as source if it has energy, otherwise sink.
-      // Energy is dynamic, so this branch stays per-tick (not cached).
       if (link.store[RESOURCE_ENERGY] > LINK_TRANSFER_THRESHOLD) {
         sources.push(link);
       } else {
@@ -134,9 +112,6 @@ function pickSink(
   src: StructureLink
 ): StructureLink | null {
   let best: StructureLink | null = null;
-  // Seed one below the headroom so a sink with *exactly* LINK_SINK_HEADROOM free still
-  // qualifies (the rule is "at least HEADROOM free", and the `>` test below would
-  // otherwise exclude the boundary).
   let bestFree = LINK_SINK_HEADROOM - 1;
 
   for (const sink of sinks) {

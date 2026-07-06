@@ -11,14 +11,14 @@
 ## Overview
 The military system provides squad-based combat with formation movement, tactical
 behaviors, intelligent target prioritization, and boosted combat creeps. Offensive
-operations run **concurrently — one per home room** (`Memory.militaryOps`, keyed by
+operations run **concurrently - one per home room** (`Memory.militaryOps`, keyed by
 home room), with extra targets lined up in an offensive **queue**
 (`Memory.militaryQueue`). A separate **DefenseCouncil** auto-raises a standing
 defensive squad whenever an owned room is meaningfully threatened
 (`Memory.defenseOps`). All of this is live, not planned.
 
 ## Key Features
-- **Squad Coordinator**: 4 formations × 5 tactics, with a leader-led cohesion model
+- **Squad Coordinator**: 4 formations x 5 tactics, with a leader-led cohesion model
   so the squad commits as one body instead of trickling in piecemeal.
 - **Formation Movement**: followers hold positions relative to the squad leader; the
   leader only advances when the squad is together (cohesive), which also stages the
@@ -31,7 +31,7 @@ defensive squad whenever an owned room is meaningfully threatened
   threshold), heal at home, then resume; triggermen kite automatically.
 - **Boost Integration**: combat creeps auto-request the best available boost for their
   combat part (attack / ranged / heal / dismantle) and are boosted at the labs.
-- **WarCouncil**: scans visible rooms, scores them 0–10, ranks enemy targets, and can
+- **WarCouncil**: scans visible rooms, scores them 0-10, ranks enemy targets, and can
   optionally auto-launch attacks against soft targets.
 - **DefenseCouncil**: automatically raises a standing defensive squad when an owned
   room is under a meaningful (healer-backed / tower-overwhelming) threat, and stands
@@ -58,7 +58,7 @@ Game.arca.attack('W2N1', 'box', 'assault', undefined, 'W1N1'); // force funding 
 ```
 **Concurrency is one op per home room.** If the chosen home is already running an
 op, the target is automatically **queued** and auto-starts when that home (or
-another free, capable home) frees up. A capable home is RCL 5+ with ≥ 50k storage
+another free, capable home) frees up. A capable home is RCL 5+ with >= 50k storage
 energy. Remove a queued target with `Game.arca.dequeueAttack('W2N1')`.
 
 ### Check Squad Status
@@ -108,7 +108,7 @@ Game.arca.safemode('W1N1');     // manually activate safe mode in a room
 ## Formations
 
 Offsets are relative to the leader (slot 0). Members are slotted front-to-back by role
-— tanks/wreckers front, healers center, ranged back — so each formation expresses its
+- tanks/wreckers front, healers center, ranged back - so each formation expresses its
 doctrine. The formation reorients naturally as the leader moves.
 
 ### Line
@@ -141,7 +141,7 @@ and towers are gone.
 
 ### Defend
 Hold within 3 tiles of the target room center and engage only nearby hostiles. Does
-not self-complete — recall to end it. Best for holding a position or contested room.
+not self-complete - recall to end it. Best for holding a position or contested room.
 
 ### Retreat
 All units fall back to the home spawn. Auto-triggered when average squad HP drops
@@ -150,30 +150,30 @@ heals at home to 85% and then resumes the prior tactic.
 
 ## Combat Roles
 
-### Enforcer (⚔️) — `enforcer`
+### Enforcer () - `enforcer`
 Melee tank. TOUGH front-loaded so armor absorbs hits before ATTACK parts die. Usually
-the squad leader. Boosted with the attack line (UH → UH₂O → XUH₂O).
+the squad leader. Boosted with the attack line (UH -> UH2O -> XUH2O).
 
-### Triggerman (🏹) — `triggerman`
+### Triggerman () - `triggerman`
 Ranged kiter. Holds enemies at range 3, uses `rangedMassAttack` when 3+ are close,
 otherwise focuses the squad's priority target. Boosted with the ranged line
-(KO → KHO₂ → XKHO₂).
+(KO -> KHO2 -> XKHO2).
 
-### Medic (➕) — `medic`
+### Medic () - `medic`
 Healer. Heals the lowest-HP% squad member (range 1 `heal`, range 3 `rangedHeal`),
 self-heals, and stays in the formation's protected center. Boosted with the heal line
-(LO → LHO₂ → XLHO₂). Also spawns for home defense during high-threat scenarios.
+(LO -> LHO2 -> XLHO2). Also spawns for home defense during high-threat scenarios.
 
-### Wrecker (🔧) — `wrecker`
+### Wrecker () - `wrecker`
 Boosted dismantler. TOUGH soaks tower fire while WORK parts dismantle ramparts and
-raze structures far faster than melee. Operates only as part of an operation — too
-fragile to act alone. Boosted with the dismantle line (ZH → ZH₂O → XZH₂O).
+raze structures far faster than melee. Operates only as part of an operation - too
+fragile to act alone. Boosted with the dismantle line (ZH -> ZH2O -> XZH2O).
 
 ## Target Priority System
 
 ### Creeps (focus fire, lowest score first)
-1. **Healers** — eliminate support first (they undo your damage)
-2. **Attackers / Ranged** — neutralize what can actually hurt the squad
+1. **Healers** - eliminate support first (they undo your damage)
+2. **Attackers / Ranged** - neutralize what can actually hurt the squad
 3. **Workers / Dismantlers**
 4. **Unarmed** (claimers, haulers, scouts)
 
@@ -181,8 +181,8 @@ Nearly-dead hostiles are bumped up a tier (finish the kill); ties break by proxi
 then remaining HP, so the whole squad concentrates fire.
 
 ### Structures (lowest number = struck first)
-Spawn (10) → Tower (15) → Nuker (20) → Terminal (25) → Lab (30) → Storage (35) →
-Power Spawn (40) → Observer (45) → Extension (60) → Link (70) → Extractor (80) →
+Spawn (10) -> Tower (15) -> Nuker (20) -> Terminal (25) -> Lab (30) -> Storage (35) ->
+Power Spawn (40) -> Observer (45) -> Extension (60) -> Link (70) -> Extractor (80) ->
 Container (90). **Siege** flips towers to the top. If the chosen target sits under a
 rampart, the rampart is broken first.
 
@@ -190,16 +190,16 @@ rampart, the rampart is broken first.
 
 ### Spawn Queue
 - Defensive Enforcers/Triggermen/Medics jump the economy queue under threat (high-severity
-  raids take priority over diggers — a dead digger respawns, a dead spawn does not).
+  raids take priority over diggers - a dead digger respawns, a dead spawn does not).
 - Offensive squad creeps spawn at full energy capacity for max-strength bodies, in
-  formation order (enforcers → wreckers → triggermen → medics).
+  formation order (enforcers -> wreckers -> triggermen -> medics).
 
 ### DefenseCouncil (automatic standing defense)
 Runs every 5 ticks inside `orchestrator.military.ts`, separate from the manual
 offensive ops. Each owned room is its own theatre:
 
-- **Trigger**: a room whose threat is high-severity, or whose threat score ≥ 150
-  (≈ a healer-backed raid towers can't comfortably out-damage), gets a `DefenseOp`
+- **Trigger**: a room whose threat is high-severity, or whose threat score >= 150
+  (~ a healer-backed raid towers can't comfortably out-damage), gets a `DefenseOp`
   declared in `Memory.defenseOps[roomName]`.
 - **Spawning**: the spawn orchestrator reads `getDefenseOp(room)` and raises the
   needed enforcers/medics/triggermen, jumping the economy queue. Composition scales with
@@ -222,7 +222,7 @@ Towers focus-fire one target room-wide and auto-trigger safe mode when structure
 critically damaged (`orchestrator.tower.ts`).
 
 ### WarCouncil (offensive intel)
-- Scans visible non-owned rooms every 50 ticks into `Memory.intel`, scoring threat 0–10.
+- Scans visible non-owned rooms every 50 ticks into `Memory.intel`, scoring threat 0-10.
 - Ranks enemy rooms for targeting (lowest threat first).
 - Optional auto-attack (off by default) launches against soft, nearby enemy rooms,
   rate-limited to once per 1000 ticks. It only uses a **free, capable** home (RCL 5+,
@@ -230,9 +230,9 @@ critically damaged (`orchestrator.tower.ts`).
 
 ## Tips
 1. **Start with box/assault** for standard attacks; the squad auto-scales to defenses.
-2. **Watch HP** with `Game.arca.squads()` — the squad auto-retreats and re-pushes.
+2. **Watch HP** with `Game.arca.squads()` - the squad auto-retreats and re-pushes.
 3. **Use wedge for offense, box for defense, scatter against towers.**
 4. **Use siege** (with wreckers) against fortified rooms; towers fall first.
-5. **Scout first** — `Game.arca.warcouncil()` shows what intel knows about a target.
-6. **Energy reserve** — keep the home room healthy before launching; offensive bodies
+5. **Scout first** - `Game.arca.warcouncil()` shows what intel knows about a target.
+6. **Energy reserve** - keep the home room healthy before launching; offensive bodies
    are expensive and spawn at full capacity.
