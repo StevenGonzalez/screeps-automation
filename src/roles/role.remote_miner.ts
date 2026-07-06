@@ -1,5 +1,5 @@
 /**
- * Remote miner (outrider): travels to an assigned source in a foreign room, sits on
+ * Remote miner (stringer): travels to an assigned source in a foreign room, sits on
  * or adjacent to it, and harvests. If a container exists next to the source it
  * will fill it; otherwise energy drops for the remote hauler to collect.
  *
@@ -16,7 +16,7 @@ import {
   clearRemoteInvader,
 } from "../services/services.creep";
 
-// Ticks an outrider waits at home after taking damage in a foreign room before re-probing the
+// Ticks a stringer waits at home after taking damage in a foreign room before re-probing the
 // remote. Long enough that a persistent border camper costs ~one hit per window instead of a
 // continuous tower-energy drain, short enough to resume promptly once the camper leaves.
 const REMOTE_DAMAGE_BACKOFF = 300;
@@ -56,7 +56,7 @@ export function runRemoteMiner(creep: Creep) {
     else if (threat.hostiles.some(isPlayerCreep)) flagRemotePlayer(creep);
   }
 
-  // Stay home while the remote is contested. Don't ferry an unarmed outrider in to die — and
+  // Stay home while the remote is contested. Don't ferry an unarmed stringer in to die — and
   // crucially don't ping-pong (in → attacked → flee → towers heal → back in), which drains
   // tower energy. Wait until the flag clears (Invader/core killed by a defender, or window lapses).
   if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {

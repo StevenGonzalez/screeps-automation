@@ -1,17 +1,18 @@
-// Medieval-fantasy decrees for controller signing. Keep under 100 chars.
+// Organized-crime "family" notices for controller signing. Polite menace, played straight —
+// nothing overtly threatening is ever said, which is the whole joke. Keep under 100 chars.
 export const SIGNATURES: string[] = [
-  "By right of conquest, this stronghold is held.",
-  "A banner rises here. None shall tear it down.",
-  "Held against the dark. No Chaos shall pass these walls.",
-  "Forged in war, raised for the long siege to come.",
-  "By blade and oath, this hold is taken.",
-  "Watchfires burn upon these ramparts tonight.",
-  "A garrison musters where the old road meets the gate.",
-  "This keep stands. Let the hordes break upon it.",
-  "Ramparts rise where braver souls once fell.",
-  "Claimed and warded. Let the forges burn and the coffers fill.",
-  "Borne here on dark wings, we hold this ground.",
-  "By our decree, the enemy turns back at these gates.",
+  "Nice room. Real nice. Be a shame if anything happened to it.",
+  "This block is spoken for. Nothing personal — it's just business.",
+  "Under new management. We'd hate for there to be a misunderstanding.",
+  "The Family thanks you for your cooperation. You've been very cooperative.",
+  "We're not saying leave. We're just saying it'd be smart.",
+  "This is a nice neighborhood. Let's keep it that way, capisce?",
+  "Everything here is accounted for. Everything.",
+  "You didn't see anything. Good. Neither did we.",
+  "Territory of the Family. Enquiries handled personally.",
+  "We take care of our own. We also take care of problems.",
+  "Consider this a friendly reminder. There won't be a second one.",
+  "This room pays its respects on time. Every time.",
 ];
 
 // Assign a signature ONCE per room and keep it stable thereafter. The stored

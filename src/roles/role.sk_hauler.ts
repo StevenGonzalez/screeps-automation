@@ -3,7 +3,7 @@ import { isSourceKeeper } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
 /**
- * Wain: hauls energy from a Source Keeper room back to the home storage. Collects
+ * Carrier: hauls energy from a Source Keeper room back to the home storage. Collects
  * dropped energy and from any containers near the sources, and falls back to home
  * (carrying whatever it has) when a keeper closes in without a guardian, or when an
  * enemy player contests the room. It has no combat parts.

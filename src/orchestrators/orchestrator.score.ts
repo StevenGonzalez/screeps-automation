@@ -15,7 +15,7 @@
  * and decays fast, so discovery is really a COVERAGE problem — keep revisiting nearby rooms
  * so a fresh Score is seen (and thus reachable) before it decays. pickPatrolRoom hands out
  * disjoint patrol targets via a deterministic sequential assignment across the fleet (see its
- * comment), so seekers cover different rooms instead of trailing each other. Per-room
+ * comment), so grifters cover different rooms instead of trailing each other. Per-room
  * last-vision ticks live in Memory.scorePatrol.seen, stamped below for every room in vision.
  */
 
@@ -109,7 +109,7 @@ export function loop(): void {
 
   // Drop coverage records for rooms we've long since stopped patrolling so Memory.scorePatrol
   // can't grow unbounded as homes come and go. Any room still in a live region is re-stamped
-  // above every time a seeker passes through, so this only ever prunes abandoned rooms.
+  // above every time a grifter passes through, so this only ever prunes abandoned rooms.
   for (const rn in patrol.seen) {
     if (Game.time - patrol.seen[rn] > SEEN_TTL) delete patrol.seen[rn];
   }
@@ -119,9 +119,9 @@ export function loop(): void {
 // any realistic revisit interval, so a room in an active patrol beat is never dropped.
 const SEEN_TTL = 50000;
 
-// How far (in rooms) seekers range from home while covering. Kept short on purpose: a Score can
-// decay in ~100 ticks and a seeker crosses ~1 room per 50 ticks, so a Score more than a room or
-// two away has usually decayed before a seeker sent after it could arrive.
+// How far (in rooms) grifters range from home while covering. Kept short on purpose: a Score can
+// decay in ~100 ticks and a grifter crosses ~1 room per 50 ticks, so a Score more than a room or
+// two away has usually decayed before a grifter sent after it could arrive.
 const PATROL_RADIUS = 2;
 
 // ── Shared with orchestrator.spawning + role.scoreHunter ───────────────────────
@@ -188,18 +188,18 @@ export function claimNearestScoreTarget(creep: Creep): string | undefined {
 // ── Coverage search (used by role.scoreHunter when nothing is claimed) ──────────
 //
 // A Score is only visible while a creep is in its room and decays fast, so the useful thing a
-// seeker with no target can do is refresh vision on the nearby room that's gone stalest — that
+// grifter with no target can do is refresh vision on the nearby room that's gone stalest — that
 // is where an as-yet-unseen Score is most likely waiting. To make the fleet cover DIFFERENT
 // rooms instead of trailing each other, targets are handed out by a deterministic sequential
-// assignment: every seeker independently replays the same allocation — in a fixed (name) order,
-// each seeker claims its best still-unclaimed room — and reads off its own result. This makes the
+// assignment: every grifter independently replays the same allocation — in a fixed (name) order,
+// each grifter claims its best still-unclaimed room — and reads off its own result. This makes the
 // fleet's patrol targets disjoint BY CONSTRUCTION, even when several are stacked on the spawn
 // (each replay reserves the earlier names' rooms first, so a co-located pair splits immediately
 // rather than both chasing the same stalest room). "Best" is stalest minus travel FROM THAT
-// seeker, so each tends to claim rooms near itself (compact beats) while earlier names win when
+// grifter, so each tends to claim rooms near itself (compact beats) while earlier names win when
 // they contend for the same room.
 //
-// (This coordinates DESTINATIONS, not paths — two seekers with beats on opposite sides of home
+// (This coordinates DESTINATIONS, not paths — two grifters with beats on opposite sides of home
 // still cross the same rooms in transit, so occasional co-location mid-journey is expected and
 // harmless; what matters is that their patrol targets are disjoint.)
 //
@@ -213,7 +213,7 @@ export function pickPatrolRoom(creep: Creep): string | undefined {
   const region = safeRegionRooms(home, myName, PATROL_RADIUS);
   if (region.length === 0) return undefined;
 
-  // The live fleet sharing this home, in a stable (name) order so every seeker replays the same
+  // The live fleet sharing this home, in a stable (name) order so every grifter replays the same
   // allocation sequence — no shared reservation state needed, each just recomputes it locally.
   const fleet: Creep[] = [];
   for (const name in Game.creeps) {
@@ -228,8 +228,8 @@ export function pickPatrolRoom(creep: Creep): string | undefined {
     const pick = bestRoom(region, seen, c.pos.roomName, reserved);
     if (c.name === creep.name) {
       // Everyone after us can't change our result, so stop. If the region had fewer free rooms
-      // than seekers we may have got nothing — fall back to the stalest room ignoring
-      // reservations so we still move (this only overlaps when there are genuinely more seekers
+      // than grifters we may have got nothing — fall back to the stalest room ignoring
+      // reservations so we still move (this only overlaps when there are genuinely more grifters
       // than rooms, which no coordination can avoid).
       return pick ?? bestRoom(region, seen, creep.pos.roomName, new Set());
     }
@@ -238,8 +238,8 @@ export function pickPatrolRoom(creep: Creep): string | undefined {
   return undefined; // unreachable: the creep is always a member of its own home's fleet
 }
 
-// Stalest region room reachable from `fromRoom`, skipping the room the seeker is already in and
-// any a higher-priority seeker has reserved. Travel is charged at ~50 ticks/room so a near-stale
+// Stalest region room reachable from `fromRoom`, skipping the room the grifter is already in and
+// any a higher-priority grifter has reserved. Travel is charged at ~50 ticks/room so a near-stale
 // room beats a far-stale one.
 function bestRoom(
   region: string[],
@@ -261,10 +261,10 @@ function bestRoom(
   return best;
 }
 
-// Safe rooms an observer should sweep for Scores: same safe region as the seekers patrol, but
+// Safe rooms an observer should sweep for Scores: same safe region as the grifters patrol, but
 // out to `range` rooms rather than the patrol radius, since the observer isn't limited by a
-// creep's walking speed. Bounded by seeker reachability though — a Score the observer reveals
-// is only worth anything if a staging seeker can sprint there before it decays (the claim's
+// creep's walking speed. Bounded by grifter reachability though — a Score the observer reveals
+// is only worth anything if a staging grifter can sprint there before it decays (the claim's
 // decay/TTL guards drop the rest). Used by the observer orchestrator.
 export function getScoreScanRooms(homeRoomName: string, range: number): string[] {
   const myName = Game.rooms[homeRoomName]?.controller?.owner?.username;

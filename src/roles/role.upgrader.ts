@@ -55,9 +55,9 @@ export function runUpgrader(creep: Creep) {
     return;
   }
 
-  // Last resort: general acquire. Like the other non-essential consumers, leave the miner
-  // containers + dropped piles for the porters (tower/core supply) and draw only from the storage
-  // buffer — UNLESS the controller is about to downgrade, when saving the room outranks the porter
+  // Last resort: general acquire. Like the other non-essential consumers, leave the digger
+  // containers + dropped piles for the bagmen (tower/core supply) and draw only from the storage
+  // buffer — UNLESS the controller is about to downgrade, when saving the room outranks the bagman
   // priority and the upgrader may take whatever it can reach (matches the spawn-side downgrade rescue).
   const ctrl = creep.room.controller;
   const nearDowngrade = !!ctrl && ctrl.my && ctrl.ticksToDowngrade < 5000;

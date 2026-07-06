@@ -163,7 +163,7 @@ function hasEnergyGatherers(room: Room): boolean {
 // or settle in ANOTHER room and don't pay their cost back here. Unlike isEnergyEmergency (which also
 // requires the spawn itself to be starved — a state haulers mask by keeping extensions topped while
 // storage quietly bleeds toward zero), this trips on the storage buffer ALONE. So offensive ops,
-// drain leeches and expansion stop being funded the moment the home economy starts losing ground,
+// drain decoys and expansion stop being funded the moment the home economy starts losing ground,
 // instead of only once it has already collapsed.
 const ECONOMY_CRITICAL_STORAGE = 25_000;
 function isEconomyCritical(room: Room): boolean {
@@ -174,21 +174,21 @@ function isEconomyCritical(room: Room): boolean {
 function getHarvesterPopulationTarget(room: Room): number {
   const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
   const phase = getRoomPhase(room);
-  // Two harvesters to cold-start a room with no miners yet. Once miners cover the sources,
+  // Two harvesters to cold-start a room with no diggers yet. Once diggers cover the sources,
   // drop to the number of still-uncovered sources — a harvester on an already-mined source
   // immediately suicides (role.harvester, "redundant here"), so demanding 2 regardless of
-  // coverage just spawn-loops: spawn peasant -> it suicides -> target still 2 -> respawn,
+  // coverage just spawn-loops: spawn runner -> it suicides -> target still 2 -> respawn,
   // hogging the spawn (harvester is top priority) and starving builders/upgraders below it.
   if (phase === "bootstrap") {
     if (minerCount === 0) return 2;
     return Math.max(0, getSources(room).length - minerCount);
   }
-  // During an energy emergency with no miners, keep 2 harvesters for direct source coverage.
-  // With miners present the distribution problem (containers full, extensions empty) is
+  // During an energy emergency with no diggers, keep 2 harvesters for direct source coverage.
+  // With diggers present the distribution problem (containers full, extensions empty) is
   // better solved by haulers — one harvester bridge is enough, not two.
   if (isEnergyEmergency(room)) return minerCount > 0 ? Math.min(1, 2 - minerCount) : 2;
-  // Past bootstrap, miners + haulers run the economy. A storage buffer lets haulers
-  // bridge a transient miner death (its replacement spawns within ~150t) by feeding the
+  // Past bootstrap, diggers + haulers run the economy. A storage buffer lets haulers
+  // bridge a transient digger death (its replacement spawns within ~150t) by feeding the
   // base from storage, so spawning a harvester would only camp the source and block the
   // haulers. Only fall back to harvesters when there's no buffer to ride out the gap;
   // a genuine drain is caught by the isEnergyEmergency branch above.
@@ -277,7 +277,7 @@ function getBuilderPopulationTarget(room: Room): number {
   const target = Math.ceil(siteCount / 5);
   // But construction is energy-THROUGHPUT limited, not builder-count limited: one ~4-WORK builder
   // already consumes ~20 e/tick, roughly a two-source room's entire gross income. Without a storage
-  // buffer to burn (storage unlocks at RCL4), extra builders just idle waiting on the miners — and
+  // buffer to burn (storage unlocks at RCL4), extra builders just idle waiting on the diggers — and
   // they sit ABOVE upgraders in the queue, so idle builders would starve RCL progression for
   // nothing. So only burst past 2 when there's a surplus buffer to actually fund the extra hands;
   // that buffer drains fast to finish the push, then siteCount → 0 auto-despawns them.
@@ -295,7 +295,7 @@ function getSpawnForRoom(room: Room): StructureSpawn | null {
 function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // Emergency recovery: if no energy gatherers exist, bypass energy reserve
   if (!hasEnergyGatherers(room)) {
-    // A raid that wiped the soft economy (killed the miners/haulers) is exactly when a lost
+    // A raid that wiped the soft economy (killed the diggers/haulers) is exactly when a lost
     // spawn becomes permanent. If a standing-defense op is active, raise a DEFENDER before
     // falling back to a harvester — otherwise the room spits one-shot harvesters forever while
     // the spawn is dismantled and never fields a defender (a hard deadlock). The defender
@@ -315,8 +315,8 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // killing anything that leaves. While blockaded we suppress EVERY role whose job is to
   // path out of the room — scouts, remotes, reservers, expansion, offense, drain, score,
   // power/deposit/SK ops — so we stop feeding the besiegers easy kills and pour all energy
-  // into the home economy below (miners/haulers/upgraders/builders are untouched), racing
-  // to RCL3 and towers. Home defense (defenders/knights/wizards/clerics) is NOT gated: if
+  // into the home economy below (diggers/haulers/upgraders/builders are untouched), racing
+  // to RCL3 and towers. Home defense (defenders/enforcers/triggermen/medics) is NOT gated: if
   // the siege breaches, we still raise a garrison to fight inside our own walls.
   const blockaded = isBlockaded(room);
 
@@ -325,13 +325,13 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 
   // Standing defense — highest non-survival priority. An auto-declared DefenseOp
   // (orchestrator.military) means a serious raid is in the room; a structured defensive
-  // squad outranks miners/haulers and all economy below, because a lost spawn doesn't
+  // squad outranks diggers/haulers and all economy below, because a lost spawn doesn't
   // respawn. A bootstrapping child room needing a defender is handled here too.
   if (shouldSpawnDefender(room) && spawnNextDefender(room, spawn)) return;
 
   // Under a serious raid (healer-backed squad), defenders take the next spawn slot
-  // before stationary miners and haulers — a dead miner respawns, a dead spawn does not.
-  // But keep a minimal economy alive first: if the room has no miner or no hauler at all,
+  // before stationary diggers and haulers — a dead digger respawns, a dead spawn does not.
+  // But keep a minimal economy alive first: if the room has no digger or no hauler at all,
   // spawn those before defenders, or a raid that kills cheap defenders as fast as they
   // spawn starves the colony into a death spiral with nothing left to fund the fight.
   const hasEconomyFloor =
@@ -349,7 +349,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnFiller(room) && spawnFiller(room, spawn)) return;
 
   // Downgrade rescue: if the controller is about to downgrade (and at low RCL revert to neutral —
-  // a lost room), spawn one upgrader to reset the timer. Placed AFTER the core economy (miner/
+  // a lost room), spawn one upgrader to reset the timer. Placed AFTER the core economy (digger/
   // hauler/filler) so survival comes first, but BEFORE the energy-emergency cutoff below — which
   // would otherwise suppress all upgraders and let the room downgrade out from under us. The
   // upgrader target already forces 1 in this window (see getUpgraderPopulationTarget).
@@ -379,7 +379,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
     return;
   }
 
-  // Low/medium threat: defenders still get priority over improvements, just not miners.
+  // Low/medium threat: defenders still get priority over improvements, just not diggers.
   if (threatScore > 0 && phase !== "bootstrap") {
     if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
     if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
@@ -396,7 +396,7 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
 
   // Season-only score collection (see orchestrator.score.ts) ranks ABOVE expansion/offense/
-  // deposit-mining/SK/apothecary/mineral-miner/remote-mining: those are all indirect economy
+  // deposit-mining/SK/chemist/mineral-miner/remote-mining: those are all indirect economy
   // growth whose only point is funding more of everything else, including score hunting,
   // while banked score is literally the win condition this season. A hunter costs 50 energy
   // and spawns in 1 tick, so letting it jump this queue costs the systems below almost
@@ -405,23 +405,23 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!blockaded && shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
 
   // War and expansion are funded only while the home economy can actually afford them. A room whose
-  // storage buffer is bleeding must never bankroll conquerors/settlers/attackers/drain leeches that
+  // storage buffer is bleeding must never bankroll capos/transplants/attackers/drain decoys that
   // spend their cost in another room while the home itself starves — that is exactly how a slow
   // energy leak snowballs into total economic collapse. (Real home defense above is NOT gated.)
   const economyCritical = isEconomyCritical(room);
 
-  // Expansion: conqueror and settlers are spawned by the home room only
+  // Expansion: capo and transplants are spawned by the home room only
   if (!blockaded && !economyCritical && Memory.expansion?.homeRoom === room.name) {
     if (shouldSpawnConqueror() && spawnConqueror(room, spawn)) return;
     if (shouldSpawnSettler(room) && spawnSettler(room, spawn)) return;
   }
 
   if (!blockaded && !economyCritical && shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
-  // Standalone tower-drain leeches (manual Game.arca.drain) — optional offensive harassment,
+  // Standalone tower-drain decoys (manual Game.arca.drain) — optional offensive harassment,
   // funded only after economy/defense/expansion/siege above are satisfied.
   if (!blockaded && !economyCritical && shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
   // Remote mining is BASELINE economy — usually the single largest energy multiplier in the
-  // mid-game — so it ranks ABOVE the opportunistic advanced ops below (power/deposit/SK/apothecary/
+  // mid-game — so it ranks ABOVE the opportunistic advanced ops below (power/deposit/SK/chemist/
   // mineral), which are either op-declared and temporary or low-yield polish. This also aligns the
   // healthy-state order with the energy-emergency branch above, which already spawns remotes first
   // because remote income is what digs a starving room back out. Scout leads the cluster: it's a
@@ -499,10 +499,10 @@ function shouldSpawnHauler(room: Room): boolean {
     (c) => !c.spawning && (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
-  // Throughput sizing: each miner container drains at the source output (10 e/tick) and a hauler
+  // Throughput sizing: each digger container drains at the source output (10 e/tick) and a hauler
   // must complete a round trip (out and back ≈ 2 × path distance) before it overflows. So the
   // CARRY needed to keep one container clear is output × round_trip / CARRY_CAPACITY. Sum that
-  // across miner containers (upgrade/mineral containers don't need a dedicated hauler), then
+  // across digger containers (upgrade/mineral containers don't need a dedicated hauler), then
   // divide by the carry one ideal hauler provides to get the hauler count.
   const minerContainerIds = new Set(room.memory.minerContainerIds ?? []);
   const minerContainers = containers.filter((c) =>
@@ -533,7 +533,7 @@ function shouldSpawnHauler(room: Room): boolean {
 
   const desired = Math.min(
     HAULER_SPAWN.MAX_HAULERS,
-    // Floor of one hauler per miner container so a freshly-built room with no distance cache yet
+    // Floor of one hauler per digger container so a freshly-built room with no distance cache yet
     // still gets coverage; throughput raises it for long hauls.
     Math.max(minerContainerCount, targetFromThroughput)
   );
@@ -672,7 +672,7 @@ function shouldSpawnRepairer(room: Room): boolean {
 }
 
 function getFillerPopulationTarget(room: Room): number {
-  // Fillers (stewards) distribute energy from storage out to the keep core. Without storage
+  // Fillers (busboys) distribute energy from storage out to the keep core. Without storage
   // there is no buffer to draw from, so haulers fill the core directly (see role.hauler) and we
   // raise none. A small number suffices because storage sits at the keep heart with extensions
   // ringed around it: one for most rooms, two once the core is large (RCL 7+).
@@ -833,9 +833,9 @@ function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
-  // Stationary miner: maximize WORK parts (each WORK = 2 energy/tick from source).
+  // Stationary digger: maximize WORK parts (each WORK = 2 energy/tick from source).
   // Source regenerates 10 energy/tick → 5 WORK parts saturates it.
-  // One MOVE is enough since the miner sits on a container.
+  // One MOVE is enough since the digger sits on a container.
   const workCost = BODYPART_COST[WORK];
   const moveCost = BODYPART_COST[MOVE];
   const carryCost = BODYPART_COST[CARRY];
@@ -856,11 +856,11 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINER}${Game.time}`;
   const existingMiners = getCreepsByRoleInRoom(ROLE_MINER, room).length;
 
-  // Size against CAPACITY, not current energy, so a miner is a full source-saturating body
+  // Size against CAPACITY, not current energy, so a digger is a full source-saturating body
   // (buildMinerBody caps WORK at 5 = 10 e/tick = a source's 3000/300-tick regen) instead of a
-  // stunted 1-WORK crawler (2 e/tick). Spawning stunted miners during a shortage is what keeps an
-  // energy emergency from ever ending: a 1-WORK miner can't refill the room, so the next miner is
-  // also stunted. Only a cold start with NO miners falls back to current energy, so a fully
+  // stunted 1-WORK crawler (2 e/tick). Spawning stunted diggers during a shortage is what keeps an
+  // energy emergency from ever ending: a 1-WORK digger can't refill the room, so the next digger is
+  // also stunted. Only a cold start with NO diggers falls back to current energy, so a fully
   // collapsed room can still bootstrap something rather than deadlock.
   const energyBasis =
     existingMiners === 0 ? room.energyAvailable : room.energyCapacityAvailable;
@@ -868,9 +868,9 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const body = buildMinerBody(allowedEnergy);
 
   if (room.energyAvailable < calculateBodyPartCost(body)) {
-    // Can't afford the full miner this tick. If a miner is already covering income, WAIT for
+    // Can't afford the full digger this tick. If a digger is already covering income, WAIT for
     // energy to accumulate rather than churning out a stunted one that would occupy the source
-    // for ~1500 ticks producing almost nothing. With no miner alive, build the largest affordable
+    // for ~1500 ticks producing almost nothing. With no digger alive, build the largest affordable
     // body to bootstrap.
     if (existingMiners > 0) return false;
     const affordable = buildMinerBody(
@@ -922,10 +922,10 @@ function spawnScout(room: Room, spawn: StructureSpawn): boolean {
 // Score is a creep physically standing in the room when one spawns. These are the search arm
 // (see role.scoreHunter's coverage patrol) — without them, hunters could only ever chase
 // targets some OTHER role's incidental vision happened to reveal. Baseline > 1 because coverage
-// is a multi-agent patrol: more seekers partition the region and cut the worst-case revisit
+// is a multi-agent patrol: more grifters partition the region and cut the worst-case revisit
 // interval (how long a room goes unwatched), which is what lets a fast-decaying Score be seen
 // before it's gone. They cost 50 energy and spawn in 1 tick, so a small standing fleet is cheap;
-// raise these if Scores decay before a seeker reaches them, lower them if seekers overlap.
+// raise these if Scores decay before a grifter reaches them, lower them if grifters overlap.
 const BASELINE_SCORE_PATROLLERS = 2;
 const MAX_SCORE_HUNTERS_PER_ROOM = 4;
 
@@ -934,9 +934,9 @@ function shouldSpawnScoreHunter(room: Room): boolean {
   // never spawn on a server without the Score object (e.g. World) just because 0 unclaimed
   // targets also happens to be true there.
   if (!scoreHunterSupported()) return false;
-  // Avoid raising cheap seekers when the home room is already under threat.
+  // Avoid raising cheap grifters when the home room is already under threat.
   if (getThreatInfo(room).score > 0) return false;
-  // Avoid spawning if there is nowhere safe for a seeker to patrol.
+  // Avoid spawning if there is nowhere safe for a grifter to patrol.
   const patrolDestination = pickPatrolRoom({
     name: room.name,
     pos: { roomName: room.name } as RoomPosition,
@@ -944,16 +944,16 @@ function shouldSpawnScoreHunter(room: Room): boolean {
     memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
   } as Creep);
   if (!patrolDestination) return false;
-  // A seeker costs only 50 energy, so it can spawn when the room can't yet afford a ~200-energy
+  // A grifter costs only 50 energy, so it can spawn when the room can't yet afford a ~200-energy
   // builder/upgrader body. Because it sits BELOW those in the queue, an unaffordable upgrader
-  // falls through to the seeker, which drains the 50 the room was accumulating toward that 200 —
+  // falls through to the grifter, which drains the 50 the room was accumulating toward that 200 —
   // holding energyAvailable perpetually under the upgrader/builder minimum so they NEVER spawn.
-  // Gate it on surplus: only raise a seeker once extensions are essentially topped up, so it can
+  // Gate it on surplus: only raise a grifter once extensions are essentially topped up, so it can
   // never snipe energy a higher-priority creep is waiting on.
   if (room.energyAvailable < room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) return false;
   const unclaimed = getUnclaimedScoreTargetCount();
   const target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed));
-  // Count by home ownership, NOT physical presence: seekers patrol out to PATROL_RADIUS every
+  // Count by home ownership, NOT physical presence: grifters patrol out to PATROL_RADIUS every
   // tick, so counting only those standing in the home room (countByRoleInRoom) sees ~0 while the
   // fleet is out searching and re-spawns endlessly. Every other roaming role counts this way.
   const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter(
@@ -1205,30 +1205,30 @@ function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
 
 // Preferred boost compounds per role (best tier first).
 const BOOST_CANDIDATES: Record<string, string[]> = {
-  knight:  ['XUH2O', 'UH2O', 'UH'],   // attack
-  wizard:  ['XKHO2', 'KHO2', 'KO'],   // ranged attack (K-line; U-line boosts harvest, not ranged)
-  cleric:  ['XLHO2', 'LHO2', 'LO'],   // heal
-  drainer: ['XLHO2', 'LHO2', 'LO'],   // heal (tower-bait self-sustain)
-  sieger:  ['XZH2O', 'ZH2O', 'ZH'],   // dismantle
+  enforcer:   ['XUH2O', 'UH2O', 'UH'],   // attack
+  triggerman: ['XKHO2', 'KHO2', 'KO'],   // ranged attack (K-line; U-line boosts harvest, not ranged)
+  medic:      ['XLHO2', 'LHO2', 'LO'],   // heal
+  decoy:      ['XLHO2', 'LHO2', 'LO'],   // heal (tower-bait self-sustain)
+  wrecker:    ['XZH2O', 'ZH2O', 'ZH'],   // dismantle
   // ECONOMY boosting (upgrader XGH2O, hauler XZHO2) is intentionally DISABLED: on a
   // CPU-constrained account the extra boost-lab trips each economy creep makes (seekBoost
   // movement + pathing) cost more CPU than the marginal throughput is worth. Re-add the
   // `upgrader`/`hauler` keys here to turn it back on when CPU headroom allows.
   // TOUGH damage-reduction boost (best tier first). Applied as a second boost to front-line
-  // melee/dismantle creeps (knight, sieger) on top of their primary combat boost.
+  // melee/dismantle creeps (enforcer, wrecker) on top of their primary combat boost.
   tough:   ['XGHO2', 'GHO2', 'GO'],
   // Catalyzed move boost (XZHO2, -75% fatigue). Appended to front-line combat creeps so they
   // reach the fight faster. (Combat only — economy move-boosting is disabled, see above.)
   move:    ['XZHO2', 'ZHO2', 'ZO'],
 };
 
-// NOTE on miner/harvester harvest boosting (UO line, XUHO2 = +200% harvest/WORK):
+// NOTE on digger/harvester harvest boosting (UO line, XUHO2 = +200% harvest/WORK):
 // deliberately NOT wired. A standard source regenerates 3000/300t = 10 energy/tick, and
-// buildMinerBody already caps a miner at 5 WORK (= 10 e/tick), which saturates that cap.
-// Harvest-boosting a cap-limited source miner yields literally nothing, so we don't. The only
+// buildMinerBody already caps a digger at 5 WORK (= 10 e/tick), which saturates that cap.
+// Harvest-boosting a cap-limited source digger yields literally nothing, so we don't. The only
 // places extra harvest helps are SK sources and mineral extraction — but those run on the
 // separate ROLE_SK_MINER / ROLE_MINERAL_MINER roles, neither of which is in scope here.
-// role.harvester is the early peasant that phases out once miners exist; labs don't exist at
+// role.harvester is the early runner that phases out once diggers exist; labs don't exist at
 // RCL1-2 when harvesters run, so a harvest boost there would never trigger — a pure no-op — so
 // it is intentionally omitted rather than wiring dead code.
 
@@ -1281,7 +1281,7 @@ function boostMemory(queue: string[]): { boostCompound?: string; boostQueue?: st
   };
 }
 
-// Knight body: front-loads TOUGH so armor absorbs hits before ATTACK parts die.
+// Enforcer body: front-loads TOUGH so armor absorbs hits before ATTACK parts die.
 // Cost per trio: TOUGH(10) + MOVE(50) + ATTACK(80) = 140. Min body = 1 trio.
 function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
   const trioCost = BODYPART_COST[TOUGH] + BODYPART_COST[MOVE] + BODYPART_COST[ATTACK];
@@ -1297,7 +1297,7 @@ function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
   ] as BodyPartConstant[];
 }
 
-// Wizard body: RANGED_ATTACK first so MOVE dies before combat parts.
+// Triggerman body: RANGED_ATTACK first so MOVE dies before combat parts.
 // Cost per pair: MOVE(50) + RANGED_ATTACK(150) = 200.
 function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
   const pairCost = BODYPART_COST[MOVE] + BODYPART_COST[RANGED_ATTACK];
@@ -1312,7 +1312,7 @@ function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
   ] as BodyPartConstant[];
 }
 
-// Cleric body: HEAL first so MOVE dies before healing parts.
+// Medic body: HEAL first so MOVE dies before healing parts.
 // Cost per pair: HEAL(250) + MOVE(50) = 300.
 function buildClericBody(availableEnergy: number): BodyPartConstant[] {
   const pairCost = BODYPART_COST[HEAL] + BODYPART_COST[MOVE];
@@ -1346,7 +1346,7 @@ function buildDrainerBody(availableEnergy: number): BodyPartConstant[] {
 }
 
 // Sieger body: TOUGH soaks tower fire while WORK parts dismantle. MOVE matched to
-// half the parts (1 MOVE per 2 working parts) since siegers travel with the squad on
+// half the parts (1 MOVE per 2 working parts) since wreckers travel with the squad on
 // roads/cleared ground and prioritise dismantle throughput over speed.
 // Cost per group: TOUGH(10) + 2×WORK(200) + MOVE(50) = 260.
 function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
@@ -1366,7 +1366,7 @@ function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
 // Count creeps available to DEFEND this room: present in the room and NOT assigned to an
 // offensive op (offensiveTarget). Plain countByRoleInRoom also counts offensive-squad
 // members staging at home, so a forming attack made the room look defended and suppressed
-// real defenders (and conversely an offensive cleric satisfied the heal-target check for
+// real defenders (and conversely an offensive medic satisfied the heal-target check for
 // fighters that had already marched away). Spawning-in-progress is still counted so two
 // idle spawns don't double-raise the same defender.
 function countDefendersInRoom(role: string, room: Room): number {
@@ -1389,7 +1389,7 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
-  const queue = buildBoostQueue(room, 'knight', attackParts, toughParts, moveParts);
+  const queue = buildBoostQueue(room, 'enforcer', attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}${Game.time}`, {
     memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
   });
@@ -1405,7 +1405,7 @@ function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
   const body = buildWizardBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
-  const queue = buildBoostQueue(room, 'wizard', rangedParts, 0);
+  const queue = buildBoostQueue(room, 'triggerman', rangedParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_WIZARD}${Game.time}`, {
     memory: { role: ROLE_WIZARD, ...boostMemory(queue) },
   });
@@ -1425,7 +1425,7 @@ function spawnCleric(room: Room, spawn: StructureSpawn): boolean {
   const body = buildClericBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
-  const queue = buildBoostQueue(room, 'cleric', healParts, 0);
+  const queue = buildBoostQueue(room, 'medic', healParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_CLERIC}${Game.time}`, {
     memory: { role: ROLE_CLERIC, ...boostMemory(queue) },
   });
@@ -1466,7 +1466,7 @@ function shouldSpawnSettler(room: Room): boolean {
 
   // orchestrator.expansion is the sole authority on the bootstrapping -> established
   // transition (it runs every tick and checks true self-sufficiency). Do not flip the
-  // phase here. Pause settler production while the child room is contested.
+  // phase here. Pause transplant production while the child room is contested.
   if (exp.pausedUntil && exp.pausedUntil > Game.time) return false;
 
   const settlers = getCreepsByRole(ROLE_SETTLER).filter(
@@ -1509,18 +1509,18 @@ function shouldSpawnOffensiveCreep(room: Room): boolean {
   if (!op || op.phase !== "forming") return false;
   const members = getOffensiveSquadMembers(op);
   return (
-    members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredKnights ||
-    members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredWizards ||
-    members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredClerics ||
-    members.filter((c) => c.memory.role === ROLE_SIEGER).length < (op.requiredSiegers ?? 0) ||
-    members.filter((c) => c.memory.role === ROLE_DRAINER).length < (op.requiredDrainers ?? 0)
+    members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredEnforcers ||
+    members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredTriggermen ||
+    members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredMedics ||
+    members.filter((c) => c.memory.role === ROLE_SIEGER).length < (op.requiredWreckers ?? 0) ||
+    members.filter((c) => c.memory.role === ROLE_DRAINER).length < (op.requiredDecoys ?? 0)
   );
 }
 
-// ── Standalone drain leeches ──────────────────────────────────────────────────
+// ── Standalone drain decoys ──────────────────────────────────────────────────
 //
 // Persistent tower-drainers funded by this room (Game.arca.drain). Counted across BOTH
-// drain-op and siege leeches on the same target so a siege already baiting a room doesn't
+// drain-op and siege decoys on the same target so a siege already baiting a room doesn't
 // get doubled up. Lowest spawn priority: it must never starve economy or real defense.
 
 function countDrainLeeches(targetRoom: string, homeRoom: string): number {
@@ -1552,7 +1552,7 @@ function spawnDrainLeech(room: Room, spawn: StructureSpawn): boolean {
 
   const healParts = body.filter((p) => p === HEAL).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const queue = buildBoostQueue(room, "drainer", healParts, toughParts);
+  const queue = buildBoostQueue(room, "decoy", healParts, toughParts);
 
   const res = spawn.spawnCreep(body, `${ROLE_DRAINER}_drain${Game.time}`, {
     memory: {
@@ -1562,7 +1562,7 @@ function spawnDrainLeech(room: Room, spawn: StructureSpawn): boolean {
       ...boostMemory(queue),
     },
   });
-  if (res === OK) console.log(`[Drain] Spawning leech: ${room.name} → ${op.targetRoom}`);
+  if (res === OK) console.log(`[Drain] Spawning decoy: ${room.name} → ${op.targetRoom}`);
   return res === OK;
 }
 
@@ -1571,21 +1571,21 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   if (!op) return false;
 
   const members = getOffensiveSquadMembers(op);
-  const knights = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
-  const wizards = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
-  const clerics = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
-  const siegers = members.filter((c) => c.memory.role === ROLE_SIEGER).length;
-  const drainers = members.filter((c) => c.memory.role === ROLE_DRAINER).length;
+  const enforcers = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
+  const triggermen = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
+  const medics = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
+  const wreckers = members.filter((c) => c.memory.role === ROLE_SIEGER).length;
+  const decoys = members.filter((c) => c.memory.role === ROLE_DRAINER).length;
 
-  // Spawn order mirrors the formation front-to-back: tanks, then the solo leech (so it
+  // Spawn order mirrors the formation front-to-back: tanks, then the solo decoy (so it
   // deploys early and starts draining while the rest assembles), then siege, ranged, and
   // finally healers — a half-formed squad already has a screen for its support.
   let roleToSpawn: string | null = null;
-  if (knights < op.requiredKnights) roleToSpawn = ROLE_KNIGHT;
-  else if (drainers < (op.requiredDrainers ?? 0)) roleToSpawn = ROLE_DRAINER;
-  else if (siegers < (op.requiredSiegers ?? 0)) roleToSpawn = ROLE_SIEGER;
-  else if (wizards < op.requiredWizards) roleToSpawn = ROLE_WIZARD;
-  else if (clerics < op.requiredClerics) roleToSpawn = ROLE_CLERIC;
+  if (enforcers < op.requiredEnforcers) roleToSpawn = ROLE_KNIGHT;
+  else if (decoys < (op.requiredDecoys ?? 0)) roleToSpawn = ROLE_DRAINER;
+  else if (wreckers < (op.requiredWreckers ?? 0)) roleToSpawn = ROLE_SIEGER;
+  else if (triggermen < op.requiredTriggermen) roleToSpawn = ROLE_WIZARD;
+  else if (medics < op.requiredMedics) roleToSpawn = ROLE_CLERIC;
   if (!roleToSpawn) return false;
 
   // Offensive creeps spawn at full capacity — wait for max-strength body
@@ -1596,38 +1596,38 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
 
   if (roleToSpawn === ROLE_KNIGHT) {
     body = buildKnightBody(energy);
-    boostKey = "knight";
+    boostKey = "enforcer";
     combatPartType = ATTACK;
   } else if (roleToSpawn === ROLE_SIEGER) {
     body = buildSiegerBody(energy);
-    boostKey = "sieger";
+    boostKey = "wrecker";
     combatPartType = WORK;
   } else if (roleToSpawn === ROLE_WIZARD) {
     body = buildWizardBody(energy);
-    boostKey = "wizard";
+    boostKey = "triggerman";
     combatPartType = RANGED_ATTACK;
   } else if (roleToSpawn === ROLE_DRAINER) {
     body = buildDrainerBody(energy);
-    boostKey = "drainer";
+    boostKey = "decoy";
     combatPartType = HEAL;
   } else {
     body = buildClericBody(energy);
-    boostKey = "cleric";
+    boostKey = "medic";
     combatPartType = HEAL;
   }
 
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const combatParts = body.filter((p) => p === combatPartType).length;
-  // Only knight/sieger carry TOUGH parts, so only they queue a TOUGH boost; wizard/cleric
+  // Only enforcer/sieger carry TOUGH parts, so only they queue a TOUGH boost; triggerman/medic
   // bodies have no TOUGH and stay single-boosted.
   const toughParts = body.filter((p) => p === TOUGH).length;
-  // Append a MOVE boost (XZHO2) only for the front-line melee/dismantle bodies (knight, sieger)
-  // so they reach the fight faster. Wizard/cleric already run a 1:1 MOVE ratio for kiting and
+  // Append a MOVE boost (XZHO2) only for the front-line melee/dismantle bodies (enforcer, sieger)
+  // so they reach the fight faster. Triggerman/medic already run a 1:1 MOVE ratio for kiting and
   // don't need it, so leave their move count at 0. Body ratios are left unchanged — appending
   // the boost is a pure speed win with no risk of an under-MOVEd creep if the lab run is cut short.
   const moveParts =
-    boostKey === "knight" || boostKey === "sieger"
+    boostKey === "enforcer" || boostKey === "wrecker"
       ? body.filter((p) => p === MOVE).length
       : 0;
   const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
@@ -1672,7 +1672,7 @@ function needsChildRoomDefender(room: Room): boolean {
   if (!exp?.needsDefender || exp.homeRoom !== room.name) return false;
   // `existing` already includes an in-flight (spawning) child-defender: it is in Game.creeps
   // with targetRoom/homeRoom set at spawn (see spawnChildRoomDefender), so this alone bounds
-  // us to one. Adding the broad getRoomSpawningCount would also count knights being raised for
+  // us to one. Adding the broad getRoomSpawningCount would also count enforcers being raised for
   // offense or this-room defense and wrongly suppress the child-room defender.
   const existing = getCreepsByRole(ROLE_KNIGHT).filter(
     (c) => c.memory.targetRoom === exp.roomName && c.memory.homeRoom === room.name
@@ -1686,14 +1686,14 @@ function shouldSpawnDefender(room: Room): boolean {
   const op = getDefenseOp(room.name);
   if (!op) return false;
   return (
-    countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredKnights ||
-    countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredWizards ||
-    countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredClerics
+    countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredEnforcers ||
+    countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredTriggermen ||
+    countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredMedics
   );
 }
 
 function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
-  // Child-room bootstrap defender: a single knight sent to clear the contested child
+  // Child-room bootstrap defender: a single enforcer sent to clear the contested child
   // room (bounded to one in-flight) rather than to defend this room.
   if (needsChildRoomDefender(room)) {
     return spawnChildRoomDefender(room, spawn);
@@ -1702,14 +1702,14 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   const op = getDefenseOp(room.name);
   if (!op) return false;
 
-  // Spawn order front-to-back: knights screen first, then wizards, then clerics.
+  // Spawn order front-to-back: enforcers screen first, then triggermen, then medics.
   let roleToSpawn: string | null = null;
   let combatPartType: BodyPartConstant = ATTACK;
-  let boostKey = "knight";
+  let boostKey = "enforcer";
   let body: BodyPartConstant[];
 
   // Size defenders to the room's FULL capacity, not currently-available (possibly drained)
-  // energy: a mid-raid trickle would otherwise spit out a 1-trio chaff knight that satisfies
+  // energy: a mid-raid trickle would otherwise spit out a 1-trio chaff enforcer that satisfies
   // the required-count and blocks a proper body from ever spawning. The affordability gate
   // below then makes the spawn WAIT (accumulating energy) rather than build chaff. Exception:
   // until the FIRST defender exists we accept whatever current energy affords — a weak
@@ -1718,20 +1718,20 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   const energyBudget = haveDefender ? room.energyCapacityAvailable : room.energyAvailable;
   const allowedEnergy = Math.floor(energyBudget * (1 - SPAWN_ENERGY_RESERVE));
 
-  if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredKnights) {
+  if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredEnforcers) {
     roleToSpawn = ROLE_KNIGHT;
     combatPartType = ATTACK;
-    boostKey = "knight";
+    boostKey = "enforcer";
     body = buildKnightBody(allowedEnergy);
-  } else if (countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredWizards) {
+  } else if (countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredTriggermen) {
     roleToSpawn = ROLE_WIZARD;
     combatPartType = RANGED_ATTACK;
-    boostKey = "wizard";
+    boostKey = "triggerman";
     body = buildWizardBody(allowedEnergy);
-  } else if (countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredClerics) {
+  } else if (countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredMedics) {
     roleToSpawn = ROLE_CLERIC;
     combatPartType = HEAL;
-    boostKey = "cleric";
+    boostKey = "medic";
     body = buildClericBody(allowedEnergy);
   } else {
     return false;
@@ -1740,12 +1740,12 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const combatParts = body.filter((p) => p === combatPartType).length;
-  // Only knight carries TOUGH parts here, so only it queues a TOUGH boost; wizard/cleric
+  // Only enforcer carries TOUGH parts here, so only it queues a TOUGH boost; triggerman/medic
   // bodies have no TOUGH and stay single-boosted.
   const toughParts = body.filter((p) => p === TOUGH).length;
-  // MOVE boost (XZHO2) only for the knight (front-line melee); wizard/cleric kite at 1:1 and
+  // MOVE boost (XZHO2) only for the enforcer (front-line melee); triggerman/medic kite at 1:1 and
   // skip it. Body ratios unchanged — pure speed win, no under-MOVE risk if the lab run is cut short.
-  const moveParts = boostKey === "knight" ? body.filter((p) => p === MOVE).length : 0;
+  const moveParts = boostKey === "enforcer" ? body.filter((p) => p === MOVE).length : 0;
   const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${roleToSpawn}_def${Game.time}`, {
     memory: {
@@ -1770,7 +1770,7 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
-  const queue = buildBoostQueue(room, "knight", attackParts, toughParts, moveParts);
+  const queue = buildBoostQueue(room, "enforcer", attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_child${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,
@@ -1787,17 +1787,17 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
 
 // ── Remote-room invader defense ───────────────────────────────────────────────
 // Remote miners/haulers flag a remote (RemoteRoomData.invaderUntil) when they spot an
-// Invader. The home raises a single knight to clear it so remote income resumes; the knight
-// role travels to memory.targetRoom and engages. Bounded to one in-flight knight per remote;
-// player threats set `hostile` instead and we avoid them rather than send a lone knight.
+// Invader. The home raises a single enforcer to clear it so remote income resumes; the enforcer
+// role travels to memory.targetRoom and engages. Bounded to one in-flight enforcer per remote;
+// player threats set `hostile` instead and we avoid them rather than send a lone enforcer.
 
-// The first contested remote of `room` that has no defender knight yet, or null.
+// The first contested remote of `room` that has no defender enforcer yet, or null.
 function findRemoteInvaderTarget(room: Room): string | null {
   const remotes = room.memory.remoteRooms;
   if (!remotes) return null;
   for (const r of remotes) {
     if (r.invaderUntil === undefined || r.invaderUntil <= Game.time) continue;
-    // Live knight list includes the spawning one (its memory is set at spawn time), so this
+    // Live enforcer list includes the spawning one (its memory is set at spawn time), so this
     // bounds the count to a single defender per contested remote.
     const defending = getCreepsByRole(ROLE_KNIGHT).some(
       (c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName
@@ -1820,7 +1820,7 @@ function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
-  const queue = buildBoostQueue(room, "knight", attackParts, toughParts, moveParts);
+  const queue = buildBoostQueue(room, "enforcer", attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_remote${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,
@@ -1833,7 +1833,7 @@ function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-// ── Apothecary helpers ───────────────────────────────────────────────────────────
+// ── Chemist helpers ───────────────────────────────────────────────────────────
 
 // ── Power bank squad helpers ──────────────────────────────────────────────────
 
@@ -2006,7 +2006,7 @@ function buildDepositMinerBody(availableEnergy: number): BodyPartConstant[] {
 // ── Source Keeper mining squad helpers ────────────────────────────────────────
 
 // Spawns the next needed creep for any SK op homed here: guardian first (it clears
-// keepers and reveals the sources), then one Delver per source, then one Wain per
+// keepers and reveals the sources), then one Tunneler per source, then one Carrier per
 // source. Returns true if a spawn was issued (or held for energy).
 function spawnSkCreeps(room: Room, spawn: StructureSpawn): boolean {
   const ops = (Memory.skOps ?? []).filter(
@@ -2052,7 +2052,7 @@ function spawnSkGuardian(room: Room, spawn: StructureSpawn, op: SourceKeeperOp):
   const body = buildSkGuardianBody(room.energyCapacityAvailable);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
-  const queue = buildBoostQueue(room, "cleric", healParts, 0);
+  const queue = buildBoostQueue(room, "medic", healParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_SK_GUARDIAN}${Game.time}`, {
     memory: { role: ROLE_SK_GUARDIAN, homeRoom: room.name, skOpId: op.id, ...boostMemory(queue) },
   });
@@ -2060,7 +2060,7 @@ function spawnSkGuardian(room: Room, spawn: StructureSpawn, op: SourceKeeperOp):
   return res === OK;
 }
 
-// Delver: WORK-heavy, no CARRY (drops energy for Wains). ~7 WORK saturates a 4000/300t
+// Tunneler: WORK-heavy, no CARRY (drops energy for Carriers). ~7 WORK saturates a 4000/300t
 // SK source; MOVE at roughly half the WORK count for the long approach.
 function buildSkMinerBody(availableEnergy: number): BodyPartConstant[] {
   const maxWork = 7;
@@ -2083,7 +2083,7 @@ function spawnSkMiner(
   const res = spawn.spawnCreep(body, `${ROLE_SK_MINER}${Game.time}`, {
     memory: { role: ROLE_SK_MINER, homeRoom: room.name, skOpId: op.id, skSourceId: sourceId },
   });
-  if (res === OK) console.log(`[SK] Spawning delver for ${op.roomName}`);
+  if (res === OK) console.log(`[SK] Spawning tunneler for ${op.roomName}`);
   return res === OK;
 }
 
@@ -2094,7 +2094,7 @@ function spawnSkHauler(room: Room, spawn: StructureSpawn, op: SourceKeeperOp): b
   const res = spawn.spawnCreep(body, `${ROLE_SK_HAULER}${Game.time}`, {
     memory: { role: ROLE_SK_HAULER, homeRoom: room.name, skOpId: op.id },
   });
-  if (res === OK) console.log(`[SK] Spawning wain for ${op.roomName}`);
+  if (res === OK) console.log(`[SK] Spawning carrier for ${op.roomName}`);
   return res === OK;
 }
 

@@ -26,23 +26,23 @@ export function runBuilder(creep: Creep) {
     creep.memory.working = true;
   }
   if (!creep.memory.working) {
-    // In a storage room, leave the miner containers AND the dropped piles beside them for the
-    // porters — pulling that raw producer energy out from under them starves the tower/extension
+    // In a storage room, leave the digger containers AND the dropped piles beside them for the
+    // bagmen — pulling that raw producer energy out from under them starves the tower/extension
     // refill. Builders eat from the storage buffer instead, so construction keeps going without
     // outbidding the core's supply, and back off (idle) when the buffer is empty rather than
-    // raiding the miners. Pre-storage rooms have no buffer, so builders still use any container.
+    // raiding the diggers. Pre-storage rooms have no buffer, so builders still use any container.
     const acquired = acquireEnergy(creep, { bufferOnly: !!creep.room.storage });
-    // If nothing could be drawn (drained buffer, miners reserved for porters) but we're already
+    // If nothing could be drawn (drained buffer, diggers reserved for bagmen) but we're already
     // carrying some energy, go spend that partial load instead of idling forever waiting for a
     // full top-up the buffer can't give — otherwise the creep is stranded half-full, never full
-    // enough to flip to working and unwilling to raid the miners. Empty-handed with no source:
+    // enough to flip to working and unwilling to raid the diggers. Empty-handed with no source:
     // genuinely nothing to do, so wait.
     if (acquired || isCreepEmpty(creep)) return;
     creep.memory.working = true;
   }
 
   // While the room is starving for energy, stop spending it on construction, repair and
-  // upgrading — those drain the very buffer the colony needs to keep spawning haulers/miners
+  // upgrading — those drain the very buffer the colony needs to keep spawning haulers/diggers
   // back. Spawning already declines to replace builders during an emergency; this stops the
   // ones already alive from bleeding the room dry in the meantime. Instead, the carried energy
   // is poured into the starved core (spawn/extensions/towers) to help end the emergency faster.
@@ -60,7 +60,7 @@ export function runBuilder(creep: Creep) {
   // Rescue a freshly-built (critically low) rampart/wall before laying or building anything
   // else. A rampart completes at 1 hit and decays away within ~100 ticks if it isn't lifted
   // past the decay amount — and the builder's generic repair fallback excludes ramparts — so
-  // without this a mason that just built a rampart abandons it at 1 hit and it dies, looping
+  // without this a contractor that just built a rampart abandons it at 1 hit and it dies, looping
   // build→decay→rebuild forever. Once it's past the floor, towers/repairers maintain it.
   // Each step below targets a single structure. If that target can't be reached
   // (ERR_NO_PATH — the tile is walled off, behind wall construction sites, or on

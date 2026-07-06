@@ -45,7 +45,7 @@ export function runKnight(creep: Creep) {
     return;
   }
 
-  // Defensive: retreat to spawn when critically injured so towers/clerics can heal
+  // Defensive: retreat to spawn when critically injured so towers/medics can heal
   if (creep.hits < creep.hitsMax * RETREAT_THRESHOLD) {
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn) {
@@ -66,7 +66,7 @@ export function runKnight(creep: Creep) {
 
   // No hostile creeps left, but an Invader Core keeps re-reserving the room and re-spawning
   // defenders — destroy it too, or the remote stays bricked. (Pre-deploy it's invulnerable;
-  // attacking simply parks the knight on it until the deploy timer elapses.)
+  // attacking simply parks the enforcer on it until the deploy timer elapses.)
   const core = findInvaderCore(creep.room);
   if (core) {
     if (creep.attack(core) === ERR_NOT_IN_RANGE) {

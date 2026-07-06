@@ -97,13 +97,13 @@ function processLabSystem(room: Room) {
     ls.targetAmount = next.amount;
     ls.lastProduced = 0;
     ls.lastProgressTick = Game.time;
-    return; // let apothecary fill labs this tick before we try to react
+    return; // let chemist fill labs this tick before we try to react
   }
 
   if (!ls.inputCompounds) return;
 
   // Check completion. Count product in storage AND in the output labs: runReaction
-  // deposits into the output lab, and the apothecary only drains it to storage once a
+  // deposits into the output lab, and the chemist only drains it to storage once a
   // lab fills past ~75%. Measuring storage alone lags real production, so the head would
   // never pop (and the stall watchdog could abort a reaction that is in fact producing).
   const produced = producedStock(ls.activeCompound, room, outputLabs) - (ls.startStock ?? 0);
@@ -152,7 +152,7 @@ function processLabSystem(room: Room) {
 }
 
 // Total amount of `compound` already produced this run: storage plus what's still sitting
-// in the output labs before the apothecary has hauled it to storage.
+// in the output labs before the chemist has hauled it to storage.
 function producedStock(compound: string, room: Room, outputLabs: StructureLab[]): number {
   const rc = compound as ResourceConstant;
   let total = room.storage?.store.getUsedCapacity(rc) ?? 0;
@@ -189,7 +189,7 @@ function refreshLabIdentity(room: Room) {
   // corner lab can't reach the opposite corner — picking inputs purely by distance-to-storage
   // could grab a corner and silently disable the far output labs (they'd return ERR_NOT_IN_RANGE
   // forever). Restrict input candidates to "central" labs, then prefer the two closest to
-  // storage for apothecary access. Fall back to closest-to-storage if no central pair exists.
+  // storage for chemist access. Fall back to closest-to-storage if no central pair exists.
   const sorted = [...labs].sort((a, b) => a.pos.getRangeTo(refPos) - b.pos.getRangeTo(refPos));
   const central = sorted.filter((lab) =>
     labs.every((other) => other.id === lab.id || lab.pos.getRangeTo(other) <= 2)

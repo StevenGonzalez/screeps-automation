@@ -6,8 +6,8 @@ import {
 import { getThreatInfo } from "../services/services.combat";
 
 /**
- * Steward (filler): distributes energy from the treasury (storage) out to the keep — spawn,
- * extensions, and towers. Decouples core-filling from the porters that restock storage, so the
+ * Busboy (filler): distributes energy from the treasury (storage) out to the keep — spawn,
+ * extensions, and towers. Decouples core-filling from the bagmen that restock storage, so the
  * spawn and defenses are fed from the always-stocked buffer instead of waiting on a hauler's
  * arrival. Only spawned once a room has storage to draw from (see getFillerPopulationTarget).
  *
@@ -32,7 +32,7 @@ export function runFiller(creep: Creep) {
       return;
     }
     // Draw energy to deliver: a storage-adjacent link (fast top-up at RCL 5+), then storage,
-    // then a miner container as a fallback when the buffer is momentarily dry.
+    // then a digger container as a fallback when the buffer is momentarily dry.
     const source = findFillerSource(creep, storage);
     if (source) {
       if (creep.withdraw(source, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
@@ -61,7 +61,7 @@ export function runFiller(creep: Creep) {
 
 // Prefer a storage-adjacent link (kept fed by the link network at RCL 5+) so its energy is
 // consumed and it stays clear to receive more; fall back to storage, then — only when the
-// buffer is dry — a miner container so the core never starves. The upgrade container is left
+// buffer is dry — a digger container so the core never starves. The upgrade container is left
 // alone so upgraders keep their supply.
 function findFillerSource(
   creep: Creep,

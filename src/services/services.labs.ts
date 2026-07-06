@@ -102,7 +102,7 @@ export function getStockForCompound(compound: string, room: Room): number {
 }
 
 // Stock that lives specifically in STORAGE — the basis production must use. resolveChain
-// measures existing stock from storage only and the apothecary loads reagents from storage
+// measures existing stock from storage only and the chemist loads reagents from storage
 // only, so the production target / completion check must too. Mixing in the terminal (as
 // getStockForCompound does, for "do we hold enough overall to trade") makes the completion
 // check overshoot the target by the terminal balance, or stall outright.

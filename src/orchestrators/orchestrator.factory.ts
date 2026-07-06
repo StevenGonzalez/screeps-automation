@@ -6,7 +6,7 @@
  *      priority under-stocked commodity whose ingredients are obtainable and whose level
  *      gate is satisfied;
  *   2. calls factory.produce() whenever the inputs are loaded and the cooldown is ready;
- *   3. moves ingredients IN and product OUT by commandeering an idle `porter` (hauler) —
+ *   3. moves ingredients IN and product OUT by commandeering an idle `bagman` (hauler) —
  *      see the input/output section for why this is done here rather than in a role file.
  *
  * Heavy planning is throttled like orchestrator.labs (Game.time % interval); the cheap
@@ -15,7 +15,7 @@
  * NOTE (cross-system integration left for the integrator):
  *  - This orchestrator is self-contained: it cannot register a dedicated factory-hauler
  *    role because role dispatch lives in orchestrator.creep.ts (owned by another agent).
- *    Instead it borrows an already-spawned, idle, empty `porter` each tick and drives it
+ *    Instead it borrows an already-spawned, idle, empty `bagman` each tick and drives it
  *    directly. main.ts runs this AFTER orchestrator.creep, so our move/withdraw/transfer
  *    intents override whatever the hauler role queued this tick. A future integrator who
  *    wants a dedicated courier should: add a ROLE_FACTORY_HAULER handler in
@@ -51,7 +51,7 @@ declare global {
     lastPlanTick?: number;
     /** When false, the orchestrator caches/evicts but never produces. */
     autoEnabled?: boolean;
-    /** Name of the porter we are currently borrowing as a courier. */
+    /** Name of the bagman we are currently borrowing as a courier. */
     courierName?: string;
   }
   interface RoomMemory {
@@ -257,7 +257,7 @@ function hasAllComponents(factory: StructureFactory, recipe: Recipe): boolean {
 
 // ── Input / output movement (borrowed courier) ──────────────────────────────────
 
-// Borrow an idle, empty `porter` and drive it for one tick to: evict product/wrong
+// Borrow an idle, empty `bagman` and drive it for one tick to: evict product/wrong
 // resources from the factory, or load the next missing ingredient. Returns silently when
 // no courier is free — the hauler simply does its normal job that tick.
 //
@@ -387,7 +387,7 @@ function findLoadResource(room: Room, factory: StructureFactory, recipe: Recipe)
 
 // ── Courier lifecycle ───────────────────────────────────────────────────────────
 
-// Find (or reuse) an idle empty porter to act as the factory courier this tick.
+// Find (or reuse) an idle empty bagman to act as the factory courier this tick.
 function acquireCourier(room: Room): Creep | null {
   const fs = room.memory.factorySystem!;
 
@@ -400,8 +400,8 @@ function acquireCourier(room: Room): Creep | null {
     delete fs.courierName;
   }
 
-  // Pick the porter closest to the factory that is currently empty (so we don't strand
-  // energy it was hauling). Falls back to any porter if none are empty — it will dump its
+  // Pick the bagman closest to the factory that is currently empty (so we don't strand
+  // energy it was hauling). Falls back to any bagman if none are empty — it will dump its
   // load to storage first.
   const factory = fs.factoryId ? Game.getObjectById(fs.factoryId) : null;
   const haulers = room.find(FIND_MY_CREEPS, {

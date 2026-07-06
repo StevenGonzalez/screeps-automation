@@ -17,22 +17,22 @@ import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles"
 //   1. We own its controller.
 //   2. It has at least one OWN spawn that is BUILT (not just a construction site).
 //   3. Controller RCL >= BOOTSTRAP_MIN_RCL.
-//   4. Its economy can sustain itself without settlers: either it has a working
-//      miner/hauler pair, or its own storage holds a comfortable energy buffer.
+//   4. Its economy can sustain itself without transplants: either it has a working
+//      digger/hauler pair, or its own storage holds a comfortable energy buffer.
 const BOOTSTRAP_MIN_RCL = 3;            // RCL 3 = towers + enough extensions to self-spawn
 const BOOTSTRAP_MIN_STORAGE_ENERGY = 10_000; // alt. proof of a self-sustaining economy
 
 // How long to pause a bootstrap after detecting hostiles in the child room. The
-// pause keeps us from feeding settlers into a meat grinder; it lifts automatically
+// pause keeps us from feeding transplants into a meat grinder; it lifts automatically
 // once the room is clear (we re-check every tick the child is visible).
 const BOOTSTRAP_INVASION_PAUSE = 200;
 
 // Give up on a never-completing bootstrap after this long. Without a hard cap a
-// settler op can churn energy forever (e.g. the spawn site keeps getting stomped).
+// transplant op can churn energy forever (e.g. the spawn site keeps getting stomped).
 const BOOTSTRAP_TIMEOUT = 6_000;
 
 // Give up on a claim that never lands (unreachable target, perpetual enemy reservation).
-// Without this a doomed target loops conqueror spawn→suicide forever and wedges the whole
+// Without this a doomed target loops capo spawn→suicide forever and wedges the whole
 // expansion queue behind it, since the queue can't advance while Memory.expansion exists.
 const CLAIM_TIMEOUT = 1_500;
 
@@ -105,7 +105,7 @@ const AUTO_EXPAND_CHECK_INTERVAL = 50;
 // A funding room must clear these bars before it's allowed to seed a colony, so
 // auto-expansion never overextends into a room it can't defend or develop.
 const MIN_HOME_RCL = 4;                 // RCL 4 = storage + ≥1300 energy capacity
-const MIN_HOME_STORAGE_ENERGY = 50_000; // buffer left after funding conqueror + settlers
+const MIN_HOME_STORAGE_ENERGY = 50_000; // buffer left after funding capo + transplants
 const MIN_BUCKET = 5_000;               // don't start a multi-hundred-tick op when CPU-starved
 
 export interface ExpansionCandidate {
@@ -408,7 +408,7 @@ function roomNameToCoords(roomName: string): { x: number; y: number } | undefine
 
 // Scout-data view: a remote is contested if a scout flagged it hostile, or that
 // hostile flag hasn't yet expired (hostileUntil is maintained by the scout/remote
-// orchestrators). We never commit settlers into such a room.
+// orchestrators). We never commit transplants into such a room.
 function isRemoteContested(remote: RemoteRoomData): boolean {
   if (remote.hostile) return true;
   if (remote.hostileUntil !== undefined && remote.hostileUntil > Game.time) return true;
@@ -475,7 +475,7 @@ function isChildSelfSufficient(child: Room | undefined): boolean {
   // result already proves the spawn is built rather than still under construction.
   if (child.find(FIND_MY_SPAWNS).length === 0) return false;
 
-  // Self-sustaining economy: either a working miner+hauler pair native to the room,
+  // Self-sustaining economy: either a working digger+hauler pair native to the room,
   // or its own storage already holds a comfortable buffer.
   const localCreeps = child.find(FIND_MY_CREEPS);
   const hasMiner = localCreeps.some((c) => c.memory.role === ROLE_MINER);
@@ -631,11 +631,11 @@ function manageActiveExpansion() {
       return;
     }
     if (Game.time - exp.startedAt > CLAIM_TIMEOUT) {
-      // Don't abort while a conqueror has actually reached the target room — the claim
+      // Don't abort while a capo has actually reached the target room — the claim
       // may commit this very tick. Clearing now would delete the expansion record the
       // same tick the room becomes ours, orphaning it at RCL 1 with no bootstrap. The
       // timeout still fires for genuinely doomed claims (unreachable target / perpetual
-      // enemy reservation), where the conqueror never makes it into the room.
+      // enemy reservation), where the capo never makes it into the room.
       const claimerInRoom = Object.values(Game.creeps).some(
         (c) =>
           c.memory.role === ROLE_CONQUEROR &&
@@ -664,13 +664,13 @@ function manageActiveExpansion() {
     if (child) {
       const threat = getThreatInfo(child).score;
       if (threat > 0) {
-        // Child is invaded: pause settler spawning and flag a defender request so a
-        // home-room spawn rule can react. Settlers themselves retreat (role.settler).
+        // Child is invaded: pause transplant spawning and flag a defender request so a
+        // home-room spawn rule can react. Transplants themselves retreat (role.settler).
         exp.pausedUntil = Game.time + BOOTSTRAP_INVASION_PAUSE;
         exp.needsDefender = true;
-        // The spawn orchestrator consumes both flags: shouldSpawnSettler() halts settler
+        // The spawn orchestrator consumes both flags: shouldSpawnSettler() halts transplant
         // production while pausedUntil is in the future, and needsChildRoomDefender()
-        // raises a knight (targetRoom = the child room) to clear it. Settlers retreat on
+        // raises an enforcer (targetRoom = the child room) to clear it. Transplants retreat on
         // their own meanwhile (see role.settler).
       } else {
         // Clear once the room is verifiably safe again.

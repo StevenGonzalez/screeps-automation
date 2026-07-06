@@ -558,7 +558,7 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  // Energy links. The link engine only *sends* from miner-adjacent links to
+  // Energy links. The link engine only *sends* from digger-adjacent links to
   // controller/storage sinks, so a link is useless until it has a partner — there's no
   // value in the lone RCL5 link, so the first functional pair (source link + controller
   // link) lands together at RCL6. Per-RCL cap rollout: source link + controller @6,
@@ -614,7 +614,7 @@ function processRoomStructures(room: Room) {
   }
 
   // Extractor — built ON the mineral (RCL6+). Without it the mineral can't be harvested at all,
-  // so the prospector + mineral-sale pipeline never starts. Plan it once; the build loop places
+  // so the cooker + mineral-sale pipeline never starts. Plan it once; the build loop places
   // the site (createConstructionSite is a no-op below RCL6) and drops it once built, and the
   // extractorId guard stops us re-planning afterwards.
   if (mineral && (room.controller?.level ?? 0) >= 6 && !room.memory.extractorId) {

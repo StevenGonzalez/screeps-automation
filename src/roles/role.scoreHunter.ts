@@ -50,7 +50,7 @@ export function runScoreHunter(creep: Creep): void {
 // Sweep nearby rooms for Scores. Passing through a room refreshes vision, which is all
 // orchestrator.score.ts needs to spot a Score there — the search is a side effect of being
 // present, not an explicit scan. Which room to head for is decided fleet-wide by pickPatrolRoom
-// (stalest safe room no peer already owns), so the seekers spread out and cover the region
+// (stalest safe room no peer already owns), so the grifters spread out and cover the region
 // rather than trailing each other.
 function patrol(creep: Creep): void {
   if (!creep.memory.targetRoom || creep.room.name === creep.memory.targetRoom) {

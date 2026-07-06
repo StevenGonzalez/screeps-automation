@@ -60,4 +60,4 @@ Game.arca.network()   // per-room storage/terminal energy, pending sends, and mi
 (There is no `Game.arca.sendEnergy()` — inter-room energy moves are planned
 automatically by the balancing pass, not commanded manually.)
 
-The wealth of Lorencia flows to every corner of the empire.
+The family's money moves to every corner of the operation.

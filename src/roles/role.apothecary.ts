@@ -64,7 +64,7 @@ export function runApothecary(creep: Creep) {
   // ── LOADING ─────────────────────────────────────────────────────────────────
 
   // Build a set of compounds currently being sought for boosts in this room —
-  // the apothecary must not drain those from labs or the boost window closes.
+  // the chemist must not drain those from labs or the boost window closes.
   const pendingBoostCompounds = new Set<string>();
   for (const c of creep.room.find(FIND_MY_CREEPS, { filter: (c) => !c.memory.boosted })) {
     if (c.memory.boostCompound) pendingBoostCompounds.add(c.memory.boostCompound);

@@ -45,7 +45,7 @@ export function runWizard(creep: Creep) {
     creep.move(hostile.pos.getDirectionTo(creep.pos));
   } else if (range > KITE_RANGE) {
     // Close to KITE_RANGE whenever we've drifted out of fire range. Using `> KITE_RANGE`
-    // (not `+ 1`) avoids a dead zone at exactly range 4, where the wizard could neither
+    // (not `+ 1`) avoids a dead zone at exactly range 4, where the triggerman could neither
     // fire (rangedAttack maxes at range 3) nor advance, stalling against a held target.
     creep.moveTo(hostile, { range: KITE_RANGE, reusePath: 5 });
   }

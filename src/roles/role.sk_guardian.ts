@@ -2,9 +2,9 @@ import { seekBoost, isSourceKeeper } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
 /**
- * Huntsman: the Source Keeper room guardian. A boosted ranged+heal creep that kills
+ * Muscle: the Source Keeper room guardian. A boosted ranged+heal creep that kills
  * keepers as they appear and camps the lair about to spawn, keeping the sources clear
- * so Delvers can mine in safety. It kites melee keepers at range 3 and self-heals.
+ * so Tunnelers can mine in safety. It kites melee keepers at range 3 and self-heals.
  */
 const KITE_RANGE = 3;
 
