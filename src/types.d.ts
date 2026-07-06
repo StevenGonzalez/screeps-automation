@@ -77,12 +77,12 @@ declare global {
     startedAt: number;
     formation: SquadFormation;
     tactic: SquadTactic;
-    requiredKnights: number;
-    requiredWizards: number;
-    requiredClerics: number;
-    requiredSiegers: number;
-    // Solo tower-drainers ("leech") that bait the target's towers ahead of the siege.
-    requiredDrainers?: number;
+    requiredEnforcers: number;
+    requiredTriggermen: number;
+    requiredMedics: number;
+    requiredWreckers: number;
+    // Solo tower-drainers ("decoy") that bait the target's towers ahead of the siege.
+    requiredDecoys?: number;
     clearedSince?: number;
     // Set while the squad is split across rooms; drives the regroup watchdog.
     regroupSince?: number;
@@ -99,20 +99,20 @@ declare global {
     startedAt: number;
     lastThreatTick: number;  // last tick a meaningful threat was seen; drives stand-down
     threatScore: number;     // most recent threat score (scales squad composition)
-    requiredKnights: number;
-    requiredWizards: number;
-    requiredClerics: number;
+    requiredEnforcers: number;
+    requiredTriggermen: number;
+    requiredMedics: number;
   }
 
   // A standalone, persistent tower-drain op against one target room. Unlike an offensive
-  // op it has no squad and no kill objective: it just keeps `drainers` leeches baiting the
+  // op it has no squad and no kill objective: it just keeps `drainers` decoys baiting the
   // target's towers to bleed their energy, decoupled from (and usually well ahead of) any
   // assault. Runs until manually stopped (Game.arca.stopDrain) or the home room is lost.
   interface DrainOp {
     targetRoom: string;
-    homeRoom: string;     // owned room funding the leeches
+    homeRoom: string;     // owned room funding the decoys
     startedAt: number;
-    drainers: number;     // number of live leeches to maintain on the target
+    drainers: number;     // number of live decoys to maintain on the target
   }
 
   // Intelligence gathered on a non-owned room, used by the WarCouncil to rank targets.
@@ -180,11 +180,11 @@ declare global {
     homeRoom?: string;        // preferred funding room; closest capable picked if absent
     formation: SquadFormation;
     tactic: SquadTactic;
-    requiredKnights: number;
-    requiredWizards: number;
-    requiredClerics: number;
-    requiredSiegers: number;
-    requiredDrainers?: number;
+    requiredEnforcers: number;
+    requiredTriggermen: number;
+    requiredMedics: number;
+    requiredWreckers: number;
+    requiredDecoys?: number;
     queuedAt: number;
   }
 
@@ -204,7 +204,7 @@ declare global {
     // progressively longer instead of us re-probing and re-feeding miners every window.
     hostileStrikes?: number;
     // Set by a remote miner/hauler that spots an Invader (not a player) in the room, so
-    // the home raises a knight to clear it. Players set `hostile` instead and we avoid.
+    // the home raises an enforcer to clear it. Players set `hostile` instead and we avoid.
     invaderUntil?: number;
   }
 
@@ -235,7 +235,7 @@ declare global {
     boosted?: boolean;
     // Military offense
     offensiveTarget?: string;
-    // Tower-drainer ("leech") hysteresis: true while it's fled out of tower range to heal.
+    // Tower-drainer ("decoy") hysteresis: true while it's fled out of tower range to heal.
     drainRetreat?: boolean;
     // Military defense (auto threat response): the owned room this creep defends
     defensiveTarget?: string;
@@ -341,7 +341,7 @@ declare global {
     militaryQueue?: QueuedMilitaryOp[];
     // Automatic threat-driven defensive ops, keyed by the owned room under threat.
     defenseOps?: Record<string, DefenseOp>;
-    // Standalone tower-drain ops, keyed by target room. Persistent: leeches bleed the
+    // Standalone tower-drain ops, keyed by target room. Persistent: decoys bleed the
     // target's tower energy independent of any siege, until manually stopped. Used to
     // pre-soften a naive (towers-fire-at-everything) opponent well ahead of an assault.
     drainOps?: Record<string, DrainOp>;

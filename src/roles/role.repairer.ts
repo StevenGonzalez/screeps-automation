@@ -22,7 +22,7 @@ export function runRepairer(creep: Creep) {
   }
 
   if (!creep.memory.working) {
-    // In a storage room, leave the miner containers + dropped piles for the porters (they feed the
+    // In a storage room, leave the digger containers + dropped piles for the bagmen (they feed the
     // tower/core); the repairer draws from the storage buffer instead and backs off when it's empty
     // rather than competing for the producer supply. Pre-storage rooms have no buffer, so there the
     // repairer still uses any container, then self-harvests as a last resort.

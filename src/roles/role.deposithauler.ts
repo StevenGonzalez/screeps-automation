@@ -1,5 +1,5 @@
-// Carter — ferries a deposit's raw resource from the highway room back home to storage,
-// where the factory consumes it for tier-2 commodities. Picks up the piles the quarrier
+// Trucker — ferries a deposit's raw resource from the highway room back home to storage,
+// where the factory consumes it for tier-2 commodities. Picks up the piles the wildcatter
 // drops; once full (or the op ends) it delivers and returns.
 
 export function runDepositHauler(creep: Creep) {

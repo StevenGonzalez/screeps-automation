@@ -1,7 +1,7 @@
-// Quarrier — works a highway deposit (silicon/metal/biomass/mist). One WORK-heavy miner
+// Wildcatter — works a highway deposit (silicon/metal/biomass/mist). One WORK-heavy miner
 // per deposit: harvesting triggers a deposit-wide cooldown, so a single big body out-yields
 // several small ones. It accumulates into its CARRY buffer and drops the load when full so
-// harvesting never stalls; the carter hauls the dropped piles home.
+// harvesting never stalls; the trucker hauls the dropped piles home.
 
 export function runDepositMiner(creep: Creep) {
   const opId = creep.memory.depositOpId;
@@ -18,7 +18,7 @@ export function runDepositMiner(creep: Creep) {
   const deposit = op.depositId ? Game.getObjectById(op.depositId) : null;
   if (!deposit) return; // gone — the orchestrator ends the op once it confirms with vision
 
-  // Drop the buffer when full so the carter can collect it and we keep harvesting.
+  // Drop the buffer when full so the trucker can collect it and we keep harvesting.
   if (creep.store.getFreeCapacity() === 0) creep.drop(op.depositType);
 
   if (creep.pos.getRangeTo(deposit) > 1) {

@@ -51,11 +51,11 @@ const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "ret
 
 export function setupConsole() {
   (Game as any).arca = {
-    // Show ranked expansion candidates from ranger scout data
+    // Show ranked expansion candidates from lookout scout data
     expand: () => {
       const candidates = rankExpansionCandidates();
       if (candidates.length === 0) {
-        console.log("[ARCA] No expansion candidates in scout data — send rangers first");
+        console.log("[ARCA] No expansion candidates in scout data — send lookouts first");
         return;
       }
       console.log("[ARCA] Top expansion candidates:");
@@ -303,13 +303,13 @@ export function setupConsole() {
     // and auto-starts when a home frees up. Pass an explicit homeRoom to force one.
     //   Game.arca.attack('W2N1')                      → box / assault, auto-scaled squad
     //   Game.arca.attack('W2N1', 'wedge', 'siege')    → pick formation + tactic
-    //   Game.arca.attack('W2N1', 'box', 'assault', { knights: 4, clerics: 2 })  → override squad
+    //   Game.arca.attack('W2N1', 'box', 'assault', { enforcers: 4, medics: 2 })  → override crew
     //   Game.arca.attack('W2N1', 'box', 'assault', undefined, 'W1N1')  → force funding home
     attack: (
       roomName: string,
       formation: SquadFormation = "box",
       tactic: SquadTactic = "assault",
-      composition?: { knights?: number; wizards?: number; clerics?: number; siegers?: number; drainers?: number },
+      composition?: { enforcers?: number; triggermen?: number; medics?: number; wreckers?: number; decoys?: number },
       homeRoomName?: string
     ) => {
       if (!roomName) {
@@ -357,11 +357,11 @@ export function setupConsole() {
       // Intelligent default composition scaled to known defenses, overridable per role.
       const rec = recommendComposition(roomName, tactic);
       const comp = {
-        knights: composition?.knights ?? rec.knights,
-        wizards: composition?.wizards ?? rec.wizards,
-        clerics: composition?.clerics ?? rec.clerics,
-        siegers: composition?.siegers ?? rec.siegers,
-        drainers: composition?.drainers ?? rec.drainers,
+        enforcers: composition?.enforcers ?? rec.enforcers,
+        triggermen: composition?.triggermen ?? rec.triggermen,
+        medics: composition?.medics ?? rec.medics,
+        wreckers: composition?.wreckers ?? rec.wreckers,
+        decoys: composition?.decoys ?? rec.decoys,
       };
 
       const err = launchOp(roomName, formation, tactic, comp, homeRoom.name);
@@ -377,7 +377,7 @@ export function setupConsole() {
       }
       console.log(
         `[Military] Op launched: ${homeRoom.name} → ${roomName}  ${formation}/${tactic}  ` +
-        `squad=${comp.knights}K/${comp.wizards}W/${comp.clerics}C/${comp.siegers}S/${comp.drainers}L`
+        `crew=${comp.enforcers}E/${comp.triggermen}T/${comp.medics}M/${comp.wreckers}R/${comp.decoys}D`
       );
       console.log(`[Military] Spawning squad... track with Game.arca.squads()`);
     },
@@ -392,12 +392,12 @@ export function setupConsole() {
       else console.log(`[Military] ${roomName} was not in the offensive queue`);
     },
 
-    // Start a STANDALONE tower-drain: send leeches to bleed a room's tower energy ahead of
+    // Start a STANDALONE tower-drain: send decoys to bleed a room's tower energy ahead of
     // (and decoupled from) any assault. Persistent — it runs until you stopDrain it. Only
     // effective against opponents whose towers fire at un-killable targets; a disciplined
     // defender holds fire and it achieves nothing.
-    //   Game.arca.drain('W2N1')              → 1 leech, closest capable home
-    //   Game.arca.drain('W2N1', 2)           → 2 leeches
+    //   Game.arca.drain('W2N1')              → 1 decoy, closest capable home
+    //   Game.arca.drain('W2N1', 2)           → 2 decoys
     //   Game.arca.drain('W2N1', 2, 'W1N1')   → force funding home
     drain: (roomName: string, count = 1, homeRoomName?: string) => {
       if (!roomName) {
@@ -411,12 +411,12 @@ export function setupConsole() {
       }
       const op = getDrainOps().find((o) => o.targetRoom === roomName);
       console.log(
-        `[Drain] Draining ${roomName} with ${op?.drainers ?? count} leech(es) from ${op?.homeRoom}. ` +
+        `[Drain] Draining ${roomName} with ${op?.drainers ?? count} decoy(s) from ${op?.homeRoom}. ` +
         `Stop with Game.arca.stopDrain('${roomName}')`
       );
     },
 
-    // Stop a standalone drain; its leeches stand down and return home.
+    // Stop a standalone drain; its decoys stand down and return home.
     stopDrain: (roomName: string) => {
       if (!roomName) {
         console.log("[Drain] Usage: Game.arca.stopDrain('W2N1')");
@@ -440,7 +440,7 @@ export function setupConsole() {
         ).length;
         const age = Game.time - op.startedAt;
         console.log(
-          `  ${op.targetRoom} ← ${op.homeRoom}  leeches=${live}/${op.drainers}  age=${age}t`
+          `  ${op.targetRoom} ← ${op.homeRoom}  decoys=${live}/${op.drainers}  age=${age}t`
         );
       }
     },
@@ -501,8 +501,8 @@ export function setupConsole() {
           `  Phase: ${op.phase}  |  Formation: ${op.formation}  |  Tactic: ${op.tactic}  |  Age: ${age}t`
         );
         console.log(
-          `  Required: ${op.requiredKnights}K / ${op.requiredWizards}W / ` +
-          `${op.requiredClerics}C / ${op.requiredSiegers ?? 0}S / ${op.requiredDrainers ?? 0}L`
+          `  Required: ${op.requiredEnforcers}E / ${op.requiredTriggermen}T / ` +
+          `${op.requiredMedics}M / ${op.requiredWreckers ?? 0}R / ${op.requiredDecoys ?? 0}D`
         );
 
         const members = Object.values(Game.creeps).filter(
@@ -528,8 +528,8 @@ export function setupConsole() {
         const avgHp = Math.round((hpSum / members.length) * 100);
         const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
         console.log(
-          `  Composition: ${counts[ROLE_KNIGHT]}K/${counts[ROLE_WIZARD]}W/` +
-          `${counts[ROLE_CLERIC]}C/${counts[ROLE_SIEGER]}S/${counts[ROLE_DRAINER]}L  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
+          `  Crew: ${counts[ROLE_KNIGHT]}E/${counts[ROLE_WIZARD]}T/` +
+          `${counts[ROLE_CLERIC]}M/${counts[ROLE_SIEGER]}R/${counts[ROLE_DRAINER]}D  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
         );
 
         for (const c of members) {
@@ -545,7 +545,7 @@ export function setupConsole() {
         queue.forEach((q, i) => {
           console.log(
             `  ${i + 1}. ${q.targetRoom}${q.homeRoom ? ` (prefer ${q.homeRoom})` : ""}  ${q.formation}/${q.tactic}  ` +
-            `${q.requiredKnights}K/${q.requiredWizards}W/${q.requiredClerics}C/${q.requiredSiegers}S/${q.requiredDrainers ?? 0}L`
+            `${q.requiredEnforcers}E/${q.requiredTriggermen}T/${q.requiredMedics}M/${q.requiredWreckers}R/${q.requiredDecoys ?? 0}D`
           );
         });
       }

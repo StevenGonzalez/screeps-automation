@@ -455,7 +455,7 @@ export function selectStructureTarget(
   }
 
   // No valuable structures exposed — only barriers remain. Break the weakest so
-  // siegers keep making progress instead of idling.
+  // wreckers keep making progress instead of idling.
   const barriers = all.filter(
     (s) => s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART
   );
@@ -530,7 +530,7 @@ export function buildTowerCostMatrix(room: Room, towers: StructureTower[]): Cost
 
 // ── Min-cut / weakest-path breach planning ──────────────────────────────────────
 //
-// Against a fortified room, siegers must concentrate on ONE breach tile rather than
+// Against a fortified room, wreckers must concentrate on ONE breach tile rather than
 // chipping at whichever barrier happens to be nearest. We compute the cheapest-to-break
 // path from outside the wall ring to the room's highest-value structure (spawn, else
 // controller, else any target) by running PathFinder with barrier tiles weighted by

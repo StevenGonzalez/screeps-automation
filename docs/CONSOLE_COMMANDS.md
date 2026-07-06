@@ -41,9 +41,6 @@ Arguments in `'quotes'` are room names like `'W1N1'`. `?` marks an optional argu
 | `Game.arca.safemode('W1N1')` | Manually triggers safe mode (enemies can't act inside your room) | A raid is about to destroy your spawn and the bot hasn't auto-triggered |
 | `Game.arca.nukes()` | Inbound nuke status + rampart reinforcement progress | You got a nuke warning |
 
-> **Your current situation (RCL 2, exits camped):** run `Game.arca.lockdown('YOUR_ROOM')` now,
-> then let the economy climb to RCL 3 for towers. Lift it once the guards leave.
-
 ---
 
 ## 🌱 Expansion (claiming new rooms)
@@ -76,7 +73,7 @@ the WarCouncil.
 | `Game.arca.formation('scatter')` | Change formation mid-fight (`line`/`box`/`wedge`/`scatter`) | Enemy towers are shredding your clustered squad |
 | `Game.arca.tactic('retreat')` | Change tactic mid-fight (`assault`/`siege`/`raid`/`defend`/`retreat`) | Pull back a losing squad |
 | `Game.arca.recall()` | Stand down **all** ops and bring squads home | Call off a war |
-| `Game.arca.drain('W2N1', 2)` | Send leeches to bleed a room's tower energy before assaulting | Softening a heavily-towered target |
+| `Game.arca.drain('W2N1', 2)` | Send decoys to bleed a room's tower energy before assaulting | Softening a heavily-towered target |
 | `Game.arca.stopDrain('W2N1')` | Stop draining | Done softening |
 | `Game.arca.warcouncil(true)` | Toggle **automatic** target selection + attacking | You want the bot to pick and attack enemies itself |
 

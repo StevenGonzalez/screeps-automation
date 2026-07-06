@@ -359,7 +359,7 @@ function executePendingSend(room: Room, terminal: StructureTerminal): void {
   const rc = pending.resource as ResourceConstant;
   const inTerminal = terminal.store.getUsedCapacity(rc) ?? 0;
 
-  if (inTerminal < pending.loadTarget) return; // hauler/apothecary still filling
+  if (inTerminal < pending.loadTarget) return; // hauler/chemist still filling
 
   // For non-energy resources also ensure terminal has enough energy to pay the fee
   if (rc !== RESOURCE_ENERGY) {

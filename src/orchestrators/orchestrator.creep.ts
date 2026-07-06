@@ -96,6 +96,34 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SCORE_HUNTER]: runScoreHunter,
 };
 
+// Flavor speech bubbles for the crime-family theme. Screeps only renders ~10 chars, so keep
+// every line short. Roles without a dedicated list fall back to GENERAL_CHATTER.
+const GENERAL_CHATTER = ["capisce?", "just biz", "nothin'", "fuhgeddit", "respect", "you square"];
+const ROLE_CHATTER: Record<string, string[]> = {
+  [ROLE_KNIGHT]: ["*cracks*", "boss says", "break it", "knuckles"],
+  [ROLE_WIZARD]: ["from here", "pop pop", "no witness"],
+  [ROLE_CLERIC]: ["hold still", "patch up", "breathe"],
+  [ROLE_SIEGER]: ["wreckin'", "open up", "demo time"],
+  [ROLE_DRAINER]: ["hey ugly", "over here", "catch me"],
+  [ROLE_CONQUEROR]: ["ours now", "moving in", "new turf"],
+  [ROLE_SETTLER]: ["new joint", "settin' up", "our block"],
+  [ROLE_HAULER]: ["the goods", "the drop", "cash run"],
+  [ROLE_UPGRADER]: ["laundry", "clean cash", "washin'"],
+  [ROLE_MINER]: ["diggin'", "the vein"],
+  [ROLE_RESERVER]: ["protection", "we collect"],
+};
+
+// Occasional, cheap chatter: at most one bubble per creep per SAY_PERIOD ticks, spread across
+// the window by a stable per-name offset so the whole fleet doesn't shout in unison.
+const SAY_PERIOD = 30;
+function maybeChatter(creep: Creep): void {
+  let hash = 0;
+  for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
+  if ((Game.time + hash) % SAY_PERIOD !== 0) return;
+  const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;
+  creep.say(lines[Math.abs(hash + Game.time) % lines.length], true);
+}
+
 export function loop() {
   // Per-role CPU accounting is opt-in (Memory.profileRoles): the two extra Game.cpu.getUsed()
   // calls per creep are pure instrumentation on the hottest loop in the bot, so off by default.
@@ -114,6 +142,7 @@ export function loop() {
       } else {
         handler(creep);
       }
+      maybeChatter(creep);
     } else if (Game.time % 100 === 0) {
       // A creep whose role isn't in the map sits inert every tick, burning a population
       // slot. Surface it (throttled) instead of failing silently — usually a renamed or

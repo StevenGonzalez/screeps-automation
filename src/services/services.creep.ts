@@ -205,7 +205,7 @@ function getDangerPositions(room: Room): RoomPosition[] {
     // Under safe mode the room is fully protected — hostiles can't attack our creeps or
     // structures — so there is no danger to route around. Treating an enemy parked in the base
     // as a no-go zone here freezes ALL nearby construction and harvesting (isPositionSafe blanks
-    // out a range-5 circle around every hostile), stranding masons/miners next to a creep that
+    // out a range-5 circle around every hostile), stranding contractors/diggers next to a creep that
     // cannot touch them. Report no danger so the economy keeps working right through the siege.
     if (room.controller?.safeMode) {
       dangerByRoom[room.name] = [];
@@ -213,7 +213,7 @@ function getDangerPositions(room: Room): RoomPosition[] {
     }
     const positions: RoomPosition[] = [];
     // Only combat creeps threaten our economy. A scout, claimer, hauler or any creep with no
-    // ATTACK/RANGED_ATTACK part can't damage a builder or miner, so it must not blank out a
+    // ATTACK/RANGED_ATTACK part can't damage a builder or digger, so it must not blank out a
     // range-5 no-go circle and freeze all work around it. getActiveBodyparts ignores parts that
     // have already been destroyed, so a disarmed attacker stops counting as a threat too.
     for (const c of room.find(FIND_HOSTILE_CREEPS)) {
@@ -271,8 +271,8 @@ export function acquireEnergy(
   creep: Creep,
   opts?: { bufferOnly?: boolean }
 ): boolean {
-  // bufferOnly: this is a non-essential consumer (builder/repairer/idle upgrader). Miner
-  // containers AND the dropped piles beside them are raw producer output the porters need to keep
+  // bufferOnly: this is a non-essential consumer (builder/repairer/idle upgrader). Digger
+  // containers AND the dropped piles beside them are raw producer output the bagmen need to keep
   // the tower and extensions filled — so a bufferOnly consumer leaves both alone and draws only
   // from the storage buffer (plus links/tombs). When the buffer is empty there is no surplus, so
   // it simply gets nothing and backs off rather than starving the core's supply line.
@@ -302,7 +302,7 @@ export function acquireEnergy(
   }
 
   // Pick up nearby dropped energy — findInRange is O(local area) vs room-wide pathfinding.
-  // bufferOnly consumers skip this: dropped piles are mostly miner overflow that the porters are
+  // bufferOnly consumers skip this: dropped piles are mostly digger overflow that the bagmen are
   // there to collect for the tower/core.
   const droppedInRange = bufferOnly
     ? []
@@ -512,7 +512,7 @@ const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
 
 // Containers aren't interchangeable, but a construction site only exposes its structureType, so
 // the flat table above can't tell them apart — leaving every container tied at priority 1, ahead
-// of extensions. That's why masons focus-fire a mineral container (useless until RCL6) before the
+// of extensions. That's why contractors focus-fire a mineral container (useless until RCL6) before the
 // extensions that grow the whole creep economy. Classify by what the site sits next to:
 //   source container  → static mining, the biggest early payoff → keep ahead of extensions
 //   controller container → an upgrade convenience → after extensions/tower
@@ -868,7 +868,7 @@ export function findClosestMinerContainerWithEnergy(
 // How low the controller container may get before a hauler tops it up. Gated this low (rather
 // than "any free space") so haulers drop the bulk of their load into storage instead of all
 // funnelling to the small controller container — which jammed a queue at the controller and,
-// because their energy never reached storage, left the stewards nothing to distribute.
+// because their energy never reached storage, left the busboys nothing to distribute.
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
 
 // How many haulers may top up the controller container at once. The "<1000" gate above is not
@@ -902,8 +902,8 @@ function getUpgradeContainerFillerIds(room: Room): Set<string> {
 
 // Where a full hauler drops energy once spawn/extension/tower are topped up. Storage is the bulk
 // sink and comes first; the controller container only gets a top-up while it's actually running
-// low, so upgraders keep a local supply without every porter funnelling to it (upgraders also
-// pull straight from storage / the controller link when their container empties). Miner
+// low, so upgraders keep a local supply without every bagman funnelling to it (upgraders also
+// pull straight from storage / the controller link when their container empties). Digger
 // containers are excluded — they are pickup sources, not drop-offs.
 export function findDepositTargetExcludingMiner(creep: Creep): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
@@ -940,7 +940,7 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
   }
 
   // Storage full — fall back to the controller container (even if not low), then any other
-  // non-miner container, rather than stranding the load.
+  // non-digger container, rather than stranding the load.
   if (upgradeIsDropTarget) {
     return upgradeCont;
   }
@@ -1113,7 +1113,7 @@ export function findUnclaimedMinerAssignment(
 export function findUnclaimedHaulerAssignment(
   room: Room
 ): StructureContainer | null {
-  // Only assign miner (producer) containers. The hauler treats its assignment as a
+  // Only assign digger (producer) containers. The hauler treats its assignment as a
   // source to drain, so handing it the upgrade or mineral container would have it
   // siphon energy away from upgraders straight back into spawn/extensions.
   const minerIds = new Set(getMinerContainerIds(room).map((id) => id.toString()));

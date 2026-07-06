@@ -7,7 +7,7 @@ import {
 } from "../orchestrators/orchestrator.military";
 
 /**
- * Drainer (leech): a solo tower-baiter that deploys ahead of a siege. It slips into the
+ * Drainer (decoy): a solo tower-baiter that deploys ahead of a siege. It slips into the
  * target room, parks just inside tower range, and soaks fire to bleed the towers' energy
  * — every shot costs the defender 10 energy regardless of how little it does at long
  * range. It self-heals to outlast that trickle and retreats over the border to recover
@@ -18,7 +18,7 @@ export function runDrainer(creep: Creep) {
   if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
   if (creep.memory.offensiveTarget) {
-    // Siege-attached leech (part of a militaryOp) takes precedence; otherwise it may belong
+    // Siege-attached decoy (part of a militaryOp) takes precedence; otherwise it may belong
     // to a standalone drain op against the same target room.
     const op = getOffensiveOp(creep.memory.offensiveTarget, creep.memory.homeRoom);
     if (op) {

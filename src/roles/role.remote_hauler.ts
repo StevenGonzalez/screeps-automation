@@ -16,7 +16,7 @@ import {
 } from "../services/services.creep";
 import { getThreatInfo, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 
-// Ticks a peddler waits at home after taking damage in a foreign room before re-probing the
+// Ticks a mule waits at home after taking damage in a foreign room before re-probing the
 // remote — see role.remote_miner.ts for the rationale (breaks the heal→re-enter tower drain).
 const REMOTE_DAMAGE_BACKOFF = 300;
 

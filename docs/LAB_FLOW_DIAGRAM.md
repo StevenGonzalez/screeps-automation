@@ -114,7 +114,7 @@
 │  INTEGRATION WITH OTHER SYSTEMS                                     │
 └─────────────────────────────────────────────────────────────────────┘
 
-    apothecary (role)            orchestrator.terminal       military system
+    chemist (role)               orchestrator.terminal       military system
          │                            │                          │
          ├─> Fill input labs          ├─> Buy missing minerals  ├─> Request boosts
          │    from storage            │    (H, O, X, etc.)      │    for combat creeps

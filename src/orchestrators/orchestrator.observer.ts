@@ -23,7 +23,7 @@ const COLLECTING_TIMEOUT = 300;
 const SQUAD_ATTACKERS = 2;
 const SQUAD_HEALERS = 3;
 const OBSERVER_SCAN_RANGE = 10;
-// How far out the observer reveals Scores. Past this a seeker can't reach a Score before it
+// How far out the observer reveals Scores. Past this a grifter can't reach a Score before it
 // decays, so scanning further just wastes the observer's one scan/tick on unreachable rooms.
 const SCORE_SCAN_RANGE = 4;
 // Rebuild the score scan queue this often so it tracks a shifting safe region. A multiple of 2
@@ -54,8 +54,8 @@ function runObserver(room: Room) {
 
   // The observer has one scan/tick. On the Season server, hand every other tick to the reachable
   // Score region: a Score is only visible while a creep (or the observer) is in its room and
-  // decays fast, so observer vision lets scores be found without every seeker having to walk the
-  // whole region itself — seekers can stage centrally and just sprint to intercept what the
+  // decays fast, so observer vision lets scores be found without every grifter having to walk the
+  // whole region itself — grifters can stage centrally and just sprint to intercept what the
   // observer reveals. (scoreSystem.loop records Scores from ANY room in vision, including this.)
   if (scoreHunterSupported() && Game.time % 2 === 0) {
     if (scanScoreRegion(room, observer)) return;

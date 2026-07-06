@@ -13,7 +13,7 @@ import {
 import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
 
-// Cheap per-tick, per-room check: is a steward (filler) alive to own core distribution? When
+// Cheap per-tick, per-room check: is a busboy (filler) alive to own core distribution? When
 // one is, haulers restock storage instead of filling spawn/extensions/towers directly. One
 // FIND_MY_CREEPS per room per tick, shared across every hauler in that room.
 let fillerCheckTick = -1;
@@ -46,7 +46,7 @@ export function runHauler(creep: Creep) {
     }
   }
 
-  // Once a room has storage AND a living steward (filler), fillers own core distribution and
+  // Once a room has storage AND a living busboy (filler), fillers own core distribution and
   // haulers just restock the storage buffer. Until then — no storage yet, or the filler just
   // died — haulers fill the core directly so spawning is never starved. In the storage model a
   // hauler must NOT pull from storage to collect (it would only deposit it straight back into
@@ -55,9 +55,9 @@ export function runHauler(creep: Creep) {
 
   if (creep.memory.working === undefined) creep.memory.working = false;
   // Collect-until-full / deliver-until-empty, on a flag (like the builder). The flag is what
-  // makes a porter top off before delivering: it keeps collecting while it has room rather than
+  // makes a bagman top off before delivering: it keeps collecting while it has room rather than
   // running a 97-energy ground scrap to the spawn while the full container it was standing on
-  // keeps overflowing. It also stops a porter flipping back to collecting just because depositing
+  // keeps overflowing. It also stops a bagman flipping back to collecting just because depositing
   // into one extension freed a little capacity — it delivers its whole load first.
   if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) creep.memory.working = false;
   if (!creep.memory.working && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
@@ -84,7 +84,7 @@ export function runHauler(creep: Creep) {
     }
   }
 
-  // In the direct-fill model (no storage/steward) haulers fill the core themselves.
+  // In the direct-fill model (no storage/busboy) haulers fill the core themselves.
   if (!storageModel) {
     // Re-use the cached core target while it still has room (skips a findClosestByPath/tick).
     if (creep.memory.fillTargetId) {
@@ -175,18 +175,18 @@ function debugDeposit(creep: Creep, target: Structure): void {
   );
 }
 
-// A loaded porter tops off only from sources within this range — it won't trek across the room
+// A loaded bagman tops off only from sources within this range — it won't trek across the room
 // for a scrap when it already has a worthwhile load to deliver.
 const DIVERT_RANGE = 10;
 
-// Fill the porter, returning true while it is still actively collecting (so the caller holds off
-// delivering). Keeps the original priority — decaying ground piles first, then the bulk miner
+// Fill the bagman, returning true while it is still actively collecting (so the caller holds off
+// delivering). Keeps the original priority — decaying ground piles first, then the bulk digger
 // container, then the storage buffer — but because the caller only flips to delivering once the
-// porter is full (or nothing's left worth fetching), grabbing a small pile no longer ends the
+// bagman is full (or nothing's left worth fetching), grabbing a small pile no longer ends the
 // trip with most of the capacity unused while a full container overflows behind it.
 function collectEnergy(creep: Creep, storageModel: boolean): boolean {
   const carried = creep.store[RESOURCE_ENERGY];
-  const nearbyOnly = carried > 0; // an empty porter fetches from anywhere; a loaded one tops off close by
+  const nearbyOnly = carried > 0; // an empty bagman fetches from anywhere; a loaded one tops off close by
 
   // Dropped energy decays every tick — grab worthwhile piles first. findClosestByRange (not
   // ByPath) keeps this cheap.
@@ -201,8 +201,8 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
     }
   }
 
-  // The bulk producer: a miner container holding a worthwhile load. Draining it is what actually
-  // fills the porter (and stops the container overflowing onto the ground). Prefer the assigned one.
+  // The bulk producer: a digger container holding a worthwhile load. Draining it is what actually
+  // fills the bagman (and stops the container overflowing onto the ground). Prefer the assigned one.
   let container: StructureContainer | null = null;
   const assignedId = creep.memory.assignedContainerId;
   if (assignedId) {
@@ -219,8 +219,8 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
     return true;
   }
 
-  // Storage buffer: a porter pulls from storage to feed the core only in the DIRECT-FILL model.
-  // In the storage model the steward distributes storage → core, so a hauler pulling from storage
+  // Storage buffer: a bagman pulls from storage to feed the core only in the DIRECT-FILL model.
+  // In the storage model the busboy distributes storage → core, so a hauler pulling from storage
   // would just deposit it straight back — the storage→storage loop. Producers above (containers/
   // dropped) are always fine to pull from; this buffer tap is the only one that must be gated.
   if (carried === 0 && !storageModel) {

@@ -1,8 +1,8 @@
 /**
  * Source Keeper mining. SK rooms hold 2-3 sources (4000 energy, ~3× a normal remote)
  * plus a mineral, guarded by Source Keepers that respawn from lairs. This orchestrator
- * runs persistent operations: a Huntsman guardian clears and camps the keeper lairs
- * while Delvers mine the sources and Wains haul the energy home.
+ * runs persistent operations: a Muscle guardian clears and camps the keeper lairs
+ * while Tunnelers mine the sources and Carriers haul the energy home.
  *
  * Operations are commanded from the console (Game.arca.sk) rather than auto-started —
  * SK rooms vary wildly in difficulty and committing blind is how squads get fed to
@@ -26,7 +26,7 @@ const SK_MIN_HOME_CAPACITY = 2_500;
 
 // Concurrency bounds. SK ops are funded per home room and never conflict across
 // different homes, so multiple run in parallel — but each op spawns a guardian +
-// a delver/wain per source, so we cap the total empire-wide (CPU/spawn pressure)
+// a tunneler/carrier per source, so we cap the total empire-wide (CPU/spawn pressure)
 // and per home room (one home can't sustain three SK squads at once).
 export const SK_MAX_CONCURRENT = 4;       // empire-wide ceiling
 export const SK_MAX_PER_HOME = 2;         // ceiling per funding home room

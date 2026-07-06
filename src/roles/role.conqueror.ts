@@ -1,7 +1,7 @@
 import { getThreatInfo } from "../services/services.combat";
 import { pickSignature } from "../config/signatures";
 
-// Conqueror: travels to the expansion target and claims its controller, flipping
+// Capo: travels to the expansion target and claims its controller, flipping
 // Memory.expansion to "bootstrapping" on success. Aborts cleanly if the target
 // turns out to be contested (claimed by another player) or invaded.
 

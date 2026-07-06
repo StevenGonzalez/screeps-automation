@@ -3,9 +3,9 @@ import { isSourceKeeper } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
 /**
- * Delver: mines a single source in a Source Keeper room. Carries no CARRY parts, so
- * harvested energy drops where it stands for Wains to collect. Keeps mining while a
- * Huntsman is nearby to kill spawning keepers; only when no guardian is protecting it
+ * Tunneler: mines a single source in a Source Keeper room. Carries no CARRY parts, so
+ * harvested energy drops where it stands for Carriers to collect. Keeps mining while a
+ * Muscle is nearby to kill spawning keepers; only when no guardian is protecting it
  * (or the room is contested) does it fall all the way back home.
  */
 const KEEPER_DANGER_RANGE = 4;
@@ -33,7 +33,7 @@ export function runSkMiner(creep: Creep) {
   }
 
   // Back off only when a keeper is closing in AND no guardian is here to kill it —
-  // otherwise trust the Huntsman and keep mining (avoids respawn-cycle oscillation).
+  // otherwise trust the Muscle and keep mining (avoids respawn-cycle oscillation).
   const keeper = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS, {
     filter: (c) => isSourceKeeper(c),
   });

@@ -285,13 +285,13 @@ function isOnWorkingPost(creep: Creep): boolean {
   // whole time a builder/upgrader/repairer carries energy — including while merely
   // walking to its target — so pinning on it makes every full worker an immovable
   // obstacle. A line of them then mutually blocks a single-file road and gridlocks
-  // until one dies. The genuine stationary posts (miner on a container, harvester at a
+  // until one dies. The genuine stationary posts (digger on a container, harvester at a
   // source, upgrader at the controller) are pinned by the specific checks below.
   const onContainer = creep.pos
     .lookFor(LOOK_STRUCTURES)
     .some((s) => s.structureType === STRUCTURE_CONTAINER);
   if (onContainer) return true;
-  // Adjacency to a source pins the miner and harvesting peasants who actually work
+  // Adjacency to a source pins the digger and harvesting runners who actually work
   // there — but NOT haulers, which only transit through to withdraw. Protecting
   // haulers here gridlocks the single-file road to the source: a full hauler trying
   // to leave can't shove the empty hauler queued behind it, so the line freezes and

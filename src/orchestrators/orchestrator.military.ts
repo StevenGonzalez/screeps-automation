@@ -44,9 +44,9 @@ const INTEL_TTL = 6_000;           // drop intel for rooms not seen in this long
                                    // and is re-gathered cheaply by scouts when actually needed.
 const FORMING_TIMEOUT = 1500;      // ticks to assemble a squad before aborting
 const FRAGMENT_TIMEOUT = 300;      // ticks split across rooms before pulling back to regroup
-const KITE_RANGE = 3;              // wizards hold the enemy at this range
+const KITE_RANGE = 3;              // triggermen hold the enemy at this range
 const DEFEND_RADIUS = 3;           // defend tactic holds within this of the rally point
-const CRITICAL_HP = 0.2;           // members below this break off to find a cleric
+const CRITICAL_HP = 0.2;           // members below this break off to find a medic
 const WARCOUNCIL_SCAN_INTERVAL = 50;
 const AUTO_ATTACK_INTERVAL = 1000; // min ticks between auto-launched attacks
 
@@ -118,8 +118,8 @@ export function loop(): void {
     // Normalize ops created before these fields existed (live-memory migration).
     op.formation = op.formation ?? "box";
     op.tactic = op.tactic ?? "assault";
-    op.requiredSiegers = op.requiredSiegers ?? 0;
-    op.requiredDrainers = op.requiredDrainers ?? 0;
+    op.requiredWreckers = op.requiredWreckers ?? 0;
+    op.requiredDecoys = op.requiredDecoys ?? 0;
 
     const homeRoom = Game.rooms[op.homeRoom];
     if (!homeRoom?.controller?.my) {
@@ -369,7 +369,7 @@ export function getSquadContext(op: MilitaryOp): SquadContext {
 
 // ── Breach planning (coordinated dismantle) ──────────────────────────────────────
 //
-// So siegers/attackers don't each chip at a different barrier, an op caches ONE breach
+// So wreckers/attackers don't each chip at a different barrier, an op caches ONE breach
 // plan per target room: a hits-weighted path to the room's core, whose first barrier is
 // the shared focus. Everyone hits that focus until it dies, then we recompute (the next
 // barrier on the path becomes the new focus). Cached in module state (not Memory) because
@@ -432,10 +432,10 @@ function getSquadMembers(op: MilitaryOp): Creep[] {
 
 function squadMet(op: MilitaryOp, members: Creep[]): boolean {
   return (
-    members.filter((c) => c.memory.role === ROLE_KNIGHT).length >= op.requiredKnights &&
-    members.filter((c) => c.memory.role === ROLE_WIZARD).length >= op.requiredWizards &&
-    members.filter((c) => c.memory.role === ROLE_CLERIC).length >= op.requiredClerics &&
-    members.filter((c) => c.memory.role === ROLE_SIEGER).length >= op.requiredSiegers
+    members.filter((c) => c.memory.role === ROLE_KNIGHT).length >= op.requiredEnforcers &&
+    members.filter((c) => c.memory.role === ROLE_WIZARD).length >= op.requiredTriggermen &&
+    members.filter((c) => c.memory.role === ROLE_CLERIC).length >= op.requiredMedics &&
+    members.filter((c) => c.memory.role === ROLE_SIEGER).length >= op.requiredWreckers
   );
 }
 
@@ -580,7 +580,7 @@ export function cancelOp(homeRoom?: string): number {
 
 // ── Standalone tower-drain ops ────────────────────────────────────────────────────
 //
-// A drain op is a lightweight, persistent operation that keeps N leeches baiting a target
+// A drain op is a lightweight, persistent operation that keeps N decoys baiting a target
 // room's towers to bleed their energy — decoupled from any siege so you can pre-soften a
 // naive opponent (one whose towers fire at un-killable targets) well ahead of an assault.
 // Against a disciplined defender that holds tower fire it simply achieves nothing, so it's
@@ -589,13 +589,13 @@ export function cancelOp(homeRoom?: string): number {
 const DRAIN_DEFAULT_COUNT = 1;
 const DRAIN_MAX_COUNT = 4;
 
-// The drain op a standalone leech belongs to (by its target room). Returns undefined once
-// the op is stopped, which is the signal for the leech to stand down and go home.
+// The drain op a standalone decoy belongs to (by its target room). Returns undefined once
+// the op is stopped, which is the signal for the decoy to stand down and go home.
 export function getDrainOp(targetRoom: string): DrainOp | undefined {
   return Memory.drainOps?.[targetRoom];
 }
 
-// All drain ops funded by a given home room — used by the spawner to top up their leeches.
+// All drain ops funded by a given home room — used by the spawner to top up their decoys.
 export function getDrainOpsForHome(homeRoom: string): DrainOp[] {
   const ops = Memory.drainOps;
   if (!ops) return [];
@@ -635,7 +635,7 @@ export function launchDrain(targetRoom: string, homeRoom?: string, count = DRAIN
   return null;
 }
 
-// Stop a standalone drain. Its leeches lose their op next tick and head home. Returns true
+// Stop a standalone drain. Its decoys lose their op next tick and head home. Returns true
 // if an op was removed.
 export function stopDrain(targetRoom: string): boolean {
   if (!Memory.drainOps?.[targetRoom]) return false;
@@ -647,7 +647,7 @@ export function getDrainOps(): DrainOp[] {
   return Memory.drainOps ? Object.values(Memory.drainOps) : [];
 }
 
-// Tear down drain ops whose home room is no longer ours (it can't fund leeches) or whose
+// Tear down drain ops whose home room is no longer ours (it can't fund decoys) or whose
 // target we've since captured. Called once per tick from the military loop.
 function cleanupDrainOps(): void {
   const ops = Memory.drainOps;
@@ -665,30 +665,30 @@ function cleanupDrainOps(): void {
 export function recommendComposition(
   targetRoom: string,
   tactic: SquadTactic
-): { knights: number; wizards: number; clerics: number; siegers: number; drainers: number } {
+): { enforcers: number; triggermen: number; medics: number; wreckers: number; decoys: number } {
   const intel = Memory.intel?.[targetRoom];
   const towers = intel?.towers ?? 0;
   const owned = !!intel?.owner;
 
-  let knights = 2 + Math.min(2, towers);
-  let wizards = 1;
-  let clerics = Math.max(1, Math.min(3, towers));
-  let siegers = 0;
+  let enforcers = 2 + Math.min(2, towers);
+  let triggermen = 1;
+  let medics = Math.max(1, Math.min(3, towers));
+  let wreckers = 0;
 
-  if (tactic === "siege" || (owned && towers >= 2)) siegers = 2;
+  if (tactic === "siege" || (owned && towers >= 2)) wreckers = 2;
   if (tactic === "raid") {
-    knights = 2;
-    wizards = 1;
-    clerics = 1;
-    siegers = 0;
+    enforcers = 2;
+    triggermen = 1;
+    medics = 1;
+    wreckers = 0;
   }
 
-  // A solo leech drains the towers ahead of any siege against a multi-tower room, so the
-  // siegers (held back by shouldHoldForDrain) commit into dry towers instead of soaking
+  // A solo decoy drains the towers ahead of any siege against a multi-tower room, so the
+  // wreckers (held back by shouldHoldForDrain) commit into dry towers instead of soaking
   // fire themselves. Pointless against ≤1 tower (nothing meaningful to drain).
-  const drainers = siegers > 0 && towers >= 2 ? 1 : 0;
+  const decoys = wreckers > 0 && towers >= 2 ? 1 : 0;
 
-  return { knights, wizards, clerics, siegers, drainers };
+  return { enforcers, triggermen, medics, wreckers, decoys };
 }
 
 // Launches an operation. Returns an error string, or null on success. Concurrency is
@@ -698,7 +698,7 @@ export function launchOp(
   targetRoom: string,
   formation: SquadFormation,
   tactic: SquadTactic,
-  composition: { knights: number; wizards: number; clerics: number; siegers: number; drainers?: number },
+  composition: { enforcers: number; triggermen: number; medics: number; wreckers: number; decoys?: number },
   homeRoom: string
 ): string | null {
   if (!Memory.militaryOps) Memory.militaryOps = {};
@@ -707,7 +707,7 @@ export function launchOp(
     return `${homeRoom} already running op against ${existing.targetRoom} (${existing.phase})`;
   }
   const total =
-    composition.knights + composition.wizards + composition.clerics + composition.siegers;
+    composition.enforcers + composition.triggermen + composition.medics + composition.wreckers;
   if (total <= 0) return "squad must have at least one member";
 
   Memory.militaryOps[homeRoom] = {
@@ -717,11 +717,11 @@ export function launchOp(
     startedAt: Game.time,
     formation,
     tactic,
-    requiredKnights: composition.knights,
-    requiredWizards: composition.wizards,
-    requiredClerics: composition.clerics,
-    requiredSiegers: composition.siegers,
-    requiredDrainers: composition.drainers ?? 0,
+    requiredEnforcers: composition.enforcers,
+    requiredTriggermen: composition.triggermen,
+    requiredMedics: composition.medics,
+    requiredWreckers: composition.wreckers,
+    requiredDecoys: composition.decoys ?? 0,
   };
   return null;
 }
@@ -737,11 +737,11 @@ export function enqueueOp(
   targetRoom: string,
   formation: SquadFormation,
   tactic: SquadTactic,
-  composition: { knights: number; wizards: number; clerics: number; siegers: number; drainers?: number },
+  composition: { enforcers: number; triggermen: number; medics: number; wreckers: number; decoys?: number },
   homeRoom?: string
 ): string | null {
   const total =
-    composition.knights + composition.wizards + composition.clerics + composition.siegers;
+    composition.enforcers + composition.triggermen + composition.medics + composition.wreckers;
   if (total <= 0) return "squad must have at least one member";
   if (!Memory.militaryQueue) Memory.militaryQueue = [];
   if (Memory.militaryQueue.some((q) => q.targetRoom === targetRoom)) {
@@ -752,11 +752,11 @@ export function enqueueOp(
     homeRoom,
     formation,
     tactic,
-    requiredKnights: composition.knights,
-    requiredWizards: composition.wizards,
-    requiredClerics: composition.clerics,
-    requiredSiegers: composition.siegers,
-    requiredDrainers: composition.drainers ?? 0,
+    requiredEnforcers: composition.enforcers,
+    requiredTriggermen: composition.triggermen,
+    requiredMedics: composition.medics,
+    requiredWreckers: composition.wreckers,
+    requiredDecoys: composition.decoys ?? 0,
     queuedAt: Game.time,
   });
   return null;
@@ -826,9 +826,9 @@ function advanceMilitaryQueue(): void {
     const err = launchOp(
       q.targetRoom, q.formation, q.tactic,
       {
-        knights: q.requiredKnights, wizards: q.requiredWizards,
-        clerics: q.requiredClerics, siegers: q.requiredSiegers,
-        drainers: q.requiredDrainers ?? 0,
+        enforcers: q.requiredEnforcers, triggermen: q.requiredTriggermen,
+        medics: q.requiredMedics, wreckers: q.requiredWreckers,
+        decoys: q.requiredDecoys ?? 0,
       },
       home
     );
@@ -1439,7 +1439,7 @@ function maintainWarTarget(): void {
 // Runs alongside the WarCouncil but is wholly separate from the manual offensive
 // Memory.militaryOp. Each owned room is its own theatre: when a meaningful hostile
 // threat appears (one towers + safe-mode can't comfortably handle), a DefenseOp is
-// declared and the spawn orchestrator raises knights/clerics/wizards (see
+// declared and the spawn orchestrator raises enforcers/medics/triggermen (see
 // shouldSpawnDefender / spawnNextDefender). Those defenders rally in-room and fight
 // here via runDefensive*. The op stands down once the room stays clear.
 //
@@ -1463,7 +1463,7 @@ function runDefenseCouncil(): void {
 
     // A hostile CLAIM creep in an owned room is a controller-downgrade attacker: it scores
     // "low" (no attack/heal mass) so the severity gate ignores it, yet left alone it strips
-    // controller progress / RCL. Treat its presence as meaningful so a knight is raised to kill
+    // controller progress / RCL. Treat its presence as meaningful so an enforcer is raised to kill
     // it (safe mode would also stop it, but burning a charge on a lone claimer is waste).
     const controllerAttacker = hostiles.some((c) => c.body.some((p) => p.type === CLAIM));
 
@@ -1502,25 +1502,25 @@ function runDefenseCouncil(): void {
   }
 }
 
-// Scales defender composition to the threat score. Knights are the backbone; clerics
-// scale with the fight's intensity; a wizard is added to counter ranged-heavy raids.
+// Scales defender composition to the threat score. Enforcers are the backbone; medics
+// scale with the fight's intensity; a triggerman is added to counter ranged-heavy raids.
 function recommendDefense(score: number): {
-  requiredKnights: number;
-  requiredWizards: number;
-  requiredClerics: number;
+  requiredEnforcers: number;
+  requiredTriggermen: number;
+  requiredMedics: number;
 } {
-  // Caps raised (knights 4→6, clerics 2→3, wizards 1→2) so a heavy boosted assault — whose
+  // Caps raised (enforcers 4→6, medics 2→3, triggermen 1→2) so a heavy boosted assault — whose
   // score reaches many hundreds — is answered with a real squad, not a hard-capped handful.
   // Floors ensure a below-threshold-but-meaningful op (e.g. a lone controller-downgrade
-  // claimer, score < DEFENSE_THREAT_SCORE) still raises at least one knight to kill it rather
+  // claimer, score < DEFENSE_THREAT_SCORE) still raises at least one enforcer to kill it rather
   // than declaring an op with zero/negative required counts.
-  const requiredKnights = Math.max(1, Math.min(6, 2 + Math.floor((score - DEFENSE_THREAT_SCORE) / 70)));
-  const requiredClerics = Math.max(0, Math.min(3, 1 + Math.floor((score - DEFENSE_THREAT_SCORE) / 110)));
-  const requiredWizards =
+  const requiredEnforcers = Math.max(1, Math.min(6, 2 + Math.floor((score - DEFENSE_THREAT_SCORE) / 70)));
+  const requiredMedics = Math.max(0, Math.min(3, 1 + Math.floor((score - DEFENSE_THREAT_SCORE) / 110)));
+  const requiredTriggermen =
     score >= DEFENSE_THREAT_SCORE + 60
       ? Math.min(2, 1 + Math.floor((score - DEFENSE_THREAT_SCORE - 60) / 150))
       : 0;
-  return { requiredKnights, requiredWizards, requiredClerics };
+  return { requiredEnforcers, requiredTriggermen, requiredMedics };
 }
 
 function clearDefenseOp(roomName: string): void {
@@ -1544,7 +1544,7 @@ export function getDefenders(roomName: string): Creep[] {
 // ── Per-creep defensive behavior (called from role files) ──────────────────────
 //
 // Defenders fight only inside their own threatened room. They focus-fire with the same
-// selectHostileTarget priority as the offensive squad (healers first), clerics keep the
+// selectHostileTarget priority as the offensive squad (healers first), medics keep the
 // line alive, and crucially they refuse to chase hostiles onto room-edge exit tiles —
 // holding near the rally point instead so a kiting raider can't peel them off the room.
 
@@ -1676,7 +1676,7 @@ export function runDefensiveKnight(creep: Creep, roomName: string): void {
     // Fight from a rampart adjacent to the target. If none is in striking range but the room
     // HAS defensive ramparts, fall back onto the nearest one and hold cover (anchor range 0)
     // rather than charging into the open — a ranged+heal raider parked outside rampart range
-    // would otherwise kite an exposed melee knight to death with no return fire. Only advance
+    // would otherwise kite an exposed melee enforcer to death with no return fire. Only advance
     // in the open when the room is genuinely wall-less (low RCL), where cover isn't an option.
     if (!anchorOnRampart(creep, target.pos, 1)) {
       if (getDefensiveRamparts(creep.room).length > 0) {
@@ -1723,7 +1723,7 @@ export function runDefensiveWizard(creep: Creep, roomName: string): void {
       fleeFrom(creep, nearest.pos);
     } else if (range > KITE_RANGE) {
       // Close whenever past KITE_RANGE. `> KITE_RANGE` (not `+ 1`) removes the range-4
-      // dead zone where the wizard could neither fire (ranged max 3) nor advance.
+      // dead zone where the triggerman could neither fire (ranged max 3) nor advance.
       defenseMoveToward(creep, rally, nearest, KITE_RANGE);
     } else if (isNearEdge(creep.pos)) {
       defenseHold(creep, rally);
@@ -1779,15 +1779,15 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
 
   const isLeader = ctx.leader?.id === creep.id;
 
-  // Critically injured: break off toward a cleric so it isn't lost.
+  // Critically injured: break off toward a medic so it isn't lost.
   if (creep.hits < creep.hitsMax * CRITICAL_HP && !isLeader) {
-    const cleric = creep.pos.findClosestByRange(ctx.members, {
+    const medic = creep.pos.findClosestByRange(ctx.members, {
       filter: (c: Creep) => c.memory.role === ROLE_CLERIC,
     });
     const adjacent = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 1)[0];
     if (adjacent) creep.attack(adjacent);
-    if (cleric && !creep.pos.isNearTo(cleric)) {
-      creep.moveTo(cleric, { reusePath: 3 });
+    if (medic && !creep.pos.isNearTo(medic)) {
+      creep.moveTo(medic, { reusePath: 3 });
       return;
     }
   }
@@ -1883,7 +1883,7 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
       fleeFrom(creep, nearest.pos);
     } else if (range > KITE_RANGE) {
       // Close whenever we've drifted past KITE_RANGE. `> KITE_RANGE` (not `+ 1`) avoids a
-      // dead zone at exactly range 4 where the wizard could neither fire (ranged max 3)
+      // dead zone at exactly range 4 where the triggerman could neither fire (ranged max 3)
       // nor advance, letting a hostile sit one tile out and neutralize it.
       if (op.tactic === "defend") holdNearRally(creep, op, ctx, isLeader);
       else if (isLeader) leaderAdvance(creep, op, ctx, nearest.pos, KITE_RANGE);
@@ -1990,7 +1990,7 @@ export function runOffensiveSieger(creep: Creep, op: MilitaryOp): void {
 // Heals the most wounded squad member in range (self included). Returns the chosen
 // ally even when out of melee range so the caller can close the distance.
 function healBest(creep: Creep, ctx: SquadContext): Creep | null {
-  // ctx.members includes the cleric itself, so self-healing is covered here too.
+  // ctx.members includes the medic itself, so self-healing is covered here too.
   const wounded = ctx.members.filter((c) => c.hits < c.hitsMax);
   if (wounded.length === 0) return null;
   const target = wounded.reduce((a, b) => (a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b));
@@ -2006,7 +2006,7 @@ function rangedSnapFire(creep: Creep): void {
   else if (inRange.length > 0) creep.rangedAttack(inRange[0]);
 }
 
-// Kite away from a threat using a flee path so the wizard rounds obstacles instead
+// Kite away from a threat using a flee path so the triggerman rounds obstacles instead
 // of pinning itself against a wall, with a raw-direction fallback.
 function fleeFrom(creep: Creep, threat: RoomPosition): void {
   const result = PathFinder.search(
@@ -2146,7 +2146,7 @@ function leaderAdvance(
       return;
     }
     // No path through the matrix (fully walled): fall through to a plain moveTo so the
-    // leader at least closes on the breach barrier the siegers are cutting.
+    // leader at least closes on the breach barrier the wreckers are cutting.
   }
 
   creep.moveTo(dest, { range, reusePath: 3 });
@@ -2201,8 +2201,8 @@ function regroup(creep: Creep, op: MilitaryOp, ctx: SquadContext, isLeader: bool
 // Against a heavily-towered siege target we don't want the whole squad grinding a wall
 // while loaded towers shred them. The drain doctrine: edge into tower range to bait their
 // fire until their energy runs low, THEN commit the dismantle. This minimal version skips
-// a dedicated bait squad — the siegers themselves hold at the breach approach (just in/near
-// tower range, healed by the clerics) which IS the bait: the towers spend energy on them
+// a dedicated bait squad — the wreckers themselves hold at the breach approach (just in/near
+// tower range, healed by the medics) which IS the bait: the towers spend energy on them
 // each tick. Once assessTowers reports the towers drained below the commit threshold, the
 // hold releases and the dismantle begins. Bounded: only triggers for genuinely fortified
 // rooms (2+ towers still loaded), and a full drain is inevitable as long as we hold.
@@ -2232,14 +2232,14 @@ function holdAtBreachApproach(creep: Creep, op: MilitaryOp, ctx: SquadContext, i
   moveToSlot(creep, op, ctx);
 }
 
-// ── Solo tower drainer ("leech") ─────────────────────────────────────────────────
+// ── Solo tower drainer ("decoy") ─────────────────────────────────────────────────
 //
-// A leech deploys ALONE, ahead of the squad. It slips into the target room and parks at
+// A decoy deploys ALONE, ahead of the squad. It slips into the target room and parks at
 // the far edge of tower range, where the towers still fire on it — bleeding 10 energy per
 // shot, per tower — but deal only their minimum falloff damage, which a modest HEAL body
 // out-heals. When it's worn down past DRAIN_RETREAT_HP it flees over the nearest exit to
 // recover untouched, then returns. It is excluded from squad cohesion/HP (getSquadMembers)
-// so its deliberate fire-soaking never stalls the block; meanwhile the siegers' own
+// so its deliberate fire-soaking never stalls the block; meanwhile the wreckers' own
 // shouldHoldForDrain keeps them safe until these towers finally run dry.
 const DRAIN_RETREAT_HP = 0.45;   // flee to heal once HP drops below this
 const DRAIN_RESUME_HP = 0.95;    // resume baiting only after healing back to this
@@ -2248,7 +2248,7 @@ const DRAIN_BAIT_RANGE = 18;     // stand-off from the nearest tower: inside max
 
 // Shared drain behavior: travel to the target, hold at the far edge of tower range to bleed
 // the towers' energy (self-healing the falloff-damage trickle), and kite over the nearest
-// border to recover when worn down. Used by both the siege-attached leech (runOffensive
+// border to recover when worn down. Used by both the siege-attached decoy (runOffensive
 // Drainer) and the standalone drain op (runStandaloneDrainer).
 function drainTarget(creep: Creep, targetRoom: string): void {
   // Self-heal whenever hurt — free alongside movement, and the entire point of the body.
@@ -2302,7 +2302,7 @@ function drainTarget(creep: Creep, targetRoom: string): void {
   }
 }
 
-// Siege-attached leech: drains ahead of the squad, but obeys the op's retreat phase so it
+// Siege-attached decoy: drains ahead of the squad, but obeys the op's retreat phase so it
 // pulls home with the rest when the assault is aborted.
 export function runOffensiveDrainer(creep: Creep, op: MilitaryOp): void {
   if (op.phase === "retreating" || op.tactic === "retreat") {
@@ -2314,7 +2314,7 @@ export function runOffensiveDrainer(creep: Creep, op: MilitaryOp): void {
 }
 
 // Standalone drain op (Memory.drainOps): no squad, no retreat phase — bleeds the target's
-// towers persistently until the op is stopped (then role.drainer sends the leech home).
+// towers persistently until the op is stopped (then role.drainer sends the decoy home).
 export function runStandaloneDrainer(creep: Creep, op: DrainOp): void {
   drainTarget(creep, op.targetRoom);
 }

@@ -1,10 +1,11 @@
 # Quick Start Guide
 
-Welcome to **Lorencia** — a medieval-themed Screeps bot. The flavor is a fantasy
-empire (peasants and miners work the land, scholars and masons build, knights and
-wizards defend), but the architecture is plain: a set of per-system `loop()`
-modules run in order from `main.ts`. There's no central AI object or class
-hierarchy. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
+Welcome to **the Family** — an organized-crime-themed Screeps bot. The flavor is a
+mob outfit (runners and diggers bring in the earnings, launderers and contractors
+build out the operation, enforcers and triggermen handle trouble), but the
+architecture is plain: a set of per-system `loop()` modules run in order from
+`main.ts`. There's no central AI object or class hierarchy. See
+[ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
 
 ## How It's Organized
 
@@ -32,36 +33,36 @@ yarn deploy        # Deploy to MMO
 yarn deploy:sim    # Deploy to simulation
 ```
 
-### 3. Watch the Realm Come to Life
+### 3. Watch the Operation Come to Life
 
-The bot automatically spawns peasants and miners to gather energy, porters to haul
-it, scholars to upgrade the controller, and masons to build as the realm expands. It
-reports CPU and creep counts every 100 ticks.
+The bot automatically spawns runners and diggers to gather energy, bagmen to haul
+it, launderers to upgrade the controller, and contractors to build as the operation
+expands. It reports CPU and creep counts every 100 ticks.
 
 ## Creep Roster
 
 | Name | Role | Notes |
 |------|------|-------|
-| **peasant** | Early harvester | Gathers directly from sources; phases out once miners are up |
-| **miner** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
-| **porter** | Hauler | Hauls source energy to storage (fills the core directly until a steward exists); also borrowed by the factory and nuker as a courier |
-| **steward** | Filler | Distributes energy from storage to spawns, extensions, and towers; appears once the room has storage (RCL 4+) |
-| **scholar** | Upgrader | Upgrades the controller to advance RCL |
-| **mason** | Builder | Constructs queued construction sites |
-| **blacksmith** | Repairer | Repairs damaged structures |
-| **prospector** | Mineral miner | Extracts minerals for lab chains (RCL 6+) |
-| **apothecary** | Lab logistics | Loads lab reagents, drains product, boosts creeps |
-| **ranger** | Scout | Surveys adjacent rooms and records intel |
-| **outrider** | Remote miner | Mines sources in frontier rooms |
-| **peddler** | Remote hauler | Carries remote energy back home |
-| **herald** | Reserver | Reserves remote controllers, doubling source yield |
-| **conqueror** | Claimer | Claims new room controllers |
-| **settler** | Bootstrapper | Establishes a freshly claimed room |
-| **knight** | Melee | Offensive squads + home defense |
-| **wizard** | Ranged | Offensive squads + home defense |
-| **cleric** | Healer | Offensive squads + home defense |
-| **sapper** | Dismantler | Boosted breacher for fortified rooms |
-| **breacher / battlepriest / caravan** | PowerBank squad | Crack and collect power banks |
+| **runner** | Early harvester | Gathers directly from sources; phases out once diggers are up |
+| **digger** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
+| **bagman** | Hauler | Hauls source energy to storage (fills the core directly until a busboy exists); also borrowed by the factory and nuker as a courier |
+| **busboy** | Filler | Distributes energy from storage to spawns, extensions, and towers; appears once the room has storage (RCL 4+) |
+| **launderer** | Upgrader | Upgrades the controller to advance RCL |
+| **contractor** | Builder | Constructs queued construction sites |
+| **fixer** | Repairer | Repairs damaged structures |
+| **cooker** | Mineral miner | Extracts minerals for lab chains (RCL 6+) |
+| **chemist** | Lab logistics | Loads lab reagents, drains product, boosts creeps |
+| **lookout** | Scout | Surveys adjacent rooms and records intel |
+| **stringer** | Remote miner | Mines sources in frontier rooms |
+| **mule** | Remote hauler | Carries remote energy back home |
+| **collector** | Reserver | Reserves remote controllers, doubling source yield |
+| **capo** | Claimer | Claims new room controllers |
+| **transplant** | Bootstrapper | Establishes a freshly claimed room |
+| **enforcer** | Melee | Offensive squads + home defense |
+| **triggerman** | Ranged | Offensive squads + home defense |
+| **medic** | Healer | Offensive squads + home defense |
+| **wrecker** | Dismantler | Boosted breacher for fortified rooms |
+| **legbreaker / sawbones / courier** | PowerBank squad | Crack and collect power banks |
 
 ## Implemented Systems
 
@@ -69,7 +70,7 @@ reports CPU and creep counts every 100 ticks.
 - Adaptive spawn priorities: core economy first, remote roles after local stability
 - Scaled creep bodies: bigger bodies when more energy is available
 - Energy-emergency detection: shed non-critical spawns to recover
-- Remote mining: rangers scout → outriders mine → peddlers haul → heralds reserve
+- Remote mining: lookouts scout → stringers mine → mules haul → collectors reserve
 - Traffic manager: stuck-repath + guarded shove (toggle with `Game.arca.traffic`)
 
 ### RCL 6+ / 7+ / 8 Systems
@@ -89,7 +90,7 @@ reports CPU and creep counts every 100 ticks.
 - Defensive rampart perimeter (RCL 4+) and incoming-nuke rampart reinforcement
 
 ### Intelligence & Expansion
-- Rangers survey adjacent rooms; heralds reserve frontier rooms
+- Lookouts survey adjacent rooms; collectors reserve frontier rooms
 - Autonomous, GCL-driven expansion: ranks candidates, claims, bootstraps, and runs a
   multi-target expansion queue
 
@@ -174,4 +175,4 @@ Game.arca.traffic(true)             // toggle the traffic manager
 
 ---
 
-*"From the gates of Lorencia, the empire stretches to the farthest dungeon."*
+*"Nothing personal. It's just business."*

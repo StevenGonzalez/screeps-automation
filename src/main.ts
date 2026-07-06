@@ -19,6 +19,7 @@ import * as powerCreepSystem from "./orchestrators/orchestrator.powercreep";
 import * as observerSystem from "./orchestrators/orchestrator.observer";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { runAllies } from "./services/services.allies";
+import { migrateRoleNames } from "./services/services.rebrand";
 import { setupConsole } from "./console";
 import { recordCpu } from "./services/services.profiler";
 // Side-effect import: installs the traffic-managed moveTo override on Creep.prototype.
@@ -57,6 +58,9 @@ export function loop() {
     bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
 
   runSafe("memory", () => memorySystem.loop());
+  // One-time role-vocabulary migration for the crime rebrand. Guards itself with a Memory
+  // flag, so this is a cheap no-op on every tick after the first post-deploy tick.
+  runSafe("rebrand", () => migrateRoleNames());
   // Set empire-wide posture immediately after memory cleanup so the systems below
   // (expansion, military, spawning, towers) all read a fresh posture this same tick.
   runSafe("strategy", () => strategySystem.loop());

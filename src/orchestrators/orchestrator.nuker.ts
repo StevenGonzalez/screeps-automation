@@ -7,7 +7,7 @@
  * Per owned room with a StructureNuker it:
  *   1. caches the nuker id;
  *   2. keeps it filled to capacity — energy (NUKER_ENERGY_CAPACITY, 300k) and ghodium
- *      (NUKER_GHODIUM_CAPACITY, 5k) — by commandeering an idle `porter` (hauler) each tick
+ *      (NUKER_GHODIUM_CAPACITY, 5k) — by commandeering an idle `bagman` (hauler) each tick
  *      and driving it to withdraw from storage/terminal and transfer into the nuker. This
  *      mirrors how orchestrator.factory borrows a courier (role dispatch lives in
  *      orchestrator.creep.ts, owned by another agent, so we cannot add a dedicated role).
@@ -42,7 +42,7 @@ const MAX_FILL_PER_TICK = 1_000;
 declare global {
   interface NukerSystemMemory {
     nukerId?: Id<StructureNuker>;
-    /** Name of the porter currently borrowed to load the nuker. */
+    /** Name of the bagman currently borrowed to load the nuker. */
     courierName?: string;
   }
   interface RoomMemory {
@@ -147,7 +147,7 @@ function findEnergyJob(room: Room, nuker: StructureNuker): FillJob | null {
 
 // ── Input movement (borrowed courier) ─────────────────────────────────────────
 
-// Borrow an idle `porter` and drive it for one tick: dump any unrelated carry to storage,
+// Borrow an idle `bagman` and drive it for one tick: dump any unrelated carry to storage,
 // then withdraw the needed resource and transfer it into the nuker. Returns silently when
 // no courier is free — the hauler simply does its normal job that tick.
 function commandCourier(room: Room, nuker: StructureNuker, job: FillJob): void {
@@ -189,8 +189,8 @@ function commandCourier(room: Room, nuker: StructureNuker, job: FillJob): void {
 
 // ── Courier lifecycle ─────────────────────────────────────────────────────────
 
-// Find (or reuse) an idle porter to act as the nuker courier this tick. Prefers an empty
-// porter closest to the nuker so we don't strand energy it was hauling.
+// Find (or reuse) an idle bagman to act as the nuker courier this tick. Prefers an empty
+// bagman closest to the nuker so we don't strand energy it was hauling.
 function acquireCourier(room: Room): Creep | null {
   const ns = room.memory.nukerSystem!;
 

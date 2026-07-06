@@ -3,7 +3,7 @@
 > **Status**: Implemented. `orchestrators/orchestrator.expansion.ts` does GCL-driven
 > autonomous claiming, drives the full bootstrap lifecycle, runs safety checks for
 > contested rooms, and manages a multi-target expansion **queue**. Remote mining
-> (outriders + peddlers + heralds) feeds the candidate data.
+> (stringers + mules + collectors) feeds the candidate data.
 
 ---
 
@@ -12,11 +12,11 @@
 The bot exploits adjacent rooms without claiming them, and the scout data this
 produces is exactly what the expander ranks candidates from:
 
-1. **Rangers** survey adjacent rooms and record source positions + hostile status
+1. **Lookouts** survey adjacent rooms and record source positions + hostile status
    into `Memory.rooms[home].remoteRooms`.
-2. **Outriders** travel to remote rooms and mine sources into containers.
-3. **Peddlers** haul that energy back to the home colony.
-4. **Heralds** reserve the remote controller, doubling source regen.
+2. **Stringers** travel to remote rooms and mine sources into containers.
+3. **Mules** haul that energy back to the home colony.
+4. **Collectors** reserve the remote controller, doubling source regen.
 
 ---
 
@@ -58,13 +58,13 @@ The CPU bucket must also be ≥ 5,000 before a multi-hundred-tick op starts.
 
 `claiming → bootstrapping → established`
 
-1. **Claiming** — a **conqueror** travels to the target and claims the controller.
+1. **Claiming** — a **capo** travels to the target and claims the controller.
    Aborts cleanly if the room turns out to be owned by another player or fresh
    scout intel flags it hostile.
-2. **Bootstrapping** — **settlers** establish the spawn and economy. During this
+2. **Bootstrapping** — **transplants** establish the spawn and economy. During this
    phase the orchestrator:
-   - **Pauses** settler spawning for ~200 ticks and flags `needsDefender` if the
-     child room is invaded (settlers retreat; a home spawn rule raises a defender).
+   - **Pauses** transplant spawning for ~200 ticks and flags `needsDefender` if the
+     child room is invaded (transplants retreat; a home spawn rule raises a defender).
    - **Times out** after 6,000 ticks if the bootstrap never completes.
 3. **Established** — declared self-sufficient (see completion criteria), kept around
    ~1,000 ticks for inspection, then cleared so the next queued target can start.
@@ -77,7 +77,7 @@ the room is visible):
 1. We own its controller.
 2. It has at least one **built** own spawn (not just a construction site).
 3. Controller RCL ≥ 3.
-4. Its economy can sustain itself: a working miner + hauler pair native to the
+4. Its economy can sustain itself: a working digger + hauler pair native to the
    room, **or** its own storage holds ≥ 10,000 energy.
 
 ---
@@ -106,4 +106,4 @@ Game.arca.cancel()                  // abort the active expansion
 Game.arca.ops()                     // overview of all pipelines (expansion + offensive + SK)
 ```
 
-The kingdom of Lorencia expands — dungeon by dungeon, room by room.
+The family's territory grows — block by block, room by room.

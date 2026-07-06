@@ -1,14 +1,14 @@
 import { getThreatInfo } from "../services/services.combat";
 import { pickSignature } from "../config/signatures";
 
-// Settler: seeds a freshly claimed child room. Its job, in priority order:
-//   1. Survive — retreat to the home room if the child is invaded (a dead settler
+// Transplant: seeds a freshly claimed child room. Its job, in priority order:
+//   1. Survive — retreat to the home room if the child is invaded (a dead transplant
 //      builds nothing; defense is the home room's / towers' job).
 //   2. Build the spawn first so the colony can start spawning its own creeps.
 //   3. Build the rest of the room's critical economy (other sites).
 //   4. Keep the spawn topped up so it can actually spawn.
 //   5. Upgrade the controller to stop it decaying.
-// Once the expansion is "established", existing settlers retire (suicide) rather
+// Once the expansion is "established", existing transplants retire (suicide) rather
 // than looping pointlessly — the room now sustains itself.
 
 export function runSettler(creep: Creep) {
@@ -16,7 +16,7 @@ export function runSettler(creep: Creep) {
   if (!targetRoom) { creep.suicide(); return; }
 
   // Retire once the colony is self-sufficient. The expansion orchestrator owns the
-  // bootstrapping → established transition; a settler has nothing left to do after.
+  // bootstrapping → established transition; a transplant has nothing left to do after.
   const exp = Memory.expansion;
   if (exp && exp.roomName === targetRoom && exp.phase === "established") {
     creep.suicide();
@@ -25,7 +25,7 @@ export function runSettler(creep: Creep) {
 
   // ── Retreat from an invaded child room ──────────────────────────────────────
   // If our destination room is hot, fall back to the home room and wait it out
-  // instead of feeding the enemy a free kill. The orchestrator pauses settler
+  // instead of feeding the enemy a free kill. The orchestrator pauses transplant
   // spawning while this lasts.
   const homeRoom = creep.memory.homeRoom ?? exp?.homeRoom;
   if (creep.room.name === targetRoom && getThreatInfo(creep.room).score > 0) {
@@ -90,7 +90,7 @@ export function runSettler(creep: Creep) {
   const ctrl = creep.room.controller;
   if (ctrl) {
     // On the first tick we find the room self-sufficient / settled, sign once.
-    // lastSigned is stamped on success (here or by the conqueror on claim), so
+    // lastSigned is stamped on success (here or by the capo on claim), so
     // once the room carries a mark we never re-sign — without this guard the
     // block fires every tick of the whole bootstrapping phase.
     const exp = Memory.expansion;
@@ -130,7 +130,7 @@ function harvest(creep: Creep) {
 }
 
 function moveToRoom(creep: Creep, roomName: string) {
-  // findExitTo still gates the unreachable case (a settler that genuinely can't route to its
+  // findExitTo still gates the unreachable case (a transplant that genuinely can't route to its
   // target suicides rather than wander). The travel itself uses PathFinder's multi-room pathing
   // to the room centre — moveTo-ing a bare exit tile bounces creeps between two rooms
   // (see role.reserver.ts / role.remote_miner.ts).

@@ -18,7 +18,7 @@ g.HEAL_POWER = 12;
 import { pickPatrolRoom } from "../src/orchestrators/orchestrator.score";
 
 const HOME = "W1N1";
-const SEEKER = "seeker"; // ROLE_SCORE_HUNTER
+const SEEKER = "grifter"; // ROLE_SCORE_HUNTER
 
 // Parse a room name to signed world coords and take the Chebyshev room distance — matches how
 // Screeps' Game.map.getRoomLinearDistance measures (max of the two axis deltas).
