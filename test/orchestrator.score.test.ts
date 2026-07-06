@@ -121,4 +121,16 @@ describe("pickPatrolRoom", () => {
     creeps.s1 = s;
     expect(pickPatrolRoom(s)).toBeUndefined();
   });
+
+  it("does not avoid a room just because an unarmed scout is present", () => {
+    const now = (g.Game as { time: number }).time;
+    seen.W1N2 = now - 5;
+    seen.W2N1 = now - 5;
+    seen.W1N0 = now - 5000;
+    seen.W0N1 = now - 5;
+    intel.W1N0 = { hostileCreeps: 1, hostileCombatParts: 0, threatLevel: 0 } as any;
+    const s = seeker("s1", HOME);
+    creeps.s1 = s;
+    expect(pickPatrolRoom(s)).toBe("W1N0");
+  });
 });

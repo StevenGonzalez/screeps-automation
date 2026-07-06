@@ -301,7 +301,10 @@ function safeRegionRooms(home: string, myName: string | undefined, range: number
 
 function isThreatenedRoom(roomName: string): boolean {
   const intel = Memory.intel?.[roomName];
-  return (intel?.hostileCreeps ?? 0) > 0 || (intel?.threatLevel ?? 0) > 0;
+  if (!intel) return false;
+  // Only avoid rooms known to contain combat-capable hostiles or a real standing threat.
+  if ((intel.hostileCombatParts ?? 0) > 0) return true;
+  return (intel.threatLevel ?? 0) > 0;
 }
 
 function isHostileOwned(roomName: string, myName: string | undefined): boolean {
