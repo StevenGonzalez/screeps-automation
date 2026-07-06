@@ -105,10 +105,12 @@ export function runRemoteMiner(creep: Creep) {
 }
 
 function moveToRoom(creep: Creep, targetRoom: string) {
-  const exit = creep.room.findExitTo(targetRoom);
-  if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) return;
-  const exitPos = creep.pos.findClosestByRange(exit);
-  if (exitPos) creep.moveTo(exitPos, { reusePath: 30 });
+  // Route toward the target room centre via PathFinder's multi-room pathing rather than
+  // findExitTo + findClosestByRange(exit). That older pattern aims at a bare edge tile chosen
+  // by straight-line range (often a corner or a wall-blocked tile), and moveTo to a bare border
+  // tile doesn't reliably cross — the creep parks on the edge or corner-drifts into the wrong
+  // neighbour, whose findExitTo points straight back, bouncing between two rooms forever.
+  creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }
 
 function findOrUpdateContainer(

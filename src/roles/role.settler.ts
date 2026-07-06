@@ -130,11 +130,14 @@ function harvest(creep: Creep) {
 }
 
 function moveToRoom(creep: Creep, roomName: string) {
+  // findExitTo still gates the unreachable case (a settler that genuinely can't route to its
+  // target suicides rather than wander). The travel itself uses PathFinder's multi-room pathing
+  // to the room centre — moveTo-ing a bare exit tile bounces creeps between two rooms
+  // (see role.reserver.ts / role.remote_miner.ts).
   const exit = creep.room.findExitTo(roomName);
   if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) {
     creep.suicide();
     return;
   }
-  const exitPos = creep.pos.findClosestByRange(exit);
-  if (exitPos) creep.moveTo(exitPos, { reusePath: 50 });
+  creep.moveTo(new RoomPosition(25, 25, roomName), { reusePath: 50, range: 20 });
 }

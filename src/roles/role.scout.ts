@@ -49,8 +49,16 @@ export function runScout(creep: Creep) {
       giveUpOnRoom(creep, homeRoom, targetRoom);
       return;
     }
-    const exitPos = creep.pos.findClosestByRange(exit);
-    if (exitPos) creep.moveTo(exitPos, { reusePath: 50, visualizePathStyle: {} });
+    // Route toward the target room centre via PathFinder's multi-room pathing rather than
+    // moveTo-ing a bare exit tile from findClosestByRange(exit): that aims at an edge tile
+    // chosen by straight-line range (often a corner or wall-blocked tile), and moveTo to a
+    // bare border tile doesn't reliably cross — the scout parks on the edge or corner-drifts
+    // into the wrong neighbour and bounces between two rooms until the travel budget lapses.
+    creep.moveTo(new RoomPosition(25, 25, targetRoom), {
+      reusePath: 50,
+      range: 20,
+      visualizePathStyle: {},
+    });
     return;
   }
 

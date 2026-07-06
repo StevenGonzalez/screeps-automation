@@ -65,8 +65,12 @@ function parkNearHomeSpawn(creep: Creep, homeRoomName: string) {
 
 function travelToRoom(creep: Creep, roomName: string) {
   if (creep.room.name === roomName) return;
-  const exit = creep.room.findExitTo(roomName);
-  if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) return;
-  const pos = creep.pos.findClosestByRange(exit);
-  if (pos) creep.moveTo(pos, { reusePath: 10, visualizePathStyle: {} });
+  // Route to the room centre via PathFinder's multi-room pathing. Aiming moveTo at a bare exit
+  // tile (findExitTo + findClosestByRange) parks creeps on the border or bounces them between
+  // two rooms — see role.reserver.ts / role.remote_miner.ts.
+  creep.moveTo(new RoomPosition(25, 25, roomName), {
+    reusePath: 10,
+    range: 20,
+    visualizePathStyle: {},
+  });
 }

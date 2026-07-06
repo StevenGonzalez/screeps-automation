@@ -10,13 +10,15 @@ export function runConqueror(creep: Creep) {
   if (!targetRoom) { creep.suicide(); return; }
 
   if (creep.room.name !== targetRoom) {
+    // findExitTo gates the unreachable case (suicide rather than wander); travel itself uses
+    // PathFinder's multi-room pathing to the room centre — moveTo-ing a bare exit tile bounces
+    // creeps between two rooms (see role.reserver.ts / role.remote_miner.ts).
     const exit = creep.room.findExitTo(targetRoom);
     if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) {
       creep.suicide();
       return;
     }
-    const exitPos = creep.pos.findClosestByRange(exit);
-    if (exitPos) creep.moveTo(exitPos, { reusePath: 50 });
+    creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 50, range: 20 });
     return;
   }
 

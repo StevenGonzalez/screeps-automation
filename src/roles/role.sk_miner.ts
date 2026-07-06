@@ -68,8 +68,8 @@ export function runSkMiner(creep: Creep) {
 }
 
 function moveToRoom(creep: Creep, targetRoom: string): void {
-  const exit = creep.room.findExitTo(targetRoom);
-  if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) return;
-  const exitPos = creep.pos.findClosestByRange(exit);
-  if (exitPos) creep.moveTo(exitPos, { reusePath: 30 });
+  // Route to the target room centre via PathFinder's multi-room pathing. Aiming moveTo at a
+  // bare exit tile (findExitTo + findClosestByRange) parks creeps on the border or bounces
+  // them between two rooms — see role.reserver.ts / role.remote_miner.ts.
+  creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }
