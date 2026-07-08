@@ -38,7 +38,10 @@ export function runMineralMiner(creep: Creep): void {
     return;
   }
 
-  if (depleted) return;
+  if (depleted) {
+    creep.suicide();
+    return;
+  }
 
   if (!creep.pos.isEqualTo(container.pos)) {
     creep.moveTo(container.pos, { reusePath: 50 });

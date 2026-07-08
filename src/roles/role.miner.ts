@@ -70,6 +70,14 @@ export function runMiner(creep: Creep) {
       return;
     }
   }
+
+  // Fallback: no source has a container (destroyed or not built yet). Drop-mine
+  // the nearest safe source so income continues instead of idling; haulers and
+  // the collect logic pick up the dropped energy.
+  if (sources.length > 0) {
+    const source = creep.pos.findClosestByRange(sources) ?? sources[0];
+    harvestFromSource(creep, source);
+  }
 }
 
 function findAdjacentLink(creep: Creep): StructureLink | null {
