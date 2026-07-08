@@ -585,6 +585,11 @@ const BREACH_DANGER_FLOOR = 50_000;
 const TOWER_DEFENSE_REPAIR_FLOOR = 300_000;
 
 export function findCriticalDefenseTarget(creep: Creep): AnyStructure | null {
+  // Only preempt construction to repair defenses when the room is actually
+  // under threat. In peacetime a freshly built rampart sits at 1 HP and would
+  // otherwise pull every builder off construction to top it up; the repairer
+  // role maintains ramparts and walls instead.
+  if (getDangerPositions(creep.room).length === 0) return null;
   const critical = getRoomStructures(creep.room).filter(
     (s): s is AnyStructure =>
       (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
