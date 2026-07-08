@@ -8,7 +8,8 @@ import {
   findDepositTargetExcludingMiner,
   findEmptiestTower,
   findCoreFillTarget,
-  putSurplusEnergyToWork,
+  getRoomBuildTarget,
+  buildAtConstructionSite,
 } from "../services/services.creep";
 import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
@@ -99,7 +100,22 @@ export function runHauler(creep: Creep) {
     return;
   }
 
-  putSurplusEnergyToWork(creep);
+  // Nothing to deposit. Build to grow the room if there is a site; otherwise
+  // stay parked by the core holding the energy so a drained spawn/extension can
+  // be topped off immediately instead of waiting for a round trip.
+  const site = getRoomBuildTarget(creep.room);
+  if (site) {
+    buildAtConstructionSite(creep, site);
+    return;
+  }
+  parkNearCore(creep);
+}
+
+function parkNearCore(creep: Creep): void {
+  const anchor = creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0];
+  if (anchor && !creep.pos.inRangeTo(anchor, 1)) {
+    creep.moveTo(anchor, { reusePath: 20, range: 1 });
+  }
 }
 
 function debugDeposit(creep: Creep, target: Structure): void {
