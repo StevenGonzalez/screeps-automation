@@ -436,12 +436,26 @@ export function findClosestConstructionSite(
   const sites = creep.room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[];
   if (!sites || sites.length === 0) return null;
 
-  const nonRoadSites = sites.filter((s) => s.structureType !== STRUCTURE_ROAD);
-  if (nonRoadSites.length > 0) {
-    return closestByPath(creep.pos, nonRoadSites) || null;
+  // Walk priority tiers best-first; return the closest reachable site in the
+  // highest-priority tier that has one, so we never fall back to a low-value
+  // structure (rampart, road) while a better site is still reachable.
+  const ranked = sites
+    .map((s) => ({ s, p: sitePriority(s) }))
+    .sort((a, b) => a.p - b.p);
+
+  let i = 0;
+  while (i < ranked.length) {
+    const tier = ranked[i].p;
+    const group: ConstructionSite[] = [];
+    while (i < ranked.length && ranked[i].p === tier) {
+      group.push(ranked[i].s);
+      i++;
+    }
+    const reachable = closestByPath(creep.pos, group);
+    if (reachable) return reachable;
   }
 
-  return closestByPath(creep.pos, sites) || null;
+  return null;
 }
 
 const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
