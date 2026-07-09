@@ -68,16 +68,44 @@ export function findOptimalAnchor(
 export function getOrFindAnchor(
   room: Room
 ): { x: number; y: number } | null {
-  const rcl = room.controller?.level ?? 0;
-  if (room.memory.castleAnchor && room.memory.lastRcl === rcl) {
-    return room.memory.castleAnchor;
-  }
-  const anchor = findOptimalAnchor(room);
-  if (anchor) {
+  // An existing spawn is immovable, so it — not a re-optimized guess — must be
+  // the stamp origin (cell {0,0}). Pinning the anchor to it keeps the auto
+  // layout aligned with the real spawn and stops the base drifting whenever the
+  // room-wide optimizer re-runs (which previously happened on every RCL change).
+  const spawns = room.find(FIND_MY_SPAWNS);
+  if (spawns.length > 0) {
+    const cached = room.memory.castleAnchor;
+    // Once several spawns exist (RCL 7+), the center is the one the anchor
+    // already sat on; if none matches (e.g. correcting an old offset anchor),
+    // fall back to the spawn nearest the previous anchor, else the first spawn.
+    let center = cached
+      ? spawns.find((s) => s.pos.x === cached.x && s.pos.y === cached.y)
+      : undefined;
+    if (!center) {
+      center = cached
+        ? spawns.reduce((best, s) =>
+            chebyshevDist(s.pos.x - cached.x, s.pos.y - cached.y) <
+            chebyshevDist(best.pos.x - cached.x, best.pos.y - cached.y)
+              ? s
+              : best
+          )
+        : spawns[0];
+    }
+    const anchor = { x: center.pos.x, y: center.pos.y };
     room.memory.castleAnchor = anchor;
-    room.memory.lastRcl = rcl;
+    return anchor;
   }
+
+  // No spawn yet (unclaimed room or a fresh GCL expansion): optimize once and
+  // cache so the layout is stable before the first spawn is placed.
+  if (room.memory.castleAnchor) return room.memory.castleAnchor;
+  const anchor = findOptimalAnchor(room);
+  if (anchor) room.memory.castleAnchor = anchor;
   return anchor;
+}
+
+function chebyshevDist(dx: number, dy: number): number {
+  return Math.max(Math.abs(dx), Math.abs(dy));
 }
 
 export function applyCastleStamp(room: Room): void {
