@@ -3,9 +3,9 @@ import {
   addPlannedStructureToMemory,
   plannedPositionsFromMemory,
 } from "../services/services.structures";
+import type { StampCell } from "./planner.stamp";
 import {
   CASTLE_STAMP,
-  StampCell,
   MERCHANT_RING_EXTENSION_OFFSETS,
   getStampCellsForRcl,
   stampMemoryKeyFor,
@@ -108,6 +108,10 @@ function chebyshevDist(dx: number, dy: number): number {
   return Math.max(Math.abs(dx), Math.abs(dy));
 }
 
+export function shouldUseFallbackForStampCell(cell: StampCell): boolean {
+  return cell.type === "tower" || Boolean(cell.critical);
+}
+
 export function applyCastleStamp(room: Room): void {
   const anchor = getOrFindAnchor(room);
   if (!anchor) return;
@@ -147,7 +151,7 @@ export function applyCastleStamp(room: Room): void {
     let finalY = absY;
 
     if (terrain.get(absX, absY) === TERRAIN_MASK_WALL) {
-      if (!cell.critical) continue;
+      if (!shouldUseFallbackForStampCell(cell)) continue;
       const fallback = findNearestBuildable(
         room,
         absX,
