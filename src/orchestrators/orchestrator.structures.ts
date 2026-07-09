@@ -170,10 +170,39 @@ function applyPlannedConstruction(room: Room) {
     }
   }
 
-  let budget = MAX_CONSTRUCTION_SITES - Object.keys(Game.constructionSites).length;
+  // Queue only a few sites per room at a time, in priority order, so builders
+  // finish the important structures before lower-value ones. MAX_CONSTRUCTION_SITES
+  // is a global cap shared by every room and remote, so also honor whatever room
+  // is left in it.
+  const perRoomCap = STRUCTURE_PLANNER.maxActiveConstructionSites;
+  let roomSiteCount = 0;
+  for (const set of sitesByType.values()) roomSiteCount += set.size;
+  const globalRemaining =
+    MAX_CONSTRUCTION_SITES - Object.keys(Game.constructionSites).length;
+  let budget = Math.min(globalRemaining, perRoomCap - roomSiteCount);
+
   const keys = Object.keys(mem).sort(
     (a, b) => buildPriority(a) - buildPriority(b)
   );
+
+  // When the room is already at its cap, let a higher-priority planned structure
+  // (e.g. a freshly unlocked tower) bump the lowest-priority pending site (a
+  // road) instead of waiting behind it.
+  const prioOfSite = (s: ConstructionSite): number =>
+    BUILD_PRIORITY[s.structureType as StructureConstant] ?? 11;
+  let evictPool: ConstructionSite[] | null = null;
+  const evictForPriority = (target: number): boolean => {
+    if (evictPool === null) {
+      evictPool = (room.find(FIND_MY_CONSTRUCTION_SITES) as ConstructionSite[])
+        .filter((s) => s.progress === 0)
+        .sort((a, b) => prioOfSite(a) - prioOfSite(b));
+    }
+    const victim = evictPool[evictPool.length - 1];
+    if (!victim || prioOfSite(victim) <= target) return false;
+    evictPool.pop();
+    victim.remove();
+    return true;
+  };
 
   const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
   const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
@@ -208,7 +237,10 @@ function applyPlannedConstruction(room: Room) {
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       keep.push(posStr);
       if (sites?.has(posStr)) continue;
-      if (budget <= 0) continue;
+      if (budget <= 0) {
+        if (!evictForPriority(buildPriority(key))) continue;
+        budget++;
+      }
       if (isRoad && roadSiteCount >= roadCap) continue;
       if (key === perimeterKey && perimeterSiteCount >= perimeterCap) continue;
       let result: ScreepsReturnCode;
@@ -352,6 +384,14 @@ const REMOTE_ROAD_SITES_PER_CALL = 5;
 function planRemoteRoad(homeRoom: Room, from: RoomPosition) {
   const storage = homeRoom.storage;
   if (!storage) return;
+
+  // Remote roads are low priority and would otherwise accumulate unbounded,
+  // filling the shared MAX_CONSTRUCTION_SITES budget and starving owned rooms.
+  if (
+    Object.keys(Game.constructionSites).length >=
+    STRUCTURE_PLANNER.remoteRoadGlobalLimit
+  )
+    return;
 
   const result = PathFinder.search(
     from,
