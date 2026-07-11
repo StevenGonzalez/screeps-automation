@@ -1,10 +1,21 @@
 import {
   claimNearestScoreTarget,
+  findNearestScoreInRoom,
   getScoreTarget,
   pickPatrolRoom,
 } from "../orchestrators/orchestrator.score";
 
 export function runScoreHunter(creep: Creep): void {
+  // A score in the room we're standing in is collected just by stepping on it — grab it before
+  // honoring any remote claim or patrol, so we never path straight past free points.
+  const localScore = findNearestScoreInRoom(creep);
+  if (localScore) {
+    if (!creep.pos.isEqualTo(localScore)) {
+      creep.moveTo(localScore, { reusePath: 5, visualizePathStyle: { stroke: "#ffff00" } });
+    }
+    return;
+  }
+
   let targetId = creep.memory.targetId;
   let target = targetId ? getScoreTarget(targetId) : undefined;
 

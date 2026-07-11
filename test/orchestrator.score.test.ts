@@ -11,7 +11,7 @@ g.ATTACK_POWER = 30;
 g.RANGED_ATTACK_POWER = 10;
 g.HEAL_POWER = 12;
 
-import { pickPatrolRoom } from "../src/orchestrators/orchestrator.score";
+import { pickPatrolRoom, findNearestScoreInRoom } from "../src/orchestrators/orchestrator.score";
 
 const HOME = "W1N1";
 const SEEKER = "snatcher";
@@ -120,5 +120,42 @@ describe("pickPatrolRoom", () => {
     const s = seeker("s1", HOME);
     creeps.s1 = s;
     expect(pickPatrolRoom(s)).toBe("W1N0");
+  });
+});
+
+describe("findNearestScoreInRoom", () => {
+  function seekerWithScores(at: { x: number; y: number }, scores: { x: number; y: number }[]): Creep {
+    return {
+      pos: {
+        roomName: HOME,
+        getRangeTo: (p: { x: number; y: number }) =>
+          Math.max(Math.abs(at.x - p.x), Math.abs(at.y - p.y)),
+      },
+      room: {
+        name: HOME,
+        find: (_c: number) => scores.map((s) => ({ pos: { x: s.x, y: s.y, roomName: HOME } })),
+      },
+    } as unknown as Creep;
+  }
+
+  it("returns undefined when the season constant is absent", () => {
+    delete g.FIND_SCORES;
+    expect(findNearestScoreInRoom(seekerWithScores({ x: 25, y: 25 }, [{ x: 10, y: 10 }]))).toBeUndefined();
+  });
+
+  it("returns undefined when the room has no score", () => {
+    g.FIND_SCORES = 10031;
+    expect(findNearestScoreInRoom(seekerWithScores({ x: 25, y: 25 }, []))).toBeUndefined();
+  });
+
+  it("picks the nearest score so the hunter steps onto free points instead of passing them", () => {
+    g.FIND_SCORES = 10031;
+    const pos = findNearestScoreInRoom(
+      seekerWithScores({ x: 25, y: 25 }, [
+        { x: 40, y: 40 },
+        { x: 27, y: 26 },
+      ])
+    );
+    expect(pos).toMatchObject({ x: 27, y: 26 });
   });
 });

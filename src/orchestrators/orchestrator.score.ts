@@ -93,6 +93,24 @@ export function getScoreTarget(id: string): ScoreTarget | undefined {
   return Memory.scoreTargets?.[id];
 }
 
+// Score is collected simply by moving a creep onto its tile, so a score in the creep's current
+// room is free points regardless of any remote target it has claimed. Returns the nearest one.
+export function findNearestScoreInRoom(creep: Creep): RoomPosition | undefined {
+  const findConstant = getScoreFindConstant();
+  if (findConstant === undefined) return undefined;
+  const scores = (creep.room.find as (c: number) => ScoreObject[])(findConstant);
+  let best: ScoreObject | undefined;
+  let bestRange = Infinity;
+  for (const s of scores) {
+    const range = creep.pos.getRangeTo(s.pos);
+    if (range < bestRange) {
+      bestRange = range;
+      best = s;
+    }
+  }
+  return best?.pos;
+}
+
 function estimateTravelTicks(fromRoom: string, toRoom: string): number {
   if (fromRoom === toRoom) return 0;
   return Game.map.getRoomLinearDistance(fromRoom, toRoom) * 50 + 25;
