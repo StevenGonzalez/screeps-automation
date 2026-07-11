@@ -42,7 +42,7 @@ import {
 } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
-import { getUnclaimedScoreTargetCount, pickPatrolRoom, scoreHunterSupported } from "./orchestrator.score";
+import { getUnclaimedScoreTargetCount, getScoreScanRooms, scoreHunterSupported } from "./orchestrator.score";
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -710,19 +710,17 @@ function spawnScout(room: Room, spawn: StructureSpawn): boolean {
 
 const BASELINE_SCORE_PATROLLERS = 2;
 const MAX_SCORE_HUNTERS_PER_ROOM = 4;
+const SCORE_PATROL_RADIUS = 2;
 
 function shouldSpawnScoreHunter(room: Room): boolean {
   if (!scoreHunterSupported()) return false;
   if (getThreatInfo(room).score > 0) return false;
-  const patrolDestination = pickPatrolRoom({
-    name: room.name,
-    pos: { roomName: room.name } as RoomPosition,
-    room: room as unknown as Room,
-    memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
-  } as Creep);
-  if (!patrolDestination) return false;
   if (room.energyAvailable < room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) return false;
+  // Spawn if there is a known unclaimed score target or a safe region to patrol for one.
+  // (Don't gate on pickPatrolRoom here: it only resolves a destination for a creep already
+  // in the live fleet, so a not-yet-spawned hunter would deadlock at zero.)
   const unclaimed = getUnclaimedScoreTargetCount();
+  if (unclaimed === 0 && getScoreScanRooms(room.name, SCORE_PATROL_RADIUS).length === 0) return false;
   const target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed));
   const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter(
     (c) => !c.spawning && c.memory.homeRoom === room.name
