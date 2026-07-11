@@ -2,7 +2,7 @@
 
 > **Status**: Implemented. Towers fire automatically via `orchestrator.tower.ts` and
 > safe mode is handled automatically. Offensive squad warfare (formations + tactics),
-> organized home defense (Enforcer, Triggerman, Medic), and the WarCouncil intel/targeting
+> organized home defense (Biter, Spitter, Licker), and the WarCouncil intel/targeting
 > layer are live. Squad coordination lives in `orchestrators/orchestrator.military.ts`;
 > combat targeting and formation geometry live in `services/services.combat.ts`.
 
@@ -25,10 +25,10 @@ defensive squad whenever an owned room is meaningfully threatened
   group at each room border before pushing in.
 - **Intelligent Targeting**: priority-based selection for both creeps (healers first)
   and structures (spawns/towers first, then economy), with rampart-shield breaking.
-- **Role-Based Combat**: Enforcer (melee/tank), Triggerman (ranged kiter), Medic (healer),
-  Wrecker (boosted dismantler for breaching).
+- **Role-Based Combat**: Biter (melee/tank), Spitter (ranged kiter), Licker (healer),
+  Chewer (boosted dismantler for breaching).
 - **Dynamic Adaptation**: auto-retreat on sustained casualties (tactic-dependent
-  threshold), heal at home, then resume; triggermen kite automatically.
+  threshold), heal at home, then resume; spitters kite automatically.
 - **Boost Integration**: combat creeps auto-request the best available boost for their
   combat part (attack / ranged / heal / dismantle) and are boosted at the labs.
 - **WarCouncil**: scans visible rooms, scores them 0-10, ranks enemy targets, and can
@@ -46,13 +46,13 @@ defensive squad whenever an owned room is meaningfully threatened
 ```javascript
 Game.arca.attack('W2N1');                       // box / assault, auto-scaled squad
 Game.arca.attack('W2N1', 'wedge', 'siege');     // choose formation + tactic
-Game.arca.attack('W2N1', 'box', 'assault', { enforcers: 4, medics: 2, wreckers: 1 });
+Game.arca.attack('W2N1', 'box', 'assault', { biters: 4, lickers: 2, chewers: 1 });
 Game.arca.attack('W2N1', 'box', 'assault', undefined, 'W1N1'); // force funding home
 // Parameters:
 //   targetRoom:   room to attack
 //   formation:    'line' | 'box' | 'wedge' | 'scatter'   (default 'box')
 //   tactic:       'assault' | 'siege' | 'raid' | 'defend' (default 'assault')
-//   composition:  optional { enforcers, triggermen, medics, wreckers } override.
+//   composition:  optional { biters, spitters, lickers, chewers } override.
 //                 Omitted roles fall back to an intel-scaled recommendation.
 //   homeRoom:     optional funding home; default is the closest owned room.
 ```
@@ -108,14 +108,14 @@ Game.arca.safemode('W1N1');     // manually activate safe mode in a room
 ## Formations
 
 Offsets are relative to the leader (slot 0). Members are slotted front-to-back by role
-- tanks/wreckers front, healers center, ranged back - so each formation expresses its
+- tanks/chewers front, healers center, ranged back - so each formation expresses its
 doctrine. The formation reorients naturally as the leader moves.
 
 ### Line
 Wide single row. Best for corridor fighting and spreading out along a front.
 
 ### Box (Default)
-Layered 3-wide block: enforcers front, medics center, triggermen back. Best balanced
+Layered 3-wide block: biters front, lickers center, spitters back. Best balanced
 formation for most engagements.
 
 ### Wedge
@@ -131,8 +131,8 @@ Advance in formation, engage all hostiles, then raze structures (spawns first, t
 towers and the economy). Best for wiping an enemy room.
 
 ### Siege
-Wreckers dismantle structures with towers prioritized first (cut defensive fire),
-while enforcers screen them and medics keep them alive. Best for fortified rooms.
+Chewers dismantle structures with towers prioritized first (cut defensive fire),
+while biters screen them and lickers keep them alive. Best for fortified rooms.
 
 ### Raid
 Hit-and-run. Same advance, but the auto-retreat threshold is high (55% avg HP) so the
@@ -150,21 +150,21 @@ heals at home to 85% and then resumes the prior tactic.
 
 ## Combat Roles
 
-### Enforcer () - `enforcer`
+### Biter () - `biter`
 Melee tank. TOUGH front-loaded so armor absorbs hits before ATTACK parts die. Usually
 the squad leader. Boosted with the attack line (UH -> UH2O -> XUH2O).
 
-### Triggerman () - `triggerman`
+### Spitter () - `spitter`
 Ranged kiter. Holds enemies at range 3, uses `rangedMassAttack` when 3+ are close,
 otherwise focuses the squad's priority target. Boosted with the ranged line
 (KO -> KHO2 -> XKHO2).
 
-### Medic () - `medic`
+### Licker () - `licker`
 Healer. Heals the lowest-HP% squad member (range 1 `heal`, range 3 `rangedHeal`),
 self-heals, and stays in the formation's protected center. Boosted with the heal line
 (LO -> LHO2 -> XLHO2). Also spawns for home defense during high-threat scenarios.
 
-### Wrecker () - `wrecker`
+### Chewer () - `chewer`
 Boosted dismantler. TOUGH soaks tower fire while WORK parts dismantle ramparts and
 raze structures far faster than melee. Operates only as part of an operation - too
 fragile to act alone. Boosted with the dismantle line (ZH -> ZH2O -> XZH2O).
@@ -189,10 +189,10 @@ rampart, the rampart is broken first.
 ## Integration with Existing Systems
 
 ### Spawn Queue
-- Defensive Enforcers/Triggermen/Medics jump the economy queue under threat (high-severity
-  raids take priority over diggers - a dead digger respawns, a dead spawn does not).
+- Defensive Biters/Spitters/Lickers jump the economy queue under threat (high-severity
+  raids take priority over munchers - a dead muncher respawns, a dead spawn does not).
 - Offensive squad creeps spawn at full energy capacity for max-strength bodies, in
-  formation order (enforcers -> wreckers -> triggermen -> medics).
+  formation order (biters -> chewers -> spitters -> lickers).
 
 ### DefenseCouncil (automatic standing defense)
 Runs every 5 ticks inside `orchestrator.military.ts`, separate from the manual
@@ -202,8 +202,8 @@ offensive ops. Each owned room is its own theatre:
   (~ a healer-backed raid towers can't comfortably out-damage), gets a `DefenseOp`
   declared in `Memory.defenseOps[roomName]`.
 - **Spawning**: the spawn orchestrator reads `getDefenseOp(room)` and raises the
-  needed enforcers/medics/triggermen, jumping the economy queue. Composition scales with
-  the threat score (up to 4 enforcers, 2 medics, +1 triggerman for ranged-heavy raids).
+  needed biters/lickers/spitters, jumping the economy queue. Composition scales with
+  the threat score (up to 4 biters, 2 lickers, +1 spitter for ranged-heavy raids).
 - **Behavior**: defenders rally and fight **inside** the threatened room only. They
   focus-fire with the same healers-first priority as offensive squads, hold near the
   rally point, and refuse to chase hostiles onto room-edge exit tiles (so a kiting
@@ -232,7 +232,7 @@ critically damaged (`orchestrator.tower.ts`).
 1. **Start with box/assault** for standard attacks; the squad auto-scales to defenses.
 2. **Watch HP** with `Game.arca.squads()` - the squad auto-retreats and re-pushes.
 3. **Use wedge for offense, box for defense, scatter against towers.**
-4. **Use siege** (with wreckers) against fortified rooms; towers fall first.
+4. **Use siege** (with chewers) against fortified rooms; towers fall first.
 5. **Scout first** - `Game.arca.warcouncil()` shows what intel knows about a target.
 6. **Energy reserve** - keep the home room healthy before launching; offensive bodies
    are expensive and spawn at full capacity.

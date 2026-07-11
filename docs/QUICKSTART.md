@@ -1,11 +1,10 @@
 # Quick Start Guide
 
-Welcome to **the Family** - an organized-crime-themed Screeps bot. The flavor is a
-mob outfit (runners and diggers bring in the earnings, launderers and contractors
-build out the operation, enforcers and triggermen handle trouble), but the
-architecture is plain: a set of per-system `loop()` modules run in order from
-`main.ts`. There's no central AI object or class hierarchy. See
-[ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
+Welcome to **the Bug Pile** - a Screeps bot themed around a colony of dumb little
+bugs (nibblers and munchers gather the food, pokers and stackers build up the nest,
+biters and spitters deal with trouble), but the architecture is plain: a set of
+per-system `loop()` modules run in order from `main.ts`. There's no central AI
+object or class hierarchy. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full picture.
 
 ## How It's Organized
 
@@ -33,36 +32,36 @@ yarn deploy        # Deploy to MMO
 yarn deploy:sim    # Deploy to simulation
 ```
 
-### 3. Watch the Operation Come to Life
+### 3. Watch the Colony Come to Life
 
-The bot automatically spawns runners and diggers to gather energy, bagmen to haul
-it, launderers to upgrade the controller, and contractors to build as the operation
-expands. It reports CPU and creep counts every 100 ticks.
+The bot automatically spawns nibblers and munchers to gather energy, draggers to haul
+it, pokers to upgrade the controller, and stackers to build as the colony
+grows. It reports CPU and creep counts every 100 ticks.
 
 ## Creep Roster
 
 | Name | Role | Notes |
 |------|------|-------|
-| **runner** | Early harvester | Gathers directly from sources; phases out once diggers are up |
-| **digger** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
-| **bagman** | Hauler | Hauls source energy to storage (fills the core directly until a busboy exists); also borrowed by the factory and nuker as a courier |
-| **busboy** | Filler | Distributes energy from storage to spawns, extensions, and towers; appears once the room has storage (RCL 4+) |
-| **launderer** | Upgrader | Upgrades the controller to advance RCL |
-| **contractor** | Builder | Constructs queued construction sites |
-| **fixer** | Repairer | Repairs damaged structures |
-| **cooker** | Mineral miner | Extracts minerals for lab chains (RCL 6+) |
-| **chemist** | Lab logistics | Loads lab reagents, drains product, boosts creeps |
-| **lookout** | Scout | Surveys adjacent rooms and records intel |
-| **stringer** | Remote miner | Mines sources in frontier rooms |
-| **mule** | Remote hauler | Carries remote energy back home |
-| **collector** | Reserver | Reserves remote controllers, doubling source yield |
-| **capo** | Claimer | Claims new room controllers |
-| **transplant** | Bootstrapper | Establishes a freshly claimed room |
-| **enforcer** | Melee | Offensive squads + home defense |
-| **triggerman** | Ranged | Offensive squads + home defense |
-| **medic** | Healer | Offensive squads + home defense |
-| **wrecker** | Dismantler | Boosted breacher for fortified rooms |
-| **legbreaker / sawbones / courier** | PowerBank squad | Crack and collect power banks |
+| **nibbler** | Early harvester | Gathers directly from sources; phases out once munchers are up |
+| **muncher** | Stationary miner | Sits on a container at a source; maximizes WORK parts |
+| **dragger** | Hauler | Hauls source energy to storage (fills the core directly until a stuffer exists); also borrowed by the factory and nuker as a courier |
+| **stuffer** | Filler | Distributes energy from storage to spawns, extensions, and towers; appears once the room has storage (RCL 4+) |
+| **poker** | Upgrader | Upgrades the controller to advance RCL |
+| **stacker** | Builder | Constructs queued construction sites |
+| **patcher** | Repairer | Repairs damaged structures |
+| **gnawer** | Mineral miner | Extracts minerals for lab chains (RCL 6+) |
+| **mixer** | Lab logistics | Loads lab reagents, drains product, boosts creeps |
+| **wobbler** | Scout | Surveys adjacent rooms and records intel |
+| **rover** | Remote miner | Mines sources in frontier rooms |
+| **plodder** | Remote hauler | Carries remote energy back home |
+| **squatter** | Reserver | Reserves remote controllers, doubling source yield |
+| **sprawler** | Claimer | Claims new room controllers |
+| **nester** | Bootstrapper | Establishes a freshly claimed room |
+| **biter** | Melee | Offensive squads + home defense |
+| **spitter** | Ranged | Offensive squads + home defense |
+| **licker** | Healer | Offensive squads + home defense |
+| **chewer** | Dismantler | Boosted breacher for fortified rooms |
+| **basher / drooler / lugger** | PowerBank squad | Crack and collect power banks |
 
 ## Implemented Systems
 
@@ -175,4 +174,4 @@ Game.arca.traffic(true)             // toggle the traffic manager
 
 ---
 
-*"Nothing personal. It's just business."*
+*"many legs. one pile. good pile."*

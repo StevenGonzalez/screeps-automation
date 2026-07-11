@@ -13,7 +13,7 @@
 ## Loading the Nuker
 
 Per owned room with a `StructureNuker`, each tick the orchestrator decides what (if
-anything) the nuker still needs and drives a borrowed **bagman** (hauler) to fetch
+anything) the nuker still needs and drives a borrowed **dragger** (hauler) to fetch
 it from storage/terminal and transfer it in. Like the factory, it borrows an idle
 hauler rather than using a dedicated role; it runs **after** the creep orchestrator
 in `main.ts`, so its intents win for the tick. It also runs **after** the terminal,

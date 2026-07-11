@@ -282,7 +282,7 @@ export function setupConsole() {
       roomName: string,
       formation: SquadFormation = "box",
       tactic: SquadTactic = "assault",
-      composition?: { enforcers?: number; triggermen?: number; medics?: number; wreckers?: number; decoys?: number },
+      composition?: { biters?: number; spitters?: number; lickers?: number; chewers?: number; wigglers?: number },
       homeRoomName?: string
     ) => {
       if (!roomName) {
@@ -328,11 +328,11 @@ export function setupConsole() {
 
       const rec = recommendComposition(roomName, tactic);
       const comp = {
-        enforcers: composition?.enforcers ?? rec.enforcers,
-        triggermen: composition?.triggermen ?? rec.triggermen,
-        medics: composition?.medics ?? rec.medics,
-        wreckers: composition?.wreckers ?? rec.wreckers,
-        decoys: composition?.decoys ?? rec.decoys,
+        biters: composition?.biters ?? rec.biters,
+        spitters: composition?.spitters ?? rec.spitters,
+        lickers: composition?.lickers ?? rec.lickers,
+        chewers: composition?.chewers ?? rec.chewers,
+        wigglers: composition?.wigglers ?? rec.wigglers,
       };
 
       const err = launchOp(roomName, formation, tactic, comp, homeRoom.name);
@@ -347,7 +347,7 @@ export function setupConsole() {
       }
       console.log(
         `[Military] Op launched: ${homeRoom.name} -> ${roomName}  ${formation}/${tactic}  ` +
-        `crew=${comp.enforcers}E/${comp.triggermen}T/${comp.medics}M/${comp.wreckers}R/${comp.decoys}D`
+        `crew=${comp.biters}B/${comp.spitters}S/${comp.lickers}L/${comp.chewers}C/${comp.wigglers}W`
       );
       console.log(`[Military] Spawning squad... track with Game.arca.squads()`);
     },
@@ -373,7 +373,7 @@ export function setupConsole() {
       }
       const op = getDrainOps().find((o) => o.targetRoom === roomName);
       console.log(
-        `[Drain] Draining ${roomName} with ${op?.drainers ?? count} decoy(s) from ${op?.homeRoom}. ` +
+        `[Drain] Draining ${roomName} with ${op?.drainers ?? count} wiggler(s) from ${op?.homeRoom}. ` +
         `Stop with Game.arca.stopDrain('${roomName}')`
       );
     },
@@ -400,7 +400,7 @@ export function setupConsole() {
         ).length;
         const age = Game.time - op.startedAt;
         console.log(
-          `  ${op.targetRoom} <- ${op.homeRoom}  decoys=${live}/${op.drainers}  age=${age}t`
+          `  ${op.targetRoom} <- ${op.homeRoom}  wigglers=${live}/${op.drainers}  age=${age}t`
         );
       }
     },
@@ -455,8 +455,8 @@ export function setupConsole() {
           `  Phase: ${op.phase}  |  Formation: ${op.formation}  |  Tactic: ${op.tactic}  |  Age: ${age}t`
         );
         console.log(
-          `  Required: ${op.requiredEnforcers}E / ${op.requiredTriggermen}T / ` +
-          `${op.requiredMedics}M / ${op.requiredWreckers ?? 0}R / ${op.requiredDecoys ?? 0}D`
+          `  Required: ${op.requiredBiters}B / ${op.requiredSpitters}S / ` +
+          `${op.requiredLickers}L / ${op.requiredChewers ?? 0}C / ${op.requiredWigglers ?? 0}W`
         );
 
         const members = Object.values(Game.creeps).filter(
@@ -482,8 +482,8 @@ export function setupConsole() {
         const avgHp = Math.round((hpSum / members.length) * 100);
         const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
         console.log(
-          `  Crew: ${counts[ROLE_KNIGHT]}E/${counts[ROLE_WIZARD]}T/` +
-          `${counts[ROLE_CLERIC]}M/${counts[ROLE_SIEGER]}R/${counts[ROLE_DRAINER]}D  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
+          `  Crew: ${counts[ROLE_KNIGHT]}B/${counts[ROLE_WIZARD]}S/` +
+          `${counts[ROLE_CLERIC]}L/${counts[ROLE_SIEGER]}C/${counts[ROLE_DRAINER]}W  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
         );
 
         for (const c of members) {
@@ -499,7 +499,7 @@ export function setupConsole() {
         queue.forEach((q, i) => {
           console.log(
             `  ${i + 1}. ${q.targetRoom}${q.homeRoom ? ` (prefer ${q.homeRoom})` : ""}  ${q.formation}/${q.tactic}  ` +
-            `${q.requiredEnforcers}E/${q.requiredTriggermen}T/${q.requiredMedics}M/${q.requiredWreckers}R/${q.requiredDecoys ?? 0}D`
+            `${q.requiredBiters}B/${q.requiredSpitters}S/${q.requiredLickers}L/${q.requiredChewers}C/${q.requiredWigglers ?? 0}W`
           );
         });
       }

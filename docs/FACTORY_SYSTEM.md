@@ -16,13 +16,13 @@ Per owned room with a built factory, each tick:
    whose ingredients are all obtainable from the room's stores.
 2. **Produce**: call `factory.produce()` whenever the factory holds all ingredients
    and is off cooldown.
-3. **Haul**: borrow an idle, empty **bagman** (hauler) and drive it for one tick to
+3. **Haul**: borrow an idle, empty **dragger** (hauler) and drive it for one tick to
    load the next missing ingredient, or evict finished product / stale ingredients
    back to storage (eviction has priority so the 50k factory store never deadlocks).
 
 The factory loop runs **after** the creep orchestrator in `main.ts`, so its
 move/withdraw/transfer intents override whatever the borrowed hauler queued that
-tick. There is no dedicated factory-hauler role - it reuses a bagman.
+tick. There is no dedicated factory-hauler role - it reuses a dragger.
 
 ---
 

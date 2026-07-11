@@ -73,7 +73,7 @@ the WarCouncil.
 | `Game.arca.formation('scatter')` | Change formation mid-fight (`line`/`box`/`wedge`/`scatter`) | Enemy towers are shredding your clustered squad |
 | `Game.arca.tactic('retreat')` | Change tactic mid-fight (`assault`/`siege`/`raid`/`defend`/`retreat`) | Pull back a losing squad |
 | `Game.arca.recall()` | Stand down **all** ops and bring squads home | Call off a war |
-| `Game.arca.drain('W2N1', 2)` | Send decoys to bleed a room's tower energy before assaulting | Softening a heavily-towered target |
+| `Game.arca.drain('W2N1', 2)` | Send wigglers to bleed a room's tower energy before assaulting | Softening a heavily-towered target |
 | `Game.arca.stopDrain('W2N1')` | Stop draining | Done softening |
 | `Game.arca.warcouncil(true)` | Toggle **automatic** target selection + attacking | You want the bot to pick and attack enemies itself |
 

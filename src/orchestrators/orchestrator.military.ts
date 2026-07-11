@@ -70,8 +70,8 @@ export function loop(): void {
 
     op.formation = op.formation ?? "box";
     op.tactic = op.tactic ?? "assault";
-    op.requiredWreckers = op.requiredWreckers ?? 0;
-    op.requiredDecoys = op.requiredDecoys ?? 0;
+    op.requiredChewers = op.requiredChewers ?? 0;
+    op.requiredWigglers = op.requiredWigglers ?? 0;
 
     const homeRoom = Game.rooms[op.homeRoom];
     if (!homeRoom?.controller?.my) {
@@ -332,10 +332,10 @@ function getSquadMembers(op: MilitaryOp): Creep[] {
 
 function squadMet(op: MilitaryOp, members: Creep[]): boolean {
   return (
-    members.filter((c) => c.memory.role === ROLE_KNIGHT).length >= op.requiredEnforcers &&
-    members.filter((c) => c.memory.role === ROLE_WIZARD).length >= op.requiredTriggermen &&
-    members.filter((c) => c.memory.role === ROLE_CLERIC).length >= op.requiredMedics &&
-    members.filter((c) => c.memory.role === ROLE_SIEGER).length >= op.requiredWreckers
+    members.filter((c) => c.memory.role === ROLE_KNIGHT).length >= op.requiredBiters &&
+    members.filter((c) => c.memory.role === ROLE_WIZARD).length >= op.requiredSpitters &&
+    members.filter((c) => c.memory.role === ROLE_CLERIC).length >= op.requiredLickers &&
+    members.filter((c) => c.memory.role === ROLE_SIEGER).length >= op.requiredChewers
   );
 }
 
@@ -501,34 +501,34 @@ function cleanupDrainOps(): void {
 export function recommendComposition(
   targetRoom: string,
   tactic: SquadTactic
-): { enforcers: number; triggermen: number; medics: number; wreckers: number; decoys: number } {
+): { biters: number; spitters: number; lickers: number; chewers: number; wigglers: number } {
   const intel = Memory.intel?.[targetRoom];
   const towers = intel?.towers ?? 0;
   const owned = !!intel?.owner;
 
-  let enforcers = 2 + Math.min(2, towers);
-  let triggermen = 1;
-  let medics = Math.max(1, Math.min(3, towers));
-  let wreckers = 0;
+  let biters = 2 + Math.min(2, towers);
+  let spitters = 1;
+  let lickers = Math.max(1, Math.min(3, towers));
+  let chewers = 0;
 
-  if (tactic === "siege" || (owned && towers >= 2)) wreckers = 2;
+  if (tactic === "siege" || (owned && towers >= 2)) chewers = 2;
   if (tactic === "raid") {
-    enforcers = 2;
-    triggermen = 1;
-    medics = 1;
-    wreckers = 0;
+    biters = 2;
+    spitters = 1;
+    lickers = 1;
+    chewers = 0;
   }
 
-  const decoys = wreckers > 0 && towers >= 2 ? 1 : 0;
+  const wigglers = chewers > 0 && towers >= 2 ? 1 : 0;
 
-  return { enforcers, triggermen, medics, wreckers, decoys };
+  return { biters, spitters, lickers, chewers, wigglers };
 }
 
 export function launchOp(
   targetRoom: string,
   formation: SquadFormation,
   tactic: SquadTactic,
-  composition: { enforcers: number; triggermen: number; medics: number; wreckers: number; decoys?: number },
+  composition: { biters: number; spitters: number; lickers: number; chewers: number; wigglers?: number },
   homeRoom: string
 ): string | null {
   if (!Memory.militaryOps) Memory.militaryOps = {};
@@ -537,7 +537,7 @@ export function launchOp(
     return `${homeRoom} already running op against ${existing.targetRoom} (${existing.phase})`;
   }
   const total =
-    composition.enforcers + composition.triggermen + composition.medics + composition.wreckers;
+    composition.biters + composition.spitters + composition.lickers + composition.chewers;
   if (total <= 0) return "squad must have at least one member";
 
   Memory.militaryOps[homeRoom] = {
@@ -547,11 +547,11 @@ export function launchOp(
     startedAt: Game.time,
     formation,
     tactic,
-    requiredEnforcers: composition.enforcers,
-    requiredTriggermen: composition.triggermen,
-    requiredMedics: composition.medics,
-    requiredWreckers: composition.wreckers,
-    requiredDecoys: composition.decoys ?? 0,
+    requiredBiters: composition.biters,
+    requiredSpitters: composition.spitters,
+    requiredLickers: composition.lickers,
+    requiredChewers: composition.chewers,
+    requiredWigglers: composition.wigglers ?? 0,
   };
   return null;
 }
@@ -560,11 +560,11 @@ export function enqueueOp(
   targetRoom: string,
   formation: SquadFormation,
   tactic: SquadTactic,
-  composition: { enforcers: number; triggermen: number; medics: number; wreckers: number; decoys?: number },
+  composition: { biters: number; spitters: number; lickers: number; chewers: number; wigglers?: number },
   homeRoom?: string
 ): string | null {
   const total =
-    composition.enforcers + composition.triggermen + composition.medics + composition.wreckers;
+    composition.biters + composition.spitters + composition.lickers + composition.chewers;
   if (total <= 0) return "squad must have at least one member";
   if (!Memory.militaryQueue) Memory.militaryQueue = [];
   if (Memory.militaryQueue.some((q) => q.targetRoom === targetRoom)) {
@@ -575,11 +575,11 @@ export function enqueueOp(
     homeRoom,
     formation,
     tactic,
-    requiredEnforcers: composition.enforcers,
-    requiredTriggermen: composition.triggermen,
-    requiredMedics: composition.medics,
-    requiredWreckers: composition.wreckers,
-    requiredDecoys: composition.decoys ?? 0,
+    requiredBiters: composition.biters,
+    requiredSpitters: composition.spitters,
+    requiredLickers: composition.lickers,
+    requiredChewers: composition.chewers,
+    requiredWigglers: composition.wigglers ?? 0,
     queuedAt: Game.time,
   });
   return null;
@@ -642,9 +642,9 @@ function advanceMilitaryQueue(): void {
     const err = launchOp(
       q.targetRoom, q.formation, q.tactic,
       {
-        enforcers: q.requiredEnforcers, triggermen: q.requiredTriggermen,
-        medics: q.requiredMedics, wreckers: q.requiredWreckers,
-        decoys: q.requiredDecoys ?? 0,
+        biters: q.requiredBiters, spitters: q.requiredSpitters,
+        lickers: q.requiredLickers, chewers: q.requiredChewers,
+        wigglers: q.requiredWigglers ?? 0,
       },
       home
     );
@@ -1147,17 +1147,17 @@ function runDefenseCouncil(): void {
 }
 
 function recommendDefense(score: number): {
-  requiredEnforcers: number;
-  requiredTriggermen: number;
-  requiredMedics: number;
+  requiredBiters: number;
+  requiredSpitters: number;
+  requiredLickers: number;
 } {
-  const requiredEnforcers = Math.max(1, Math.min(6, 2 + Math.floor((score - DEFENSE_THREAT_SCORE) / 70)));
-  const requiredMedics = Math.max(0, Math.min(3, 1 + Math.floor((score - DEFENSE_THREAT_SCORE) / 110)));
-  const requiredTriggermen =
+  const requiredBiters = Math.max(1, Math.min(6, 2 + Math.floor((score - DEFENSE_THREAT_SCORE) / 70)));
+  const requiredLickers = Math.max(0, Math.min(3, 1 + Math.floor((score - DEFENSE_THREAT_SCORE) / 110)));
+  const requiredSpitters =
     score >= DEFENSE_THREAT_SCORE + 60
       ? Math.min(2, 1 + Math.floor((score - DEFENSE_THREAT_SCORE - 60) / 150))
       : 0;
-  return { requiredEnforcers, requiredTriggermen, requiredMedics };
+  return { requiredBiters, requiredSpitters, requiredLickers };
 }
 
 function clearDefenseOp(roomName: string): void {
@@ -1373,13 +1373,13 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
   const isLeader = ctx.leader?.id === creep.id;
 
   if (creep.hits < creep.hitsMax * CRITICAL_HP && !isLeader) {
-    const medic = creep.pos.findClosestByRange(ctx.members, {
+    const licker = creep.pos.findClosestByRange(ctx.members, {
       filter: (c: Creep) => c.memory.role === ROLE_CLERIC,
     });
     const adjacent = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 1)[0];
     if (adjacent) creep.attack(adjacent);
-    if (medic && !creep.pos.isNearTo(medic)) {
-      creep.moveTo(medic, { reusePath: 3 });
+    if (licker && !creep.pos.isNearTo(licker)) {
+      creep.moveTo(licker, { reusePath: 3 });
       return;
     }
   }
