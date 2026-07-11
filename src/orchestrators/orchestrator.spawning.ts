@@ -708,8 +708,13 @@ function spawnScout(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-const BASELINE_SCORE_PATROLLERS = 2;
-const MAX_SCORE_HUNTERS_PER_ROOM = 4;
+const BASELINE_SCORE_PATROLLERS = 3;
+const MAX_SCORE_HUNTERS_PER_ROOM = 8;
+// Without an observer, hunters are the vision system: each one buys sight, reach, and coverage
+// density at once. Scale the fleet to the region so freshness holds; roughly one hunter per this
+// many reachable rooms. Hunters are last in the spawn priority, so economy creeps still win the
+// spawn and spare capacity naturally throttles this.
+const ROOMS_PER_HUNTER = 3;
 const SCORE_PATROL_RADIUS = 2;
 
 function shouldSpawnScoreHunter(room: Room): boolean {
@@ -720,8 +725,13 @@ function shouldSpawnScoreHunter(room: Room): boolean {
   // (Don't gate on pickPatrolRoom here: it only resolves a destination for a creep already
   // in the live fleet, so a not-yet-spawned hunter would deadlock at zero.)
   const unclaimed = getUnclaimedScoreTargetCount();
-  if (unclaimed === 0 && getScoreScanRooms(room.name, SCORE_PATROL_RADIUS).length === 0) return false;
-  const target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed));
+  const scanRooms = getScoreScanRooms(room.name, SCORE_PATROL_RADIUS).length;
+  if (unclaimed === 0 && scanRooms === 0) return false;
+  const coverageNeed = Math.ceil(scanRooms / ROOMS_PER_HUNTER);
+  const target = Math.min(
+    MAX_SCORE_HUNTERS_PER_ROOM,
+    Math.max(BASELINE_SCORE_PATROLLERS, unclaimed, coverageNeed)
+  );
   const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter(
     (c) => !c.spawning && c.memory.homeRoom === room.name
   );

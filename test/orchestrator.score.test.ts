@@ -11,7 +11,11 @@ g.ATTACK_POWER = 30;
 g.RANGED_ATTACK_POWER = 10;
 g.HEAL_POWER = 12;
 
-import { pickPatrolRoom, findNearestScoreInRoom } from "../src/orchestrators/orchestrator.score";
+import {
+  pickPatrolRoom,
+  findNearestScoreInRoom,
+  getScoreScanRooms,
+} from "../src/orchestrators/orchestrator.score";
 
 const HOME = "W1N1";
 const SEEKER = "snatcher";
@@ -157,5 +161,15 @@ describe("findNearestScoreInRoom", () => {
       ])
     );
     expect(pos).toMatchObject({ x: 27, y: 26 });
+  });
+});
+
+describe("safeRegionRooms death-trap tolerance", () => {
+  it("still patrols a room with only light hostile presence but avoids a war-party", () => {
+    intel.W1N2 = { hostileCombatParts: 20 } as any; // war-party -> avoid
+    intel.W2N1 = { hostileCombatParts: 4 } as any; // light -> brave it for score
+    const region = getScoreScanRooms(HOME, 1);
+    expect(region).not.toContain("W1N2");
+    expect(region).toContain("W2N1");
   });
 });

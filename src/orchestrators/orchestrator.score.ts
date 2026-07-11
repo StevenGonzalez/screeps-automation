@@ -206,7 +206,7 @@ function safeRegionRooms(home: string, myName: string | undefined, range: number
       for (const nb of Object.values(exits)) {
         if (!nb || visited.has(nb)) continue;
         visited.add(nb);
-        if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb) || isThreatenedRoom(nb)) continue;
+        if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb) || isDeathTrapRoom(nb)) continue;
         result.push(nb);
         next.push(nb);
       }
@@ -216,11 +216,15 @@ function safeRegionRooms(home: string, myName: string | undefined, range: number
   return result;
 }
 
-function isThreatenedRoom(roomName: string): boolean {
+// A hotly contested season means score sits in rooms with hostiles; a naked hunter moves every tick
+// and can dash in for a touch, so we no longer concede a room over any single hostile. We only avoid
+// rooms with a genuine war-party, where an unescorted hunter is just a donation (escorts come later).
+const SCORE_THREAT_TOLERANCE = 12;
+
+function isDeathTrapRoom(roomName: string): boolean {
   const intel = Memory.intel?.[roomName];
   if (!intel) return false;
-  if ((intel.hostileCombatParts ?? 0) > 0) return true;
-  return (intel.threatLevel ?? 0) > 0;
+  return (intel.hostileCombatParts ?? 0) >= SCORE_THREAT_TOLERANCE;
 }
 
 function isHostileOwned(roomName: string, myName: string | undefined): boolean {
