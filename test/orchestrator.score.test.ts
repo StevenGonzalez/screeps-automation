@@ -125,6 +125,15 @@ describe("pickPatrolRoom", () => {
     creeps.s1 = s;
     expect(pickPatrolRoom(s)).toBe("W1N0");
   });
+
+  it("assigns no patrol when the home room has an observer (hunters become collectors)", () => {
+    const now = (g.Game as { time: number }).time;
+    seen.W1N0 = now - 5000;
+    (g.Game as any).rooms[HOME].memory = { observerId: "obs1" };
+    const s = seeker("s1", HOME);
+    creeps.s1 = s;
+    expect(pickPatrolRoom(s)).toBeUndefined();
+  });
 });
 
 describe("findNearestScoreInRoom", () => {

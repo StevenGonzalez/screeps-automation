@@ -79,7 +79,13 @@ export function loop(): void {
 
 const SEEN_TTL = 50000;
 
-const PATROL_RADIUS = 2;
+// No observer: hunters ARE the sensor grid, so they patrol a wide region to maximize fresh
+// room-coverage per tick. (With an observer, hunters don't patrol at all — see pickPatrolRoom.)
+export const SCORE_SCOUT_RADIUS = 4;
+
+export function homeHasObserver(home: string): boolean {
+  return !!Game.rooms[home]?.memory?.observerId;
+}
 
 export function getUnclaimedScoreTargetCount(): number {
   const targets = Memory.scoreTargets;
@@ -146,9 +152,12 @@ export function claimNearestScoreTarget(creep: Creep): string | undefined {
 export function pickPatrolRoom(creep: Creep): string | undefined {
   const home = creep.memory.homeRoom;
   if (!home) return undefined;
+  // With an observer, discovery is the observer's job. Hunters become pure collectors: they idle
+  // near home and dash to whatever the observer finds, so there's no patrol to assign.
+  if (homeHasObserver(home)) return undefined;
   const myName = Game.rooms[home]?.controller?.owner?.username;
 
-  const region = safeRegionRooms(home, myName, PATROL_RADIUS);
+  const region = safeRegionRooms(home, myName, SCORE_SCOUT_RADIUS);
   if (region.length === 0) return undefined;
 
   const fleet: Creep[] = [];

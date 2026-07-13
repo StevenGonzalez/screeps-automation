@@ -16,7 +16,11 @@ const COLLECTING_TIMEOUT = 300;
 const SQUAD_ATTACKERS = 2;
 const SQUAD_HEALERS = 3;
 const OBSERVER_SCAN_RANGE = 10;
-const SCORE_SCAN_RANGE = 4;
+const SCORE_SCAN_RANGE = 5;
+// Fraction of observer ticks handed to highway (power/deposit) scanning while a scoring season is
+// active; the rest go to score discovery. 1-in-5 keeps power banks/deposits visible without
+// starving the score sweep the way an even 50/50 split did.
+const HIGHWAY_SCAN_EVERY = 5;
 const SCORE_SCAN_REBUILD_INTERVAL = 1500;
 const POWER_PROCESS_ENERGY_FLOOR = 100000;
 
@@ -37,7 +41,7 @@ function runObserver(room: Room) {
   const observer = Game.getObjectById(room.memory.observerId) as StructureObserver | null;
   if (!observer) { room.memory.observerId = undefined; return; }
 
-  if (scoreHunterSupported() && Game.time % 2 === 0) {
+  if (scoreHunterSupported() && Game.time % HIGHWAY_SCAN_EVERY !== 0) {
     if (scanScoreRegion(room, observer)) return;
   }
   scanHighways(room, observer);
