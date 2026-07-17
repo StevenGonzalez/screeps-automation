@@ -125,16 +125,18 @@ describe("getThreatInfo scoring", () => {
 
   it("counts TOUGH boost as extra effective HP (tankier => higher score)", () => {
     const plain = getThreatInfo(
-      makeRoom("W1N1", [makeCreep([{ type: "tough", count: 5 }])])
+      makeRoom("W1N1", [makeCreep([{ type: "attack", count: 1 }, { type: "tough", count: 5 }])])
     ).score;
     const armored = getThreatInfo(
-      makeRoom("W2N2", [makeCreep([{ type: "tough", count: 5, boost: "XGHO2" }])])
+      makeRoom("W2N2", [
+        makeCreep([{ type: "attack", count: 1 }, { type: "tough", count: 5, boost: "XGHO2" }]),
+      ])
     ).score;
-    expect(plain).toBeCloseTo(10.5, 5);
+    expect(plain).toBeCloseTo(11.6, 5);
     expect(armored).toBeGreaterThan(plain);
   });
 
-  it("ignores destroyed parts (hits === 0)", () => {
+  it("ignores destroyed parts (hits === 0): a de-weaponed creep is not a threat", () => {
     const room = makeRoom("W1N1", [
       {
         body: [
@@ -145,7 +147,14 @@ describe("getThreatInfo scoring", () => {
         owner: { username: "Enemy" },
       } as unknown as Creep,
     ]);
-    expect(getThreatInfo(room).score).toBeCloseTo(10.1, 5);
+    expect(getThreatInfo(room).score).toBe(0);
+  });
+
+  it("treats an unarmed enemy scout (MOVE only) as zero threat", () => {
+    const room = makeRoom("W1N1", [
+      makeCreep([{ type: "move", count: 5 }]),
+    ]);
+    expect(getThreatInfo(room).score).toBe(0);
   });
 
   it("does NOT count allied creeps as threats", () => {

@@ -1,4 +1,4 @@
-import { isSourceKeeperRoom, isPlayerCreep } from "../services/services.combat";
+import { isSourceKeeperRoom, isPlayerCreep, canDealDamage } from "../services/services.combat";
 import {
   markRemotePlayerHostile,
   clearRemotePlayerHostile,
@@ -298,7 +298,7 @@ function refreshVisibleRemoteRooms(room: Room) {
     if (!visible) continue;
 
     remote.lastSeen = Game.time;
-    const hostiles = visible.find(FIND_HOSTILE_CREEPS);
+    const hostiles = visible.find(FIND_HOSTILE_CREEPS).filter(canDealDamage);
     if (hostiles.some(isPlayerCreep)) {
       markRemotePlayerHostile(remote);
       continue;

@@ -83,7 +83,19 @@ const EHP_DIVISOR = 1000;
 let threatCacheTick = -1;
 const threatCache: Record<string, ThreatInfo> = {};
 
+export function canDealDamage(creep: Creep): boolean {
+  return creep.body.some(
+    (p) =>
+      p.hits > 0 &&
+      (p.type === ATTACK ||
+        p.type === RANGED_ATTACK ||
+        p.type === WORK ||
+        p.type === HEAL)
+  );
+}
+
 function creepThreatScore(c: Creep): number {
+  if (!canDealDamage(c)) return 0;
   let attackPower = 0;
   let rangedPower = 0;
   let dismantlePower = 0;
