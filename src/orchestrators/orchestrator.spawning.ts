@@ -898,6 +898,11 @@ function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[] {
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < work; i++) body.push(WORK);
   for (let i = 0; i < move; i++) body.push(MOVE);
+  // One CARRY so the miner can build and repair its own container. Surplus
+  // harvest still overflows into the container it stands on, so steady-state
+  // mining is unchanged.
+  const cost = work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
+  if (availableEnergy >= cost + BODYPART_COST[CARRY]) body.push(CARRY);
   return body;
 }
 

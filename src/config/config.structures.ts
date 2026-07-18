@@ -17,7 +17,6 @@ export const STRUCTURE_PLANNER = {
   ],
   planInterval: 50,
   maxActiveConstructionSites: 8,
-  remoteRoadGlobalLimit: 50,
   maxRoadConstructionSites: 15,
   maxPerimeterConstructionSites: 10,
   plannedCleanupInterval: 1000,

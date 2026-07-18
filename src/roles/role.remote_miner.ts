@@ -66,6 +66,14 @@ export function runRemoteMiner(creep: Creep) {
     }
     creep.harvest(source);
   } else {
+    // Nothing else builds in remotes, so the miner finishes its own container.
+    const site = source.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 1, {
+      filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+    })[0];
+    if (site && creep.store[RESOURCE_ENERGY] > 0) {
+      if (creep.build(site) === ERR_NOT_IN_RANGE) creep.moveTo(site, { reusePath: 30 });
+      return;
+    }
     if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
       creep.moveTo(source, { reusePath: 30 });
     }

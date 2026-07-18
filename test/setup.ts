@@ -10,6 +10,8 @@ const STRUCTURE_CONSTANTS: Record<string, string> = {
   STRUCTURE_LAB: "lab",
   STRUCTURE_TERMINAL: "terminal",
   STRUCTURE_CONTAINER: "container",
+  STRUCTURE_ROAD: "road",
+  STRUCTURE_RAMPART: "rampart",
   STRUCTURE_NUKER: "nuker",
   STRUCTURE_FACTORY: "factory",
 };

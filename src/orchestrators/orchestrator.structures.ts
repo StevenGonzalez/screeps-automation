@@ -315,8 +315,21 @@ function ensureRampartsForExistingStructures(room: Room) {
   }
 }
 
+// Source containers are the only thing we place outside owned rooms. Anything
+// else out there is an orphan from an earlier planner: no role builds it, no
+// role repairs it, and it holds a slot against the global site cap forever.
+export function cleanupSitesOutsideOwnedRooms() {
+  for (const id in Game.constructionSites) {
+    const site = Game.constructionSites[id];
+    if (Game.rooms[site.pos.roomName]?.controller?.my) continue;
+    if (site.structureType === STRUCTURE_CONTAINER) continue;
+    site.remove();
+  }
+}
+
 export function loop() {
   cleanupPlannedStructuresGlobal();
+  if (Game.time % 100 === 0) cleanupSitesOutsideOwnedRooms();
   const applyConstruction = Game.time % 5 === 0;
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
@@ -331,11 +344,25 @@ export function loop() {
   }
 }
 
+// A container is only worth placing where we control the ground: our own rooms
+// or ones we hold a reservation on. Anywhere else we cannot defend it, cannot
+// repair it beyond the miner sitting on it, and the site is likely rejected
+// outright by the server.
+export function canBuildInRemote(remoteRoom: Room, myName: string | undefined): boolean {
+  const ctrl = remoteRoom.controller;
+  if (!ctrl) return false;
+  if (ctrl.owner && !ctrl.my) return false;
+  if (ctrl.reservation && ctrl.reservation.username !== myName) return false;
+  return true;
+}
+
 function planRemoteRoomContainers(homeRoom: Room) {
+  const myName = homeRoom.controller?.owner?.username;
   for (const remote of homeRoom.memory.remoteRooms ?? []) {
     if (remote.hostile) continue;
     const remoteRoom = Game.rooms[remote.roomName];
     if (!remoteRoom) continue;
+    if (!canBuildInRemote(remoteRoom, myName)) continue;
 
     const terrain = remoteRoom.getTerrain();
     for (const sourceData of remote.sources) {
@@ -344,10 +371,7 @@ function planRemoteRoomContainers(homeRoom: Room) {
 
       if (sourceData.containerId) {
         const existing = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
-        if (existing) {
-          planRemoteRoad(homeRoom, existing.pos);
-          continue;
-        }
+        if (existing) continue;
         sourceData.containerId = undefined;
       }
 
@@ -356,7 +380,6 @@ function planRemoteRoomContainers(homeRoom: Room) {
       }) as StructureContainer[];
       if (built.length > 0) {
         sourceData.containerId = built[0].id;
-        planRemoteRoad(homeRoom, built[0].pos);
         continue;
       }
 
@@ -376,63 +399,6 @@ function planRemoteRoomContainers(homeRoom: Room) {
         }
       }
     }
-  }
-}
-
-const REMOTE_ROAD_SITES_PER_CALL = 5;
-
-function planRemoteRoad(homeRoom: Room, from: RoomPosition) {
-  const storage = homeRoom.storage;
-  if (!storage) return;
-
-  // Remote roads are low priority and would otherwise accumulate unbounded,
-  // filling the shared MAX_CONSTRUCTION_SITES budget and starving owned rooms.
-  if (
-    Object.keys(Game.constructionSites).length >=
-    STRUCTURE_PLANNER.remoteRoadGlobalLimit
-  )
-    return;
-
-  const result = PathFinder.search(
-    from,
-    { pos: storage.pos, range: 1 },
-    {
-      plainCost: 2,
-      swampCost: 10,
-      maxOps: 4000,
-      roomCallback: (roomName) => {
-        const r = Game.rooms[roomName];
-        if (!r) return new PathFinder.CostMatrix();
-        const cm = new PathFinder.CostMatrix();
-        for (const s of r.find(FIND_STRUCTURES)) {
-          if (s.structureType === STRUCTURE_ROAD) cm.set(s.pos.x, s.pos.y, 1);
-          else if (
-            s.structureType !== STRUCTURE_CONTAINER &&
-            s.structureType !== STRUCTURE_RAMPART
-          ) {
-            cm.set(s.pos.x, s.pos.y, 255);
-          }
-        }
-        return cm;
-      },
-    }
-  );
-  if (result.incomplete) return;
-
-  let placed = 0;
-  for (const pos of result.path) {
-    if (placed >= REMOTE_ROAD_SITES_PER_CALL) break;
-    const r = Game.rooms[pos.roomName];
-    if (!r) continue;
-    const here = r.lookAt(pos.x, pos.y);
-    const blocked = here.some(
-      (o) =>
-        (o.type === "structure" && (o.structure as Structure).structureType === STRUCTURE_ROAD) ||
-        (o.type === "constructionSite" &&
-          (o.constructionSite as ConstructionSite).structureType === STRUCTURE_ROAD)
-    );
-    if (blocked) continue;
-    if (r.createConstructionSite(pos.x, pos.y, STRUCTURE_ROAD) === OK) placed++;
   }
 }
 
