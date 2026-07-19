@@ -692,7 +692,10 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const body = buildMinerBody(allowedEnergy);
 
   if (room.energyAvailable < calculateBodyPartCost(body)) {
-    if (existingMiners > 0) return false;
+    // Once a miner exists, wait for a full-size body rather than falling through
+    // to lower-priority roles (repairer/builder/upgrader) that would spend the
+    // energy we're saving up on a runt. Block the spawn tick like spawnHauler does.
+    if (existingMiners > 0) return true;
     const affordable = buildMinerBody(
       Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE))
     );
