@@ -37,6 +37,9 @@ const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
 
 const PERIMETER_PRIORITY = 12;
 
+// How many remote container sites may be open at once, across all rooms.
+const MAX_REMOTE_CONTAINER_SITES = 2;
+
 function buildPriority(key: string): number {
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY) return PERIMETER_PRIORITY;
   const type = structureTypeForKey(key);
@@ -340,8 +343,33 @@ export function loop() {
       cleanupUnplannedConstructionSites(room);
       ensureRampartsForExistingStructures(room);
     }
-    if (Game.time % 100 === 0) planRemoteRoomContainers(room);
   }
+
+  if (Game.time % 100 === 0) {
+    let budget = MAX_REMOTE_CONTAINER_SITES - countRemoteContainerSites();
+    for (const roomName in Game.rooms) {
+      if (budget <= 0) break;
+      const room = Game.rooms[roomName];
+      if (!room.controller || !room.controller.my) continue;
+      budget = planRemoteRoomContainers(room, budget);
+    }
+  }
+}
+
+// A remote container costs 5000 energy the miner burns building it instead of
+// hauling home, so an open site is a source that earns nothing until it closes.
+// Opening every one at once stalls all remote income simultaneously; cap the
+// in-flight count so each remote comes online and starts paying before the next
+// one starts costing.
+export function countRemoteContainerSites(): number {
+  let count = 0;
+  for (const id in Game.constructionSites) {
+    const site = Game.constructionSites[id];
+    if (site.structureType !== STRUCTURE_CONTAINER) continue;
+    if (Game.rooms[site.pos.roomName]?.controller?.my) continue;
+    count++;
+  }
+  return count;
 }
 
 // A container is only worth placing where we control the ground: our own rooms
@@ -356,9 +384,10 @@ export function canBuildInRemote(remoteRoom: Room, myName: string | undefined): 
   return true;
 }
 
-function planRemoteRoomContainers(homeRoom: Room) {
+export function planRemoteRoomContainers(homeRoom: Room, budget: number): number {
   const myName = homeRoom.controller?.owner?.username;
   for (const remote of homeRoom.memory.remoteRooms ?? []) {
+    if (budget <= 0) return budget;
     if (remote.hostile) continue;
     const remoteRoom = Game.rooms[remote.roomName];
     if (!remoteRoom) continue;
@@ -366,6 +395,7 @@ function planRemoteRoomContainers(homeRoom: Room) {
 
     const terrain = remoteRoom.getTerrain();
     for (const sourceData of remote.sources) {
+      if (budget <= 0) return budget;
       const source = Game.getObjectById(sourceData.sourceId) as Source | null;
       if (!source) continue;
 
@@ -388,18 +418,21 @@ function planRemoteRoomContainers(homeRoom: Room) {
       });
       if (site.length > 0) continue;
 
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
+      let placed = false;
+      for (let dx = -1; dx <= 1 && !placed; dx++) {
+        for (let dy = -1; dy <= 1 && !placed; dy++) {
           if (dx === 0 && dy === 0) continue;
           const x = source.pos.x + dx;
           const y = source.pos.y + dy;
           if (x < 1 || x >= 49 || y < 1 || y >= 49) continue;
           if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
-          if (remoteRoom.createConstructionSite(x, y, STRUCTURE_CONTAINER) === OK) break;
+          if (remoteRoom.createConstructionSite(x, y, STRUCTURE_CONTAINER) === OK) placed = true;
         }
       }
+      if (placed) budget--;
     }
   }
+  return budget;
 }
 
 function processRoomStructures(room: Room) {
