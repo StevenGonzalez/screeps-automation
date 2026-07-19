@@ -423,6 +423,10 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
   const bodyCost = calculateBodyPartCost(body);
 
   if (room.energyAvailable < bodyCost) {
+    // Only the first hauler may downgrade to whatever is in the bank right now.
+    // Past that, wait for a full-size body: a runt hauler costs the energy the
+    // miner is saving up for, and the miner never gets to spawn.
+    if (existingHaulers.length > 0) return true;
     const affordableEnergy = Math.floor(
       room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
     );
@@ -444,8 +448,21 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
   }) === OK;
 }
 
+function getMinerWorkTarget(room: Room): number {
+  const allowed = Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  return buildMinerBody(allowed).filter((p) => p === WORK).length;
+}
+
 function shouldSpawnMiner(room: Room): boolean {
-  return countByRoleInRoom(ROLE_MINER, room) < getMinerPopulationTarget(room);
+  // Count only miners big enough for the room's current capacity. A miner born
+  // during an energy crunch is undersized for its whole life and caps income at
+  // a fraction of the source; it needs replacing once we can afford better.
+  const workTarget = getMinerWorkTarget(room);
+  const adequate =
+    getCreepsByRoleInRoom(ROLE_MINER, room).filter(
+      (c) => !c.spawning && c.body.filter((p) => p.type === WORK).length >= workTarget
+    ).length + getRoomSpawningCount(room, ROLE_MINER);
+  return adequate < getMinerPopulationTarget(room);
 }
 
 function shouldSpawnHarvester(room: Room): boolean {
