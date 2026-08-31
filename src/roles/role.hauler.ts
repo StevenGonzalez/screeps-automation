@@ -10,6 +10,9 @@ import {
   findCoreFillTarget,
   getRoomBuildTarget,
   buildAtConstructionSite,
+  findSmartEnergyFallbackTarget,
+  repairStructure,
+  upgradeController,
 } from "../services/services.creep";
 import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
@@ -108,6 +111,21 @@ export function runHauler(creep: Creep) {
     buildAtConstructionSite(creep, site);
     return;
   }
+
+  const fallback = findSmartEnergyFallbackTarget(creep);
+  if (fallback) {
+    if (fallback.kind === "build") {
+      buildAtConstructionSite(creep, fallback.target as ConstructionSite);
+      return;
+    }
+    if (fallback.kind === "repair") {
+      repairStructure(creep, fallback.target as AnyStructure);
+      return;
+    }
+    upgradeController(creep);
+    return;
+  }
+
   parkNearCore(creep);
 }
 

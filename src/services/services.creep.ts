@@ -933,19 +933,43 @@ export function repairStructure(creep: Creep, target: AnyStructure): number {
   return res;
 }
 
-export function putSurplusEnergyToWork(creep: Creep): void {
+export function findSmartEnergyFallbackTarget(
+  creep: Creep
+): { kind: "build" | "repair" | "upgrade"; target: ConstructionSite | AnyStructure | StructureController } | null {
   const site = getRoomBuildTarget(creep.room);
-  if (site) {
-    buildAtConstructionSite(creep, site);
-    return;
-  }
+  if (site) return { kind: "build", target: site };
 
   const repairTarget = findClosestRepairTarget(creep);
-  if (repairTarget) {
-    repairStructure(creep, repairTarget);
-    return;
+  if (repairTarget) return { kind: "repair", target: repairTarget };
+
+  const controller = creep.room.controller;
+  if (controller && controller.my) return { kind: "upgrade", target: controller };
+
+  return null;
+}
+
+export function performSmartEnergyFallback(creep: Creep): boolean {
+  const fallback = findSmartEnergyFallbackTarget(creep);
+  if (!fallback) return false;
+
+  if (fallback.kind === "build") {
+    const res = buildAtConstructionSite(creep, fallback.target as ConstructionSite);
+    if (res === ERR_NOT_ENOUGH_RESOURCES) return false;
+    return true;
   }
 
+  if (fallback.kind === "repair") {
+    const res = repairStructure(creep, fallback.target as AnyStructure);
+    if (res === ERR_NOT_ENOUGH_RESOURCES) return false;
+    return true;
+  }
+
+  upgradeController(creep);
+  return true;
+}
+
+export function putSurplusEnergyToWork(creep: Creep): void {
+  if (performSmartEnergyFallback(creep)) return;
   upgradeController(creep);
 }
 
