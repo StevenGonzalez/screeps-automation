@@ -9,10 +9,10 @@ import {
   findCriticalDefenseTarget,
   findCoreFillTarget,
   transferEnergyTo,
-  upgradeController,
   buildAtConstructionSite,
   repairStructure,
   isEnergyEmergency,
+  putSurplusEnergyToWork,
 } from "../services/services.creep";
 
 export function runBuilder(creep: Creep) {
@@ -67,5 +67,5 @@ export function runBuilder(creep: Creep) {
     if (r !== ERR_NO_PATH) return;
   }
 
-  upgradeController(creep);
+  putSurplusEnergyToWork(creep);
 }

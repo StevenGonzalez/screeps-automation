@@ -1,9 +1,9 @@
 import {
   isCreepEmpty,
   isCreepFull,
-  upgradeController,
   withdrawFromContainer,
   acquireEnergy,
+  putSurplusEnergyToWork,
 } from "../services/services.creep";
 import { seekBoost } from "../services/services.combat";
 
@@ -20,7 +20,7 @@ export function runUpgrader(creep: Creep) {
   }
 
   if (creep.memory.working) {
-    upgradeController(creep);
+    putSurplusEnergyToWork(creep);
     return;
   }
 

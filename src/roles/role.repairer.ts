@@ -6,8 +6,8 @@ import {
   getClosestContainerOrStorage,
   findMostCriticalRepairTarget,
   repairStructure,
-  upgradeController,
   acquireEnergy,
+  putSurplusEnergyToWork,
 } from "../services/services.creep";
 
 export function runRepairer(creep: Creep) {
@@ -41,9 +41,10 @@ export function runRepairer(creep: Creep) {
   const target = findMostCriticalRepairTarget(creep);
   if (target) {
     const res = repairStructure(creep, target);
+    if (res === ERR_NOT_IN_RANGE) return;
     if (res === ERR_NOT_ENOUGH_RESOURCES) creep.memory.working = false;
     return;
   }
 
-  upgradeController(creep);
+  putSurplusEnergyToWork(creep);
 }
