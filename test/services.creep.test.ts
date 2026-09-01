@@ -22,6 +22,7 @@ beforeEach(() => {
   g.STRUCTURE_WALL = "wall";
   g.STRUCTURE_ROAD = "road";
   g.STRUCTURE_CONTROLLER = "controller";
+  g.WORK = "work";
   g.ERR_NOT_IN_RANGE = -1;
   g.ERR_INVALID_TARGET = -7;
   g.ERR_NO_PATH = -2000;
@@ -55,6 +56,7 @@ describe("findSmartEnergyFallbackTarget", () => {
         getFreeCapacity: () => 0,
         [g.RESOURCE_ENERGY as string]: 50,
       },
+      getActiveBodyparts: () => 1,
       moveTo: () => g.OK,
       upgradeController: () => g.OK,
     } as unknown as Creep;

@@ -8,7 +8,6 @@ import {
   findDepositTargetExcludingMiner,
   findEmptiestTower,
   findCoreFillTarget,
-  getRoomBuildTarget,
   buildAtConstructionSite,
   findSmartEnergyFallbackTarget,
   repairStructure,
@@ -103,15 +102,9 @@ export function runHauler(creep: Creep) {
     return;
   }
 
-  // Nothing to deposit. Build to grow the room if there is a site; otherwise
-  // stay parked by the core holding the energy so a drained spawn/extension can
-  // be topped off immediately instead of waiting for a round trip.
-  const site = getRoomBuildTarget(creep.room);
-  if (site) {
-    buildAtConstructionSite(creep, site);
-    return;
-  }
-
+  // Nothing to deposit. A hauler carries no WORK part, so the fallback below
+  // yields nothing and it stays parked by the core holding the energy, ready to
+  // top off a drained spawn/extension without waiting for a round trip.
   const fallback = findSmartEnergyFallbackTarget(creep);
   if (fallback) {
     if (fallback.kind === "build") {

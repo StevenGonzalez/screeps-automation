@@ -936,6 +936,11 @@ export function repairStructure(creep: Creep, target: AnyStructure): number {
 export function findSmartEnergyFallbackTarget(
   creep: Creep
 ): { kind: "build" | "repair" | "upgrade"; target: ConstructionSite | AnyStructure | StructureController } | null {
+  // Build, repair and upgrade all need a WORK part. Offering any of them to a
+  // WORK-less creep (hauler, remote hauler) makes it stall holding its energy
+  // instead of falling through to whatever it can actually do.
+  if (creep.getActiveBodyparts(WORK) === 0) return null;
+
   const site = getRoomBuildTarget(creep.room);
   if (site) return { kind: "build", target: site };
 
