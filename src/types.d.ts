@@ -245,6 +245,7 @@ declare global {
       manual?: boolean;
       guards?: number;
     };
+    spawnHold?: { role: string; since: number; lastTick: number };
   }
 
   interface Memory {

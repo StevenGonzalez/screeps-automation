@@ -134,6 +134,24 @@ function countByRoleInRoom(role: string, room: Room): number {
   return present + getRoomSpawningCount(room, role);
 }
 
+// A role that is saving up for a full-size body blocks the spawn tick so the
+// roles below it cannot spend the savings on a runt. That hold has to be able
+// to expire: while it is held nothing else in the room spawns, so a target the
+// room never reaches costs it every upgrader, builder, repairer and defender.
+const SPAWN_HOLD_LIMIT = 100;
+
+function holdSpawnFor(room: Room, role: string): boolean {
+  const memory = getRoomMemory(room);
+  const hold = memory.spawnHold;
+  // A room with two idle spawns asks twice in the same tick, so treat both the
+  // current tick and the previous one as the same unbroken hold.
+  const continuing =
+    hold !== undefined && hold.role === role && Game.time - hold.lastTick <= 1;
+  const since = continuing ? hold!.since : Game.time;
+  memory.spawnHold = { role, since, lastTick: Game.time };
+  return Game.time - since < SPAWN_HOLD_LIMIT;
+}
+
 function getMinerPopulationTarget(room: Room): number {
   return (room.memory.minerContainerIds ?? []).length;
 }
@@ -238,7 +256,7 @@ function getSpawnForRoom(room: Room): StructureSpawn | null {
   return Game.getObjectById(roomMemory.spawnId) as StructureSpawn | null;
 }
 
-function processRoomSpawning(room: Room, spawn: StructureSpawn) {
+export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!hasEnergyGatherers(room)) {
     if (shouldSpawnDefender(room) && spawnNextDefender(room, spawn)) return;
     spawnEmergencyHarvester(room, spawn);
@@ -263,9 +281,14 @@ function processRoomSpawning(room: Room, spawn: StructureSpawn) {
     if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
   }
 
+  // The filler is what moves stored energy into spawn and extensions, so it is
+  // the only reason room.energyAvailable ever climbs once storage exists. Miner
+  // and hauler both hold the spawn while they save up for a full-size body; if
+  // the filler sat behind that hold it could never be replaced, and the energy
+  // the hold is waiting for would never arrive.
+  if (shouldSpawnFiller(room) && spawnFiller(room, spawn)) return;
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
   if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
-  if (shouldSpawnFiller(room) && spawnFiller(room, spawn)) return;
 
   if (
     room.controller?.my &&
@@ -425,14 +448,17 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < bodyCost) {
     // Only the first hauler may downgrade to whatever is in the bank right now.
     // Past that, wait for a full-size body: a runt hauler costs the energy the
-    // miner is saving up for, and the miner never gets to spawn.
-    if (existingHaulers.length > 0) return true;
+    // miner is saving up for, and the miner never gets to spawn. Give up on the
+    // wait once it has starved the rest of the room for SPAWN_HOLD_LIMIT ticks.
+    if (existingHaulers.length > 0 && holdSpawnFor(room, ROLE_HAULER)) return true;
     const affordableEnergy = Math.floor(
       room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
     );
     const affordableBody = buildScaledBody(ROLE_HAULER, affordableEnergy);
     if (room.energyAvailable < calculateBodyPartCost(affordableBody)) {
-      return existingHaulers.length > 0;
+      // Below the cost of the smallest hauler there is nothing to save up for,
+      // so let the chain move on rather than holding the spawn again.
+      return false;
     }
     return spawn.spawnCreep(affordableBody, newName, {
       memory: { role: ROLE_HAULER, homeRoom: room.name },
@@ -694,8 +720,9 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) {
     // Once a miner exists, wait for a full-size body rather than falling through
     // to lower-priority roles (repairer/builder/upgrader) that would spend the
-    // energy we're saving up on a runt. Block the spawn tick like spawnHauler does.
-    if (existingMiners > 0) return true;
+    // energy we're saving up on a runt. Block the spawn tick like spawnHauler
+    // does, and give up on the wait on the same bounded terms.
+    if (existingMiners > 0 && holdSpawnFor(room, ROLE_MINER)) return true;
     const affordable = buildMinerBody(
       Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE))
     );
