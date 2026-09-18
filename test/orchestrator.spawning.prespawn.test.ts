@@ -191,6 +191,23 @@ describe("pre-spawning replacements", () => {
   });
 });
 
+describe("body budget", () => {
+  it("spends everything in the core rather than shaving 10% off it", () => {
+    const { room, spawn } = makeRoom(settledCreeps(), FULL_ENERGY);
+
+    processRoomSpawning(room, spawn);
+
+    expect(spawnCalls).toHaveLength(1);
+    const costs = g.BODYPART_COST as Record<string, number>;
+    const cost = spawnCalls[0].body.reduce((sum, part) => sum + costs[part], 0);
+
+    // [WORK, WORK, CARRY, MOVE] costs 300, so 2300 buys seven repeats. The 10%
+    // reserve this replaces capped the budget at 2070 and bought only six.
+    expect(spawnCalls[0].body).toHaveLength(28);
+    expect(cost).toBeGreaterThan(Math.floor(CAPACITY * 0.9));
+  });
+});
+
 describe("anti-runt body gate", () => {
   it("spawns immediately when the core is full", () => {
     const { room, spawn } = makeRoom(settledCreeps(), FULL_ENERGY);

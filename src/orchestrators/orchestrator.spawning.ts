@@ -38,7 +38,6 @@ import { getRampartTargetHP, isEnergyEmergency } from "../services/services.cree
 import {
   BODY_PATTERNS,
   MAX_BODY_PART_COUNT,
-  SPAWN_ENERGY_RESERVE,
 } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
@@ -152,6 +151,27 @@ function holdSpawnFor(room: Room, role: string): boolean {
   return Game.time - since < SPAWN_HOLD_LIMIT;
 }
 
+// How much a body may cost, and it depends on which number the caller is
+// working from.
+//
+// An "available" budget is energy already sitting in the spawn and extensions
+// this tick. Nothing else draws on it - towers hold their own store, and every
+// other consumer takes from storage or a container - so it is all spendable,
+// and the 10% that used to be shaved off it bought nothing. It just made every
+// creep in the empire a tenth smaller for its whole life.
+//
+// A "capacity" budget is different: it is a target the room still has to climb
+// to, and the callers that use it hold the spawn while they wait. Aiming at the
+// last few energy of capacity means waiting for a number a working room rarely
+// lands on exactly, so that one keeps a margin.
+const CAPACITY_TARGET_MARGIN = 0.1;
+
+function bodyBudget(room: Room, basis: "available" | "capacity"): number {
+  return basis === "available"
+    ? room.energyAvailable
+    : Math.floor(room.energyCapacityAvailable * (1 - CAPACITY_TARGET_MARGIN));
+}
+
 // A replacement takes CREEP_SPAWN_TIME ticks per body part to build and then has
 // to walk to its post. Ordering it only once the creep it replaces is already
 // gone leaves that post - and the source worked from it - idle for the whole
@@ -225,7 +245,7 @@ function getMinerPopulationTarget(room: Room): number {
 }
 
 function getMinerReplacementLead(room: Room): number {
-  const allowed = Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowed = bodyBudget(room, "capacity");
   return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room));
 }
 
@@ -482,7 +502,7 @@ function shouldSpawnHauler(room: Room): boolean {
 
   const idealRepeats = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 3),
-    Math.floor((room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) / 150)
+    Math.floor(bodyBudget(room, "capacity") / 150)
   );
   const carryPerIdealHauler = Math.max(1, idealRepeats * 2);
 
@@ -514,10 +534,10 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
     (c) => (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
-  const energyBasis = existingHaulers.length === 0
-    ? room.energyAvailable
-    : room.energyCapacityAvailable;
-  const allowedEnergy = Math.floor(energyBasis * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(
+    room,
+    existingHaulers.length === 0 ? "available" : "capacity"
+  );
   const body = buildScaledBody(ROLE_HAULER, allowedEnergy);
   const bodyCost = calculateBodyPartCost(body);
 
@@ -527,9 +547,7 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
     // miner is saving up for, and the miner never gets to spawn. Give up on the
     // wait once it has starved the rest of the room for SPAWN_HOLD_LIMIT ticks.
     if (existingHaulers.length > 0 && holdSpawnFor(room, ROLE_HAULER)) return true;
-    const affordableEnergy = Math.floor(
-      room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-    );
+    const affordableEnergy = bodyBudget(room, "available");
     const affordableBody = buildScaledBody(ROLE_HAULER, affordableEnergy);
     if (room.energyAvailable < calculateBodyPartCost(affordableBody)) {
       // Below the cost of the smallest hauler there is nothing to save up for,
@@ -551,7 +569,7 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function getMinerWorkTarget(room: Room): number {
-  const allowed = Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowed = bodyBudget(room, "capacity");
   return buildMinerBody(allowed).filter((p) => p === WORK).length;
 }
 
@@ -644,11 +662,10 @@ function shouldSpawnFiller(room: Room): boolean {
 }
 
 function spawnFiller(room: Room, spawn: StructureSpawn): boolean {
-  const energyBasis =
-    countByRoleInRoom(ROLE_FILLER, room) === 0
-      ? room.energyAvailable
-      : room.energyCapacityAvailable;
-  const allowedEnergy = Math.floor(energyBasis * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(
+    room,
+    countByRoleInRoom(ROLE_FILLER, room) === 0 ? "available" : "capacity"
+  );
   const body = buildScaledBody(ROLE_FILLER, allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const res = spawn.spawnCreep(body, `${ROLE_FILLER}${Game.time}`, {
@@ -690,9 +707,7 @@ function shouldSpawnMineralMiner(room: Room): boolean {
 
 function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_REPAIRER}${Game.time}`;
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_REPAIRER },
@@ -728,9 +743,7 @@ function buildMineralMinerBody(availableEnergy: number): BodyPartConstant[] {
 
 function spawnMineralMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINERAL_MINER}${Game.time}`;
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildMineralMinerBody(allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_MINERAL_MINER },
@@ -740,9 +753,7 @@ function spawnMineralMiner(room: Room, spawn: StructureSpawn): boolean {
 
 function spawnHarvester(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_HARVESTER}${Game.time}`;
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_HARVESTER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_HARVESTER },
@@ -767,10 +778,7 @@ function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_UPGRADER}${Game.time}`;
   const rcl = room.controller?.level ?? 0;
 
-  const allowedEnergy =
-    rcl >= 8
-      ? Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE))
-      : Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, rcl >= 8 ? "capacity" : "available");
   const body =
     rcl >= 8
       ? buildRcl8UpgraderBody(allowedEnergy)
@@ -791,9 +799,7 @@ function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
 
 function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_BUILDER}${Game.time}`;
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_BUILDER, allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_BUILDER },
@@ -822,9 +828,7 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINER}${Game.time}`;
   const existingMiners = getCreepsByRoleInRoom(ROLE_MINER, room).length;
 
-  const energyBasis =
-    existingMiners === 0 ? room.energyAvailable : room.energyCapacityAvailable;
-  const allowedEnergy = Math.floor(energyBasis * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, existingMiners === 0 ? "available" : "capacity");
   const body = buildMinerBody(allowedEnergy);
 
   if (room.energyAvailable < calculateBodyPartCost(body)) {
@@ -833,9 +837,7 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
     // energy we're saving up on a runt. Block the spawn tick like spawnHauler
     // does, and give up on the wait on the same bounded terms.
     if (existingMiners > 0 && holdSpawnFor(room, ROLE_MINER)) return true;
-    const affordable = buildMinerBody(
-      Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE))
-    );
+    const affordable = buildMinerBody(bodyBudget(room, "available"));
     return spawn.spawnCreep(affordable, newName, { memory: { role: ROLE_MINER } }) === OK;
   }
 
@@ -886,7 +888,7 @@ const BASELINE_SCORE_COLLECTORS = 2;
 function shouldSpawnScoreHunter(room: Room): boolean {
   if (!scoreHunterSupported()) return false;
   if (getThreatInfo(room).score > 0) return false;
-  if (room.energyAvailable < room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) return false;
+  if (room.energyAvailable < bodyBudget(room, "capacity")) return false;
 
   const unclaimed = getUnclaimedScoreTargetCount();
   let target: number;
@@ -948,9 +950,7 @@ function spawnRemoteMiner(room: Room, spawn: StructureSpawn): boolean {
   const assignment = findUnassignedRemoteSource(room);
   if (!assignment) return false;
 
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildRemoteMinerBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
@@ -980,9 +980,8 @@ function getRemoteHaulerTarget(room: Room): number {
   // has and over-hauled to match.
   const carryPerHauler = Math.max(
     1,
-    buildRemoteHaulerRoadBody(
-      Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE))
-    ).filter((p) => p === CARRY).length
+    buildRemoteHaulerRoadBody(bodyBudget(room, "capacity")).filter((p) => p === CARRY)
+      .length
   );
 
   let total = 0;
@@ -1033,9 +1032,7 @@ function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
     }
   }
 
-  const allowedEnergy = Math.floor(
-    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-  );
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildRemoteHaulerRoadBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
@@ -1264,7 +1261,7 @@ function shouldSpawnKnight(room: Room, threatScore: number): boolean {
 }
 
 function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
@@ -1282,7 +1279,7 @@ function shouldSpawnWizard(room: Room, threatScore: number): boolean {
 }
 
 function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildWizardBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
@@ -1302,7 +1299,7 @@ function shouldSpawnCleric(room: Room, threatScore: number): boolean {
 }
 
 function spawnCleric(room: Room, spawn: StructureSpawn): boolean {
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildClericBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
@@ -1353,7 +1350,7 @@ function shouldSpawnSettler(room: Room): boolean {
 function spawnSettler(room: Room, spawn: StructureSpawn): boolean {
   const exp = Memory.expansion;
   if (!exp) return false;
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_SETTLER, allowedEnergy);
   const res = spawn.spawnCreep(body, `${ROLE_SETTLER}${Game.time}`, {
     memory: {
@@ -1543,8 +1540,7 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   let body: BodyPartConstant[];
 
   const haveDefender = getDefenders(room.name).some((c) => !c.spawning);
-  const energyBudget = haveDefender ? room.energyCapacityAvailable : room.energyAvailable;
-  const allowedEnergy = Math.floor(energyBudget * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, haveDefender ? "capacity" : "available");
 
   if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredBiters) {
     roleToSpawn = ROLE_KNIGHT;
@@ -1588,7 +1584,7 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
 function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   const exp = Memory.expansion;
   if (!exp) return false;
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
@@ -1629,7 +1625,7 @@ function shouldSpawnRemoteDefender(room: Room): boolean {
 function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   const target = findRemoteInvaderTarget(room);
   if (!target) return false;
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const attackParts = body.filter((p) => p === ATTACK).length;
@@ -1774,7 +1770,7 @@ function spawnNextDepositCreep(room: Room, spawn: StructureSpawn): boolean {
     body = buildDepositMinerBody(energy);
   } else if (haulers < op.requiredHaulers) {
     roleToSpawn = ROLE_DEPOSIT_HAULER;
-    body = buildRemoteHaulerBody(Math.floor(energy * (1 - SPAWN_ENERGY_RESERVE)));
+    body = buildRemoteHaulerBody(bodyBudget(room, "capacity"));
   } else {
     return false;
   }
@@ -1877,7 +1873,7 @@ function spawnSkMiner(
 }
 
 function spawnSkHauler(room: Room, spawn: StructureSpawn, op: SourceKeeperOp): boolean {
-  const allowedEnergy = Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "capacity");
   const body = buildRemoteHaulerBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const res = spawn.spawnCreep(body, `${ROLE_SK_HAULER}${Game.time}`, {
@@ -1894,7 +1890,7 @@ function shouldSpawnApothecary(room: Room): boolean {
 }
 
 function spawnApothecary(room: Room, spawn: StructureSpawn): boolean {
-  const allowedEnergy = Math.floor(room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_APOTHECARY, allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const res = spawn.spawnCreep(body, `${ROLE_APOTHECARY}${Game.time}`, {
