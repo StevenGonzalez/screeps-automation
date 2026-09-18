@@ -700,12 +700,38 @@ function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
+// The extractor's cooldown caps a mineral miner at one mineral per WORK part
+// per EXTRACTOR_COOLDOWN ticks however big it is, so extra WORK buys nothing
+// past the container's regen. What sets its output is CARRY, because it carries
+// its own load to storage: with the one CARRY part buildMinerBody gives it, it
+// walked off the extractor every 50 minerals and spent most of its life in
+// transit. Trade the surplus WORK for CARRY and it stays on the mineral.
+function buildMineralMinerBody(availableEnergy: number): BodyPartConstant[] {
+  const workParts = 5;
+  const baseMove = 3;
+  const baseCost =
+    workParts * BODYPART_COST[WORK] + baseMove * BODYPART_COST[MOVE];
+  // Two CARRY to one MOVE: the route to the mineral is roaded like the rest of
+  // the cardinal arteries.
+  const unitCost = 2 * BODYPART_COST[CARRY] + BODYPART_COST[MOVE];
+  const units = Math.max(
+    1,
+    Math.min(5, Math.floor((availableEnergy - baseCost) / unitCost))
+  );
+
+  return [
+    ...Array(workParts).fill(WORK),
+    ...Array(units * 2).fill(CARRY),
+    ...Array(baseMove + units).fill(MOVE),
+  ] as BodyPartConstant[];
+}
+
 function spawnMineralMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINERAL_MINER}${Game.time}`;
   const allowedEnergy = Math.floor(
     room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
   );
-  const body = buildMinerBody(allowedEnergy);
+  const body = buildMineralMinerBody(allowedEnergy);
   const res = spawn.spawnCreep(body, newName, {
     memory: { role: ROLE_MINERAL_MINER },
   });
@@ -948,12 +974,15 @@ function getRemoteHaulerTarget(room: Room): number {
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return 0;
 
+  // Ask the body builder how much CARRY a hauler actually gets rather than
+  // re-deriving it here. The copy this replaces divided by 200 while the body
+  // pattern costs 150, so every remote was credited a quarter less carry than it
+  // has and over-hauled to match.
   const carryPerHauler = Math.max(
     1,
-    Math.min(
-      Math.floor(MAX_BODY_PART_COUNT / 3),
-      Math.floor((room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE)) / 200)
-    ) * 2
+    buildRemoteHaulerRoadBody(
+      Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE))
+    ).filter((p) => p === CARRY).length
   );
 
   let total = 0;

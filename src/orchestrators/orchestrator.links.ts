@@ -114,9 +114,12 @@ function pickSink(
   let best: StructureLink | null = null;
   let bestFree = LINK_SINK_HEADROOM - 1;
 
+  // Only the sending link's cooldown gates transferEnergy, so a sink is a valid
+  // target whatever its own cooldown says. Filtering on it here rejected most
+  // sinks most of the time, because a sink that has ever sent is on cooldown for
+  // the next several ticks.
   for (const sink of sinks) {
     if (sink.id === src.id) continue;
-    if (sink.cooldown > 0) continue;
     const free = sink.store.getFreeCapacity(RESOURCE_ENERGY);
     if (free > bestFree) {
       best = sink;

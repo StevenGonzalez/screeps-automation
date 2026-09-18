@@ -1,5 +1,4 @@
 import {
-  getSources,
   acquireEnergy,
   isCreepEmpty,
   isCreepFull,
