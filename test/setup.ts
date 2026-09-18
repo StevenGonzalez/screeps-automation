@@ -42,6 +42,7 @@ const GAME_CONSTANTS: Record<string, unknown> = {
     claim: 600,
   },
   CARRY_CAPACITY: 50,
+  CREEP_SPAWN_TIME: 3,
   RESOURCE_ENERGY: "energy",
   NUKER_GHODIUM_CAPACITY: 5000,
   NUKER_ENERGY_CAPACITY: 300000,

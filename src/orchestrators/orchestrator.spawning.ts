@@ -152,8 +152,81 @@ function holdSpawnFor(room: Room, role: string): boolean {
   return Game.time - since < SPAWN_HOLD_LIMIT;
 }
 
+// A replacement takes CREEP_SPAWN_TIME ticks per body part to build and then has
+// to walk to its post. Ordering it only once the creep it replaces is already
+// gone leaves that post - and the source worked from it - idle for the whole
+// lead time, every life cycle.
+function spawnLeadTicks(bodyParts: number, travelTicks: number): number {
+  return bodyParts * CREEP_SPAWN_TIME + travelTicks;
+}
+
+function isRetiring(creep: Creep, lead: number): boolean {
+  const ttl = creep.ticksToLive;
+  return ttl !== undefined && ttl <= lead;
+}
+
+// A remote post is a long walk from the spawn, so its replacement has to be
+// ordered that much earlier. The outgoing creep's own body is a good stand-in
+// for the size of the one that relieves it.
+function isRemoteCreepRetiring(home: Room, creep: Creep): boolean {
+  const target = creep.memory.targetRoom;
+  if (!target) return false;
+  const lead = spawnLeadTicks(creep.body.length, estimateRemoteDistance(home, target));
+  return isRetiring(creep, lead);
+}
+
+// Spawn -> miner container path length, reusing the distance cache the hauler
+// sizing already maintains. The furthest post sets the lead so that no post is
+// left empty while its replacement walks. 999 is the cache's "unreachable"
+// marker, which would otherwise read as an enormous lead.
+const UNREACHABLE_DISTANCE = 999;
+
+function getMinerTravelTicks(room: Room): number {
+  const spawn = getSpawnForRoom(room);
+  if (!spawn) return 0;
+  const containers = (room.memory.minerContainerIds ?? [])
+    .map((id) => Game.getObjectById(id))
+    .filter(Boolean) as StructureContainer[];
+  if (containers.length === 0) return 0;
+  const distances = getContainerDistances(room, spawn, containers);
+  let furthest = 0;
+  for (const c of containers) {
+    const d = distances[c.id] ?? 0;
+    if (d < UNREACHABLE_DISTANCE) furthest = Math.max(furthest, d);
+  }
+  return furthest;
+}
+
+// Bodies are sized from room.energyAvailable, so one spawned during a dip in the
+// core commits the room to an undersized creep for its whole 1500-tick life.
+// Wait for the extensions to refill first. Unlike holdSpawnFor this does not
+// block the roles below it in the chain, and it gives up so that a room that
+// simply never reaches the ratio still gets its creep, just a smaller one.
+const FULL_BODY_ENERGY_RATIO = 0.9;
+const FULL_BODY_MAX_WAIT = 40;
+
+function waitForFullBody(room: Room, role: string): boolean {
+  const memory = getRoomMemory(room);
+  if (room.energyAvailable >= room.energyCapacityAvailable * FULL_BODY_ENERGY_RATIO) {
+    if (memory.bodyWait) delete memory.bodyWait[role];
+    return false;
+  }
+  if (!memory.bodyWait) memory.bodyWait = {};
+  const since = memory.bodyWait[role];
+  if (since === undefined) {
+    memory.bodyWait[role] = Game.time;
+    return true;
+  }
+  return Game.time - since < FULL_BODY_MAX_WAIT;
+}
+
 function getMinerPopulationTarget(room: Room): number {
   return (room.memory.minerContainerIds ?? []).length;
+}
+
+function getMinerReplacementLead(room: Room): number {
+  const allowed = Math.floor(room.energyCapacityAvailable * (1 - SPAWN_ENERGY_RESERVE));
+  return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room));
 }
 
 type RoomPhase = "bootstrap" | "developing" | "established" | "powerhouse";
@@ -420,7 +493,10 @@ function shouldSpawnHauler(room: Room): boolean {
     Math.max(minerContainerCount, targetFromThroughput)
   );
 
-  const haulerCount = haulers.length + getRoomSpawningCount(room, ROLE_HAULER);
+  const lead = spawnLeadTicks(idealRepeats * 3, getMinerTravelTicks(room));
+  const haulerCount =
+    haulers.filter((h) => !isRetiring(h, lead)).length +
+    getRoomSpawningCount(room, ROLE_HAULER);
   if (haulerCount < desired) return true;
 
   if (haulers.length >= HAULER_SPAWN.MAX_HAULERS) return false;
@@ -484,9 +560,13 @@ function shouldSpawnMiner(room: Room): boolean {
   // during an energy crunch is undersized for its whole life and caps income at
   // a fraction of the source; it needs replacing once we can afford better.
   const workTarget = getMinerWorkTarget(room);
+  const lead = getMinerReplacementLead(room);
   const adequate =
     getCreepsByRoleInRoom(ROLE_MINER, room).filter(
-      (c) => !c.spawning && c.body.filter((p) => p.type === WORK).length >= workTarget
+      (c) =>
+        !c.spawning &&
+        c.body.filter((p) => p.type === WORK).length >= workTarget &&
+        !isRetiring(c, lead)
     ).length + getRoomSpawningCount(room, ROLE_MINER);
   return adequate < getMinerPopulationTarget(room);
 }
@@ -496,10 +576,12 @@ function shouldSpawnHarvester(room: Room): boolean {
 }
 
 function shouldSpawnUpgrader(room: Room): boolean {
+  if (waitForFullBody(room, ROLE_UPGRADER)) return false;
   return countByRoleInRoom(ROLE_UPGRADER, room) < getUpgraderPopulationTarget(room);
 }
 
 function shouldSpawnBuilder(room: Room): boolean {
+  if (waitForFullBody(room, ROLE_BUILDER)) return false;
   return countByRoleInRoom(ROLE_BUILDER, room) < getBuilderPopulationTarget(room);
 }
 
@@ -546,7 +628,9 @@ function getRepairerPopulationTarget(room: Room): number {
 
 function shouldSpawnRepairer(room: Room): boolean {
   const target = getRepairerPopulationTarget(room);
-  return target > 0 && countByRoleInRoom(ROLE_REPAIRER, room) < target;
+  if (target === 0) return false;
+  if (waitForFullBody(room, ROLE_REPAIRER)) return false;
+  return countByRoleInRoom(ROLE_REPAIRER, room) < target;
 }
 
 function getFillerPopulationTarget(room: Room): number {
@@ -810,50 +894,49 @@ function spawnScoreHunter(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-function shouldSpawnRemoteMiner(room: Room): boolean {
-  if ((room.controller?.level ?? 0) < 3) return false;
-  const activeRooms = getActiveRemoteRooms(room);
-  const miners = getCreepsByRole(ROLE_REMOTE_MINER).filter(
-    (c) => c.memory.homeRoom === room.name
+function findUnassignedRemoteSource(
+  room: Room
+): { roomName: string; sourceId: Id<Source> } | null {
+  const covered = new Set(
+    getCreepsByRole(ROLE_REMOTE_MINER)
+      .filter((c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c))
+      .map((c) => c.memory.remoteSourceId)
   );
-  const assignedSources = new Set(miners.map((c) => c.memory.remoteSourceId));
-  for (const remote of activeRooms) {
+  for (const remote of getActiveRemoteRooms(room)) {
     for (const src of remote.sources) {
-      if (!assignedSources.has(src.sourceId)) return true;
+      if (!covered.has(src.sourceId)) {
+        return { roomName: remote.roomName, sourceId: src.sourceId };
+      }
     }
   }
-  return false;
+  return null;
+}
+
+function shouldSpawnRemoteMiner(room: Room): boolean {
+  if ((room.controller?.level ?? 0) < 3) return false;
+  if (waitForFullBody(room, ROLE_REMOTE_MINER)) return false;
+  return findUnassignedRemoteSource(room) !== null;
 }
 
 function spawnRemoteMiner(room: Room, spawn: StructureSpawn): boolean {
-  const activeRooms = getActiveRemoteRooms(room);
-  const miners = getCreepsByRole(ROLE_REMOTE_MINER).filter(
-    (c) => c.memory.homeRoom === room.name
+  const assignment = findUnassignedRemoteSource(room);
+  if (!assignment) return false;
+
+  const allowedEnergy = Math.floor(
+    room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
   );
-  const assignedSources = new Set(miners.map((c) => c.memory.remoteSourceId));
+  const body = buildRemoteMinerBody(allowedEnergy);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
-  for (const remote of activeRooms) {
-    for (const src of remote.sources) {
-      if (assignedSources.has(src.sourceId)) continue;
-
-      const allowedEnergy = Math.floor(
-        room.energyAvailable * (1 - SPAWN_ENERGY_RESERVE)
-      );
-      const body = buildRemoteMinerBody(allowedEnergy);
-      if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-
-      const res = spawn.spawnCreep(body, `${ROLE_REMOTE_MINER}${Game.time}`, {
-        memory: {
-          role: ROLE_REMOTE_MINER,
-          homeRoom: room.name,
-          targetRoom: remote.roomName,
-          remoteSourceId: src.sourceId,
-        },
-      });
-      return res === OK;
-    }
-  }
-  return false;
+  const res = spawn.spawnCreep(body, `${ROLE_REMOTE_MINER}${Game.time}`, {
+    memory: {
+      role: ROLE_REMOTE_MINER,
+      homeRoom: room.name,
+      targetRoom: assignment.roomName,
+      remoteSourceId: assignment.sourceId,
+    },
+  });
+  return res === OK;
 }
 
 function estimateRemoteDistance(homeRoom: Room, remoteRoomName: string): number {
@@ -889,8 +972,10 @@ function shouldSpawnRemoteHauler(room: Room): boolean {
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return false;
 
+  if (waitForFullBody(room, ROLE_REMOTE_HAULER)) return false;
+
   const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter(
-    (c) => c.memory.homeRoom === room.name
+    (c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c)
   );
 
   return haulers.length < getRemoteHaulerTarget(room);
@@ -1065,7 +1150,12 @@ function boostMemory(queue: string[]): { boostCompound?: string; boostQueue?: st
   };
 }
 
-function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
+// Damage eats body parts left to right, so a combat body is ordered worst-to-
+// best: TOUGH soaks first, MOVE goes next, and the part the creep exists for
+// (ATTACK / RANGED_ATTACK / WORK, then HEAL) is last so it keeps producing
+// until the creep is nearly dead. A body that lists its combat parts first
+// loses its output while still at full mobility, which is backwards.
+export function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
   const trioCost = BODYPART_COST[TOUGH] + BODYPART_COST[MOVE] + BODYPART_COST[ATTACK];
   const maxTrios = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 3),
@@ -1079,7 +1169,7 @@ function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
   ] as BodyPartConstant[];
 }
 
-function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
+export function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
   const pairCost = BODYPART_COST[MOVE] + BODYPART_COST[RANGED_ATTACK];
   const maxPairs = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 2),
@@ -1087,12 +1177,12 @@ function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
   );
   const pairs = Math.max(1, maxPairs);
   return [
-    ...Array(pairs).fill(RANGED_ATTACK),
     ...Array(pairs).fill(MOVE),
+    ...Array(pairs).fill(RANGED_ATTACK),
   ] as BodyPartConstant[];
 }
 
-function buildClericBody(availableEnergy: number): BodyPartConstant[] {
+export function buildClericBody(availableEnergy: number): BodyPartConstant[] {
   const pairCost = BODYPART_COST[HEAL] + BODYPART_COST[MOVE];
   const maxPairs = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 2),
@@ -1100,12 +1190,12 @@ function buildClericBody(availableEnergy: number): BodyPartConstant[] {
   );
   const pairs = Math.max(1, maxPairs);
   return [
-    ...Array(pairs).fill(HEAL),
     ...Array(pairs).fill(MOVE),
+    ...Array(pairs).fill(HEAL),
   ] as BodyPartConstant[];
 }
 
-function buildDrainerBody(availableEnergy: number): BodyPartConstant[] {
+export function buildDrainerBody(availableEnergy: number): BodyPartConstant[] {
   const groupCost = BODYPART_COST[TOUGH] + BODYPART_COST[HEAL] + 2 * BODYPART_COST[MOVE];
   const maxGroups = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 4),
@@ -1114,12 +1204,12 @@ function buildDrainerBody(availableEnergy: number): BodyPartConstant[] {
   const groups = Math.max(1, maxGroups);
   return [
     ...Array(groups).fill(TOUGH),
-    ...Array(groups).fill(HEAL),
     ...Array(groups * 2).fill(MOVE),
+    ...Array(groups).fill(HEAL),
   ] as BodyPartConstant[];
 }
 
-function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
+export function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
   const groupCost = BODYPART_COST[TOUGH] + 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE];
   const maxGroups = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 4),
@@ -1128,8 +1218,8 @@ function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
   const groups = Math.max(1, maxGroups);
   return [
     ...Array(groups).fill(TOUGH),
-    ...Array(groups * 2).fill(WORK),
     ...Array(groups).fill(MOVE),
+    ...Array(groups * 2).fill(WORK),
   ] as BodyPartConstant[];
 }
 
@@ -1706,7 +1796,7 @@ function spawnSkCreeps(room: Room, spawn: StructureSpawn): boolean {
   return false;
 }
 
-function buildSkGuardianBody(availableEnergy: number): BodyPartConstant[] {
+export function buildSkGuardianBody(availableEnergy: number): BodyPartConstant[] {
   const groupCost = BODYPART_COST[RANGED_ATTACK] + BODYPART_COST[HEAL] + 2 * BODYPART_COST[MOVE];
   const maxGroups = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 4),
@@ -1714,9 +1804,9 @@ function buildSkGuardianBody(availableEnergy: number): BodyPartConstant[] {
   );
   const groups = Math.max(5, maxGroups);
   return [
+    ...Array(groups * 2).fill(MOVE),
     ...Array(groups).fill(RANGED_ATTACK),
     ...Array(groups).fill(HEAL),
-    ...Array(groups * 2).fill(MOVE),
   ] as BodyPartConstant[];
 }
 

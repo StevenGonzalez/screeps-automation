@@ -247,6 +247,7 @@ declare global {
       guards?: number;
     };
     spawnHold?: { role: string; since: number; lastTick: number };
+    bodyWait?: Record<string, number>;
   }
 
   interface Memory {

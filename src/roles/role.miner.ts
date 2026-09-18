@@ -29,6 +29,11 @@ export function runMiner(creep: Creep) {
     if (source && container) {
       if (!creep.pos.isEqualTo(container.pos)) {
         creep.moveTo(container.pos, { reusePath: 50 });
+        // Moving and harvesting are separate intents, so the walk out costs the
+        // room nothing once the creep is already beside the source. This matters
+        // while a replacement overlaps the miner it relieves and cannot reach
+        // the container tile at all.
+        if (creep.pos.isNearTo(source)) creep.harvest(source);
         return;
       }
 
@@ -64,6 +69,7 @@ export function runMiner(creep: Creep) {
       const container = containers[0];
       if (!creep.pos.isEqualTo(container.pos)) {
         creep.moveTo(container.pos, { reusePath: 50 });
+        if (creep.pos.isNearTo(source)) creep.harvest(source);
         return;
       }
       harvestFromSource(creep, source);

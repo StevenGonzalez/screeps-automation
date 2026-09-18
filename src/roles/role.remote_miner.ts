@@ -59,6 +59,10 @@ export function runRemoteMiner(creep: Creep) {
   if (container) {
     if (!creep.pos.isEqualTo(container.pos)) {
       creep.moveTo(container, { reusePath: 30 });
+      // Moving and harvesting are separate intents, so the last steps of the
+      // walk out are still productive, including while a replacement overlaps
+      // the miner it relieves.
+      if (creep.pos.isNearTo(source)) creep.harvest(source);
       return;
     }
     if (container.hits < container.hitsMax * 0.5 && creep.store[RESOURCE_ENERGY] > 0) {
