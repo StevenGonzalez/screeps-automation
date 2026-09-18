@@ -44,7 +44,10 @@ export function runHauler(creep: Creep) {
   const storageModel = !!creep.room.storage && hasActiveFiller(creep.room);
 
   if (creep.memory.working === undefined) creep.memory.working = false;
-  if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) creep.memory.working = false;
+  if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
+    creep.memory.working = false;
+    creep.memory.coreRelief = undefined;
+  }
   if (!creep.memory.working && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
     creep.memory.working = true;
   }
@@ -65,7 +68,7 @@ export function runHauler(creep: Creep) {
     }
   }
 
-  if (!storageModel) {
+  if (!storageModel || creep.memory.coreRelief) {
     if (creep.memory.fillTargetId) {
       const cached = Game.getObjectById(creep.memory.fillTargetId as Id<AnyStoreStructure>) as AnyStoreStructure | null;
       if (cached && "store" in cached && cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
@@ -203,15 +206,23 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
     return true;
   }
 
-  if (carried === 0 && !storageModel) {
+  if (carried === 0) {
     const storage = creep.room.storage;
     const baseNeedsEnergy = creep.room.energyAvailable < creep.room.energyCapacityAvailable;
     if (storage && baseNeedsEnergy && storage.store[RESOURCE_ENERGY] > 0) {
+      // Under the storage model the filler owns storage -> spawn/extensions, so
+      // a hauler normally leaves this leg alone. We only get here with nothing
+      // to haul, though, and deferring then means parking beside empty
+      // extensions: one filler cannot always keep the core fed, and a starved
+      // core is what stops the room spawning. Take the run and mark it, so the
+      // delivery leg fills the core instead of putting it back in storage.
+      if (storageModel) creep.memory.coreRelief = true;
       if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(storage, { reusePath: 20 });
       }
       return true;
     }
+    if (storageModel) return false;
     if (baseNeedsEnergy) {
       acquireEnergy(creep);
       return true;

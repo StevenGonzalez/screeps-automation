@@ -185,6 +185,7 @@ declare global {
     _hp?: number;
     remoteBackoffUntil?: number;
     fillTargetId?: string;
+    coreRelief?: boolean;
     constructionSiteId?: Id<ConstructionSite>;
     energySourceId?: Id<AnyStoreStructure>;
     boostCompound?: string;
