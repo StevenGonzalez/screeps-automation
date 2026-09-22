@@ -124,10 +124,14 @@ export function findEnergyDepositTarget(
   if (priorityList.length === 0) return null;
 
   const typeSet = new Set<StructureConstant>(priorityList);
+  // The mineral container is the mineral miner's standing tile, not an energy
+  // buffer; energy dumped there sits far from every consumer.
+  const mineralContainerId = creep.room.memory.mineralContainerId;
 
   const all = getRoomStructures(creep.room).filter(
     (s): s is AnyStoreStructure =>
       typeSet.has(s.structureType) &&
+      s.id !== mineralContainerId &&
       "store" in s &&
       (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
   );
@@ -466,6 +470,7 @@ const SITE_BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_STORAGE]: 4,
   [STRUCTURE_TERMINAL]: 5,
   [STRUCTURE_LINK]: 6,
+  [STRUCTURE_EXTRACTOR]: 6,
   [STRUCTURE_LAB]: 7,
   [STRUCTURE_FACTORY]: 8,
   [STRUCTURE_NUKER]: 9,

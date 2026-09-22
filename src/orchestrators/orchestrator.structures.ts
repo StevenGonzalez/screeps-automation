@@ -26,6 +26,7 @@ const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_STORAGE]: 4,
   [STRUCTURE_TERMINAL]: 5,
   [STRUCTURE_LINK]: 6,
+  [STRUCTURE_EXTRACTOR]: 6,
   [STRUCTURE_LAB]: 7,
   [STRUCTURE_FACTORY]: 8,
   [STRUCTURE_NUKER]: 9,
@@ -105,7 +106,7 @@ function cleanupPlannedStructuresGlobal() {
   }
 }
 
-function applyPlannedConstruction(room: Room) {
+export function applyPlannedConstruction(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
   const terrain = room.getTerrain();
@@ -237,7 +238,9 @@ function applyPlannedConstruction(room: Room) {
       const comma = posStr.indexOf(",");
       const x = +posStr.slice(0, comma);
       const y = +posStr.slice(comma + 1);
-      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      // Minerals often sit on wall terrain, and the engine lets an extractor
+      // be placed there; every other planned type is invalid on a wall.
+      if (type !== STRUCTURE_EXTRACTOR && terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       keep.push(posStr);
       if (sites?.has(posStr)) continue;
       if (budget <= 0) {
@@ -563,22 +566,7 @@ function processRoomStructures(room: Room) {
     }
   }
 
-  const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
-  if (mineral) {
-    const containerKey = `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`;
-    const plannedMineral = plannedPositionsFromMemory(room, containerKey);
-    if (plannedMineral.length === 0) {
-      const mpos = planMineralContainer(room, mineral);
-      if (mpos) addPlannedStructureToMemory(room, containerKey, mpos);
-    }
-  }
-
-  if (mineral && (room.controller?.level ?? 0) >= 6 && !room.memory.extractorId) {
-    const extractorKey = `${PLANNER_KEYS.EXTRACTOR_PREFIX}${mineral.id}`;
-    if (plannedPositionsFromMemory(room, extractorKey).length === 0) {
-      addPlannedStructureToMemory(room, extractorKey, mineral.pos);
-    }
-  }
+  planMineralStructures(room);
 
   planCardinalArteries(room);
 
@@ -587,4 +575,31 @@ function processRoomStructures(room: Room) {
   removeConnectorRoads(room);
 
   room.memory.lastStructurePlanTick = Game.time;
+}
+
+// The mineral container is only the mineral miner's standing tile, and that
+// miner needs an extractor, which unlocks at RCL 6. Before then the container
+// would just decay, so drop any plan made for it earlier.
+export function planMineralStructures(room: Room) {
+  const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
+  if (!mineral) return;
+
+  const containerKey = `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`;
+  if ((room.controller?.level ?? 0) < 6) {
+    delete room.memory.plannedStructures?.[containerKey];
+    delete room.memory.plannedStructuresMeta?.[containerKey];
+    return;
+  }
+
+  if (plannedPositionsFromMemory(room, containerKey).length === 0) {
+    const mpos = planMineralContainer(room, mineral);
+    if (mpos) addPlannedStructureToMemory(room, containerKey, mpos);
+  }
+
+  if (!room.memory.extractorId) {
+    const extractorKey = `${PLANNER_KEYS.EXTRACTOR_PREFIX}${mineral.id}`;
+    if (plannedPositionsFromMemory(room, extractorKey).length === 0) {
+      addPlannedStructureToMemory(room, extractorKey, mineral.pos);
+    }
+  }
 }
