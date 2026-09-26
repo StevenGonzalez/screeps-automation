@@ -1,3 +1,5 @@
+import { MINERAL_LAB_RESERVE, MINERAL_TERMINAL_CAP } from "../orchestrators/orchestrator.terminal";
+
 export function runMineralMiner(creep: Creep): void {
   const mineralId = creep.room.memory.mineralId;
   if (!mineralId) return;
@@ -20,12 +22,22 @@ export function runMineralMiner(creep: Creep): void {
       ? (Game.getObjectById(terminalId) as StructureTerminal | null)
       : null;
     const storage = creep.room.storage;
-    const target =
-      storage && storage.store.getFreeCapacity() > 0
-        ? storage
-        : terminal && terminal.store.getFreeCapacity() > 0
-        ? terminal
-        : storage ?? terminal;
+    // Once storage holds the lab reserve, stage the surplus in the terminal
+    // where the market code can sell it.
+    const mineralType = mineral.mineralType;
+    const surplus =
+      !!storage &&
+      !!terminal &&
+      (storage.store.getUsedCapacity(mineralType) ?? 0) >= MINERAL_LAB_RESERVE &&
+      (terminal.store.getUsedCapacity(mineralType) ?? 0) < MINERAL_TERMINAL_CAP &&
+      terminal.store.getFreeCapacity() > 0;
+    const target = surplus
+      ? terminal
+      : storage && storage.store.getFreeCapacity() > 0
+      ? storage
+      : terminal && terminal.store.getFreeCapacity() > 0
+      ? terminal
+      : storage ?? terminal;
     if (!target) return;
     for (const resourceType in creep.store) {
       const amount = creep.store[resourceType as ResourceConstant];

@@ -1,3 +1,9 @@
+import { ROLE_DEPOSIT_MINER } from "../config/config.roles";
+
+// Ticks per room of travel home, plus slack for the last leg to storage.
+const TICKS_PER_ROOM = 50;
+const RETURN_SLACK = 50;
+
 export function runDepositHauler(creep: Creep) {
   if (creep.store.getFreeCapacity() === 0) { deliverHome(creep); return; }
 
@@ -17,6 +23,13 @@ export function runDepositHauler(creep: Creep) {
     return;
   }
 
+  // Head home only when full (checked above) or when waiting longer would
+  // leave too little life for the trip back.
+  if (creep.store.getUsedCapacity() > 0 && (creep.ticksToLive ?? Infinity) < returnTripTicks(creep)) {
+    deliverHome(creep);
+    return;
+  }
+
   const dropped = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
     filter: (r) => r.resourceType === op.depositType,
   });
@@ -27,11 +40,33 @@ export function runDepositHauler(creep: Creep) {
     return;
   }
 
-  if (creep.store.getUsedCapacity() > 0) { deliverHome(creep); return; }
+  const holder = [
+    ...creep.room.find(FIND_TOMBSTONES),
+    ...creep.room.find(FIND_RUINS),
+  ].find((h) => (h.store[op.depositType] ?? 0) > 0);
+  if (holder) {
+    if (creep.withdraw(holder, op.depositType) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(holder, { reusePath: 5, visualizePathStyle: {} });
+    }
+    return;
+  }
+
+  // Nothing loose to collect: wait beside the miner so it can hand over cargo.
+  const miner = creep.room
+    .find(FIND_MY_CREEPS)
+    .find((c) => c.memory.role === ROLE_DEPOSIT_MINER && c.memory.depositOpId === op.id);
   const deposit = op.depositId ? Game.getObjectById(op.depositId) : null;
-  if (deposit && creep.pos.getRangeTo(deposit) > 2) {
+  if (miner) {
+    if (!creep.pos.isNearTo(miner)) creep.moveTo(miner, { range: 1, reusePath: 5, visualizePathStyle: {} });
+  } else if (deposit && creep.pos.getRangeTo(deposit) > 2) {
     creep.moveTo(deposit, { reusePath: 10, visualizePathStyle: {} });
   }
+}
+
+function returnTripTicks(creep: Creep): number {
+  const home = creep.memory.homeRoom;
+  if (!home) return RETURN_SLACK;
+  return Game.map.getRoomLinearDistance(creep.room.name, home) * TICKS_PER_ROOM + RETURN_SLACK;
 }
 
 function deliverHome(creep: Creep) {

@@ -28,7 +28,12 @@ export function loop(): void {
 
 function ensureOperatorsExist(): void {
   const existing = Object.values(Game.powerCreeps);
-  if (Game.gpl.level <= existing.length) return;
+  // Creating a power creep and each of its levels both cost one GPL level.
+  // Spend free levels upgrading the operators we have; only add another once
+  // every existing one is maxed.
+  const usedLevels = existing.reduce((sum, pc) => sum + pc.level + 1, 0);
+  if (Game.gpl.level <= usedLevels) return;
+  if (existing.some((pc) => pc.level < POWER_CREEP_MAX_LEVEL)) return;
 
   const claimed = new Set<string>();
   for (const pc of existing) {
@@ -45,7 +50,10 @@ function ensureOperatorsExist(): void {
     const name = `Operator_${room.name}_${Game.time}`;
     const res = PowerCreep.create(name, POWER_CLASS.OPERATOR);
     if (res === OK) {
-      Game.powerCreeps[name].memory.homeRoom = room.name;
+      // The new creep is not in Game.powerCreeps until next tick; seed its
+      // memory directly.
+      if (!Memory.powerCreeps) Memory.powerCreeps = {};
+      Memory.powerCreeps[name] = { ...(Memory.powerCreeps[name] ?? {}), homeRoom: room.name };
       console.log(`[Power] Created Operator "${name}" for ${room.name}`);
     }
     return;
@@ -136,7 +144,7 @@ function applyBestPower(pc: PowerCreep, room: Room): boolean {
       pc.moveTo(target, { range, reusePath: 10 });
       return false;
     }
-    return pc.usePower(power, target) === OK;
+    if (pc.usePower(power, target) === OK) return true;
   }
 
   const anchor = room.storage ?? getHomePowerSpawn(pc);

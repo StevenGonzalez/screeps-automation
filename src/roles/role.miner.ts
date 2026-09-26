@@ -55,9 +55,10 @@ export function runMiner(creep: Creep) {
 
       if (creep.store.getFreeCapacity() === 0) {
         const link = findAdjacentLink(creep);
+        // Transfer and harvest are separate intents, so empty into the link
+        // and still harvest this tick.
         if (link && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
           creep.transfer(link, RESOURCE_ENERGY);
-          return;
         }
       }
 

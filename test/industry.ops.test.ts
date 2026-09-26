@@ -1,0 +1,156 @@
+import { describe, it, expect, beforeEach } from "vitest";
+
+const g = globalThis as Record<string, unknown>;
+g.OK = 0;
+g.ATTACK_POWER = 30;
+g.FIND_STRUCTURES = 101;
+g.FIND_DEPOSITS = 120;
+g.FIND_MY_CREEPS = 107;
+g.STRUCTURE_POWER_BANK = "powerBank";
+g.POWER_CREEP_MAX_LEVEL = 25;
+g.POWER_CLASS = { OPERATOR: "operator" };
+
+g.ERR_NOT_ENOUGH_RESOURCES = -6;
+[
+  "PWR_GENERATE_OPS", "PWR_REGEN_SOURCE", "PWR_OPERATE_SPAWN", "PWR_OPERATE_EXTENSION",
+  "PWR_OPERATE_FACTORY", "PWR_OPERATE_LAB", "PWR_OPERATE_STORAGE", "PWR_OPERATE_TOWER",
+  "PWR_OPERATE_TERMINAL", "PWR_OPERATE_POWER",
+].forEach((n, i) => {
+  if (g[n] === undefined) g[n] = i + 1;
+});
+
+// Imported after the globals above, which these modules read at load time.
+const { loop: observerLoop, powerOpTicksNeeded } = await import(
+  "../src/orchestrators/orchestrator.observer"
+);
+const { loop: powerCreepLoop } = await import("../src/orchestrators/orchestrator.powercreep");
+const { runDepositMiner } = await import("../src/roles/role.depositminer");
+const { ROLE_DEPOSIT_HAULER } = await import("../src/config/config.roles");
+
+let clock = 7000;
+beforeEach(() => {
+  clock += 1;
+  g.Memory = {};
+});
+
+describe("power bank ops", () => {
+  function world(
+    homeLevel: number,
+    bank: { power: number; hits: number; ticksToDecay: number },
+    distance = 2
+  ) {
+    const home = { name: "W1N1", controller: { my: true, level: homeLevel }, memory: {} };
+    const bankObj = { id: "pb", structureType: "powerBank", ...bank };
+    const highway = {
+      name: "W0N1",
+      memory: {},
+      find: (type: number) => (type === g.FIND_STRUCTURES ? [bankObj] : []),
+    };
+    g.Game = {
+      time: clock,
+      rooms: { W1N1: home, W0N1: highway },
+      creeps: {},
+      map: { getRoomLinearDistance: () => distance },
+      getObjectById: (id: string) => (id === "pb" ? bankObj : null),
+    };
+  }
+
+  it("counts spawn, travel and crack time", () => {
+    // 2M hits at 2 x 25 ATTACK x 30 = 1500/tick -> 1334 ticks to crack.
+    expect(powerOpTicksNeeded(2_000_000, 4)).toBe(750 + 200 + 1334 + 300);
+  });
+
+  it("only launches from an RCL8 room", () => {
+    world(7, { power: 3000, hits: 2_000_000, ticksToDecay: 4900 });
+    observerLoop();
+    expect((g.Memory as Memory).powerOps ?? []).toHaveLength(0);
+
+    world(8, { power: 3000, hits: 2_000_000, ticksToDecay: 4900 });
+    observerLoop();
+    expect((g.Memory as Memory).powerOps).toHaveLength(1);
+  });
+
+  it("skips a bank that will decay before the squad can crack it", () => {
+    // Six rooms out needs 750 + 300 + 1667 + 300 = 3017 ticks.
+    world(8, { power: 3000, hits: 2_000_000, ticksToDecay: 2600 }, 6);
+    observerLoop();
+    expect((g.Memory as Memory).powerOps ?? []).toHaveLength(0);
+  });
+});
+
+describe("power creep creation", () => {
+  it("spends a free GPL level on upgrading, not on a second operator", () => {
+    let created = 0;
+    (g as Record<string, unknown>).PowerCreep = {
+      create: () => {
+        created++;
+        return 0;
+      },
+    };
+    g.Game = {
+      time: clock,
+      gpl: { level: 3 },
+      rooms: { W1N1: { name: "W1N1", controller: { my: true }, memory: { powerSpawnId: "ps" } } },
+      powerCreeps: {},
+      getObjectById: () => ({ id: "ps" }),
+    };
+    // One operator at level 1 uses 2 of 3 GPL levels.
+    (g.Game as { powerCreeps: Record<string, unknown> }).powerCreeps = {
+      op1: { name: "op1", level: 1, memory: { homeRoom: "W9N9" }, ticksToLive: undefined, upgrade: () => -6, spawn: () => -1 },
+    };
+    powerCreepLoop();
+    expect(created).toBe(0);
+  });
+
+  it("seeds the new operator's memory without touching Game.powerCreeps", () => {
+    (g as Record<string, unknown>).PowerCreep = { create: () => 0 };
+    g.Game = {
+      time: clock,
+      gpl: { level: 1 },
+      rooms: { W1N1: { name: "W1N1", controller: { my: true }, memory: { powerSpawnId: "ps" } } },
+      powerCreeps: {},
+      getObjectById: () => ({ id: "ps" }),
+    };
+    expect(() => powerCreepLoop()).not.toThrow();
+    expect(Object.values((g.Memory as Memory).powerCreeps ?? {})).toEqual([{ homeRoom: "W1N1" }]);
+  });
+});
+
+describe("deposit miner", () => {
+  function miner(haulerAdjacent: boolean, free = 88) {
+    const calls: string[] = [];
+    (g.Memory as Memory).depositOps = [
+      { id: 1, depositId: "d1", roomName: "W0N1", depositType: "silicon", phase: "mining" } as DepositOp,
+    ];
+    const hauler = { memory: { role: ROLE_DEPOSIT_HAULER, depositOpId: 1 }, store: { getFreeCapacity: () => 500 } };
+    g.Game = { time: clock, getObjectById: () => ({ id: "d1" }) };
+    const creep = {
+      room: { name: "W0N1" },
+      memory: { depositOpId: 1 },
+      store: { silicon: 12, getFreeCapacity: () => free },
+      getActiveBodyparts: () => 20,
+      pos: {
+        getRangeTo: () => 1,
+        findInRange: (_t: number, _r: number, opts: { filter: (c: unknown) => boolean }) =>
+          haulerAdjacent ? [hauler].filter(opts.filter) : [],
+      },
+      transfer: () => calls.push("transfer"),
+      drop: () => calls.push("drop"),
+      harvest: () => calls.push("harvest"),
+    } as unknown as Creep;
+    runDepositMiner(creep);
+    return calls;
+  }
+
+  it("hands cargo to an adjacent hauler each tick and keeps harvesting", () => {
+    expect(miner(true)).toEqual(["transfer", "harvest"]);
+  });
+
+  it("holds cargo while the next harvest still fits and no hauler is beside it", () => {
+    expect(miner(false)).toEqual(["harvest"]);
+  });
+
+  it("drops cargo when the next harvest would not fit", () => {
+    expect(miner(false, 10)).toEqual(["drop", "harvest"]);
+  });
+});

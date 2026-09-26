@@ -23,15 +23,25 @@ const SCORE_SCAN_RANGE = 5;
 const HIGHWAY_SCAN_EVERY = 5;
 const SCORE_SCAN_REBUILD_INTERVAL = 1500;
 const POWER_PROCESS_ENERGY_FLOOR = 100000;
+// Viability estimate for a power bank op. Healers cost more than an RCL7 room
+// can spend, so only RCL8 rooms run them. Attack parts per attacker match the
+// spawned body; travel is ~50 ticks per room; spawning is serial worst case.
+const POWER_OP_MIN_RCL = 8;
+const POWER_ATTACKER_ATTACK_PARTS = 25;
+const TICKS_PER_ROOM = 50;
+const SQUAD_SPAWN_TICKS = (SQUAD_ATTACKERS + SQUAD_HEALERS) * 50 * 3;
+const POWER_OP_TICK_MARGIN = 300;
 
 export function loop() {
+  const owned: string[] = [];
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
+    owned.push(roomName);
     runObserver(room);
-    scanVisibleHighwayRooms(room.name);
     runPowerSpawn(room);
   }
+  scanVisibleHighwayRooms(owned);
   updatePowerOps();
   updateDepositOps();
 }
@@ -70,10 +80,19 @@ function scanHighways(room: Room, observer: StructureObserver): void {
   observer.observeRoom(target);
 }
 
-function scanVisibleHighwayRooms(homeRoomName: string) {
+// Once per tick: each visible highway room is checked once if any owned room
+// is within range, rather than once per owned room.
+function scanVisibleHighwayRooms(ownedRoomNames: string[]) {
+  if (ownedRoomNames.length === 0) return;
   for (const roomName in Game.rooms) {
     if (!isHighwayRoom(roomName)) continue;
-    if (Game.map.getRoomLinearDistance(homeRoomName, roomName) > OBSERVER_SCAN_RANGE) continue;
+    if (
+      !ownedRoomNames.some(
+        (home) => Game.map.getRoomLinearDistance(home, roomName) <= OBSERVER_SCAN_RANGE
+      )
+    ) {
+      continue;
+    }
     checkForPowerBanks(roomName);
     checkForDeposits(roomName);
   }
@@ -97,13 +116,18 @@ function checkForPowerBanks(roomName: string) {
   if (bank.power < POWER_BANK_MIN_POWER) return;
   if (bank.ticksToDecay < POWER_BANK_MIN_TICKS) return;
 
-  const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
-  if (ownedRooms.length === 0) return;
-  const homeRoom = ownedRooms.reduce((best, r) => {
+  const homeRooms = Object.values(Game.rooms).filter(
+    (r) => r.controller?.my && r.controller.level >= POWER_OP_MIN_RCL
+  );
+  if (homeRooms.length === 0) return;
+  const homeRoom = homeRooms.reduce((best, r) => {
     const d = Game.map.getRoomLinearDistance(r.name, roomName);
     const bd = Game.map.getRoomLinearDistance(best.name, roomName);
     return d < bd ? r : best;
   });
+
+  const distance = Game.map.getRoomLinearDistance(homeRoom.name, roomName);
+  if (bank.ticksToDecay < powerOpTicksNeeded(bank.hits, distance)) return;
 
   if (!Memory.powerOps) Memory.powerOps = [];
   if (!Memory.nextPowerOpId) Memory.nextPowerOpId = 1;
@@ -126,6 +150,16 @@ function checkForPowerBanks(roomName: string) {
     `[Observer] Power bank in ${roomName}: ${bank.power} power, ${bank.ticksToDecay} ticks. ` +
     `Op #${op.id} - ${SQUAD_ATTACKERS}A/${SQUAD_HEALERS}H/${carriers}C from ${homeRoom.name}`
   );
+}
+
+/**
+ * Ticks from deciding on a bank to having its power on the ground: spawn the
+ * squad, walk there, and break the bank, plus margin for the carriers.
+ */
+export function powerOpTicksNeeded(bankHits: number, distance: number): number {
+  const damagePerTick = SQUAD_ATTACKERS * POWER_ATTACKER_ATTACK_PARTS * ATTACK_POWER;
+  const crackTicks = Math.ceil(bankHits / damagePerTick);
+  return SQUAD_SPAWN_TICKS + distance * TICKS_PER_ROOM + crackTicks + POWER_OP_TICK_MARGIN;
 }
 
 function updatePowerOps() {

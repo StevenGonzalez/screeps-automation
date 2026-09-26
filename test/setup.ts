@@ -47,6 +47,7 @@ const GAME_CONSTANTS: Record<string, unknown> = {
   NUKER_GHODIUM_CAPACITY: 5000,
   NUKER_ENERGY_CAPACITY: 300000,
   POWER_BANK_DECAY: 5000,
+  HARVEST_DEPOSIT_POWER: 1,
 };
 
 for (const [name, value] of Object.entries(GAME_CONSTANTS)) {

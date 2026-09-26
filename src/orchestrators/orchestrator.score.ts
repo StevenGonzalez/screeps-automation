@@ -208,6 +208,9 @@ function safeRegionRooms(home: string, myName: string | undefined, range: number
   const result: string[] = [];
   const visited = new Set<string>([home]);
   let frontier = [home];
+  // Novice/respawn zones are walled off from the rest of the map; a hunter sent
+  // across the boundary gets ERR_NO_PATH and stalls.
+  const homeStatus = Game.map.getRoomStatus(home).status;
   for (let depth = 0; depth < range; depth++) {
     const next: string[] = [];
     for (const rn of frontier) {
@@ -216,6 +219,7 @@ function safeRegionRooms(home: string, myName: string | undefined, range: number
         if (!nb || visited.has(nb)) continue;
         visited.add(nb);
         if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb) || isDeathTrapRoom(nb)) continue;
+        if (Game.map.getRoomStatus(nb).status !== homeStatus) continue;
         result.push(nb);
         next.push(nb);
       }

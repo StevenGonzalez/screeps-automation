@@ -1,3 +1,5 @@
+import { ROLE_DEPOSIT_HAULER } from "../config/config.roles";
+
 export function runDepositMiner(creep: Creep) {
   const opId = creep.memory.depositOpId;
   if (opId === undefined) { creep.suicide(); return; }
@@ -13,7 +15,21 @@ export function runDepositMiner(creep: Creep) {
   const deposit = op.depositId ? Game.getObjectById(op.depositId) : null;
   if (!deposit) return;
 
-  if (creep.store.getFreeCapacity() === 0) creep.drop(op.depositType);
+  // Hand cargo straight to an adjacent hauler of this op whenever one is here.
+  // Without one, hold it until the next harvest wouldn't fit, then drop, since
+  // a ground pile decays while the hauler is away. Harvest is a separate
+  // intent, so either costs no mining time.
+  const harvestYield = creep.getActiveBodyparts(WORK) * HARVEST_DEPOSIT_POWER;
+  if ((creep.store[op.depositType] ?? 0) > 0) {
+    const hauler = creep.pos.findInRange(FIND_MY_CREEPS, 1, {
+      filter: (c) =>
+        c.memory.role === ROLE_DEPOSIT_HAULER &&
+        c.memory.depositOpId === opId &&
+        c.store.getFreeCapacity() > 0,
+    })[0];
+    if (hauler) creep.transfer(hauler, op.depositType);
+    else if (creep.store.getFreeCapacity() < harvestYield) creep.drop(op.depositType);
+  }
 
   if (creep.pos.getRangeTo(deposit) > 1) {
     creep.moveTo(deposit, { reusePath: 10, visualizePathStyle: {} });

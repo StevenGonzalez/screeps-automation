@@ -133,3 +133,19 @@ export function getStockForCompound(compound: string, room: Room): number {
 export function getStorageStockForCompound(compound: string, room: Room): number {
   return room.storage?.store.getUsedCapacity(compound as ResourceConstant) ?? 0;
 }
+
+const BASE_MINERAL_SET = new Set<string>(["H", "O", "U", "L", "K", "Z", "X"]);
+
+// Base minerals the queued reactions will consume, summed per mineral. Queue
+// entries are already net of stock on hand, so this is what the labs still need.
+export function queuedBaseMineralNeed(queue: LabQueueEntry[]): Map<string, number> {
+  const need = new Map<string, number>();
+  for (const entry of queue) {
+    const recipe = REACTION_RECIPES[entry.compound];
+    if (!recipe) continue;
+    for (const input of recipe) {
+      if (BASE_MINERAL_SET.has(input)) need.set(input, (need.get(input) ?? 0) + entry.amount);
+    }
+  }
+  return need;
+}

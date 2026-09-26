@@ -1,4 +1,5 @@
 import { getThreatSeverity } from "../services/services.combat";
+import { inPixelRefill } from "./orchestrator.pixels";
 
 const BUCKET_RECOVER_THRESHOLD = 3000;
 
@@ -17,14 +18,26 @@ export function loop() {
   let crippled = false;
   for (const room of ownedRooms) {
     const spawns = room.find(FIND_MY_SPAWNS);
-    if (spawns.length === 0 && (room.controller?.level ?? 0) >= 2) crippled = true;
+    // Only a room that has had a spawn and lost it is crippled. A colony still
+    // bootstrapping its first spawn is expected to have none.
+    const mem = room.memory as RoomMemory & { hadSpawn?: boolean };
+    if (spawns.length > 0) mem.hadSpawn = true;
+    else if (
+      (room.controller?.level ?? 0) >= 2 &&
+      mem.hadSpawn &&
+      Memory.expansion?.roomName !== room.name
+    ) {
+      crippled = true;
+    }
 
     if (getThreatSeverity(room) === "high") highThreatRooms.push(room.name);
   }
 
   const bucket = typeof Game.cpu.bucket === "number" ? Game.cpu.bucket : Number.POSITIVE_INFINITY;
   const wasRecovering = Memory.empire?.posture === "RECOVER";
-  const bucketCritical = bucket < (wasRecovering ? BUCKET_RECOVER_EXIT : BUCKET_RECOVER_THRESHOLD);
+  const bucketLimit = wasRecovering ? BUCKET_RECOVER_EXIT : BUCKET_RECOVER_THRESHOLD;
+  // A bucket drained by our own pixel and refilling is not a CPU emergency.
+  const bucketCritical = bucket < bucketLimit && !inPixelRefill();
   const multiThreat = highThreatRooms.length >= MULTI_THREAT_RECOVER_COUNT;
 
   const warTargetRoom = Memory.empire?.warTargetRoom;
@@ -34,7 +47,7 @@ export function loop() {
   if (bucketCritical || crippled || multiThreat) {
     posture = "RECOVER";
     reason = bucketCritical
-      ? `CPU bucket ${bucket} below ${BUCKET_RECOVER_THRESHOLD}`
+      ? `CPU bucket ${bucket} below ${bucketLimit}`
       : crippled
         ? "owned room lost its last spawn"
         : `${highThreatRooms.length} owned rooms under HIGH threat`;

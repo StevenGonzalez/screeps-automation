@@ -2,6 +2,7 @@ import {
   COMMODITY_TARGETS,
   FACTORY_PLAN_INTERVAL,
   FACTORY_MIN_RESERVE_ENERGY,
+  FACTORY_BATTERY_MIN_ENERGY,
   FACTORY_MAX_INPUT_LOAD,
   FACTORY_PRODUCT_EVICT_THRESHOLD,
   FACTORY_MIN_RESERVE_MINERAL,
@@ -32,6 +33,16 @@ interface Recipe {
   amount: number;
   cooldown: number;
   level: number;
+}
+
+/**
+ * The engine only runs a leveled recipe in a factory of exactly that level with
+ * an active PWR_OPERATE_FACTORY effect; unleveled recipes run anywhere.
+ */
+export function factoryCanRun(factory: StructureFactory, recipeLevel: number): boolean {
+  if (recipeLevel === 0) return true;
+  if ((factory.level ?? 0) !== recipeLevel) return false;
+  return !!factory.effects?.some((e) => e.effect === PWR_OPERATE_FACTORY);
 }
 
 function getRecipe(commodity: CommodityConstant): Recipe | null {
@@ -81,6 +92,10 @@ function processFactory(room: Room): void {
     const res = factory.produce(commodity);
     if (res === ERR_INVALID_TARGET || res === ERR_RCL_NOT_ENOUGH) {
       delete fs.activeCommodity;
+    } else if (res === ERR_BUSY) {
+      // Operate effect lapsed: drop the leveled recipe and replan next tick.
+      delete fs.activeCommodity;
+      fs.lastPlanTick = 0;
     }
   }
 
@@ -107,13 +122,14 @@ function resolveFactory(room: Room): StructureFactory | null {
 }
 
 function selectCommodity(room: Room, factory: StructureFactory): CommodityConstant | undefined {
-  const factoryLevel = factory.level ?? 0;
-
   let best: CommodityConstant | undefined;
   let bestValue = -Infinity;
+  const storedEnergy = room.storage?.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
 
   for (const t of COMMODITY_TARGETS) {
-    if (factoryLevel < t.requiresLevel) continue;
+    if (!factoryCanRun(factory, t.requiresLevel)) continue;
+    // Batteries only bank genuine energy surplus.
+    if (t.commodity === RESOURCE_BATTERY && storedEnergy < FACTORY_BATTERY_MIN_ENERGY) continue;
     if (t.value <= bestValue) continue;
     if (totalStock(room, t.commodity) >= t.target) continue;
 
@@ -140,7 +156,7 @@ function resolveProduction(
 
   const recipe = getRecipe(commodity);
   if (!recipe) return null;
-  if ((factory.level ?? 0) < recipe.level) return null;
+  if (!factoryCanRun(factory, recipe.level)) return null;
 
   for (const comp in recipe.components) {
     const rc = comp as ResourceConstant;
@@ -392,8 +408,8 @@ export function forceCommodity(roomName: string, commodity: string): string | nu
   if (!factory) return `${roomName} has no factory`;
 
   const recipe = getRecipe(commodity as CommodityConstant);
-  if (recipe && (factory.level ?? 0) < recipe.level) {
-    return `${commodity} needs factory level ${recipe.level} (have ${factory.level ?? 0}) - level it via PWR_OPERATE_FACTORY`;
+  if (recipe && recipe.level !== 0 && (factory.level ?? 0) !== recipe.level) {
+    return `${commodity} needs a level ${recipe.level} factory (have ${factory.level ?? 0})`;
   }
 
   if (!room.memory.factorySystem) room.memory.factorySystem = {};

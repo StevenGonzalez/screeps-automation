@@ -31,13 +31,23 @@ const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
 const CPU_SKIP_HEAVY_THRESHOLD = 0.80;
 
 const CPU_BUCKET_CRITICAL = 2000;
+// Below this the tick has almost no headroom past the limit, so heavy systems
+// shed even during a pixel refill.
+const CPU_BUCKET_FLOOR = 500;
+
+// CPU the previous tick used, to tell a self-inflicted pixel drain (use under
+// the limit, bucket refilling) from a real overrun.
+let lastTickUsed = 0;
 
 export function loop() {
   setupConsole();
   const tickStart = Game.cpu.getUsed();
   const limit = Game.cpu.limit;
   const bucketCritical =
-    typeof Game.cpu.bucket === "number" && Game.cpu.bucket < CPU_BUCKET_CRITICAL;
+    typeof Game.cpu.bucket === "number" &&
+    (Game.cpu.bucket < CPU_BUCKET_FLOOR ||
+      (Game.cpu.bucket < CPU_BUCKET_CRITICAL &&
+        !(pixelsSystem.inPixelRefill() && lastTickUsed <= limit)));
   const cpuFraction = (used: number): number => (limit ? used / limit : 0);
   const heavyShed = (): boolean =>
     bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
@@ -75,6 +85,7 @@ export function loop() {
   }
 
   const used = Game.cpu.getUsed() - tickStart;
+  lastTickUsed = Game.cpu.getUsed();
 
   if (limit && used / limit > CPU_WARN_THRESHOLD) {
     console.log(

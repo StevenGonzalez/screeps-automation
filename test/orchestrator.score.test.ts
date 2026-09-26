@@ -48,12 +48,14 @@ function seeker(name: string, room: string): Creep {
 
 let creeps: Record<string, Creep>;
 let seen: Record<string, number>;
+const closedRooms = new Set<string>();
 let intel: Record<string, { owner?: string }>;
 
 beforeEach(() => {
   creeps = {};
   seen = {};
   intel = {};
+  closedRooms.clear();
   g.Game = {
     time: 100000,
     creeps,
@@ -61,6 +63,7 @@ beforeEach(() => {
     map: {
       describeExits: (rn: string) => EXITS[rn] ?? {},
       getRoomLinearDistance: (a: string, b: string) => linearDist(a, b),
+      getRoomStatus: (rn: string) => ({ status: closedRooms.has(rn) ? "closed" : "normal" }),
     },
   };
   g.Memory = { allies: [], intel, scorePatrol: { seen } };
@@ -180,5 +183,14 @@ describe("safeRegionRooms death-trap tolerance", () => {
     const region = getScoreScanRooms(HOME, 1);
     expect(region).not.toContain("W1N2");
     expect(region).toContain("W2N1");
+  });
+});
+
+describe("safeRegionRooms room status", () => {
+  it("never patrols across a novice/respawn/closed boundary", () => {
+    closedRooms.add("W0N1");
+    const region = getScoreScanRooms(HOME, 1);
+    expect(region).not.toContain("W0N1");
+    expect(region).toContain("W1N2");
   });
 });

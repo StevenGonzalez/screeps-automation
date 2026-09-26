@@ -2,6 +2,9 @@ export const FACTORY_PLAN_INTERVAL = 50;
 
 export const FACTORY_MIN_RESERVE_ENERGY = 50_000;
 
+// Storage energy below which the factory will not pack energy into batteries.
+export const FACTORY_BATTERY_MIN_ENERGY = 400_000;
+
 export const FACTORY_MIN_RESERVE_MINERAL = 3_000;
 
 export const FACTORY_MAX_INPUT_LOAD = 6_000;

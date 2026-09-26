@@ -1,5 +1,6 @@
 import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
 import { MANAGED_COMMODITIES } from "../config/config.factory";
+import { queuedBaseMineralNeed } from "../services/services.labs";
 
 declare global {
   interface Memory {
@@ -15,6 +16,8 @@ const TERMINAL_CONFIG = {
   MINERAL_SELL_THRESHOLD: 1000,
   MINERAL_MAX_TRADE_AMOUNT: 1000,
   MIN_PRICE_RATIO: 0.5,
+  // Commodities are sold only at or above this fraction of the history average.
+  COMMODITY_MIN_PRICE_RATIO: 0.9,
   MAX_TRADE_DISTANCE: 10,
   MIN_TERMINAL_ENERGY: 1000,
 };
@@ -23,9 +26,18 @@ const BUY_CONFIG = {
   INTERVAL: 500,
   MIN_STOCK: 500,
   TARGET_STOCK: 3000,
-  MAX_PRICE: 50,
+  // Pay at most this multiple of the history average for a base mineral.
+  MAX_PRICE_RATIO: 1.2,
   MAX_AMOUNT: 1000,
+  MIN_AMOUNT: 100,
+  // Skip sellers so far away that the energy fee exceeds this share of the amount.
+  MAX_ENERGY_COST_RATIO: 0.3,
 };
+
+// Base mineral kept back for labs and factory; stock above this may be sold.
+export const MINERAL_LAB_RESERVE = 20_000;
+// Most of a room's own mineral the miner will stage in the terminal for sale.
+export const MINERAL_TERMINAL_CAP = 20_000;
 
 const GHODIUM_CONFIG = {
   INTERVAL: 500,
@@ -132,7 +144,11 @@ function processTerminal(room: Room): void {
     return;
   }
 
-  executePendingSend(room, terminal);
+  // A terminal can make one send or deal per tick, after which it is on
+  // cooldown. Stop at the first transaction that goes through.
+  if (terminal.cooldown > 0) return;
+
+  if (executePendingSend(room, terminal)) return;
 
   if (terminal.store[RESOURCE_ENERGY] < TERMINAL_CONFIG.MIN_TERMINAL_ENERGY) return;
 
@@ -143,14 +159,9 @@ function processTerminal(room: Room): void {
   if (mineralId && !mineral) room.memory.mineralId = undefined;
   if (mineral) {
     const mineralType = mineral.mineralType;
-    const mineralAmount = terminal.store.getUsedCapacity(mineralType) ?? 0;
-    if (mineralAmount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD) {
-      const pending = room.memory.pendingSend;
-      const reserved = pending?.resource === mineralType ? pending.loadTarget : 0;
-      const keepStock = room.memory.labSystem?.inputLabIds?.length ? BUY_CONFIG.TARGET_STOCK : 0;
-      const totalStock = (room.storage?.store.getUsedCapacity(mineralType) ?? 0) + mineralAmount;
-      const sellable = Math.min(mineralAmount - reserved, totalStock - keepStock);
-      if (sellable > 0) attemptMineralSale(room, terminal, mineralType, sellable);
+    const sellable = sellableMineral(room, terminal, mineralType);
+    if (sellable >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD) {
+      if (attemptMineralSale(room, terminal, mineralType, sellable)) return;
     }
   }
 
@@ -159,6 +170,7 @@ function processTerminal(room: Room): void {
     if (Game.time - lastBuy >= BUY_CONFIG.INTERVAL) {
       if (buyMissingMinerals(room, terminal)) {
         room.memory.lastMarketBuyTick = Game.time;
+        return;
       }
     }
   }
@@ -167,19 +179,21 @@ function processTerminal(room: Room): void {
   if (Game.time - lastGBuy >= GHODIUM_CONFIG.INTERVAL) {
     if (buyMissingGhodium(room, terminal)) {
       room.memory.lastGhodiumBuyTick = Game.time;
+      return;
     }
   }
 
   const lastCommoditySale = room.memory.lastCommoditySaleTick ?? 0;
   if (Game.time - lastCommoditySale >= COMMODITY_SALE_INTERVAL) {
-    attemptCommoditySale(room, terminal);
     room.memory.lastCommoditySaleTick = Game.time;
+    if (attemptCommoditySale(room, terminal)) return;
   }
 
   const lastEnergyTrade = room.memory.lastEnergyTradeTick ?? 0;
   if (Game.time - lastEnergyTrade >= ENERGY_TRADE_CONFIG.INTERVAL) {
     if (tradeEnergy(room, terminal)) {
       room.memory.lastEnergyTradeTick = Game.time;
+      return;
     }
   }
 
@@ -188,6 +202,23 @@ function processTerminal(room: Room): void {
     manageSellOrders(room, terminal);
     room.memory.lastOrderManageTick = Game.time;
   }
+}
+
+/**
+ * Terminal stock of the room's own mineral that may be sold: what is in the
+ * terminal beyond any pending send, and never eating into the lab reserve
+ * across storage and terminal combined.
+ */
+export function sellableMineral(
+  room: Room,
+  terminal: StructureTerminal,
+  mineralType: MineralConstant
+): number {
+  const inTerminal = terminal.store.getUsedCapacity(mineralType) ?? 0;
+  const pending = room.memory.pendingSend;
+  const reserved = pending?.resource === mineralType ? pending.loadTarget : 0;
+  const total = (room.storage?.store.getUsedCapacity(mineralType) ?? 0) + inTerminal;
+  return Math.max(0, Math.min(inTerminal - reserved, total - MINERAL_LAB_RESERVE));
 }
 
 function ghodiumTarget(room: Room): number {
@@ -226,7 +257,10 @@ function buyMissingGhodium(room: Room, terminal: StructureTerminal): boolean {
     (o) =>
       o.type === ORDER_SELL &&
       o.resourceType === RESOURCE_GHODIUM &&
-      o.price <= GHODIUM_CONFIG.MAX_PRICE
+      o.price <= GHODIUM_CONFIG.MAX_PRICE &&
+      !!o.roomName &&
+      energyCostPerUnit(Math.min(needed, o.amount, GHODIUM_CONFIG.MAX_AMOUNT), room.name, o.roomName) <=
+        BUY_CONFIG.MAX_ENERGY_COST_RATIO
   );
   if (orders.length === 0) return false;
 
@@ -250,9 +284,9 @@ function buyMissingGhodium(room: Room, terminal: StructureTerminal): boolean {
   return false;
 }
 
-function executePendingSend(room: Room, terminal: StructureTerminal): void {
+function executePendingSend(room: Room, terminal: StructureTerminal): boolean {
   const pending = room.memory.pendingSend;
-  if (!pending) return;
+  if (!pending) return false;
 
   if (pending.queuedAt === undefined) {
     pending.queuedAt = Game.time;
@@ -261,30 +295,32 @@ function executePendingSend(room: Room, terminal: StructureTerminal): void {
       `[Network] Abandoning stuck send in ${room.name} (${pending.amount} ${pending.resource} -> ${pending.to})`
     );
     delete room.memory.pendingSend;
-    return;
+    return false;
   }
 
-  if (terminal.cooldown > 0) return;
+  if (terminal.cooldown > 0) return false;
 
   const rc = pending.resource as ResourceConstant;
   const inTerminal = terminal.store.getUsedCapacity(rc) ?? 0;
 
-  if (inTerminal < pending.loadTarget) return;
+  if (inTerminal < pending.loadTarget) return false;
 
   if (rc !== RESOURCE_ENERGY) {
     const dist = Game.map.getRoomLinearDistance(room.name, pending.to);
     const fee = Math.ceil(pending.amount * (1 - Math.exp(-dist / 30)));
-    if ((terminal.store[RESOURCE_ENERGY] ?? 0) < fee + 100) return;
+    if ((terminal.store[RESOURCE_ENERGY] ?? 0) < fee + 100) return false;
   }
 
   const result = terminal.send(rc, pending.amount, pending.to);
   if (result === OK) {
     console.log(`[Network] ${room.name} -> ${pending.to}: ${pending.amount} ${pending.resource}`);
     delete room.memory.pendingSend;
+    return true;
   } else if (result !== ERR_TIRED && result !== ERR_NOT_ENOUGH_RESOURCES) {
     console.log(`[Network] Send failed (${result}), clearing pending send in ${room.name}`);
     delete room.memory.pendingSend;
   }
+  return false;
 }
 
 function planNetworkBalancing(): void {
@@ -440,14 +476,27 @@ function attemptMineralSale(
   terminal: StructureTerminal,
   mineralType: MineralConstant,
   availableAmount: number
-): void {
-  sellResourceToMarket(
+): boolean {
+  if (terminal.cooldown > 0) return false;
+  return sellResourceToMarket(
     room,
     terminal,
     mineralType,
     availableAmount,
-    TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT
+    TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT,
+    TERMINAL_CONFIG.MIN_PRICE_RATIO
   );
+}
+
+/** Credits one unit of energy is worth, for pricing the energy a deal burns. */
+function energyUnitValue(): number {
+  return getMarketHistoryAvg(RESOURCE_ENERGY) ?? ENERGY_TRADE_CONFIG.SELL_MIN_PRICE;
+}
+
+/** Energy a deal of `amount` between the two rooms burns, per unit traded. */
+function energyCostPerUnit(amount: number, fromRoom: string, toRoom: string): number {
+  if (amount <= 0) return 0;
+  return Game.market.calcTransactionCost(amount, fromRoom, toRoom) / amount;
 }
 
 function sellResourceToMarket(
@@ -455,22 +504,27 @@ function sellResourceToMarket(
   terminal: StructureTerminal,
   resource: ResourceConstant,
   availableAmount: number,
-  maxTradeAmount: number
+  maxTradeAmount: number,
+  minPriceRatio: number
 ): boolean {
   const avgPrice = getMarketHistoryAvg(resource);
   if (avgPrice === undefined) return false;
   const recentAvg = recentAvgPrice(resource);
-  let bestPrice = avgPrice * TERMINAL_CONFIG.MIN_PRICE_RATIO;
+  // Floor on the price we net after paying for the energy the deal burns.
+  let floor = avgPrice * minPriceRatio;
   if (recentAvg !== undefined) {
-    bestPrice = Math.max(bestPrice, recentAvg * TERMINAL_CONFIG.MIN_PRICE_RATIO);
+    floor = Math.max(floor, recentAvg * minPriceRatio);
   }
+  const energyValue = energyUnitValue();
+  let bestNet = floor;
+  let bestPrice = 0;
   let bestOrderId: string | null = null;
   let bestOrderRoom = "";
   let bestOrderAmount = 0;
 
   const orders = getMarketOrders((order) => {
     if (order.type !== ORDER_BUY || order.resourceType !== resource) return false;
-    if (!order.roomName) return false;
+    if (!order.roomName || order.amount <= 0) return false;
     return (
       Game.map.getRoomLinearDistance(room.name, order.roomName) <
       TERMINAL_CONFIG.MAX_TRADE_DISTANCE
@@ -478,7 +532,10 @@ function sellResourceToMarket(
   });
 
   for (const order of orders) {
-    if (order.price > bestPrice) {
+    const lot = Math.min(availableAmount, order.amount, maxTradeAmount);
+    const net = order.price - energyCostPerUnit(lot, room.name, order.roomName!) * energyValue;
+    if (net >= bestNet && (bestOrderId === null || net > bestNet)) {
+      bestNet = net;
       bestPrice = order.price;
       bestOrderId = order.id;
       bestOrderRoom = order.roomName!;
@@ -530,41 +587,77 @@ const COMMODITY_SELL_MIN_LOT = 100;
 const COMMODITY_MAX_TRADE = 5_000;
 const COMMODITY_SALE_INTERVAL = 20;
 
-function attemptCommoditySale(room: Room, terminal: StructureTerminal): void {
-  if (terminal.cooldown > 0) return;
+function attemptCommoditySale(room: Room, terminal: StructureTerminal): boolean {
+  if (terminal.cooldown > 0) return false;
   for (const c of MANAGED_COMMODITIES) {
     const rc = c as ResourceConstant;
+    if (feedsLocalRecipe(room, rc)) continue;
     const amount = terminal.store.getUsedCapacity(rc) ?? 0;
     if (amount < COMMODITY_SELL_MIN_LOT) continue;
-    if (sellResourceToMarket(room, terminal, rc, amount, COMMODITY_MAX_TRADE)) return;
+    if (
+      sellResourceToMarket(
+        room,
+        terminal,
+        rc,
+        amount,
+        COMMODITY_MAX_TRADE,
+        TERMINAL_CONFIG.COMMODITY_MIN_PRICE_RATIO
+      )
+    ) {
+      return true;
+    }
   }
+  return false;
+}
+
+/**
+ * True when `resource` is a component of a managed recipe this room's factory
+ * can make at its level: an intermediate worth keeping, not an end product.
+ */
+export function feedsLocalRecipe(room: Room, resource: ResourceConstant): boolean {
+  const factoryId = room.memory.factorySystem?.factoryId;
+  const factory = factoryId ? (Game.getObjectById(factoryId) as StructureFactory | null) : null;
+  if (!factory) return false;
+  const level = factory.level ?? 0;
+  for (const c of MANAGED_COMMODITIES) {
+    const def = COMMODITIES[c as CommodityConstant];
+    if (!def) continue;
+    if (def.level !== undefined && def.level !== level) continue;
+    if (((def.components as Record<string, number>)[resource] ?? 0) > 0) return true;
+  }
+  return false;
 }
 
 function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
   const storage = room.storage;
+  const need = queuedBaseMineralNeed(room.memory.labSystem?.queue ?? []);
   for (const mineral of BASE_MINERALS) {
     const stock =
       (storage?.store.getUsedCapacity(mineral) ?? 0) +
       (terminal.store.getUsedCapacity(mineral) ?? 0);
-    if (stock >= BUY_CONFIG.MIN_STOCK) continue;
+    const needed = (need.get(mineral) ?? 0) - stock;
+    if (needed < BUY_CONFIG.MIN_AMOUNT) continue;
 
-    const needed = BUY_CONFIG.TARGET_STOCK - stock;
+    const avg = getMarketHistoryAvg(mineral);
+    if (avg === undefined) continue;
+    const maxPrice = avg * BUY_CONFIG.MAX_PRICE_RATIO;
     const orders = getMarketOrders(
       (o) =>
         o.type === ORDER_SELL &&
         o.resourceType === mineral &&
-        o.price <= BUY_CONFIG.MAX_PRICE
+        !!o.roomName &&
+        o.amount > 0 &&
+        o.price <= maxPrice
     );
-    if (orders.length === 0) continue;
+    const lot = (o: Order) => Math.min(needed, o.amount, BUY_CONFIG.MAX_AMOUNT);
+    const viable = orders.filter(
+      (o) => energyCostPerUnit(lot(o), room.name, o.roomName!) <= BUY_CONFIG.MAX_ENERGY_COST_RATIO
+    );
+    if (viable.length === 0) continue;
 
-    orders.sort((a, b) => a.price - b.price);
-    const best = orders[0];
-    const amount = affordableTradeAmount(
-      terminal,
-      room.name,
-      best.roomName!,
-      Math.min(needed, best.amount, BUY_CONFIG.MAX_AMOUNT)
-    );
+    viable.sort((a, b) => a.price - b.price);
+    const best = viable[0];
+    const amount = affordableTradeAmount(terminal, room.name, best.roomName!, lot(best));
     if (amount <= 0) continue;
 
     const result = Game.market.deal(best.id, amount, room.name);
@@ -617,8 +710,17 @@ function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: num
       Game.map.getRoomLinearDistance(room.name, o.roomName) < TERMINAL_CONFIG.MAX_TRADE_DISTANCE
     );
   });
+  // Rank by what each unit nets once the energy the deal burns is paid for.
+  const energyValue = energyUnitValue();
+  const net = (o: Order) =>
+    o.price - energyCostPerUnit(Math.min(amount, o.amount), room.name, o.roomName!) * energyValue;
+  let bestNet = ENERGY_TRADE_CONFIG.SELL_MIN_PRICE;
   for (const o of orders) {
-    if (!best || o.price > best.price) best = o;
+    const n = net(o);
+    if (n >= bestNet && (!best || n > bestNet)) {
+      best = o;
+      bestNet = n;
+    }
   }
   if (!best || !best.roomName) return false;
 
@@ -642,9 +744,18 @@ function buyCheapEnergy(room: Room, terminal: StructureTerminal): boolean {
     if (o.type !== ORDER_SELL || o.resourceType !== RESOURCE_ENERGY) return false;
     if (!o.roomName || o.amount <= 0) return false;
     if (o.price > ENERGY_TRADE_CONFIG.BUY_MAX_PRICE) return false;
-    return (
-      Game.map.getRoomLinearDistance(room.name, o.roomName) < TERMINAL_CONFIG.MAX_TRADE_DISTANCE
+    if (
+      Game.map.getRoomLinearDistance(room.name, o.roomName) >= TERMINAL_CONFIG.MAX_TRADE_DISTANCE
+    ) {
+      return false;
+    }
+    // The fee is paid in energy, so price what actually arrives net of it.
+    const ratio = energyCostPerUnit(
+      Math.min(o.amount, ENERGY_TRADE_CONFIG.BUY_MAX_AMOUNT),
+      room.name,
+      o.roomName
     );
+    return ratio < 1 && o.price / (1 - ratio) <= ENERGY_TRADE_CONFIG.BUY_MAX_PRICE;
   });
   if (orders.length === 0) return false;
   orders.sort((a, b) => a.price - b.price);
@@ -673,14 +784,19 @@ function manageSellOrders(room: Room, terminal: StructureTerminal): void {
   const candidates = new Set<ResourceConstant>();
   const mineralId = room.memory.mineralId;
   const mineral = mineralId ? (Game.getObjectById(mineralId) as Mineral | null) : null;
-  if (mineral && !NON_SELLABLE.has(mineral.mineralType)) candidates.add(mineral.mineralType);
+  // The room's own mineral is sellable above the lab reserve; other base
+  // minerals stay off the market.
+  if (mineral) candidates.add(mineral.mineralType);
   for (const c of MANAGED_COMMODITIES) {
     const rc = c as ResourceConstant;
-    if (!NON_SELLABLE.has(rc)) candidates.add(rc);
+    if (!NON_SELLABLE.has(rc) && !feedsLocalRecipe(room, rc)) candidates.add(rc);
   }
 
   for (const resource of candidates) {
-    const surplus = terminal.store.getUsedCapacity(resource) ?? 0;
+    const surplus =
+      mineral && resource === mineral.mineralType
+        ? sellableMineral(room, terminal, mineral.mineralType)
+        : terminal.store.getUsedCapacity(resource) ?? 0;
     if (surplus < MARKET_MAKER_CONFIG.MIN_SELL_SURPLUS) continue;
 
     const fair = fairSellPrice(resource);
@@ -708,7 +824,6 @@ function manageSellOrders(room: Room, terminal: StructureTerminal): void {
       roomName: room.name,
     });
     if (result === OK) {
-      recordPrice(resource, fair);
       console.log(
         `[Terminal] ${room.name}: Posted sell order ${lot} ${resource} @ ${fair.toFixed(3)}`
       );
@@ -721,9 +836,15 @@ function fairSellPrice(resource: ResourceConstant): number | undefined {
   const floorAvg = recentAvgPrice(resource);
   const histAvg = getMarketHistoryAvg(resource);
 
+  // Our own orders are not the competition: undercutting them only ratchets
+  // our price down.
   let bestAsk: number | undefined;
   const asks = getMarketOrders(
-    (o) => o.type === ORDER_SELL && o.resourceType === resource && o.amount > 0
+    (o) =>
+      o.type === ORDER_SELL &&
+      o.resourceType === resource &&
+      o.amount > 0 &&
+      !(o.id in Game.market.orders)
   );
   for (const o of asks) {
     if (bestAsk === undefined || o.price < bestAsk) bestAsk = o.price;
