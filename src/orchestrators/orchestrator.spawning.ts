@@ -289,12 +289,21 @@ function waitForFullBody(room: Room, role: string, needed: boolean): boolean {
   return Game.time - since < FULL_BODY_MAX_WAIT;
 }
 
+// A miner tops out at five WORK (600 energy), so the margin bodyBudget keeps on
+// a capacity target never shortened its wait - it only cost it a WORK part:
+// RCL 2's 550 capacity got a three-WORK miner instead of four, and a spawn-only
+// 300 got one WORK instead of two, for the miner's whole life. Size it from
+// capacity itself.
+function minerBudget(room: Room): number {
+  return room.energyCapacityAvailable;
+}
+
 function getMinerPopulationTarget(room: Room): number {
   return (room.memory.minerContainerIds ?? []).length;
 }
 
 function getMinerReplacementLead(room: Room): number {
-  const allowed = bodyBudget(room, "capacity");
+  const allowed = minerBudget(room);
   return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room));
 }
 
@@ -347,19 +356,72 @@ function isEconomyCritical(room: Room): boolean {
   return room.storage.store[RESOURCE_ENERGY] < ECONOMY_CRITICAL_STORAGE;
 }
 
+// A source refills 10 energy a tick, which takes five WORK parts to keep up
+// with. A flat two harvesters per room - one WORK each at RCL 1 - worked the
+// sources at a fifth of that, and until miners and haulers exist they are all
+// that fills the spawn. Crew each source no miner has taken yet up to five
+// WORK, but with no more harvesters than the tiles around it can hold.
+const SOURCE_WORK_TO_DRAIN = 5;
+
+function countOpenTilesAround(room: Room, pos: RoomPosition): number {
+  const terrain = room.getTerrain();
+  let open = 0;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = pos.x + dx;
+      const y = pos.y + dy;
+      if (x < 0 || x > 49 || y < 0 || y > 49) continue;
+      if (terrain.get(x, y) !== TERRAIN_MASK_WALL) open++;
+    }
+  }
+  return open;
+}
+
+function getHarvesterCrewTarget(room: Room, minerCount: number): number {
+  const sources = getSources(room);
+  const uncovered = Math.max(0, sources.length - minerCount);
+  if (uncovered === 0) return 0;
+  const taken = new Set(
+    getCreepsByRoleInRoom(ROLE_MINER, room).map((c) => c.memory.assignedSourceId)
+  );
+  const work = buildScaledBody(ROLE_HARVESTER, room.energyCapacityAvailable).filter(
+    (p) => p === WORK
+  ).length;
+  const perSource = Math.ceil(SOURCE_WORK_TO_DRAIN / Math.max(1, work));
+  return sources
+    .filter((s) => !taken.has(s.id))
+    .slice(0, uncovered)
+    .reduce((sum, s) => sum + Math.min(perSource, countOpenTilesAround(room, s.pos)), 0);
+}
+
 function getHarvesterPopulationTarget(room: Room): number {
   const minerCount = getCreepsByRoleInRoom(ROLE_MINER, room).length;
   const phase = getRoomPhase(room);
-  if (phase === "bootstrap") {
-    if (minerCount === 0) return 2;
-    return Math.max(0, getSources(room).length - minerCount);
-  }
+  if (phase === "bootstrap") return getHarvesterCrewTarget(room, minerCount);
   if (isEnergyEmergency(room)) return minerCount > 0 ? Math.min(1, 2 - minerCount) : 2;
   if (room.storage && room.storage.store[RESOURCE_ENERGY] > 10000) return 0;
-  return Math.max(0, 2 - minerCount);
+  return getHarvesterCrewTarget(room, minerCount);
 }
 
 const CONTROLLER_DOWNGRADE_SAFETY = 5000;
+
+// Before storage the containers are the room's only bank. Energy piling up in
+// them is income nothing is spending, and one or two upgraders - two WORK each
+// at RCL 2 - spend a fraction of what two sources yield. Add an upgrader for
+// every NO_STORAGE_ENERGY_PER_UPGRADER banked; they draw from those same
+// containers, so the count backs off as the bank drains.
+const NO_STORAGE_ENERGY_PER_UPGRADER = 1000;
+const NO_STORAGE_MAX_UPGRADERS = 5;
+
+function getContainerEnergy(room: Room): number {
+  let total = 0;
+  for (const id of room.memory.containerIds ?? []) {
+    const container = Game.getObjectById(id);
+    if (container) total += container.store[RESOURCE_ENERGY];
+  }
+  return total;
+}
 
 function getUpgraderPopulationTarget(room: Room): number {
   const controller = room.controller;
@@ -375,7 +437,11 @@ function getUpgraderPopulationTarget(room: Room): number {
   if (rcl >= 8) return 1;
 
   const storage = room.storage;
-  if (!storage) return phase === "bootstrap" ? 1 : 2;
+  if (!storage) {
+    const base = phase === "bootstrap" ? 1 : 2;
+    const extra = Math.floor(getContainerEnergy(room) / NO_STORAGE_ENERGY_PER_UPGRADER);
+    return Math.min(NO_STORAGE_MAX_UPGRADERS, base + extra);
+  }
 
   const cap = phase === "powerhouse" ? 4 : 3;
   return Math.min(cap, 1 + Math.floor(storage.store[RESOURCE_ENERGY] / 50000));
@@ -646,7 +712,7 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function getMinerWorkTarget(room: Room): number {
-  const allowed = bodyBudget(room, "capacity");
+  const allowed = minerBudget(room);
   return buildMinerBody(allowed).filter((p) => p === WORK).length;
 }
 
@@ -666,8 +732,14 @@ function shouldSpawnMiner(room: Room): boolean {
   return adequate < getMinerPopulationTarget(room);
 }
 
+// The first harvester goes out on whatever the core holds. The rest wait for a
+// full body like the other roles do: spawned the moment 200 energy came in,
+// every harvester was a one-WORK runt however many extensions the room had.
 function shouldSpawnHarvester(room: Room): boolean {
-  return countByRoleInRoom(ROLE_HARVESTER, room) < getHarvesterPopulationTarget(room);
+  const count = countByRoleInRoom(ROLE_HARVESTER, room);
+  const needed = count < getHarvesterPopulationTarget(room);
+  if (waitForFullBody(room, ROLE_HARVESTER, needed && count > 0)) return false;
+  return needed;
 }
 
 function shouldSpawnUpgrader(room: Room): boolean {
@@ -910,7 +982,8 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_MINER}${Game.time}`;
   const existingMiners = getCreepsByRoleInRoom(ROLE_MINER, room).length;
 
-  const allowedEnergy = bodyBudget(room, existingMiners === 0 ? "available" : "capacity");
+  const allowedEnergy =
+    existingMiners === 0 ? bodyBudget(room, "available") : minerBudget(room);
   const body = buildMinerBody(allowedEnergy);
 
   if (room.energyAvailable < calculateBodyPartCost(body)) {
