@@ -3,6 +3,8 @@ import {
   ROLE_HAULER,
   ROLE_REMOTE_HAULER,
 } from "../config/config.roles";
+import { isSourceKeeperRoom } from "./services.combat";
+import { isAlly } from "./services.allies";
 
 const STUCK_THRESHOLD = 3;
 const COSTMATRIX_TTL = 1000;
@@ -95,6 +97,89 @@ function roadCostCallback(roomName: string): CostMatrix {
   return cm;
 }
 
+const ROUTE_TTL = 500;
+const DANGER_ROUTE_COST = 10;
+
+const routeCache = new Map<string, { rooms: Set<string> | null; tick: number }>();
+let routePruneTick = 0;
+let blockedMatrix: CostMatrix | undefined;
+
+let dangerTick = -1;
+let myName: string | undefined;
+const markedHostile = new Set<string>();
+
+function refreshDangerContext(): void {
+  if (dangerTick === Game.time) return;
+  dangerTick = Game.time;
+  myName = undefined;
+  for (const rn in Game.rooms) {
+    const ctrl = Game.rooms[rn].controller;
+    if (ctrl?.my && ctrl.owner) {
+      myName = ctrl.owner.username;
+      break;
+    }
+  }
+  markedHostile.clear();
+  for (const rn in Memory.rooms) {
+    for (const r of Memory.rooms[rn]?.remoteRooms ?? []) {
+      if (r.hostile && (r.hostileUntil === undefined || r.hostileUntil > Game.time)) {
+        markedHostile.add(r.roomName);
+      }
+    }
+  }
+}
+
+function isHighwayRoom(roomName: string): boolean {
+  const m = roomName.match(/^[WE](\d+)[NS](\d+)$/);
+  if (!m) return false;
+  return parseInt(m[1], 10) % 10 === 0 || parseInt(m[2], 10) % 10 === 0;
+}
+
+// Cost of passing through a room on the way to destRoom. Towered enemy rooms are
+// impassable (with no tower count recorded, any enemy-owned room is); Source Keeper
+// rooms and rooms we have flagged hostile are a last resort. The destination itself
+// is always allowed, so SK ops and attacks can still reach their target.
+export function routeRoomCost(roomName: string, destRoom: string): number {
+  if (roomName === destRoom) return 1;
+  refreshDangerContext();
+  if (Game.rooms[roomName]?.controller?.my) return 1;
+  const intel = Memory.intel?.[roomName];
+  const owner = intel?.owner;
+  if (intel && owner && owner !== myName && !isAlly(owner)) {
+    if (intel.towers === undefined || intel.towers > 0) return Infinity;
+    return DANGER_ROUTE_COST;
+  }
+  if (isSourceKeeperRoom(roomName) || markedHostile.has(roomName)) return DANGER_ROUTE_COST;
+  if (isHighwayRoom(roomName)) return 1;
+  return 2;
+}
+
+// Rooms a creep may path through from `from` to `to`, cached per pair. Null means
+// no safe route exists, and the caller falls back to unrestricted pathing rather
+// than stranding the creep.
+export function getRouteRooms(from: string, to: string): Set<string> | null {
+  if (Game.time - routePruneTick >= ROUTE_TTL) {
+    routePruneTick = Game.time;
+    for (const [k, v] of routeCache) if (Game.time - v.tick >= ROUTE_TTL) routeCache.delete(k);
+  }
+  const key = `${from}:${to}`;
+  const cached = routeCache.get(key);
+  if (cached && Game.time - cached.tick < ROUTE_TTL) return cached.rooms;
+
+  const route = Game.map.findRoute(from, to, { routeCallback: (rn) => routeRoomCost(rn, to) });
+  const rooms = route === ERR_NO_PATH ? null : new Set([from, to, ...route.map((r) => r.room)]);
+  routeCache.set(key, { rooms, tick: Game.time });
+  return rooms;
+}
+
+function getBlockedMatrix(): CostMatrix {
+  if (!blockedMatrix) {
+    blockedMatrix = new PathFinder.CostMatrix();
+    for (let x = 0; x < 50; x++) for (let y = 0; y < 50; y++) blockedMatrix.set(x, y, 0xff);
+  }
+  return blockedMatrix;
+}
+
 (Creep.prototype as { moveTo: unknown }).moveTo = function (
   this: Creep,
   ...args: unknown[]
@@ -112,6 +197,15 @@ function roadCostCallback(roomName: string): CostMatrix {
   const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
   if (!effectiveOpts.costCallback) {
     effectiveOpts.costCallback = roadCostCallback;
+  }
+  // Cross-room: keep the path inside the danger-aware room route.
+  if (tpos instanceof RoomPosition && !sameRoom) {
+    const allowed = getRouteRooms(this.pos.roomName, tpos.roomName);
+    if (allowed) {
+      const inner = effectiveOpts.costCallback;
+      effectiveOpts.costCallback = (roomName, cm) =>
+        allowed.has(roomName) ? inner(roomName, cm) : getBlockedMatrix();
+    }
   }
 
   pruneStuckState();
