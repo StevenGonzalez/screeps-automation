@@ -282,7 +282,7 @@ export function setupConsole() {
       roomName: string,
       formation: SquadFormation = "box",
       tactic: SquadTactic = "assault",
-      composition?: { biters?: number; spitters?: number; lickers?: number; chewers?: number; wigglers?: number },
+      composition?: { melee?: number; ranged?: number; healers?: number; siege?: number; drainers?: number },
       homeRoomName?: string
     ) => {
       if (!roomName) {
@@ -328,11 +328,11 @@ export function setupConsole() {
 
       const rec = recommendComposition(roomName, tactic);
       const comp = {
-        biters: composition?.biters ?? rec.biters,
-        spitters: composition?.spitters ?? rec.spitters,
-        lickers: composition?.lickers ?? rec.lickers,
-        chewers: composition?.chewers ?? rec.chewers,
-        wigglers: composition?.wigglers ?? rec.wigglers,
+        melee: composition?.melee ?? rec.melee,
+        ranged: composition?.ranged ?? rec.ranged,
+        healers: composition?.healers ?? rec.healers,
+        siege: composition?.siege ?? rec.siege,
+        drainers: composition?.drainers ?? rec.drainers,
       };
 
       const err = launchOp(roomName, formation, tactic, comp, homeRoom.name);
@@ -347,7 +347,7 @@ export function setupConsole() {
       }
       console.log(
         `[Military] Op launched: ${homeRoom.name} -> ${roomName}  ${formation}/${tactic}  ` +
-        `crew=${comp.biters}B/${comp.spitters}S/${comp.lickers}L/${comp.chewers}C/${comp.wigglers}W`
+        `crew=${comp.melee}M/${comp.ranged}R/${comp.healers}H/${comp.siege}S/${comp.drainers}D`
       );
       console.log(`[Military] Spawning squad... track with Game.arca.squads()`);
     },
@@ -373,7 +373,7 @@ export function setupConsole() {
       }
       const op = getDrainOps().find((o) => o.targetRoom === roomName);
       console.log(
-        `[Drain] Draining ${roomName} with ${op?.drainers ?? count} wiggler(s) from ${op?.homeRoom}. ` +
+        `[Drain] Draining ${roomName} with ${op?.drainers ?? count} drainer(s) from ${op?.homeRoom}. ` +
         `Stop with Game.arca.stopDrain('${roomName}')`
       );
     },
@@ -400,7 +400,7 @@ export function setupConsole() {
         ).length;
         const age = Game.time - op.startedAt;
         console.log(
-          `  ${op.targetRoom} <- ${op.homeRoom}  wigglers=${live}/${op.drainers}  age=${age}t`
+          `  ${op.targetRoom} <- ${op.homeRoom}  drainers=${live}/${op.drainers}  age=${age}t`
         );
       }
     },
@@ -455,8 +455,8 @@ export function setupConsole() {
           `  Phase: ${op.phase}  |  Formation: ${op.formation}  |  Tactic: ${op.tactic}  |  Age: ${age}t`
         );
         console.log(
-          `  Required: ${op.requiredBiters}B / ${op.requiredSpitters}S / ` +
-          `${op.requiredLickers}L / ${op.requiredChewers ?? 0}C / ${op.requiredWigglers ?? 0}W`
+          `  Required: ${op.requiredMelee}M / ${op.requiredRanged}R / ` +
+          `${op.requiredHealers}H / ${op.requiredSiege ?? 0}S / ${op.requiredDrainers ?? 0}D`
         );
 
         const members = Object.values(Game.creeps).filter(
@@ -482,8 +482,8 @@ export function setupConsole() {
         const avgHp = Math.round((hpSum / members.length) * 100);
         const inTarget = members.filter((c) => c.room.name === op.targetRoom).length;
         console.log(
-          `  Crew: ${counts[ROLE_KNIGHT]}B/${counts[ROLE_WIZARD]}S/` +
-          `${counts[ROLE_CLERIC]}L/${counts[ROLE_SIEGER]}C/${counts[ROLE_DRAINER]}W  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
+          `  Crew: ${counts[ROLE_KNIGHT]}M/${counts[ROLE_WIZARD]}R/` +
+          `${counts[ROLE_CLERIC]}H/${counts[ROLE_SIEGER]}S/${counts[ROLE_DRAINER]}D  avgHP=${avgHp}%  inTarget=${inTarget}/${members.length}`
         );
 
         for (const c of members) {
@@ -499,7 +499,7 @@ export function setupConsole() {
         queue.forEach((q, i) => {
           console.log(
             `  ${i + 1}. ${q.targetRoom}${q.homeRoom ? ` (prefer ${q.homeRoom})` : ""}  ${q.formation}/${q.tactic}  ` +
-            `${q.requiredBiters}B/${q.requiredSpitters}S/${q.requiredLickers}L/${q.requiredChewers}C/${q.requiredWigglers ?? 0}W`
+            `${q.requiredMelee}M/${q.requiredRanged}R/${q.requiredHealers}H/${q.requiredSiege}S/${q.requiredDrainers ?? 0}D`
           );
         });
       }

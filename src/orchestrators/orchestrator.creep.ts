@@ -93,25 +93,25 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SCORE_HUNTER]: runScoreHunter,
 };
 
-const GENERAL_CHATTER = ["ooh dirt", "walk walk", "wall :(", "bonk", "food?", "shiny!", "where go", "wiggle"];
+const GENERAL_CHATTER = ["circle bk", "synergy", "per email", "quick sync", "noted", "bandwidth?", "EOD pls", "align!"];
 const ROLE_CHATTER: Record<string, string[]> = {
-  [ROLE_MINER]: ["nom rock", "my rock", "chew chew", "tasty"],
-  [ROLE_HARVESTER]: ["nibble", "om nom", "food!"],
-  [ROLE_HAULER]: ["heavy", "carry it", "drag drag", "oof"],
-  [ROLE_FILLER]: ["stuff it", "top up", "more!"],
-  [ROLE_UPGRADER]: ["poke", "poke it", "bonk it"],
-  [ROLE_BUILDER]: ["stack!", "block go", "wobble"],
-  [ROLE_REPAIRER]: ["fix it", "patch", "sticky"],
-  [ROLE_MINERAL_MINER]: ["gnaw", "weird rock", "salty"],
-  [ROLE_SCOUT]: ["wobble", "ooh", "what dat"],
-  [ROLE_RESERVER]: ["my spot", "squat", "mine!"],
-  [ROLE_KNIGHT]: ["bite!", "grr", "chomp", "angy"],
-  [ROLE_WIZARD]: ["ptooey", "spit!", "pew pew"],
-  [ROLE_CLERIC]: ["lick", "better?", "you ok"],
-  [ROLE_SIEGER]: ["chew wall", "gnaw", "crunch"],
-  [ROLE_DRAINER]: ["look me", "over here", "wiggle!"],
-  [ROLE_CONQUEROR]: ["new dirt", "mine now", "sprawl"],
-  [ROLE_SETTLER]: ["new nest", "home?", "settle"],
+  [ROLE_MINER]: ["heads down", "KPIs met", "grinding"],
+  [ROLE_HARVESTER]: ["paid?", "learning!", "coffee?"],
+  [ROLE_HAULER]: ["en route", "sign here", "package!"],
+  [ROLE_FILLER]: ["restocked", "label it", "who took?"],
+  [ROLE_UPGRADER]: ["value-add", "invoiced", "leverage"],
+  [ROLE_BUILDER]: ["wet paint", "on it", "ticket!"],
+  [ROLE_REPAIRER]: ["reboot it", "fixed?", "closed"],
+  [ROLE_MINERAL_MINER]: ["sourcing", "PO sent", "vendor ok"],
+  [ROLE_SCOUT]: ["great fit!", "hiring?", "connect?"],
+  [ROLE_RESERVER]: ["on hold", "per terms", "cease!"],
+  [ROLE_KNIGHT]: ["a word?", "my office", "noted."],
+  [ROLE_WIZARD]: ["audit!", "cc: legal", "flagged"],
+  [ROLE_CLERIC]: ["self-care", "breathe", "you ok?"],
+  [ROLE_SIEGER]: ["cut costs", "redundant", "line item"],
+  [ROLE_DRAINER]: ["no comment", "spin it", "valued!"],
+  [ROLE_CONQUEROR]: ["acquired", "new branch", "rightsize"],
+  [ROLE_SETTLER]: ["day one!", "my desk?", "badge pls"],
 };
 
 const SAY_PERIOD = 30;

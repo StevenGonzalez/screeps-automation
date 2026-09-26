@@ -1128,11 +1128,11 @@ function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
 }
 
 const BOOST_CANDIDATES: Record<string, string[]> = {
-  biter:   ['XUH2O', 'UH2O', 'UH'],
-  spitter: ['XKHO2', 'KHO2', 'KO'],
-  licker:      ['XLHO2', 'LHO2', 'LO'],
-  wiggler:      ['XLHO2', 'LHO2', 'LO'],
-  chewer:    ['XZH2O', 'ZH2O', 'ZH'],
+  melee:   ['XUH2O', 'UH2O', 'UH'],
+  ranged:  ['XKHO2', 'KHO2', 'KO'],
+  healer:  ['XLHO2', 'LHO2', 'LO'],
+  drainer: ['XLHO2', 'LHO2', 'LO'],
+  siege:   ['XZH2O', 'ZH2O', 'ZH'],
   tough:   ['XGHO2', 'GHO2', 'GO'],
   move:    ['XZHO2', 'ZHO2', 'ZO'],
 };
@@ -1267,7 +1267,7 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
-  const queue = buildBoostQueue(room, 'biter', attackParts, toughParts, moveParts);
+  const queue = buildBoostQueue(room, 'melee', attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}${Game.time}`, {
     memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
   });
@@ -1283,7 +1283,7 @@ function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
   const body = buildWizardBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
-  const queue = buildBoostQueue(room, 'spitter', rangedParts, 0);
+  const queue = buildBoostQueue(room, 'ranged', rangedParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_WIZARD}${Game.time}`, {
     memory: { role: ROLE_WIZARD, ...boostMemory(queue) },
   });
@@ -1303,7 +1303,7 @@ function spawnCleric(room: Room, spawn: StructureSpawn): boolean {
   const body = buildClericBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
-  const queue = buildBoostQueue(room, 'licker', healParts, 0);
+  const queue = buildBoostQueue(room, 'healer', healParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_CLERIC}${Game.time}`, {
     memory: { role: ROLE_CLERIC, ...boostMemory(queue) },
   });
@@ -1377,11 +1377,11 @@ function shouldSpawnOffensiveCreep(room: Room): boolean {
   if (!op || op.phase !== "forming") return false;
   const members = getOffensiveSquadMembers(op);
   return (
-    members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredBiters ||
-    members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredSpitters ||
-    members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredLickers ||
-    members.filter((c) => c.memory.role === ROLE_SIEGER).length < (op.requiredChewers ?? 0) ||
-    members.filter((c) => c.memory.role === ROLE_DRAINER).length < (op.requiredWigglers ?? 0)
+    members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredMelee ||
+    members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredRanged ||
+    members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredHealers ||
+    members.filter((c) => c.memory.role === ROLE_SIEGER).length < (op.requiredSiege ?? 0) ||
+    members.filter((c) => c.memory.role === ROLE_DRAINER).length < (op.requiredDrainers ?? 0)
   );
 }
 
@@ -1414,7 +1414,7 @@ function spawnDrainLeech(room: Room, spawn: StructureSpawn): boolean {
 
   const healParts = body.filter((p) => p === HEAL).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const queue = buildBoostQueue(room, "wiggler", healParts, toughParts);
+  const queue = buildBoostQueue(room, "drainer", healParts, toughParts);
 
   const res = spawn.spawnCreep(body, `${ROLE_DRAINER}_drain${Game.time}`, {
     memory: {
@@ -1424,7 +1424,7 @@ function spawnDrainLeech(room: Room, spawn: StructureSpawn): boolean {
       ...boostMemory(queue),
     },
   });
-  if (res === OK) console.log(`[Drain] Spawning wiggler: ${room.name} -> ${op.targetRoom}`);
+  if (res === OK) console.log(`[Drain] Spawning ${ROLE_DRAINER}: ${room.name} -> ${op.targetRoom}`);
   return res === OK;
 }
 
@@ -1433,18 +1433,18 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   if (!op) return false;
 
   const members = getOffensiveSquadMembers(op);
-  const biters = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
-  const spitters = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
-  const lickers = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
-  const chewers = members.filter((c) => c.memory.role === ROLE_SIEGER).length;
-  const wigglers = members.filter((c) => c.memory.role === ROLE_DRAINER).length;
+  const melee = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
+  const ranged = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
+  const healers = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
+  const siege = members.filter((c) => c.memory.role === ROLE_SIEGER).length;
+  const drainers = members.filter((c) => c.memory.role === ROLE_DRAINER).length;
 
   let roleToSpawn: string | null = null;
-  if (biters < op.requiredBiters) roleToSpawn = ROLE_KNIGHT;
-  else if (wigglers < (op.requiredWigglers ?? 0)) roleToSpawn = ROLE_DRAINER;
-  else if (chewers < (op.requiredChewers ?? 0)) roleToSpawn = ROLE_SIEGER;
-  else if (spitters < op.requiredSpitters) roleToSpawn = ROLE_WIZARD;
-  else if (lickers < op.requiredLickers) roleToSpawn = ROLE_CLERIC;
+  if (melee < op.requiredMelee) roleToSpawn = ROLE_KNIGHT;
+  else if (drainers < (op.requiredDrainers ?? 0)) roleToSpawn = ROLE_DRAINER;
+  else if (siege < (op.requiredSiege ?? 0)) roleToSpawn = ROLE_SIEGER;
+  else if (ranged < op.requiredRanged) roleToSpawn = ROLE_WIZARD;
+  else if (healers < op.requiredHealers) roleToSpawn = ROLE_CLERIC;
   if (!roleToSpawn) return false;
 
   const energy = room.energyCapacityAvailable;
@@ -1454,23 +1454,23 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
 
   if (roleToSpawn === ROLE_KNIGHT) {
     body = buildKnightBody(energy);
-    boostKey = "biter";
+    boostKey = "melee";
     combatPartType = ATTACK;
   } else if (roleToSpawn === ROLE_SIEGER) {
     body = buildSiegerBody(energy);
-    boostKey = "chewer";
+    boostKey = "siege";
     combatPartType = WORK;
   } else if (roleToSpawn === ROLE_WIZARD) {
     body = buildWizardBody(energy);
-    boostKey = "spitter";
+    boostKey = "ranged";
     combatPartType = RANGED_ATTACK;
   } else if (roleToSpawn === ROLE_DRAINER) {
     body = buildDrainerBody(energy);
-    boostKey = "wiggler";
+    boostKey = "drainer";
     combatPartType = HEAL;
   } else {
     body = buildClericBody(energy);
-    boostKey = "licker";
+    boostKey = "healer";
     combatPartType = HEAL;
   }
 
@@ -1479,7 +1479,7 @@ function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): boolean {
   const combatParts = body.filter((p) => p === combatPartType).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts =
-    boostKey === "biter" || boostKey === "chewer"
+    boostKey === "melee" || boostKey === "siege"
       ? body.filter((p) => p === MOVE).length
       : 0;
   const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
@@ -1520,9 +1520,9 @@ function shouldSpawnDefender(room: Room): boolean {
   const op = getDefenseOp(room.name);
   if (!op) return false;
   return (
-    countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredBiters ||
-    countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredSpitters ||
-    countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredLickers
+    countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredMelee ||
+    countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredRanged ||
+    countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers
   );
 }
 
@@ -1536,26 +1536,26 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
 
   let roleToSpawn: string | null = null;
   let combatPartType: BodyPartConstant = ATTACK;
-  let boostKey = "biter";
+  let boostKey = "melee";
   let body: BodyPartConstant[];
 
   const haveDefender = getDefenders(room.name).some((c) => !c.spawning);
   const allowedEnergy = bodyBudget(room, haveDefender ? "capacity" : "available");
 
-  if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredBiters) {
+  if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredMelee) {
     roleToSpawn = ROLE_KNIGHT;
     combatPartType = ATTACK;
-    boostKey = "biter";
+    boostKey = "melee";
     body = buildKnightBody(allowedEnergy);
-  } else if (countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredSpitters) {
+  } else if (countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredRanged) {
     roleToSpawn = ROLE_WIZARD;
     combatPartType = RANGED_ATTACK;
-    boostKey = "spitter";
+    boostKey = "ranged";
     body = buildWizardBody(allowedEnergy);
-  } else if (countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredLickers) {
+  } else if (countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers) {
     roleToSpawn = ROLE_CLERIC;
     combatPartType = HEAL;
-    boostKey = "licker";
+    boostKey = "healer";
     body = buildClericBody(allowedEnergy);
   } else {
     return false;
@@ -1565,7 +1565,7 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
 
   const combatParts = body.filter((p) => p === combatPartType).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
-  const moveParts = boostKey === "biter" ? body.filter((p) => p === MOVE).length : 0;
+  const moveParts = boostKey === "melee" ? body.filter((p) => p === MOVE).length : 0;
   const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${roleToSpawn}_def${Game.time}`, {
     memory: {
@@ -1590,7 +1590,7 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
-  const queue = buildBoostQueue(room, "biter", attackParts, toughParts, moveParts);
+  const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_child${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,
@@ -1631,7 +1631,7 @@ function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
-  const queue = buildBoostQueue(room, "biter", attackParts, toughParts, moveParts);
+  const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
   const res = spawn.spawnCreep(body, `${ROLE_KNIGHT}_remote${Game.time}`, {
     memory: {
       role: ROLE_KNIGHT,
@@ -1839,7 +1839,7 @@ function spawnSkGuardian(room: Room, spawn: StructureSpawn, op: SourceKeeperOp):
   const body = buildSkGuardianBody(room.energyCapacityAvailable);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
-  const queue = buildBoostQueue(room, "licker", healParts, 0);
+  const queue = buildBoostQueue(room, "healer", healParts, 0);
   const res = spawn.spawnCreep(body, `${ROLE_SK_GUARDIAN}${Game.time}`, {
     memory: { role: ROLE_SK_GUARDIAN, homeRoom: room.name, skOpId: op.id, ...boostMemory(queue) },
   });
@@ -1868,7 +1868,7 @@ function spawnSkMiner(
   const res = spawn.spawnCreep(body, `${ROLE_SK_MINER}${Game.time}`, {
     memory: { role: ROLE_SK_MINER, homeRoom: room.name, skOpId: op.id, skSourceId: sourceId },
   });
-  if (res === OK) console.log(`[SK] Spawning burrower for ${op.roomName}`);
+  if (res === OK) console.log(`[SK] Spawning ${ROLE_SK_MINER} for ${op.roomName}`);
   return res === OK;
 }
 

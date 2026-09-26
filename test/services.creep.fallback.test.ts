@@ -112,7 +112,7 @@ describe("runHauler with nothing to deposit", () => {
     const creep = {
       room,
       id: "hauler1",
-      name: "dragger1",
+      name: "courier1",
       memory: {} as CreepMemory,
       pos: {
         x: 35,

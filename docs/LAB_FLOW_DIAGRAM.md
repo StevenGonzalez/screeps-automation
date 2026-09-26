@@ -114,7 +114,7 @@
 |  INTEGRATION WITH OTHER SYSTEMS                                     |
 +---------------------------------------------------------------------+
 
-    mixer (role)                 orchestrator.terminal       military system
+    research (role)                 orchestrator.terminal       military system
          |                            |                          |
          +-> Fill input labs          +-> Buy missing minerals  +-> Request boosts
          |    from storage            |    (H, O, X, etc.)      |    for combat creeps

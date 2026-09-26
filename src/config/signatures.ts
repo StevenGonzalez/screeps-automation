@@ -1,17 +1,17 @@
-// Dumb-little-bug notices for controller signing. Simple, small, sincere. Keep under 100 chars.
+// Corporate memos for controller signing. Passive-aggressive, relentlessly polite. Keep under 100 chars.
 export const SIGNATURES: string[] = [
-  "bug lives here. this good dirt.",
-  "we found the shiny. it is ours now.",
-  "many legs live here. please no step.",
-  "we chewed this room. it is home now.",
-  "beware: bugs. not smart, but many.",
-  "the pile is ours. do not touch the pile.",
-  "we do not know what we do, but we do it here.",
-  "found food. stayed. this home now.",
-  "us bugs live here. thank you. bye.",
-  "big rock good. we stay by big rock.",
-  "this our room. we forget why. but ours.",
-  "no boot please. we are small and we try.",
+  "Per my last message, this room has been acquired. Thanks!",
+  "Circling back: this controller now reports to us.",
+  "This room is now a synergy hub. Please update your calendars.",
+  "Friendly reminder: this space is booked through end of quarter.",
+  "We've taken this offline. Happy to sync if you have questions.",
+  "Going forward, please route all harvesting through our team.",
+  "Not sure if you saw my previous email, but this room is ours.",
+  "Excited to announce this room has joined our family of rooms!",
+  "Let's take this conversation offline. Also, the room. We took it.",
+  "Moving forward, this room is aligned with our core values.",
+  "Kindly vacate. There is cake in the break room (there is no cake).",
+  "New hire orientation is at 9am. You are not invited. Thanks!",
 ];
 
 export function pickSignature(roomName: string): string {

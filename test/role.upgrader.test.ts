@@ -41,7 +41,7 @@ function runFullUpgraderIn(room: Room): string[] {
   const calls: string[] = [];
   const creep = {
     room,
-    name: "poker1",
+    name: "consultant1",
     memory: {} as CreepMemory,
     pos: {
       x: 25,
@@ -79,7 +79,7 @@ function runEmptyUpgraderIn(room: Room): string[] {
   const calls: string[] = [];
   const creep = {
     room,
-    name: "poker2",
+    name: "consultant2",
     memory: {} as CreepMemory,
     pos: {
       x: 25,

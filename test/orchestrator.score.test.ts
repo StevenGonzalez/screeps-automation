@@ -18,7 +18,7 @@ import {
 } from "../src/orchestrators/orchestrator.score";
 
 const HOME = "W1N1";
-const SEEKER = "snatcher";
+const SEEKER = "bizdev";
 
 function coords(name: string): [number, number] {
   const m = name.match(/^([WE])(\d+)([NS])(\d+)$/)!;

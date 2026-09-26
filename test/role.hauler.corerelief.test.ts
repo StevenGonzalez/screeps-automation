@@ -19,7 +19,7 @@ let transferred: string[] = [];
 
 /**
  * A hauler under the storage model with drained miner containers and a core
- * well short of capacity - the RCL 6 room where the dragger sat idle beside
+ * well short of capacity - the RCL 6 room where the courier sat idle beside
  * empty extensions.
  */
 function scenario(carrying: number, energyAvailable = 300) {
@@ -82,7 +82,7 @@ function scenario(carrying: number, energyAvailable = 300) {
   g.Memory = { creeps: {}, rooms: { [roomName]: room.memory } };
 
   const creep = {
-    name: "dragger1",
+    name: "courier1",
     room,
     pos: {
       x: 25,

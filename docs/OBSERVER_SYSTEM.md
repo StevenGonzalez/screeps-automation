@@ -4,7 +4,7 @@
 
 Two separate things gather information here:
 
-- **Wobbler scouts** (`role.scout.ts`) survey adjacent rooms and record source
+- **Recruiter scouts** (`role.scout.ts`) survey adjacent rooms and record source
   positions + hostile status - the data the expansion and remote-mining systems
   rank candidates from.
 - The **Observer** (`orchestrator.observer.ts`), at RCL 8, scans distant **highway**
@@ -18,7 +18,7 @@ rooms the bot can currently see (including rooms an observer just scanned). See
 
 ---
 
-## Wobbler Scouts (`role.scout.ts`)
+## Recruiter Scouts (`role.scout.ts`)
 
 ### What They Do
 
@@ -30,7 +30,7 @@ rooms the bot can currently see (including rooms an observer just scanned). See
 
 ### Hostile Detection
 
-- **Source Keepers**: flagged but recorded so rovers avoid them.
+- **Source Keepers**: flagged but recorded so freelancers avoid them.
 - **Player creeps**: any non-Source-Keeper, non-Invader creep marks the room hostile
   for **2,000 ticks** (`hostileUntil`).
 - Hostile rooms are skipped both when selecting remote-mining targets and when
@@ -57,26 +57,26 @@ Body: `[MOVE]` - minimal cost, just needs to enter and read the room.
 ## Remote Room Pipeline
 
 ```
-pendingScoutRooms[] -> wobbler surveys -> remoteRooms[]
+pendingScoutRooms[] -> recruiter surveys -> remoteRooms[]
                                               v
-                               rovers mine sources
-                               plodders haul energy home
-                               squatters reserve the controller
+                               freelancers mine sources
+                               logistics crews haul energy home
+                               legal reserve the controller
                                (expander ranks them as colony candidates)
 ```
 
 ### Invader contention
 
-When a rover/plodder sees an **Invader creep** in its remote it flags the room
-(`invaderUntil`, 1,500 ticks) and waits at home; the spawner raises one biter
+When a freelancer or logistics crew sees an **Invader creep** in its remote it flags the room
+(`invaderUntil`, 1,500 ticks) and waits at home; the spawner raises one HR rep
 (`spawnRemoteDefender`) to clear it. The same flag is raised by an **Invader Core**
 (`findInvaderCore`) - the NPC structure that reserves the room for "Invader" and
 periodically re-spawns defenders. Because the core is a *structure*, the defending
-biter engages hostile creeps first and then **attacks the core itself**; it only lifts
-the flag once the room holds neither creeps nor a core. Without this the biter would
+HR rep engages hostile creeps first and then **attacks the core itself**; it only lifts
+the flag once the room holds neither creeps nor a core. Without this the HR rep would
 kill the spawned creeps, declare the room clear, and leave the core to re-reserve and
 re-spawn indefinitely - the remote stays bricked. A **player** creep instead marks the
-room hostile and we abandon it rather than send a lone biter.
+room hostile and we abandon it rather than send a lone HR rep.
 
 ---
 
@@ -109,12 +109,12 @@ can only be made from market-bought raw materials. See [FACTORY_SYSTEM.md](FACTO
 
 - A fresh-ish deposit (`lastCooldown <= 100`) with >= 3,000 ticks-to-decay spawns a
   `DepositOp` (`Memory.depositOps`), funded by the closest owned room.
-- **No combat squad** - deposits are unguarded, so the op is just scrapers + haulers
-  (unlike the power-bank squad). One WORK-heavy **scraper** works the deposit and one
-  or two **toters** ferry the resource home to storage. A single big scraper is used on
+- **No combat squad** - deposits are unguarded, so the op is just offshore crews + haulers
+  (unlike the power-bank squad). One WORK-heavy **offshore** crew works the deposit and one
+  or two **shipping** crews ferry the resource home to storage. A single big offshore crew is used on
   purpose: harvesting triggers a *deposit-wide* cooldown, so one large body out-yields
-  several small ones. The scraper accumulates into its CARRY buffer and drops the load
-  when full so harvesting never stalls; toters collect the dropped piles.
+  several small ones. The offshore crew accumulates into its CARRY buffer and drops the load
+  when full so harvesting never stalls; shipping crews collect the dropped piles.
 - The op runs `mining -> done`. It ends when the deposit decays, when its harvest
   cooldown climbs past 100 (`DEPOSIT_MAX_COOLDOWN` - no longer worth hauling), or after
   a 20,000-tick hard timeout if it never makes contact. Check status with

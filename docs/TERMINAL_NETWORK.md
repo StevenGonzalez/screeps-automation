@@ -60,4 +60,4 @@ Game.arca.network()   // per-room storage/terminal energy, pending sends, and mi
 (There is no `Game.arca.sendEnergy()` - inter-room energy moves are planned
 automatically by the balancing pass, not commanded manually.)
 
-The pile moves to every corner of the colony.
+Resources get routed to every branch office. Please advise if you have questions.

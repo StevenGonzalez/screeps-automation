@@ -66,11 +66,11 @@ declare global {
     startedAt: number;
     formation: SquadFormation;
     tactic: SquadTactic;
-    requiredBiters: number;
-    requiredSpitters: number;
-    requiredLickers: number;
-    requiredChewers: number;
-    requiredWigglers?: number;
+    requiredMelee: number;
+    requiredRanged: number;
+    requiredHealers: number;
+    requiredSiege: number;
+    requiredDrainers?: number;
     clearedSince?: number;
     regroupSince?: number;
     retreatSince?: number;
@@ -81,9 +81,9 @@ declare global {
     startedAt: number;
     lastThreatTick: number;
     threatScore: number;
-    requiredBiters: number;
-    requiredSpitters: number;
-    requiredLickers: number;
+    requiredMelee: number;
+    requiredRanged: number;
+    requiredHealers: number;
   }
 
   interface DrainOp {
@@ -148,11 +148,11 @@ declare global {
     homeRoom?: string;
     formation: SquadFormation;
     tactic: SquadTactic;
-    requiredBiters: number;
-    requiredSpitters: number;
-    requiredLickers: number;
-    requiredChewers: number;
-    requiredWigglers?: number;
+    requiredMelee: number;
+    requiredRanged: number;
+    requiredHealers: number;
+    requiredSiege: number;
+    requiredDrainers?: number;
     queuedAt: number;
   }
 
