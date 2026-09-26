@@ -6,6 +6,7 @@ import {
 } from "../config/config.roles";
 import { pickSignature } from "../config/signatures";
 import { PLANNER_KEYS } from "../config/config.structures";
+import { invaderStrength } from "./services.combat";
 
 let assignmentCacheTick = -1;
 const assignedContainerIdsByRoomAndRole: Record<string, Set<string>> = {};
@@ -1135,11 +1136,13 @@ export function isAssignedRemoteContested(creep: Creep): boolean {
 
 export function flagRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
-  if (entry) markRemoteInvader(entry);
+  if (entry) markRemoteInvader(entry, creep.room);
 }
 
-export function markRemoteInvader(entry: RemoteRoomData): void {
+// `room` is the remote itself, seen this tick.
+export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
   entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
+  entry.invaderStrength = invaderStrength(room);
 }
 
 export function flagRemotePlayer(creep: Creep): void {
@@ -1178,4 +1181,5 @@ export function clearRemotePlayerHostile(entry: RemoteRoomData): void {
 export function clearRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
   if (entry && entry.invaderUntil !== undefined) entry.invaderUntil = undefined;
+  if (entry) delete entry.invaderStrength;
 }

@@ -155,6 +155,54 @@ export function structureDamagePerTick(hostiles: Creep[]): number {
   return dps;
 }
 
+export interface HostileStrength {
+  heal: number;
+  damage: number;
+  hits: number;
+}
+
+// What a group brings to a fight: the healing it can pour into one target
+// (every healer adjacent to it), the damage it deals to creeps, and the hit
+// points that have to be chewed through, with boosted TOUGH counted at the
+// damage it takes to break.
+export function summarizeHostiles(hostiles: Creep[]): HostileStrength {
+  const s: HostileStrength = { heal: 0, damage: 0, hits: 0 };
+  for (const c of hostiles) {
+    for (const p of c.body) {
+      if (p.hits <= 0) continue;
+      const boost = p.boost as string | undefined;
+      if (p.type === HEAL) s.heal += HEAL_POWER * (boost ? HEAL_BOOST_MULT[boost] ?? 1 : 1);
+      else if (p.type === ATTACK) s.damage += ATTACK_POWER * (boost ? ATTACK_BOOST_MULT[boost] ?? 1 : 1);
+      else if (p.type === RANGED_ATTACK)
+        s.damage += RANGED_ATTACK_POWER * (boost ? RANGED_BOOST_MULT[boost] ?? 1 : 1);
+      s.hits += p.type === TOUGH && boost ? p.hits / (TOUGH_DAMAGE_MULT[boost] ?? 1) : p.hits;
+    }
+  }
+  return s;
+}
+
+// A defender has to finish the job well inside its 1500-tick life, walk included.
+const DEFENDER_KILL_TICKS = 600;
+
+// Fewest melee defenders with this body that out-damage the group's healing,
+// kill it within DEFENDER_KILL_TICKS, and have the hit points to outlast its
+// damage meanwhile. `cap` when even that many would not.
+export function meleeDefendersToWin(
+  enemy: HostileStrength,
+  body: BodyPartConstant[],
+  cap: number
+): number {
+  const attack = body.filter((p) => p === ATTACK).length * ATTACK_POWER;
+  const hits = body.length * 100;
+  for (let n = 1; n < cap; n++) {
+    const net = n * attack - enemy.heal;
+    if (net <= 0) continue;
+    const ticks = enemy.hits / net;
+    if (ticks <= DEFENDER_KILL_TICKS && n * hits > enemy.damage * ticks) return n;
+  }
+  return cap;
+}
+
 export function getThreatInfo(room: Room): ThreatInfo {
   if (threatCacheTick !== Game.time) {
     threatCacheTick = Game.time;
@@ -565,6 +613,14 @@ export function findInvaderCore(room: Room): StructureInvaderCore | null {
     filter: (s) => s.structureType === STRUCTURE_INVADER_CORE,
   });
   return (cores[0] as StructureInvaderCore | undefined) ?? null;
+}
+
+// The Invader creeps and core in a room, as one force to beat.
+export function invaderStrength(room: Room): HostileStrength {
+  const s = summarizeHostiles(room.find(FIND_HOSTILE_CREEPS).filter(isInvaderCreep));
+  const core = findInvaderCore(room);
+  if (core) s.hits += core.hits;
+  return s;
 }
 
 export function isPlayerCreep(creep: Creep): boolean {

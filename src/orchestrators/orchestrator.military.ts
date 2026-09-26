@@ -18,6 +18,7 @@ import {
   type TowerStatus,
 } from "../services/services.combat";
 import { launchNukeFrom } from "./orchestrator.nuker";
+import { towersCanHold } from "../roles/role.tower";
 import { getAllies, requestHelp } from "../services/services.allies";
 
 declare global {
@@ -1247,7 +1248,10 @@ function runDefenseCouncil(): void {
 
     const controllerAttacker = hostiles.some((c) => c.body.some((p) => p.type === CLAIM));
 
-    const meaningful = severity === "high" || score >= DEFENSE_THREAT_SCORE || controllerAttacker;
+    // Towers that will kill the lot on their own need no creeps beside them.
+    const meaningful =
+      (severity === "high" || score >= DEFENSE_THREAT_SCORE || controllerAttacker) &&
+      !towersCanHold(room, hostiles);
 
     if (meaningful) {
       if (existing) {

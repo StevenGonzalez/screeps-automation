@@ -1,4 +1,5 @@
 import { findTowerRepairTarget, findTowerDefenseRepairTarget } from "../services/services.creep";
+import { summarizeHostiles } from "../services/services.combat";
 
 // Peacetime repair only spends the top of the tank, so a raid that arrives
 // mid-repair still meets towers that can fire for a good while.
@@ -138,6 +139,26 @@ function shouldKeepFiring(room: Room, target: Creep): boolean {
 function isOurs(s: AnyStructure): boolean {
   if (s.structureType === STRUCTURE_WALL) return true;
   return "my" in s && s.my;
+}
+
+// Whether the towers alone will kill every hostile they can shoot: each one has
+// to take more damage (after TOUGH) than the whole group could heal into it, and
+// the towers need the energy to keep firing until the last one is dead. Edge
+// tiles are left out as selectRoomAttackTarget leaves them out.
+export function towersCanHold(room: Room, hostiles: Creep[]): boolean {
+  const towers = activeTowers(room);
+  if (towers.length === 0) return false;
+  const groupHeal = summarizeHostiles(hostiles).heal;
+  let ticks = 0;
+  for (const c of hostiles) {
+    if (c.pos.x <= 1 || c.pos.x >= 48 || c.pos.y <= 1 || c.pos.y >= 48) continue;
+    const net = effectiveTowerDamage(c, towers) - groupHeal;
+    if (net <= 0) return false;
+    ticks += Math.ceil(c.hits / net);
+  }
+  let energy = 0;
+  for (const t of towers) energy += t.store[RESOURCE_ENERGY];
+  return energy >= ticks * towers.length * TOWER_ENERGY_COST;
 }
 
 function targetScore(creep: Creep, hostiles: Creep[], towers: StructureTower[]): number {

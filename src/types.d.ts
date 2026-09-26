@@ -169,6 +169,8 @@ declare global {
     hostileUntil?: number;
     hostileStrikes?: number;
     invaderUntil?: number;
+    // Last Invader force seen there (creeps plus any core), to size the defenders.
+    invaderStrength?: { heal: number; damage: number; hits: number };
   }
 
   interface CreepMemory {

@@ -30,7 +30,15 @@ import {
   ROLE_SCORE_HUNTER,
   ROLE_UNCLAIMER,
 } from "../config/config.roles";
-import { getThreatInfo, getThreatSeverity, refreshBlockade, isBlockaded } from "../services/services.combat";
+import {
+  getThreatInfo,
+  getThreatSeverity,
+  refreshBlockade,
+  isBlockaded,
+  summarizeHostiles,
+  meleeDefendersToWin,
+} from "../services/services.combat";
+import { towersCanHold } from "../roles/role.tower";
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
 import { getSkMembers, isOpPaused } from "./orchestrator.sourcekeeper";
 import { getStockForCompound } from "../services/services.labs";
@@ -1405,8 +1413,45 @@ function countDefendersInRoom(role: string, room: Room): number {
   return present + getRoomSpawningCount(room, role);
 }
 
+// The hostiles are through when nothing can shoot them (no tower with energy)
+// or a spawn or tower is already taking hits. Until then the towers and
+// ramparts are buying time for a full-size defender.
+function isBreached(room: Room): boolean {
+  const core = room.find(FIND_MY_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
+  }) as (StructureSpawn | StructureTower)[];
+  const armed = core.some(
+    (s) => s.structureType === STRUCTURE_TOWER && s.store[RESOURCE_ENERGY] >= TOWER_ENERGY_COST
+  );
+  return !armed || core.some((s) => s.hits < s.hitsMax);
+}
+
+// Towers that will kill the hostiles on their own need no creeps beside them.
+function homeNeedsDefenders(room: Room): boolean {
+  return !towersCanHold(room, getThreatInfo(room).hostiles);
+}
+
+// Full-size knights it takes to beat the hostiles here, towers aside.
+function homeKnightsNeeded(room: Room, cap: number): number {
+  const body = buildKnightBody(bodyBudget(room, "capacity"));
+  return meleeDefendersToWin(summarizeHostiles(getThreatInfo(room).hostiles), body, cap);
+}
+
+// Wait for a full-energy body while the towers and ramparts hold; a breached
+// room takes whatever the spawn can build right now.
+function waitForDefenderBody(room: Room, key: string, needed: boolean): boolean {
+  return waitForFullBody(room, key, needed && !isBreached(room));
+}
+
+const HOME_KNIGHT_CAP = 3;
+
 function shouldSpawnKnight(room: Room, threatScore: number): boolean {
-  return countDefendersInRoom(ROLE_KNIGHT, room) < Math.min(3, Math.ceil(threatScore / 40));
+  const target = Math.max(Math.ceil(threatScore / 40), homeKnightsNeeded(room, HOME_KNIGHT_CAP));
+  const needed =
+    homeNeedsDefenders(room) &&
+    countDefendersInRoom(ROLE_KNIGHT, room) < Math.min(HOME_KNIGHT_CAP, target);
+  if (waitForDefenderBody(room, ROLE_KNIGHT, needed)) return false;
+  return needed;
 }
 
 function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
@@ -1424,7 +1469,11 @@ function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
 }
 
 function shouldSpawnWizard(room: Room, threatScore: number): boolean {
-  return countDefendersInRoom(ROLE_WIZARD, room) < Math.min(2, Math.ceil(threatScore / 60));
+  const needed =
+    homeNeedsDefenders(room) &&
+    countDefendersInRoom(ROLE_WIZARD, room) < Math.min(2, Math.ceil(threatScore / 60));
+  if (waitForDefenderBody(room, ROLE_WIZARD, needed)) return false;
+  return needed;
 }
 
 function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
@@ -1444,7 +1493,9 @@ function shouldSpawnCleric(room: Room, threatScore: number): boolean {
   const fighters =
     countDefendersInRoom(ROLE_KNIGHT, room) + countDefendersInRoom(ROLE_WIZARD, room);
   if (fighters === 0) return false;
-  return countDefendersInRoom(ROLE_CLERIC, room) < 1;
+  const needed = homeNeedsDefenders(room) && countDefendersInRoom(ROLE_CLERIC, room) < 1;
+  if (waitForDefenderBody(room, ROLE_CLERIC, needed)) return false;
+  return needed;
 }
 
 function spawnCleric(room: Room, spawn: StructureSpawn): boolean {
@@ -1701,16 +1752,27 @@ function needsChildRoomDefender(room: Room): boolean {
   return existing.length === 0;
 }
 
+const DEFENSE_OP_KNIGHT_CAP = 6;
+
+// The op's score-based count, raised to what it takes to beat the hostiles'
+// healing and hit points.
+function requiredOpMelee(room: Room, op: DefenseOp): number {
+  return Math.max(op.requiredMelee, homeKnightsNeeded(room, DEFENSE_OP_KNIGHT_CAP));
+}
+
+const DEFENSE_OP_BODY_WAIT = "defenseOp";
+
 function shouldSpawnDefender(room: Room): boolean {
   if (needsChildRoomDefender(room)) return true;
 
   const op = getDefenseOp(room.name);
   if (!op) return false;
-  return (
-    countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredMelee ||
+  const short =
+    countDefendersByRole(room.name, ROLE_KNIGHT, room) < requiredOpMelee(room, op) ||
     countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredRanged ||
-    countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers
-  );
+    countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers;
+  if (waitForDefenderBody(room, DEFENSE_OP_BODY_WAIT, short)) return false;
+  return short;
 }
 
 function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
@@ -1726,10 +1788,10 @@ function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   let boostKey = "melee";
   let body: BodyPartConstant[];
 
-  const haveDefender = getDefenders(room.name).some((c) => !c.spawning);
-  const allowedEnergy = bodyBudget(room, haveDefender ? "capacity" : "available");
+  // shouldSpawnDefender already waited for a full body unless the room is breached.
+  const allowedEnergy = bodyBudget(room, "available");
 
-  if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < op.requiredMelee) {
+  if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < requiredOpMelee(room, op)) {
     roleToSpawn = ROLE_KNIGHT;
     combatPartType = ATTACK;
     boostKey = "melee";
@@ -1792,21 +1854,36 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
+const REMOTE_KNIGHT_CAP = 2;
+
+// One knight unless the last look at the remote showed a force (healers, a
+// group, a 100k-hit core) that one full-size knight cannot beat in good time.
+function remoteKnightsNeeded(room: Room, remote: RemoteRoomData): number {
+  if (!remote.invaderStrength) return 1;
+  const body = buildKnightBody(bodyBudget(room, "capacity"));
+  return meleeDefendersToWin(remote.invaderStrength, body, REMOTE_KNIGHT_CAP);
+}
+
 function findRemoteInvaderTarget(room: Room): string | null {
   const remotes = room.memory.remoteRooms;
   if (!remotes) return null;
   for (const r of remotes) {
     if (r.invaderUntil === undefined || r.invaderUntil <= Game.time) continue;
-    const defending = getCreepsByRole(ROLE_KNIGHT).some(
+    const defending = getCreepsByRole(ROLE_KNIGHT).filter(
       (c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName
-    );
-    if (!defending) return r.roomName;
+    ).length;
+    if (defending < remoteKnightsNeeded(room, r)) return r.roomName;
   }
   return null;
 }
 
+const REMOTE_DEFENDER_BODY_WAIT = "remoteDefender";
+
+// Nothing at home is at stake, so the defender always waits for a full body.
 function shouldSpawnRemoteDefender(room: Room): boolean {
-  return findRemoteInvaderTarget(room) !== null;
+  const needed = findRemoteInvaderTarget(room) !== null;
+  if (waitForFullBody(room, REMOTE_DEFENDER_BODY_WAIT, needed)) return false;
+  return needed;
 }
 
 function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {

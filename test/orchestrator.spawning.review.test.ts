@@ -27,6 +27,8 @@ g.HEAL_POWER = 12;
 g.CREEP_SPAWN_TIME = 3;
 g.RESOURCE_ENERGY = "energy";
 g.FIND_MY_SPAWNS = 108;
+g.FIND_MY_STRUCTURES = 109;
+g.TOWER_ENERGY_COST = 10;
 g.FIND_HOSTILE_CREEPS = 103;
 g.FIND_STRUCTURES = 101;
 g.FIND_CONSTRUCTION_SITES = 111;
@@ -480,6 +482,140 @@ describe("remote rooms", () => {
     });
     processRoomSpawning(low.room, low.spawn);
     expect(roles()).toContain(ROLE_RESERVER);
+  });
+});
+
+describe("tower-gated home defense", () => {
+  const base = {
+    rcl: 4,
+    capacity: 1300,
+    storageEnergy: 100_000,
+    containerIds: ["cont1", "cont2"],
+    minerContainerIds: ["cont1", "cont2"],
+  };
+  const settled = () => [
+    makeCreep(ROLE_FILLER, { carry: 10 }),
+    makeCreep(ROLE_MINER, { work: 5, carry: 1 }),
+    makeCreep(ROLE_MINER, { work: 5, carry: 1 }),
+    makeCreep(ROLE_HAULER, { carry: 16 }),
+    makeCreep(ROLE_HAULER, { carry: 16 }),
+    makeCreep(ROLE_UPGRADER, { work: 8, carry: 4 }),
+    makeCreep(ROLE_UPGRADER, { work: 8, carry: 4 }),
+    makeCreep(ROLE_UPGRADER, { work: 8, carry: 4 }),
+    makeCreep(ROLE_REPAIRER, { work: 5, carry: 5 }),
+  ];
+
+  function enemy(x: number, body: { type: unknown; boost?: string }[]): Creep {
+    return {
+      name: `enemy${Math.random()}`,
+      owner: { username: "Enemy" },
+      hits: body.length * 100,
+      body: body.map((p) => ({ ...p, hits: 100 })),
+      pos: { x, y: 25 },
+    } as unknown as Creep;
+  }
+  const many = (type: unknown, n: number, boost?: string) =>
+    Array.from({ length: n }, () => ({ type, boost }));
+
+  // One tower 5 tiles from the hostiles: 600 damage a tick.
+  function towerRoom(energy: number, hostiles: Creep[], spawnHurt = false) {
+    const made = makeRoom(settled(), { ...base, energy, hostiles });
+    const tower = {
+      id: "tower1",
+      structureType: g.STRUCTURE_TOWER,
+      hits: 3000,
+      hitsMax: 3000,
+      store: { energy: 1000 },
+      pos: { getRangeTo: () => 5 },
+    };
+    const spawnHits = { structureType: g.STRUCTURE_SPAWN, hits: spawnHurt ? 4000 : 5000, hitsMax: 5000 };
+    made.room.memory.towerIds = ["tower1" as Id<StructureTower>];
+    const find = made.room.find.bind(made.room);
+    (made.room as unknown as { find: unknown }).find = (type: number, opts?: unknown) =>
+      type === g.FIND_MY_STRUCTURES ? [tower, spawnHits] : find(type as FindConstant, opts as never);
+    const game = g.Game as { getObjectById: (id: string) => unknown };
+    const get = game.getObjectById;
+    game.getObjectById = (id: string) => (id === "tower1" ? tower : get(id));
+    return made;
+  }
+
+  const healedDismantler = () => [
+    enemy(20, [...many(g.WORK, 5), ...many(g.MOVE, 5)]),
+    // 13 XLHO2 HEAL heals 624 a tick, more than the tower deals.
+    enemy(21, many(g.HEAL, 13, "XLHO2")),
+  ];
+
+  it("leaves an attacker the towers can kill to the towers", () => {
+    const { room, spawn } = towerRoom(1300, [enemy(20, [...many(g.ATTACK, 2), ...many(g.MOVE, 2)])]);
+    processRoomSpawning(room, spawn);
+    expect(roles()).not.toContain(ROLE_KNIGHT);
+  });
+
+  it("raises a knight when the hostiles out-heal the towers", () => {
+    const { room, spawn } = towerRoom(1300, healedDismantler());
+    processRoomSpawning(room, spawn);
+    expect(roles()).toContain(ROLE_KNIGHT);
+  });
+
+  it("waits for a full-size knight while the base is holding", () => {
+    const { room, spawn } = towerRoom(400, healedDismantler());
+    processRoomSpawning(room, spawn);
+    expect(roles()).not.toContain(ROLE_KNIGHT);
+  });
+
+  it("spawns what it can straight away once a spawn is taking hits", () => {
+    const { room, spawn } = towerRoom(400, healedDismantler(), true);
+    processRoomSpawning(room, spawn);
+    expect(roles()).toContain(ROLE_KNIGHT);
+  });
+});
+
+describe("remote invader defense", () => {
+  const remote: RemoteRoomData = {
+    roomName: REMOTE,
+    sources: [{ sourceId: "rsrc1" } as unknown as RemoteSourceData],
+    lastSeen: 0,
+    hostile: false,
+  };
+  function run(strength: RemoteRoomData["invaderStrength"]) {
+    const knight = makeCreep(ROLE_KNIGHT, {}, { memory: { targetRoom: REMOTE } });
+    const { room, spawn } = makeRoom(
+      [
+        makeCreep(ROLE_FILLER, { carry: 10 }),
+        makeCreep(ROLE_MINER, { work: 5, carry: 1 }),
+        makeCreep(ROLE_MINER, { work: 5, carry: 1 }),
+        makeCreep(ROLE_HAULER, { carry: 16 }),
+        makeCreep(ROLE_HAULER, { carry: 16 }),
+        makeCreep(ROLE_UPGRADER, { work: 8, carry: 4 }),
+        makeCreep(ROLE_UPGRADER, { work: 8, carry: 4 }),
+        makeCreep(ROLE_UPGRADER, { work: 8, carry: 4 }),
+        makeCreep(ROLE_REPAIRER, { work: 5, carry: 5 }),
+        knight,
+      ],
+      {
+        rcl: 4,
+        capacity: 1300,
+        energy: 1300,
+        storageEnergy: 100_000,
+        containerIds: ["cont1", "cont2"],
+        minerContainerIds: ["cont1", "cont2"],
+        remoteRooms: [{ ...remote, invaderUntil: clock + 500, invaderStrength: strength }],
+      }
+    );
+    processRoomSpawning(room, spawn);
+  }
+
+  it("sends a second knight when one cannot out-damage the invaders' healing", () => {
+    // A 1300-capacity knight hits for 180; the invaders heal 300.
+    run({ heal: 300, damage: 100, hits: 3000 });
+    const knights = spawnCalls.filter((c) => c.memory.role === ROLE_KNIGHT);
+    expect(knights).toHaveLength(1);
+    expect(knights[0].memory.targetRoom).toBe(REMOTE);
+  });
+
+  it("keeps to one knight against a lone invader", () => {
+    run({ heal: 0, damage: 60, hits: 1500 });
+    expect(roles()).not.toContain(ROLE_KNIGHT);
   });
 });
 
