@@ -7,7 +7,7 @@ import {
 } from "../services/services.creep";
 import { seekBoost } from "../services/services.combat";
 
-const UPGRADER_STORAGE_FLOOR = 10_000;
+export const UPGRADER_STORAGE_FLOOR = 10_000;
 
 export function runUpgrader(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;

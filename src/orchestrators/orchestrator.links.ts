@@ -1,6 +1,12 @@
+import { UPGRADER_STORAGE_FLOOR } from "../roles/role.upgrader";
+
 const LINK_TRANSFER_THRESHOLD = 400;
 const LINK_MIN_TRANSFER = 150;
 const LINK_SINK_HEADROOM = 100;
+// Below this the controller link is fed ahead of every other sink, and the
+// storage link relays to it when no source link does. Half a link covers an
+// RCL8 upgrader (15/tick) across any realistic link cooldown.
+const CONTROLLER_LINK_LOW = 400;
 
 export function loop() {
   for (const roomName in Game.rooms) {
@@ -11,16 +17,11 @@ export function loop() {
 }
 
 function processRoomLinks(room: Room) {
-  const linkIds = room.memory.linkIds ?? [];
-  if (linkIds.length < 2) return;
-
-  const links = linkIds
-    .map((id) => Game.getObjectById(id))
-    .filter(Boolean) as StructureLink[];
-
+  const links = getRoomLinks(room);
   if (links.length < 2) return;
 
   const { sources, sinks } = classifyLinks(room, links);
+  let hungry = findHungryControllerLink(room, links);
 
   for (const src of sources) {
     if (src.cooldown > 0) continue;
@@ -28,17 +29,69 @@ function processRoomLinks(room: Room) {
     const available = src.store[RESOURCE_ENERGY];
     if (available < LINK_MIN_TRANSFER) continue;
 
-    const sink = pickSink(sinks, src);
+    const sink = hungry ?? pickSink(sinks, src);
     if (!sink) continue;
 
     const deficit = sink.store.getFreeCapacity(RESOURCE_ENERGY);
     if (Math.min(available, deficit) < LINK_MIN_TRANSFER) continue;
 
-    src.transferEnergy(sink);
+    if (src.transferEnergy(sink) === OK && sink === hungry) hungry = null;
+  }
+
+  // No source link fed the controller this tick, so pass stored energy through
+  // the storage link. The filler tops the storage link up from storage while
+  // findRelayLink says the relay is wanted.
+  if (!hungry) return;
+  const relay = findRelayLink(room);
+  if (
+    relay &&
+    relay.cooldown === 0 &&
+    relay.store[RESOURCE_ENERGY] >= LINK_MIN_TRANSFER
+  ) {
+    relay.transferEnergy(hungry);
   }
 }
 
-type LinkRole = "source" | "sink" | "neutral";
+function getRoomLinks(room: Room): StructureLink[] {
+  return (room.memory.linkIds ?? [])
+    .map((id) => Game.getObjectById(id))
+    .filter(Boolean) as StructureLink[];
+}
+
+function findHungryControllerLink(
+  room: Room,
+  links: StructureLink[]
+): StructureLink | null {
+  const roles = getLinkRoles(room, links);
+  let best: StructureLink | null = null;
+  for (const link of links) {
+    if (roles[link.id] !== "controller") continue;
+    if (link.store[RESOURCE_ENERGY] >= CONTROLLER_LINK_LOW) continue;
+    if (!best || link.store[RESOURCE_ENERGY] < best.store[RESOURCE_ENERGY]) {
+      best = link;
+    }
+  }
+  return best;
+}
+
+/**
+ * The storage link, when it should be relaying stored energy to a controller
+ * link that has run low. Uses the upgrader's own storage floor: the relay is
+ * upgrader energy by another route, so it stops where they would.
+ */
+export function findRelayLink(room: Room): StructureLink | null {
+  const storage = room.storage;
+  if (!storage || storage.store[RESOURCE_ENERGY] <= UPGRADER_STORAGE_FLOOR) {
+    return null;
+  }
+  const links = getRoomLinks(room);
+  if (links.length < 2) return null;
+  if (!findHungryControllerLink(room, links)) return null;
+  const roles = getLinkRoles(room, links);
+  return links.find((l) => roles[l.id] === "storage") ?? null;
+}
+
+type LinkRole = "source" | "controller" | "storage" | "neutral";
 const linkRoleCache: Record<
   string,
   { signature: string; roles: Record<string, LinkRole> }
@@ -70,8 +123,10 @@ function getLinkRoles(
 
     if (nearMiner && !nearController && !nearStorage) {
       roles[link.id] = "source";
-    } else if (nearController || nearStorage) {
-      roles[link.id] = "sink";
+    } else if (nearController) {
+      roles[link.id] = "controller";
+    } else if (nearStorage) {
+      roles[link.id] = "storage";
     } else {
       roles[link.id] = "neutral";
     }
@@ -93,7 +148,7 @@ function classifyLinks(
     const role = roles[link.id];
     if (role === "source") {
       sources.push(link);
-    } else if (role === "sink") {
+    } else if (role === "controller" || role === "storage") {
       sinks.push(link);
     } else {
       if (link.store[RESOURCE_ENERGY] > LINK_TRANSFER_THRESHOLD) {

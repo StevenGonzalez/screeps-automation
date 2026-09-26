@@ -4,6 +4,7 @@ import {
   getRoomStructures,
 } from "../services/services.creep";
 import { getThreatInfo } from "../services/services.combat";
+import { findRelayLink } from "../orchestrators/orchestrator.links";
 
 // Power spawn upkeep, done only once spawns/extensions/towers are full.
 const POWER_SPAWN_POWER_LOW = 50;
@@ -21,13 +22,24 @@ export function runFiller(creep: Creep) {
     return;
   }
 
+  // With the core full, feed the storage link so it can relay stored energy to
+  // a controller link the source links are not keeping up with. Upgrading comes
+  // before topping up the power spawn's energy.
+  const relay = coreTarget ? null : findRelayLink(creep.room);
   const powerSpawn = coreTarget ? null : getPowerSpawn(creep.room);
   const target: AnyStoreStructure | null =
-    coreTarget ?? (powerSpawn && powerSpawnWantsEnergy(powerSpawn, storage) ? powerSpawn : null);
+    coreTarget ??
+    (!relay && powerSpawn && powerSpawnWantsEnergy(powerSpawn, storage) ? powerSpawn : null);
 
   if (creep.store[RESOURCE_ENERGY] === 0) {
     if (powerSpawn && loadPower(creep, powerSpawn, storage)) return;
     if (!target) {
+      if (relay && storage && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(storage, { reusePath: 20 });
+        }
+        return;
+      }
       if (storage && !creep.pos.isNearTo(storage)) {
         creep.moveTo(storage, { range: 1, reusePath: 20 });
       }
@@ -47,6 +59,13 @@ export function runFiller(creep: Creep) {
   if (target) {
     if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
       creep.moveTo(target, { reusePath: 10 });
+    }
+    return;
+  }
+
+  if (relay && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+    if (creep.transfer(relay, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(relay, { reusePath: 20 });
     }
     return;
   }
