@@ -1,0 +1,168 @@
+import { describe, it, expect, beforeEach } from "vitest";
+
+const g = globalThis as Record<string, unknown>;
+g.FIND_MY_SPAWNS = 108;
+g.OK = 0;
+
+import {
+  getUpgraderPopulationTarget,
+  buildUpgraderBody,
+} from "../src/orchestrators/orchestrator.spawning.economy";
+import { waitForFullBody } from "../src/orchestrators/orchestrator.spawning.shared";
+import {
+  getActiveRemoteRooms,
+  getPickedRemoteRoomNames,
+} from "../src/orchestrators/orchestrator.spawning.remote";
+import { ROLE_REMOTE_MINER, ROLE_UPGRADER } from "../src/config/config.roles";
+
+let clock = 90_000;
+
+beforeEach(() => {
+  clock += 1000;
+});
+
+function storageRoom(stored: number): Room {
+  const room = {
+    name: "W1N1",
+    controller: { my: true, level: 5, ticksToDowngrade: 50_000 },
+    energyAvailable: 1800,
+    energyCapacityAvailable: 1800,
+    storage: { store: { energy: stored } },
+    memory: {},
+  } as unknown as Room;
+  g.Game = { time: clock, rooms: { W1N1: room }, creeps: {} };
+  g.Memory = { rooms: { W1N1: room.memory }, creeps: {} };
+  return room;
+}
+
+describe("upgraders with storage", () => {
+  it("adds a second upgrader once 20k sits above the upgraders' floor", () => {
+    expect(getUpgraderPopulationTarget(storageRoom(25_000))).toBe(1);
+    expect(getUpgraderPopulationTarget(storageRoom(30_000))).toBe(2);
+    expect(getUpgraderPopulationTarget(storageRoom(50_000))).toBe(3);
+  });
+
+  it("stays at the cap however much is stored", () => {
+    expect(getUpgraderPopulationTarget(storageRoom(900_000))).toBe(3);
+  });
+});
+
+describe("upgrader body", () => {
+  const cost = (body: string[]) => body.reduce((n, p) => n + (BODYPART_COST as Record<string, number>)[p], 0);
+
+  it("spends an RCL 2 room's 550 energy instead of stopping at 300", () => {
+    const body = buildUpgraderBody(550);
+    expect(cost(body)).toBe(550);
+    expect(body.filter((p) => p === WORK)).toHaveLength(4);
+    expect(body.filter((p) => p === MOVE)).toHaveLength(2);
+  });
+
+  it("fills an RCL 3 room's 800 energy to within 50", () => {
+    const body = buildUpgraderBody(800);
+    expect(800 - cost(body)).toBeLessThanOrEqual(50);
+    expect(body.filter((p) => p === CARRY)).toHaveLength(2);
+  });
+
+  it("stays within 50 parts", () => {
+    expect(buildUpgraderBody(12_900).length).toBeLessThanOrEqual(50);
+  });
+});
+
+describe("waitForFullBody", () => {
+  function lowRoom(): Room {
+    const room = {
+      name: "W1N1",
+      energyAvailable: 300,
+      energyCapacityAvailable: 1300,
+      memory: {},
+    } as unknown as Room;
+    g.Memory = { rooms: { W1N1: room.memory }, creeps: {} };
+    return room;
+  }
+
+  it("gives each creep its own wait after giving up on the last", () => {
+    const room = lowRoom();
+    g.Game = { time: clock };
+    expect(waitForFullBody(room, ROLE_UPGRADER, true)).toBe(true);
+    g.Game = { time: clock + 40 };
+    expect(waitForFullBody(room, ROLE_UPGRADER, true)).toBe(false);
+    // Still short: the next one waits again rather than going out as a runt.
+    g.Game = { time: clock + 41 };
+    expect(waitForFullBody(room, ROLE_UPGRADER, true)).toBe(true);
+  });
+});
+
+describe("remote picks look past invaders", () => {
+  function remote(roomName: string, invaded: boolean): RemoteRoomData {
+    return {
+      roomName,
+      lastSeen: 0,
+      hostile: false,
+      invaderUntil: invaded ? clock + 500 : undefined,
+      sources: [
+        { sourceId: `${roomName}-s0`, pathLength: 40, pathKey: "k", pathTick: clock } as unknown as RemoteSourceData,
+      ],
+    };
+  }
+
+  function home(remotes: RemoteRoomData[], creeps: Creep[] = []): Room {
+    const room = {
+      name: "W5N5",
+      controller: { my: true, level: 4, owner: { username: "Me" } },
+      energyAvailable: 1300,
+      energyCapacityAvailable: 1300,
+      memory: { remoteRooms: remotes } as unknown as RoomMemory,
+      find: (type: number) => (type === g.FIND_MY_SPAWNS ? [{ id: "spawn0" }] : []),
+    } as unknown as Room;
+    const byName: Record<string, Creep> = {};
+    for (const c of creeps) byName[c.name] = c;
+    g.Game = {
+      time: clock,
+      creeps: byName,
+      rooms: { W5N5: room },
+      cpu: { bucket: 10_000 },
+      map: { getRoomLinearDistance: () => 1 },
+      getObjectById: () => null,
+    };
+    g.Memory = { creeps: {}, rooms: { W5N5: room.memory }, intel: {} };
+    return room;
+  }
+
+  it("keeps an invaded remote picked while sending no economy creeps there", () => {
+    const room = home([remote("W4N5", true), remote("W6N5", false)]);
+    expect([...getPickedRemoteRoomNames(room)].sort()).toEqual(["W4N5", "W6N5"]);
+    expect(getActiveRemoteRooms(room).map((r) => r.roomName)).toEqual(["W6N5"]);
+  });
+
+  it("keeps a mined source that a new one of equal worth would only just fit beside", () => {
+    // Fill the home until the second source only fits without headroom.
+    const upgraders = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        name: `u${i}`,
+        room: { name: "W5N5" },
+        body: Array(16).fill({ type: "work", hits: 100 }),
+        memory: { role: ROLE_UPGRADER, homeRoom: "W5N5" },
+      })) as unknown as Creep[];
+    const miner = {
+      name: "m",
+      room: { name: "W6N5" },
+      body: [],
+      memory: { role: ROLE_REMOTE_MINER, homeRoom: "W5N5", remoteSourceId: "W6N5-s0" },
+    } as unknown as Creep;
+    const remotes = [remote("W4N5", false), remote("W6N5", false)];
+    let busy = 0;
+    // Find a load where both fit only when the mined one needs no headroom.
+    for (let n = 0; n < 40; n++) {
+      const fresh = getPickedRemoteRoomNames(home(remotes, upgraders(n)));
+      clock += 1;
+      const withMiner = getPickedRemoteRoomNames(home(remotes, [...upgraders(n), miner]));
+      clock += 1;
+      if (withMiner.size > fresh.size) {
+        busy = n;
+        expect(withMiner.has("W6N5")).toBe(true);
+        break;
+      }
+    }
+    expect(busy).toBeGreaterThan(0);
+  });
+});

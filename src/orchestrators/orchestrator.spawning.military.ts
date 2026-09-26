@@ -24,6 +24,7 @@ import {
   buildBoostQueue,
   boostMemory,
 } from "./orchestrator.spawning.shared";
+import { getPickedRemoteRoomNames } from "./orchestrator.spawning.remote";
 
 // Damage eats body parts left to right. TOUGH soaks first, then the damage
 // parts (ATTACK / RANGED_ATTACK / WORK), then MOVE, then HEAL. Losing MOVE
@@ -430,11 +431,24 @@ export function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): bool
   return res === OK;
 }
 
+// Op defenders for targetRoom. When the op defends the home itself, the
+// ad-hoc home defenders already standing there (spawnKnight and friends, which
+// carry no target) count too, or the op would spawn its full count beside them.
 function countDefendersByRole(targetRoom: string, role: string, homeRoom: Room): number {
   const live = getDefenders(targetRoom).filter(
     (c) => !c.spawning && c.memory.role === role
   ).length;
-  return live + getRoomSpawningCount(homeRoom, role);
+  const adHoc =
+    targetRoom === homeRoom.name
+      ? getCreepsByRoleInRoom(role, homeRoom).filter(
+          (c) =>
+            !c.spawning &&
+            !c.memory.defensiveTarget &&
+            !c.memory.offensiveTarget &&
+            !c.memory.targetRoom
+        ).length
+      : 0;
+  return live + adHoc + getRoomSpawningCount(homeRoom, role);
 }
 
 function needsChildRoomDefender(room: Room): boolean {
@@ -561,8 +575,11 @@ function remoteKnightsNeeded(room: Room, remote: RemoteRoomData): number {
 function findRemoteInvaderTarget(room: Room): string | null {
   const remotes = room.memory.remoteRooms;
   if (!remotes) return null;
+  // Only remotes this home works are worth a knight; the rest earn nothing.
+  const worked = getPickedRemoteRoomNames(room);
   for (const r of remotes) {
     if (r.invaderUntil === undefined || r.invaderUntil <= Game.time) continue;
+    if (!worked.has(r.roomName)) continue;
     const defending = getCreepsByRole(ROLE_KNIGHT).filter(
       (c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName
     ).length;

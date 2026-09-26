@@ -1,5 +1,4 @@
 import { pickSignature } from "../config/signatures";
-import { PLANNER_KEYS } from "../config/config.structures";
 import { invaderStrength } from "./services.combat";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 

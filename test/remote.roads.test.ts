@@ -20,6 +20,7 @@ g.RoomPosition = class {
 const activeRemotes = vi.fn((_room: Room): RemoteRoomData[] => []);
 vi.mock("../src/orchestrators/orchestrator.spawning", () => ({
   getActiveRemoteRooms: (room: Room) => activeRemotes(room),
+  getPickedRemoteRoomNames: (room: Room) => new Set(activeRemotes(room).map((r) => r.roomName)),
 }));
 
 import { getRemoteSourcePathLength, UNREACHABLE_REMOTE_PATH } from "../src/services/services.remote";

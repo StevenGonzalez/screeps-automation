@@ -571,6 +571,42 @@ describe("tower-gated home defense", () => {
   });
 });
 
+describe("home defense op", () => {
+  it("counts the ad-hoc knight already at home toward the op", () => {
+    const { room, spawn } = makeRoom(
+      [
+        makeCreep(ROLE_FILLER, { carry: 10 }),
+        makeCreep(ROLE_MINER, { work: 5, carry: 1 }),
+        makeCreep(ROLE_MINER, { work: 5, carry: 1 }),
+        makeCreep(ROLE_HAULER, { carry: 16 }),
+        makeCreep(ROLE_HAULER, { carry: 16 }),
+        makeCreep(ROLE_KNIGHT, {}),
+      ],
+      {
+        rcl: 4,
+        capacity: 1300,
+        energy: 1300,
+        storageEnergy: 100_000,
+        containerIds: ["cont1", "cont2"],
+        minerContainerIds: ["cont1", "cont2"],
+      }
+    );
+    (Memory as { defenseOps?: Record<string, DefenseOp> }).defenseOps = {
+      [room.name]: {
+        room: room.name,
+        startedAt: clock,
+        lastThreatTick: clock,
+        threatScore: 50,
+        requiredMelee: 1,
+        requiredRanged: 0,
+        requiredHealers: 0,
+      },
+    };
+    processRoomSpawning(room, spawn);
+    expect(roles()).not.toContain(ROLE_KNIGHT);
+  });
+});
+
 describe("remote invader defense", () => {
   const remote: RemoteRoomData = {
     roomName: REMOTE,
@@ -578,7 +614,7 @@ describe("remote invader defense", () => {
     lastSeen: 0,
     hostile: false,
   };
-  function run(strength: RemoteRoomData["invaderStrength"]) {
+  function run(strength: RemoteRoomData["invaderStrength"], worked = remote) {
     const knight = makeCreep(ROLE_KNIGHT, {}, { memory: { targetRoom: REMOTE } });
     const { room, spawn } = makeRoom(
       [
@@ -600,7 +636,7 @@ describe("remote invader defense", () => {
         storageEnergy: 100_000,
         containerIds: ["cont1", "cont2"],
         minerContainerIds: ["cont1", "cont2"],
-        remoteRooms: [{ ...remote, invaderUntil: clock + 500, invaderStrength: strength }],
+        remoteRooms: [{ ...worked, invaderUntil: clock + 500, invaderStrength: strength }],
       }
     );
     processRoomSpawning(room, spawn);
@@ -616,6 +652,18 @@ describe("remote invader defense", () => {
 
   it("keeps to one knight against a lone invader", () => {
     run({ heal: 0, damage: 60, hits: 1500 });
+    expect(roles()).not.toContain(ROLE_KNIGHT);
+  });
+
+  it("sends no knight to a remote the home does not work", () => {
+    // An unreachable source earns nothing, so the remote is never picked.
+    const unworked = {
+      ...remote,
+      sources: [
+        { sourceId: "rsrc1", pathLength: 999, pathKey: "k", pathTick: clock } as unknown as RemoteSourceData,
+      ],
+    };
+    run({ heal: 300, damage: 100, hits: 3000 }, unworked);
     expect(roles()).not.toContain(ROLE_KNIGHT);
   });
 });

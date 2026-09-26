@@ -32,21 +32,35 @@ import {
 function isRemoteCreepRetiring(home: Room, creep: Creep): boolean {
   const target = creep.memory.targetRoom;
   if (!target) return false;
-  const lead = spawnLeadTicks(creep.body.length, estimateRemoteDistance(home, target));
+  const lead = spawnLeadTicks(creep.body.length, remoteTravelTicks(home, target, creep.memory.remoteSourceId));
   return isRetiring(creep, lead);
+}
+
+// Walk time out to a remote post: the measured path to the creep's own source,
+// or for a hauler the farthest source in its room. The rough room-distance
+// estimate only stands in until a path has been measured.
+function remoteTravelTicks(home: Room, roomName: string, sourceId?: string): number {
+  const remote = home.memory.remoteRooms?.find((r) => r.roomName === roomName);
+  if (!remote) return estimateRemoteDistance(home, roomName);
+  const sources = sourceId ? remote.sources.filter((s) => s.sourceId === sourceId) : remote.sources;
+  if (sources.length === 0) return estimateRemoteDistance(home, roomName);
+  return Math.max(...sources.map((s) => getRemoteSourceDistance(home, remote, s)));
 }
 
 // Remotes we could send creeps to. A room we have since claimed, one someone
 // else owns or reserves, and one with invaders currently in it are all left out.
 // An Invader reservation stops harvesting too, but a reserver can take it back,
-// so the "reserve" view keeps those rooms. Remote defenders read the raw list.
+// so the "reserve" view keeps those rooms. Picking which remotes to work looks
+// past invaders (`ignoreInvaders`): they leave or get killed, and dropping the
+// room for the visit would hand its spawn time to another remote meanwhile.
 function isRemoteEligible(
   room: Room,
   r: RemoteRoomData,
-  purpose: "harvest" | "reserve"
+  purpose: "harvest" | "reserve",
+  ignoreInvaders = false
 ): boolean {
   if (r.hostile || r.sources.length === 0) return false;
-  if (r.invaderUntil !== undefined && r.invaderUntil > Game.time) return false;
+  if (!ignoreInvaders && r.invaderUntil !== undefined && r.invaderUntil > Game.time) return false;
   const ctrl = Game.rooms[r.roomName]?.controller;
   const intel = Memory.intel?.[r.roomName];
   const owner = ctrl ? ctrl.owner?.username : intel?.owner;
@@ -75,6 +89,17 @@ export function getActiveRemoteRooms(
   return out.sort((a, b) => rank(a) - rank(b));
 }
 
+// Remote rooms this home has picked sources in, invaded or not. Remote
+// defenders guard these, and remote construction sites are kept only in these.
+export function getPickedRemoteRoomNames(room: Room): Set<string> {
+  const picked = pickRemoteSources(room);
+  const out = new Set<string>();
+  for (const r of room.memory.remoteRooms ?? []) {
+    if (r.sources.some((s) => picked.has(s.sourceId))) out.add(r.roomName);
+  }
+  return out;
+}
+
 // A hard ceiling on remote sources per home, whatever the budget says. Remotes
 // are adjacent rooms only, so this is at most four rooms' worth anyway.
 const MAX_REMOTE_SOURCES = 6;
@@ -82,6 +107,9 @@ const MAX_REMOTE_SOURCES = 6;
 // Share of the home's spawn time remotes may plan on. The rest is headroom for
 // defenders and for replacements that happen to come due together.
 const REMOTE_SPAWN_SHARE = 0.8;
+
+// Share of the remote budget a new source must leave spare to be taken on.
+const REMOTE_PICK_HEADROOM = 0.1;
 
 // Below this bucket, keep working the remotes already mined but add none.
 const REMOTE_CPU_BUCKET_FLOOR = 5000;
@@ -196,7 +224,7 @@ function pickRemoteSources(room: Room): Map<string, number> {
   );
   const plans: Array<{ sourceId: string; profit: number; spawnTime: number }> = [];
   for (const r of room.memory.remoteRooms ?? []) {
-    if (!isRemoteEligible(room, r, "reserve")) continue;
+    if (!isRemoteEligible(room, r, "reserve", true)) continue;
     for (const s of r.sources) {
       if (lowCpu && !mined.has(s.sourceId)) continue;
       const plan = planRemoteSource(room, r, s);
@@ -205,11 +233,16 @@ function pickRemoteSources(room: Room): Map<string, number> {
   }
   plans.sort((a, b) => b.profit - a.profit);
 
-  let budget = remoteSpawnBudget(room);
+  // The budget counts live creeps, so it breathes as home creeps die and are
+  // replaced. A source not yet mined has to fit with REMOTE_PICK_HEADROOM to
+  // spare, so that breathing does not keep adding and dropping the marginal one.
+  const total = remoteSpawnBudget(room);
+  let budget = total;
   const picked = new Map<string, number>();
   for (const p of plans) {
     if (picked.size >= MAX_REMOTE_SOURCES) break;
-    if (p.spawnTime > budget) continue;
+    const reserve = mined.has(p.sourceId as Id<Source>) ? 0 : total * REMOTE_PICK_HEADROOM;
+    if (p.spawnTime > budget - reserve) continue;
     budget -= p.spawnTime;
     picked.set(p.sourceId, picked.size);
   }

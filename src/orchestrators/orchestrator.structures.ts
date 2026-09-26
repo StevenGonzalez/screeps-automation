@@ -18,7 +18,7 @@ import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room
 import { planDefensivePerimeter } from "../planning/planner.rampart";
 import { isSourceSafe } from "../services/services.creep";
 import { remoteRoadsEnabled } from "../services/services.remote";
-import { getActiveRemoteRooms } from "./orchestrator.spawning";
+import { getActiveRemoteRooms, getPickedRemoteRoomNames } from "./orchestrator.spawning";
 
 const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_SPAWN]: 0,
@@ -355,30 +355,37 @@ function ensureRampartsForExistingStructures(room: Room) {
   }
 }
 
-// Outside owned rooms we place source containers, and roads in the remotes a
-// home is actively working once it lays remote roads (its haulers build and
-// repair those). Anything else out there - including road sites in a remote
-// that has since dropped out of the active set - is an orphan: nothing builds
-// it and it holds a slot against the global site cap forever.
+// Outside owned rooms we place source containers in the remotes a home works,
+// and roads there once it lays remote roads (its haulers build and repair
+// those). Anything else out there - including sites in a remote that has since
+// dropped out of the worked set - is an orphan: nothing builds it and it holds
+// a slot against the global site cap forever.
 export function cleanupSitesOutsideOwnedRooms() {
-  const roadRooms = remoteRoadRooms();
+  const { containerRooms, roadRooms } = workedRemoteRooms();
   for (const id in Game.constructionSites) {
     const site = Game.constructionSites[id];
     if (Game.rooms[site.pos.roomName]?.controller?.my) continue;
-    if (site.structureType === STRUCTURE_CONTAINER) continue;
+    if (site.structureType === STRUCTURE_CONTAINER && containerRooms.has(site.pos.roomName)) continue;
     if (site.structureType === STRUCTURE_ROAD && roadRooms.has(site.pos.roomName)) continue;
     site.remove();
   }
 }
 
-function remoteRoadRooms(): Set<string> {
-  const out = new Set<string>();
+// Remotes some home works (invaded or not, see getPickedRemoteRoomNames), and
+// the subset of those whose home lays roads.
+function workedRemoteRooms(): { containerRooms: Set<string>; roadRooms: Set<string> } {
+  const containerRooms = new Set<string>();
+  const roadRooms = new Set<string>();
   for (const rn in Game.rooms) {
     const room = Game.rooms[rn];
-    if (!room.controller?.my || !remoteRoadsEnabled(room)) continue;
-    for (const r of getActiveRemoteRooms(room)) out.add(r.roomName);
+    if (!room.controller?.my) continue;
+    const roads = remoteRoadsEnabled(room);
+    for (const name of getPickedRemoteRoomNames(room)) {
+      containerRooms.add(name);
+      if (roads) roadRooms.add(name);
+    }
   }
-  return out;
+  return { containerRooms, roadRooms };
 }
 
 export function loop() {

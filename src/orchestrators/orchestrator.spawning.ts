@@ -74,6 +74,7 @@ import {
 
 export {
   getActiveRemoteRooms,
+  getPickedRemoteRoomNames,
   planRemoteSource,
   buildRemoteHaulerBody,
   buildReserverBody,

@@ -1,6 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
+
+let workedRemotes = new Set<string>();
+vi.mock("../src/orchestrators/orchestrator.spawning", () => ({
+  getActiveRemoteRooms: () => [],
+  getPickedRemoteRoomNames: () => workedRemotes,
+}));
 
 import {
   canBuildInRemote,
@@ -204,13 +210,24 @@ describe("cleanupSitesOutsideOwnedRooms", () => {
     expect(blind.removed).toBe(true);
   });
 
-  it("keeps remote source containers", () => {
+  it("keeps remote source containers in worked remotes", () => {
+    workedRemotes = new Set(["W1N2"]);
     const container = site("c", "W1N2", "container");
     (g.Game as any).constructionSites = { c: container };
 
     cleanupSitesOutsideOwnedRooms();
 
     expect(container.removed).toBe(false);
+  });
+
+  it("removes container sites in remotes no home works any more", () => {
+    workedRemotes = new Set();
+    const container = site("c", "W1N2", "container");
+    (g.Game as any).constructionSites = { c: container };
+
+    cleanupSitesOutsideOwnedRooms();
+
+    expect(container.removed).toBe(true);
   });
 
   it("never touches anything inside an owned room", () => {

@@ -178,7 +178,9 @@ const FULL_BODY_ENERGY_RATIO = 0.9;
 const FULL_BODY_MAX_WAIT = 40;
 
 // The wait only runs while the role is actually short. Timing it on ticks when
-// nothing was needed would use up the wait before the real need arrived.
+// nothing was needed would use up the wait before the real need arrived. Giving
+// up clears the timer, so the next creep of a role still short several gets its
+// own wait instead of spawning as a runt straight away.
 export function waitForFullBody(room: Room, role: string, needed: boolean): boolean {
   const memory = getRoomMemory(room);
   if (!needed || room.energyAvailable >= room.energyCapacityAvailable * FULL_BODY_ENERGY_RATIO) {
@@ -191,7 +193,9 @@ export function waitForFullBody(room: Room, role: string, needed: boolean): bool
     memory.bodyWait[role] = Game.time;
     return true;
   }
-  return Game.time - since < FULL_BODY_MAX_WAIT;
+  if (Game.time - since < FULL_BODY_MAX_WAIT) return true;
+  delete memory.bodyWait[role];
+  return false;
 }
 
 type RoomPhase = "bootstrap" | "developing" | "established" | "powerhouse";

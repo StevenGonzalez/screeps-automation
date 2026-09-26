@@ -13,6 +13,7 @@ import { barrierTargetFn, isEnergyEmergency } from "../services/services.creep";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
+import { UPGRADER_STORAGE_FLOOR } from "../roles/role.upgrader";
 import {
   buildScaledBody,
   calculateBodyPartCost,
@@ -153,6 +154,8 @@ const NO_STORAGE_ENERGY_PER_UPGRADER = 1000;
 
 const NO_STORAGE_MAX_UPGRADERS = 5;
 
+const STORAGE_ENERGY_PER_UPGRADER = 20_000;
+
 function getContainerEnergy(room: Room): number {
   let total = 0;
   for (const id of room.memory.containerIds ?? []) {
@@ -162,7 +165,7 @@ function getContainerEnergy(room: Room): number {
   return total;
 }
 
-function getUpgraderPopulationTarget(room: Room): number {
+export function getUpgraderPopulationTarget(room: Room): number {
   const controller = room.controller;
   if (controller?.my && controller.ticksToDowngrade < CONTROLLER_DOWNGRADE_SAFETY) return 1;
 
@@ -182,8 +185,12 @@ function getUpgraderPopulationTarget(room: Room): number {
     return Math.min(NO_STORAGE_MAX_UPGRADERS, base + extra);
   }
 
+  // Upgraders stop drawing at UPGRADER_STORAGE_FLOOR, so count only what sits
+  // above it. Stepping from zero in 50k units kept a fresh RCL 4-5 storage on a
+  // single upgrader while it filled.
   const cap = phase === "powerhouse" ? 4 : 3;
-  return Math.min(cap, 1 + Math.floor(storage.store[RESOURCE_ENERGY] / 50000));
+  const spare = Math.max(0, storage.store[RESOURCE_ENERGY] - UPGRADER_STORAGE_FLOOR);
+  return Math.min(cap, 1 + Math.floor(spare / STORAGE_ENERGY_PER_UPGRADER));
 }
 
 let constructionSiteCacheTick = -1;
@@ -574,6 +581,21 @@ function buildRcl8UpgraderBody(availableEnergy: number): BodyPartConstant[] {
   return body;
 }
 
+// Whole [WORK, WORK, CARRY, MOVE] patterns, then what is left goes to WORK
+// with a MOVE per pair and a lone WORK last. Whole patterns alone left up to
+// 250 energy of an RCL 2-3 room's capacity unspent on every upgrader.
+export function buildUpgraderBody(availableEnergy: number): BodyPartConstant[] {
+  const body = buildScaledBody(ROLE_UPGRADER, availableEnergy);
+  let left = availableEnergy - calculateBodyPartCost(body);
+  const pair = BODYPART_COST[WORK] + BODYPART_COST[MOVE];
+  while (left >= pair && body.length + 2 <= MAX_BODY_PART_COUNT) {
+    body.push(WORK, MOVE);
+    left -= pair;
+  }
+  if (left >= BODYPART_COST[WORK] && body.length < MAX_BODY_PART_COUNT) body.push(WORK);
+  return body;
+}
+
 export function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   const newName = `${ROLE_UPGRADER}${Game.time}`;
   const rcl = room.controller?.level ?? 0;
@@ -582,7 +604,7 @@ export function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   const body =
     rcl >= 8
       ? buildRcl8UpgraderBody(allowedEnergy)
-      : buildScaledBody(ROLE_UPGRADER, allowedEnergy);
+      : buildUpgraderBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   let queue: string[] = [];
