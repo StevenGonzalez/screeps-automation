@@ -11,14 +11,14 @@ const LAB_STALL_TIMEOUT = 200;
 
 const LAB_PLAN_INTERVAL = 100;
 
-const AUTO_PRODUCTION_TARGETS: Record<string, number> = {
+export const AUTO_PRODUCTION_TARGETS: Record<string, number> = {
   XUH2O: 3000,
   XKHO2: 3000,
   XLHO2: 3000,
   XZH2O: 2000,
-  XUHO2: 3000,
   XZHO2: 2000,
   XGH2O: 3000,
+  XGHO2: 2000,
   OH:    10000,
   G:     5000,
 };

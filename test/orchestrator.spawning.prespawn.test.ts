@@ -201,9 +201,9 @@ describe("body budget", () => {
     const costs = g.BODYPART_COST as Record<string, number>;
     const cost = spawnCalls[0].body.reduce((sum, part) => sum + costs[part], 0);
 
-    // [WORK, WORK, CARRY, MOVE] costs 300, so 2300 buys seven repeats. The 10%
-    // reserve this replaces capped the budget at 2070 and bought only six.
-    expect(spawnCalls[0].body).toHaveLength(28);
+    // The repairer's [WORK, CARRY, MOVE] costs 200, so 2300 buys eleven repeats.
+    // The 10% reserve this replaces capped the budget at 2070 and bought ten.
+    expect(spawnCalls[0].body).toHaveLength(33);
     expect(cost).toBeGreaterThan(Math.floor(CAPACITY * 0.9));
   });
 });

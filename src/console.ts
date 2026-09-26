@@ -1,4 +1,5 @@
 import { resolveChain, getStockForCompound } from "./services/services.labs";
+import { AUTO_PRODUCTION_TARGETS } from "./orchestrators/orchestrator.labs";
 import {
   cancelOp,
   launchOp,
@@ -206,11 +207,7 @@ export function setupConsole() {
         if (ls.queue.length > 0) {
           console.log(`  Queue: ${ls.queue.map((e) => `${e.compound}x${e.amount}`).join(", ")}`);
         }
-        const targets: Record<string, number> = {
-          XUH2O: 3000, XUHO2: 3000, XKHO2: 3000,
-          XZHO2: 2000, XGH2O: 3000, OH: 10000, G: 5000,
-        };
-        const stockLines = Object.entries(targets)
+        const stockLines = Object.entries(AUTO_PRODUCTION_TARGETS)
           .map(([c, t]) => `${c}=${getStockForCompound(c, room)}/${t}`)
           .join("  ");
         console.log(`  Stock: ${stockLines}`);
@@ -220,7 +217,7 @@ export function setupConsole() {
 
     produce: (compound: string, amount: number, roomName?: string) => {
       if (!compound || !amount) {
-        console.log("[Labs] Usage: Game.arca.produce('XUHO2', 3000)  or  Game.arca.produce('XUHO2', 3000, 'W1N1')");
+        console.log("[Labs] Usage: Game.arca.produce('XGH2O', 3000)  or  Game.arca.produce('XGH2O', 3000, 'W1N1')");
         return;
       }
       const candidates = Object.values(Game.rooms).filter(

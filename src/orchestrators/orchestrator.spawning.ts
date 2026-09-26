@@ -33,7 +33,7 @@ import { getThreatInfo, getThreatSeverity, refreshBlockade, isBlockaded } from "
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
 import { getSkMembers, isOpPaused } from "./orchestrator.sourcekeeper";
 import { getStockForCompound } from "../services/services.labs";
-import { getRampartTargetHP, isEnergyEmergency } from "../services/services.creep";
+import { barrierTargetFn, isEnergyEmergency } from "../services/services.creep";
 
 import {
   BODY_PATTERNS,
@@ -263,9 +263,11 @@ function getMinerTravelTicks(room: Room): number {
 const FULL_BODY_ENERGY_RATIO = 0.9;
 const FULL_BODY_MAX_WAIT = 40;
 
-function waitForFullBody(room: Room, role: string): boolean {
+// The wait only runs while the role is actually short. Timing it on ticks when
+// nothing was needed would use up the wait before the real need arrived.
+function waitForFullBody(room: Room, role: string, needed: boolean): boolean {
   const memory = getRoomMemory(room);
-  if (room.energyAvailable >= room.energyCapacityAvailable * FULL_BODY_ENERGY_RATIO) {
+  if (!needed || room.energyAvailable >= room.energyCapacityAvailable * FULL_BODY_ENERGY_RATIO) {
     if (memory.bodyWait) delete memory.bodyWait[role];
     return false;
   }
@@ -303,6 +305,33 @@ function hasEnergyGatherers(room: Room): boolean {
   return harvesters.length + miners.length > 0;
 }
 
+function countHomeHaulers(room: Room): number {
+  const live = getCreepsByRole(ROLE_HAULER).filter(
+    (c) => !c.spawning && (c.memory.homeRoom ?? c.room.name) === room.name
+  ).length;
+  return live + getRoomSpawningCount(room, ROLE_HAULER);
+}
+
+// Something has to carry energy into spawn and extensions for a held spawn to
+// ever see the energy it is holding for.
+function hasCoreRefiller(room: Room): boolean {
+  return (
+    countHomeHaulers(room) > 0 ||
+    countByRoleInRoom(ROLE_FILLER, room) > 0 ||
+    countByRoleInRoom(ROLE_HARVESTER, room) > 0
+  );
+}
+
+// WORK counts: nobody can harvest in a room we own, so a WORK creep here is a
+// dismantler or a builder of something hostile.
+function hasArmedHostiles(room: Room): boolean {
+  return getThreatInfo(room).hostiles.some((c) =>
+    c.body.some(
+      (p) => p.hits > 0 && (p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK)
+    )
+  );
+}
+
 const ECONOMY_CRITICAL_STORAGE = 25_000;
 function isEconomyCritical(room: Room): boolean {
   if (!room.storage) return isEnergyEmergency(room);
@@ -321,11 +350,6 @@ function getHarvesterPopulationTarget(room: Room): number {
   return Math.max(0, 2 - minerCount);
 }
 
-const RCL8_SURPLUS_HIGH_WATER = 400_000;
-const RCL8_ENERGY_PER_SURPLUS_UPGRADER = 100_000;
-const RCL8_MAX_UPGRADERS = 4;
-const RCL8_SURPLUS_MIN_BUCKET = 9000;
-
 const CONTROLLER_DOWNGRADE_SAFETY = 5000;
 
 function getUpgraderPopulationTarget(room: Room): number {
@@ -337,16 +361,9 @@ function getUpgraderPopulationTarget(room: Room): number {
   const phase = getRoomPhase(room);
   const rcl = room.controller?.level ?? 0;
 
-  if (rcl >= 8) {
-    const storedEnergy = room.storage?.store[RESOURCE_ENERGY] ?? 0;
-    const bucket = typeof Game.cpu.bucket === "number" ? Game.cpu.bucket : 0;
-    if (storedEnergy <= RCL8_SURPLUS_HIGH_WATER || bucket < RCL8_SURPLUS_MIN_BUCKET) return 1;
-    const surplus = storedEnergy - RCL8_SURPLUS_HIGH_WATER;
-    return Math.min(
-      RCL8_MAX_UPGRADERS,
-      1 + Math.floor(surplus / RCL8_ENERGY_PER_SURPLUS_UPGRADER)
-    );
-  }
+  // An RCL 8 controller takes at most CONTROLLER_MAX_UPGRADE_PER_TICK (15)
+  // energy a tick, which one 15-WORK upgrader already spends.
+  if (rcl >= 8) return 1;
 
   const storage = room.storage;
   if (!storage) return phase === "bootstrap" ? 1 : 2;
@@ -418,6 +435,11 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // the filler sat behind that hold it could never be replaced, and the energy
   // the hold is waiting for would never arrive.
   if (shouldSpawnFiller(room) && spawnFiller(room, spawn)) return;
+  // A miner with no hauler behind it fills its container and nothing reaches
+  // the core, so the first hauler goes ahead of any further miner.
+  const needsFirstHauler =
+    countHomeHaulers(room) === 0 && countByRoleInRoom(ROLE_MINER, room) >= 1;
+  if (needsFirstHauler && shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
   if (shouldSpawnMiner(room) && spawnMiner(room, spawn)) return;
   if (shouldSpawnHauler(room) && spawnHauler(room, spawn)) return;
 
@@ -439,7 +461,9 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
     return;
   }
 
-  if (threatScore > 0 && phase !== "bootstrap") {
+  // Towers only arrive at RCL 3, so a bootstrap room has nothing else to fight
+  // with. Only hostiles that can actually hit something justify a defender.
+  if (hasArmedHostiles(room)) {
     if (shouldSpawnKnight(room, threatScore) && spawnKnight(room, spawn)) return;
     if (shouldSpawnWizard(room, threatScore) && spawnWizard(room, spawn)) return;
     if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
@@ -490,7 +514,10 @@ function getContainerDistances(
   spawn: StructureSpawn,
   containers: StructureContainer[]
 ): Record<string, number> {
-  const cache = containerDistanceCache[room.name];
+  // Keyed on the container set as well as the room: callers pass different
+  // sets, and a container built or lost has to be measured straight away.
+  const key = `${room.name}:${containers.map((c) => c.id).sort().join(",")}`;
+  const cache = containerDistanceCache[key];
   if (cache && Game.time - cache.cachedAt < HAULER_SPAWN.DISTANCE_CACHE_TTL) {
     return cache.distances;
   }
@@ -503,7 +530,13 @@ function getContainerDistances(
     });
     distances[c.id] = result.incomplete ? 999 : result.path.length;
   }
-  containerDistanceCache[room.name] = { distances, cachedAt: Game.time };
+  // Container sets change over a room's life; drop stale keys so the cache stays bounded.
+  for (const k in containerDistanceCache) {
+    if (Game.time - containerDistanceCache[k].cachedAt >= HAULER_SPAWN.DISTANCE_CACHE_TTL) {
+      delete containerDistanceCache[k];
+    }
+  }
+  containerDistanceCache[key] = { distances, cachedAt: Game.time };
   return distances;
 }
 
@@ -597,12 +630,8 @@ function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
     }) === OK;
   }
 
-  const moveParts = body.filter((p) => p === MOVE).length;
-  const queue =
-    (room.controller?.level ?? 0) >= 7 ? buildBoostQueue(room, "hauler", moveParts, 0) : [];
-
   return trackedSpawn(room, spawn, body, newName, {
-    memory: { role: ROLE_HAULER, homeRoom: room.name, ...boostMemory(queue) },
+    memory: { role: ROLE_HAULER, homeRoom: room.name },
   }) === OK;
 }
 
@@ -632,13 +661,15 @@ function shouldSpawnHarvester(room: Room): boolean {
 }
 
 function shouldSpawnUpgrader(room: Room): boolean {
-  if (waitForFullBody(room, ROLE_UPGRADER)) return false;
-  return countByRoleInRoom(ROLE_UPGRADER, room) < getUpgraderPopulationTarget(room);
+  const needed = countByRoleInRoom(ROLE_UPGRADER, room) < getUpgraderPopulationTarget(room);
+  if (waitForFullBody(room, ROLE_UPGRADER, needed)) return false;
+  return needed;
 }
 
 function shouldSpawnBuilder(room: Room): boolean {
-  if (waitForFullBody(room, ROLE_BUILDER)) return false;
-  return countByRoleInRoom(ROLE_BUILDER, room) < getBuilderPopulationTarget(room);
+  const needed = countByRoleInRoom(ROLE_BUILDER, room) < getBuilderPopulationTarget(room);
+  if (waitForFullBody(room, ROLE_BUILDER, needed)) return false;
+  return needed;
 }
 
 const repairerTargetCache: Record<string, { value: number; tick: number }> = {};
@@ -648,13 +679,15 @@ function getRepairerPopulationTarget(room: Room): number {
   const cached = repairerTargetCache[room.name];
   if (cached && Game.time - cached.tick < 50) return cached.value;
 
-  const critical = room.find(FIND_STRUCTURES, {
+  // 0.8 matches where the repair target picker starts caring about a structure.
+  const worn = room.find(FIND_STRUCTURES, {
     filter: (s) => {
       if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) return false;
       const st = s as AnyStructure;
-      return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.5;
+      return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.8;
     },
-  });
+  }) as AnyStructure[];
+  const critical = worn.filter((s) => s.hits < s.hitsMax * 0.5);
   let value = Math.min(2, Math.ceil(critical.length / 5));
 
   const rcl = room.controller?.level ?? 0;
@@ -662,12 +695,12 @@ function getRepairerPopulationTarget(room: Room): number {
     const hasEnergyBuffer =
       !room.storage || room.storage.store[RESOURCE_ENERGY] > 20_000;
     if (hasEnergyBuffer) {
-      if (rcl >= 3) value = Math.max(value, 1);
-      const wallTarget = getRampartTargetHP(rcl);
+      if (rcl >= 3 && worn.length > 0) value = Math.max(value, 1);
+      const barrierTarget = barrierTargetFn(room);
       const wallsNeedRepair = room.find(FIND_STRUCTURES, {
         filter: (s): s is AnyStructure =>
           (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
-          (s as AnyStructure).hits < wallTarget,
+          (s as AnyStructure).hits < barrierTarget(s as AnyStructure),
       }).length > 0;
       if (wallsNeedRepair) value = Math.min(2, value + 1);
     }
@@ -684,19 +717,22 @@ function getRepairerPopulationTarget(room: Room): number {
 
 function shouldSpawnRepairer(room: Room): boolean {
   const target = getRepairerPopulationTarget(room);
-  if (target === 0) return false;
-  if (waitForFullBody(room, ROLE_REPAIRER)) return false;
-  return countByRoleInRoom(ROLE_REPAIRER, room) < target;
+  const needed = target > 0 && countByRoleInRoom(ROLE_REPAIRER, room) < target;
+  if (waitForFullBody(room, ROLE_REPAIRER, needed)) return false;
+  return needed;
 }
 
 function getFillerPopulationTarget(room: Room): number {
   if (!room.storage) return 0;
-  if (isEnergyEmergency(room)) return 0;
   return (room.controller?.level ?? 0) >= 7 ? 2 : 1;
 }
 
+// Fillers work beside the spawn, so the lead is just the time to build one.
 function shouldSpawnFiller(room: Room): boolean {
-  return countByRoleInRoom(ROLE_FILLER, room) < getFillerPopulationTarget(room);
+  const fillers = getCreepsByRoleInRoom(ROLE_FILLER, room).filter(
+    (c) => !c.spawning && !isRetiring(c, spawnLeadTicks(c.body.length, 0))
+  ).length;
+  return fillers + getRoomSpawningCount(room, ROLE_FILLER) < getFillerPopulationTarget(room);
 }
 
 function spawnFiller(room: Room, spawn: StructureSpawn): boolean {
@@ -802,10 +838,8 @@ function spawnHarvester(room: Room, spawn: StructureSpawn): boolean {
 function buildRcl8UpgraderBody(availableEnergy: number): BodyPartConstant[] {
   const group: BodyPartConstant[] = [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE];
   const groupCost = calculateBodyPartCost(group);
-  const maxGroups = Math.min(
-    Math.floor(MAX_BODY_PART_COUNT / group.length),
-    Math.floor(availableEnergy / groupCost)
-  );
+  // Three groups is 15 WORK: anything past that is capped away by the controller.
+  const maxGroups = Math.min(3, Math.floor(availableEnergy / groupCost));
   const groups = Math.max(1, maxGroups);
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < groups; i++) body.push(...group);
@@ -874,18 +908,65 @@ function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
     // to lower-priority roles (repairer/builder/upgrader) that would spend the
     // energy we're saving up on a runt. Block the spawn tick like spawnHauler
     // does, and give up on the wait on the same bounded terms.
-    if (existingMiners > 0 && holdSpawnFor(room, ROLE_MINER)) return true;
+    // With nothing refilling the core the hold can only run out the clock.
+    if (existingMiners > 0 && hasCoreRefiller(room) && holdSpawnFor(room, ROLE_MINER)) return true;
     const affordable = buildMinerBody(bodyBudget(room, "available"));
-    return trackedSpawn(room, spawn, affordable, newName, { memory: { role: ROLE_MINER } }) === OK;
+    return trackedSpawn(room, spawn, affordable, newName, {
+      memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
+    }) === OK;
   }
 
-  return trackedSpawn(room, spawn, body, newName, { memory: { role: ROLE_MINER } }) === OK;
+  return trackedSpawn(room, spawn, body, newName, {
+    memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
+  }) === OK;
 }
 
-function getActiveRemoteRooms(room: Room): RemoteRoomData[] {
-  return (room.memory.remoteRooms ?? []).filter(
-    (r) => !r.hostile && r.sources.length > 0
-  );
+// A replacement ordered ahead of time would otherwise look for an unclaimed
+// container, find the outgoing miner still holding its post, and go elsewhere
+// or idle. Hand it the post of a miner that is retiring or undersized and that
+// no other miner has already been sent to relieve.
+function inheritMinerPost(room: Room): Pick<CreepMemory, "assignedSourceId" | "assignedContainerId"> {
+  // Includes creeps still in the spawn, so a replacement already on order
+  // counts as the post's second holder.
+  const miners = getCreepsByRoleInRoom(ROLE_MINER, room);
+  const workTarget = getMinerWorkTarget(room);
+  const lead = getMinerReplacementLead(room);
+  const holders: Record<string, number> = {};
+  for (const c of miners) {
+    const id = c.memory.assignedContainerId;
+    if (id) holders[id] = (holders[id] ?? 0) + 1;
+  }
+  for (const c of miners) {
+    const { assignedSourceId, assignedContainerId } = c.memory;
+    if (c.spawning || !assignedSourceId || !assignedContainerId) continue;
+    if (holders[assignedContainerId] > 1) continue;
+    const undersized = c.body.filter((p) => p.type === WORK).length < workTarget;
+    if (!undersized && !isRetiring(c, lead)) continue;
+    return { assignedSourceId, assignedContainerId };
+  }
+  return {};
+}
+
+// Remotes worth sending creeps to. A room we have since claimed, one someone
+// else owns or reserves, and one with invaders currently in it are all left out.
+// An Invader reservation stops harvesting too, but a reserver can take it back,
+// so the "reserve" view keeps those rooms. Remote defenders read the raw list.
+function getActiveRemoteRooms(
+  room: Room,
+  purpose: "harvest" | "reserve" = "harvest"
+): RemoteRoomData[] {
+  const me = room.controller?.owner?.username;
+  return (room.memory.remoteRooms ?? []).filter((r) => {
+    if (r.hostile || r.sources.length === 0) return false;
+    if (r.invaderUntil !== undefined && r.invaderUntil > Game.time) return false;
+    const ctrl = Game.rooms[r.roomName]?.controller;
+    const intel = Memory.intel?.[r.roomName];
+    const owner = ctrl ? ctrl.owner?.username : intel?.owner;
+    if (ctrl?.my || owner) return false;
+    const reservedBy = ctrl ? ctrl.reservation?.username : intel?.reservedBy;
+    if (!reservedBy || reservedBy === me) return true;
+    return reservedBy === "Invader" && purpose === "reserve";
+  });
 }
 
 function getScoutsForRoom(room: Room): Creep[] {
@@ -963,9 +1044,13 @@ function spawnScoreHunter(room: Room, spawn: StructureSpawn): boolean {
 function findUnassignedRemoteSource(
   room: Room
 ): { roomName: string; sourceId: Id<Source> } | null {
+  // Any home's miner covers the source: two homes can share a neighbour.
   const covered = new Set(
     getCreepsByRole(ROLE_REMOTE_MINER)
-      .filter((c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c))
+      .filter((c) => {
+        const home = (c.memory.homeRoom && Game.rooms[c.memory.homeRoom]) || room;
+        return !isRemoteCreepRetiring(home, c);
+      })
       .map((c) => c.memory.remoteSourceId)
   );
   for (const remote of getActiveRemoteRooms(room)) {
@@ -980,8 +1065,9 @@ function findUnassignedRemoteSource(
 
 function shouldSpawnRemoteMiner(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 3) return false;
-  if (waitForFullBody(room, ROLE_REMOTE_MINER)) return false;
-  return findUnassignedRemoteSource(room) !== null;
+  const needed = findUnassignedRemoteSource(room) !== null;
+  if (waitForFullBody(room, ROLE_REMOTE_MINER, needed)) return false;
+  return needed;
 }
 
 function spawnRemoteMiner(room: Room, spawn: StructureSpawn): boolean {
@@ -1008,6 +1094,10 @@ function estimateRemoteDistance(homeRoom: Room, remoteRoomName: string): number 
   return rooms * 50 + 25;
 }
 
+// A sanity bound per remote rather than a throughput limit: two sources two
+// rooms out need about this many full-size haulers.
+const MAX_REMOTE_HAULERS_PER_ROOM = 6;
+
 function getRemoteHaulerTarget(room: Room): number {
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return 0;
@@ -1018,8 +1108,7 @@ function getRemoteHaulerTarget(room: Room): number {
   // has and over-hauled to match.
   const carryPerHauler = Math.max(
     1,
-    buildRemoteHaulerRoadBody(bodyBudget(room, "capacity")).filter((p) => p === CARRY)
-      .length
+    buildRemoteHaulerBody(bodyBudget(room, "capacity")).filter((p) => p === CARRY).length
   );
 
   let total = 0;
@@ -1028,23 +1117,27 @@ function getRemoteHaulerTarget(room: Room): number {
     const dist = estimateRemoteDistance(room, remote.roomName);
     const requiredCarry =
       (HAULER_SPAWN.SOURCE_OUTPUT * 2 * dist * sourceCount) / HAULER_SPAWN.CARRY_CAPACITY;
-    total += Math.max(1, Math.ceil(requiredCarry / carryPerHauler));
+    total += Math.min(
+      MAX_REMOTE_HAULERS_PER_ROOM,
+      Math.max(1, Math.ceil(requiredCarry / carryPerHauler))
+    );
   }
-  return Math.min(total, activeRooms.length * 3);
+  return total;
 }
+
 
 function shouldSpawnRemoteHauler(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 3) return false;
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return false;
 
-  if (waitForFullBody(room, ROLE_REMOTE_HAULER)) return false;
-
   const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter(
     (c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c)
   );
 
-  return haulers.length < getRemoteHaulerTarget(room);
+  const needed = haulers.length < getRemoteHaulerTarget(room);
+  if (waitForFullBody(room, ROLE_REMOTE_HAULER, needed)) return false;
+  return needed;
 }
 
 function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
@@ -1070,8 +1163,9 @@ function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
     }
   }
 
+  // Remotes have no roads, so a 2:1 CARRY:MOVE body crawls at half speed.
   const allowedEnergy = bodyBudget(room, "available");
-  const body = buildRemoteHaulerRoadBody(allowedEnergy);
+  const body = buildRemoteHaulerBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const res = trackedSpawn(room, spawn, body, `${ROLE_REMOTE_HAULER}${Game.time}`, {
@@ -1113,53 +1207,65 @@ function buildRemoteHaulerBody(availableEnergy: number): BodyPartConstant[] {
   return body;
 }
 
-function buildRemoteHaulerRoadBody(availableEnergy: number): BodyPartConstant[] {
-  const pattern: BodyPartConstant[] = [CARRY, CARRY, MOVE];
-  const patternCost = calculateBodyPartCost(pattern);
-  const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
-  const maxByEnergy = Math.floor(availableEnergy / patternCost);
-  const repeats = Math.max(2, Math.min(maxByParts, maxByEnergy));
-  const body: BodyPartConstant[] = [];
-  for (let i = 0; i < repeats; i++) body.push(...pattern);
-  return body;
-}
-
 function getReserversForRoom(homeRoom: Room): Creep[] {
   return getCreepsByRole(ROLE_RESERVER).filter(
     (c) => c.memory.homeRoom === homeRoom.name
   );
 }
 
+// Top up a reservation before it runs low rather than holding it at the cap:
+// a reservation only builds while a reserver stands on the controller.
+const RESERVATION_TOP_UP_TICKS = 1500;
+const MAX_RESERVER_CLAIM = 3;
+
+function needsReservation(room: Room, roomName: string): boolean {
+  const ctrl = Game.rooms[roomName]?.controller;
+  // No vision: we cannot see the reservation, so assume it needs one.
+  if (!ctrl) return true;
+  const res = ctrl.reservation;
+  if (!res || res.username !== room.controller?.owner?.username) return true;
+  return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
+}
+
+function findReserverTarget(room: Room): string | null {
+  if ((room.controller?.level ?? 0) < 3) return null;
+  // A reserver about to die no longer covers its room, so its replacement is
+  // ordered while it still works, the same way remote miners are.
+  const covered = new Set(
+    getReserversForRoom(room)
+      .filter((c) => !isRemoteCreepRetiring(room, c))
+      .map((c) => c.memory.targetRoom)
+  );
+  for (const r of getActiveRemoteRooms(room, "reserve")) {
+    if (!covered.has(r.roomName) && needsReservation(room, r.roomName)) return r.roomName;
+  }
+  return null;
+}
+
 function shouldSpawnReserver(room: Room): boolean {
-  if ((room.controller?.level ?? 0) < 3) return false;
-  const activeRooms = getActiveRemoteRooms(room);
-  if (activeRooms.length === 0) return false;
+  return findReserverTarget(room) !== null;
+}
 
-  const reservers = getReserversForRoom(room);
-  const assignedTargets = new Set(reservers.map((c) => c.memory.targetRoom));
-
-  return activeRooms.some((r) => !assignedTargets.has(r.roomName));
+// One CLAIM only holds a reservation steady; each extra CLAIM builds it by a
+// tick per tick. MOVE matches CLAIM because remotes have no roads.
+export function buildReserverBody(capacity: number): BodyPartConstant[] {
+  const pairCost = BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
+  const pairs = Math.max(1, Math.min(MAX_RESERVER_CLAIM, Math.floor(capacity / pairCost)));
+  return [...Array(pairs).fill(CLAIM), ...Array(pairs).fill(MOVE)] as BodyPartConstant[];
 }
 
 function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
-  const activeRooms = getActiveRemoteRooms(room);
-  const reservers = getReserversForRoom(room);
-  const assignedTargets = new Set(reservers.map((c) => c.memory.targetRoom));
-
-  const target = activeRooms.find((r) => !assignedTargets.has(r.roomName));
+  const target = findReserverTarget(room);
   if (!target) return false;
 
-  const bigBody: BodyPartConstant[] = [CLAIM, CLAIM, MOVE, MOVE, MOVE, MOVE];
-  const smallBody: BodyPartConstant[] = [CLAIM, MOVE, MOVE, MOVE, MOVE];
-  const body =
-    room.energyCapacityAvailable >= calculateBodyPartCost(bigBody) ? bigBody : smallBody;
+  const body = buildReserverBody(room.energyCapacityAvailable);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const res = trackedSpawn(room, spawn, body, `${ROLE_RESERVER}${Game.time}`, {
     memory: {
       role: ROLE_RESERVER,
       homeRoom: room.name,
-      targetRoom: target.roomName,
+      targetRoom: target,
     },
   });
   return res === OK;
@@ -1173,6 +1279,7 @@ const BOOST_CANDIDATES: Record<string, string[]> = {
   siege:   ['XZH2O', 'ZH2O', 'ZH'],
   tough:   ['XGHO2', 'GHO2', 'GO'],
   move:    ['XZHO2', 'ZHO2', 'ZO'],
+  upgrader: ['XGH2O', 'GH2O', 'GH'],
 };
 
 function pickBoostCompound(room: Room, roleKey: string, boostParts: number): string | undefined {
@@ -1219,17 +1326,19 @@ function boostMemory(queue: string[]): { boostCompound?: string; boostQueue?: st
 // (ATTACK / RANGED_ATTACK / WORK, then HEAL) is last so it keeps producing
 // until the creep is nearly dead. A body that lists its combat parts first
 // loses its output while still at full mobility, which is backwards.
+// One MOVE per other part so a knight keeps full speed off-road: remote
+// defence and offensive squads rarely have roads under them.
 export function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
-  const trioCost = BODYPART_COST[TOUGH] + BODYPART_COST[MOVE] + BODYPART_COST[ATTACK];
-  const maxTrios = Math.min(
-    Math.floor(MAX_BODY_PART_COUNT / 3),
-    Math.floor(availableEnergy / trioCost)
+  const groupCost = BODYPART_COST[TOUGH] + BODYPART_COST[ATTACK] + 2 * BODYPART_COST[MOVE];
+  const maxGroups = Math.min(
+    Math.floor(MAX_BODY_PART_COUNT / 4),
+    Math.floor(availableEnergy / groupCost)
   );
-  const trios = Math.max(1, maxTrios);
+  const groups = Math.max(1, maxGroups);
   return [
-    ...Array(trios).fill(TOUGH),
-    ...Array(trios).fill(MOVE),
-    ...Array(trios).fill(ATTACK),
+    ...Array(groups).fill(TOUGH),
+    ...Array(groups * 2).fill(MOVE),
+    ...Array(groups).fill(ATTACK),
   ] as BodyPartConstant[];
 }
 
@@ -1274,15 +1383,15 @@ export function buildDrainerBody(availableEnergy: number): BodyPartConstant[] {
 }
 
 export function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
-  const groupCost = BODYPART_COST[TOUGH] + 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE];
+  const groupCost = BODYPART_COST[TOUGH] + 2 * BODYPART_COST[WORK] + 3 * BODYPART_COST[MOVE];
   const maxGroups = Math.min(
-    Math.floor(MAX_BODY_PART_COUNT / 4),
+    Math.floor(MAX_BODY_PART_COUNT / 6),
     Math.floor(availableEnergy / groupCost)
   );
   const groups = Math.max(1, maxGroups);
   return [
     ...Array(groups).fill(TOUGH),
-    ...Array(groups).fill(MOVE),
+    ...Array(groups * 3).fill(MOVE),
     ...Array(groups * 2).fill(WORK),
   ] as BodyPartConstant[];
 }
@@ -1682,9 +1791,12 @@ function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
+// Cracking ops are included so a member lost mid-fight gets replaced. A home
+// that cannot build the full healer body cannot field a squad at all.
 function getPowerSquadForRoom(room: Room): PowerBankOp | undefined {
+  if (room.energyCapacityAvailable < calculateBodyPartCost(buildPowerHealerBody())) return undefined;
   return Memory.powerOps?.find(
-    (o) => o.homeRoom === room.name && o.phase === "forming"
+    (o) => o.homeRoom === room.name && (o.phase === "forming" || o.phase === "cracking")
   );
 }
 
@@ -1747,11 +1859,13 @@ function spawnNextPowerCreep(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-function buildPowerAttackerBody(): BodyPartConstant[] {
+// Unboosted TOUGH is only hit points the healers already cover, while ATTACK is
+// what cracks the bank; a 2:1 body also crawls there off-road. So: all ATTACK,
+// one MOVE each.
+export function buildPowerAttackerBody(): BodyPartConstant[] {
   return [
-    ...Array(20).fill(TOUGH),
-    ...Array(10).fill(MOVE),
-    ...Array(20).fill(ATTACK),
+    ...Array(25).fill(MOVE),
+    ...Array(25).fill(ATTACK),
   ] as BodyPartConstant[];
 }
 
