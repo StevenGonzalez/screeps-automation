@@ -4,6 +4,7 @@ const g = globalThis as Record<string, unknown>;
 
 g.ERR_NOT_IN_RANGE = -9;
 g.OK = 0;
+g.RESOURCE_POWER = "power";
 
 let relayLink: unknown = null;
 let coreTarget: unknown = null;
@@ -35,7 +36,8 @@ function makeLink(free: number) {
 function makeFiller(energy: number) {
   const calls: string[] = [];
   const creep = {
-    room: { name: "W1N1", storage },
+    room: { name: "W1N1", storage, memory: {} },
+    memory: {},
     pos: { isNearTo: () => true },
     store: { energy },
     withdraw: (t: { id: string }) => {
@@ -52,6 +54,7 @@ function makeFiller(energy: number) {
 }
 
 beforeEach(() => {
+  g.Game = { time: 1, getObjectById: () => null };
   relayLink = null;
   coreTarget = null;
 });
@@ -100,5 +103,19 @@ describe("filler storage-link relay", () => {
     runFiller(creep);
 
     expect(calls).toEqual(["transfer:ext1"]);
+  });
+
+  it("feeds the relay ahead of the power spawn's energy", () => {
+    relayLink = makeLink(800);
+    const ps = { id: "ps", store: { power: 100, energy: 0, getFreeCapacity: () => 5000 } };
+    g.Game = { time: 1, getObjectById: (id: string) => (id === "ps" ? ps : null) };
+    const { creep, calls } = makeFiller(400);
+    const room = (creep as unknown as { room: { memory: Record<string, unknown>; storage: unknown } }).room;
+    room.memory.powerSpawnId = "ps";
+    room.storage = { ...storage, store: { energy: 500_000, getFreeCapacity: () => 500_000 } };
+
+    runFiller(creep);
+
+    expect(calls).toEqual(["transfer:storageLink"]);
   });
 });
