@@ -118,34 +118,36 @@ export function planControllerContainer(
   room: Room,
   controller: StructureController
 ): RoomPosition | null {
+  // The upgrade container is only recognised within range 2 of the controller,
+  // so never search further out than that.
   const offset = STRUCTURE_PLANNER.upgradeContainerOffset;
-  for (let r = 1; r <= offset + 1; r++) {
+  const planned = plannedNonRoadTiles(room);
+  for (let r = 1; r <= offset; r++) {
     for (let dx = -r; dx <= r; dx++) {
       for (let dy = -r; dy <= r; dy++) {
         if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
         const x = controller.pos.x + dx;
         const y = controller.pos.y + dy;
-        if (x < 0 || x >= 50 || y < 0 || y >= 50) continue;
-        if (!isWalkable(room, x, y)) continue;
-
-        const structures = room.lookForAt(LOOK_STRUCTURES, x, y) as Structure[];
-        const sites = room.lookForAt(
-          LOOK_CONSTRUCTION_SITES,
-          x,
-          y
-        ) as ConstructionSite[];
-        const hasContainer = structures.some(
-          (s) => s.structureType === STRUCTURE_CONTAINER
-        );
-        const hasContainerSite = sites.some(
-          (s) => s.structureType === STRUCTURE_CONTAINER
-        );
-        if (!hasContainer && !hasContainerSite)
-          return new RoomPosition(x, y, room.name);
+        if (x < 1 || x > 48 || y < 1 || y > 48) continue;
+        if (planned.has(`${x},${y}`)) continue;
+        if (isBuildableTile(room, x, y)) return new RoomPosition(x, y, room.name);
       }
     }
   }
   return null;
+}
+
+// Tiles already promised to another planned structure a container cannot share.
+function plannedNonRoadTiles(room: Room): Set<string> {
+  const out = new Set<string>();
+  const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
+  if (!mem) return out;
+  for (const key of Object.keys(mem)) {
+    const type = structureTypeForKey(key);
+    if (type === STRUCTURE_ROAD || type === STRUCTURE_RAMPART) continue;
+    for (const p of mem[key]) out.add(p);
+  }
+  return out;
 }
 
 export function planMineralContainer(

@@ -109,6 +109,37 @@ function chebyshevDist(dx: number, dy: number): number {
   return Math.max(Math.abs(dx), Math.abs(dy));
 }
 
+type BlockedCheck = (x: number, y: number, type: StructureConstant | null) => boolean;
+
+// A tile is unusable for a planned structure when it is terrain wall, holds a
+// source, mineral or controller, or already carries a different structure that
+// cannot share the tile (roads, ramparts and containers can be built over).
+function buildBlockedCheck(room: Room, terrain: RoomTerrain): BlockedCheck {
+  const natural = new Set<string>();
+  for (const s of room.find(FIND_SOURCES)) natural.add(`${s.pos.x},${s.pos.y}`);
+  for (const m of room.find(FIND_MINERALS)) natural.add(`${m.pos.x},${m.pos.y}`);
+  if (room.controller) natural.add(`${room.controller.pos.x},${room.controller.pos.y}`);
+
+  const builtType = new Map<string, StructureConstant>();
+  for (const st of room.find(FIND_STRUCTURES)) {
+    if (
+      st.structureType === STRUCTURE_ROAD ||
+      st.structureType === STRUCTURE_RAMPART ||
+      st.structureType === STRUCTURE_CONTAINER ||
+      st.structureType === STRUCTURE_CONTROLLER
+    ) continue;
+    builtType.set(`${st.pos.x},${st.pos.y}`, st.structureType);
+  }
+
+  return (x, y, type) => {
+    if (terrain.get(x, y) === TERRAIN_MASK_WALL) return true;
+    const k = `${x},${y}`;
+    if (natural.has(k)) return true;
+    const existing = builtType.get(k);
+    return existing !== undefined && existing !== type;
+  };
+}
+
 export function shouldUseFallbackForStampCell(cell: StampCell): boolean {
   return cell.type === "tower" || Boolean(cell.critical);
 }
@@ -120,6 +151,7 @@ export function applyCastleStamp(room: Room): void {
   const rcl = room.controller?.level ?? 0;
   const cells = getStampCellsForRcl(rcl);
   const terrain = room.getTerrain();
+  const isBlocked = buildBlockedCheck(room, terrain);
 
   const occupiedSet = new Set<string>();
   if (room.memory.plannedStructures) {
@@ -142,23 +174,25 @@ export function applyCastleStamp(room: Room): void {
 
     const posKey = `${absX},${absY}`;
 
-    if (occupiedSet.has(posKey)) continue;
-
+    // Count towers before skipping already-planned cells, or towers planned on
+    // earlier runs go uncounted and the RCL cap is overshot.
     if (cell.type === "tower") {
       if (towerCount >= towerCap) continue;
       towerCount++;
     }
 
+    if (occupiedSet.has(posKey)) continue;
+
     let finalX = absX;
     let finalY = absY;
 
     const memKey = stampMemoryKeyFor(cell);
+    const type = structureTypeForKey(memKey);
 
-    if (terrain.get(absX, absY) === TERRAIN_MASK_WALL) {
+    if (isBlocked(absX, absY, type)) {
       if (!shouldUseFallbackForStampCell(cell)) continue;
       const plan = room.memory.plannedStructures as Record<string, string[]> | undefined;
       const prior = plan?.[memKey];
-      const type = structureTypeForKey(memKey);
       if (plan && prior && prior.length > 0) {
         if (prior.length > 1) plan[memKey] = [prior[0]];
         occupiedSet.add(prior[0]);
@@ -176,11 +210,10 @@ export function applyCastleStamp(room: Room): void {
         continue;
       }
       const fallback = findNearestBuildable(
-        room,
         absX,
         absY,
         occupiedSet,
-        terrain
+        (x, y) => isBlocked(x, y, type)
       );
       if (!fallback) continue;
       finalX = fallback.x;
@@ -198,14 +231,15 @@ export function applyCastleStamp(room: Room): void {
     }
   }
 
-  planMerchantRingExtensions(room, anchor, occupiedSet, rcl);
+  planMerchantRingExtensions(room, anchor, occupiedSet, rcl, isBlocked);
 }
 
 function planMerchantRingExtensions(
   room: Room,
   anchor: { x: number; y: number },
   occupiedSet: Set<string>,
-  rcl: number
+  rcl: number,
+  isBlocked: BlockedCheck
 ): void {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
@@ -216,17 +250,20 @@ function planMerchantRingExtensions(
     return;
   }
 
-  const terrain = room.getTerrain();
   const positions: string[] = [];
   for (const { dx, dy } of MERCHANT_RING_EXTENSION_OFFSETS) {
     if (positions.length >= cap) break;
     const x = anchor.x + dx;
     const y = anchor.y + dy;
     if (x < 1 || x > 48 || y < 1 || y > 48) continue;
-    if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+    if (isBlocked(x, y, STRUCTURE_EXTENSION)) continue;
     const key = `${x},${y}`;
     if (occupiedSet.has(key)) continue;
     positions.push(key);
+  }
+
+  if (positions.length < cap) {
+    fillExtensionShortfall(room, anchor, occupiedSet, isBlocked, positions, cap);
   }
 
   mem[PLANNER_KEYS.STAMP_EXTENSION_KEY] = positions;
@@ -237,12 +274,93 @@ function planMerchantRingExtensions(
   }
 }
 
-function findNearestBuildable(
+const EXTENSION_FALLBACK_MAX_RADIUS = 12;
+
+// Ring offsets lost to walls or obstacles would otherwise cost extensions for
+// good. Top up from just outside the stamp, nearest first, on a checkerboard so
+// every extension keeps free walkable neighbours and nothing gets sealed in.
+function fillExtensionShortfall(
   room: Room,
+  anchor: { x: number; y: number },
+  occupiedSet: Set<string>,
+  isBlocked: BlockedCheck,
+  positions: string[],
+  cap: number
+): void {
+  const mem = room.memory.plannedStructures as Record<string, string[]>;
+  const taken = new Set<string>(positions);
+  for (const key of Object.keys(mem)) {
+    if (!isRoadKey(key)) continue;
+    for (const p of mem[key]) taken.add(p);
+  }
+
+  // Roads, containers and ramparts are real tiles we path over; don't wall them in.
+  for (const st of room.find(FIND_STRUCTURES)) {
+    if (st.structureType !== STRUCTURE_EXTENSION) taken.add(`${st.pos.x},${st.pos.y}`);
+  }
+
+  const keepClear: Array<{ pos: RoomPosition; range: number }> = [
+    ...room.find(FIND_SOURCES).map((s) => ({ pos: s.pos, range: 1 })),
+    ...room.find(FIND_MINERALS).map((m) => ({ pos: m.pos, range: 1 })),
+  ];
+  // Upgraders and the controller container work within range 2.
+  if (room.controller) keepClear.push({ pos: room.controller.pos, range: 2 });
+
+  // A checkerboard in a one-wide corridor would cut it, so only fill open ground.
+  const terrain = room.getTerrain();
+  const nextToWall = (x: number, y: number): boolean => {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (terrain.get(x + dx, y + dy) === TERRAIN_MASK_WALL) return true;
+      }
+    }
+    return false;
+  };
+
+  const parity = (anchor.x + anchor.y) % 2;
+  const start = `${anchor.x},${anchor.y}`;
+  const queue: Array<{ x: number; y: number }> = [{ x: anchor.x, y: anchor.y }];
+  const visited = new Set<string>([start]);
+
+  for (let head = 0; head < queue.length && positions.length < cap; head++) {
+    const { x, y } = queue[head];
+    const key = `${x},${y}`;
+    if (
+      chebyshevDist(x - anchor.x, y - anchor.y) > STAMP_PLANNER.halfSize &&
+      x >= 2 && x <= 47 && y >= 2 && y <= 47 &&
+      (x + y) % 2 === parity &&
+      !taken.has(key) &&
+      !occupiedSet.has(key) &&
+      !isBlocked(x, y, STRUCTURE_EXTENSION) &&
+      !keepClear.some(({ pos, range }) => chebyshevDist(pos.x - x, pos.y - y) <= range) &&
+      !nextToWall(x, y)
+    ) {
+      positions.push(key);
+      taken.add(key);
+    }
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (dx === 0 && dy === 0) continue;
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 1 || nx > 48 || ny < 1 || ny > 48) continue;
+        if (chebyshevDist(nx - anchor.x, ny - anchor.y) > EXTENSION_FALLBACK_MAX_RADIUS) continue;
+        const nk = `${nx},${ny}`;
+        if (visited.has(nk)) continue;
+        visited.add(nk);
+        if (isBlocked(nx, ny, null)) continue;
+        queue.push({ x: nx, y: ny });
+      }
+    }
+  }
+}
+
+function findNearestBuildable(
   startX: number,
   startY: number,
   occupiedSet: Set<string>,
-  terrain: RoomTerrain
+  isBlocked: (x: number, y: number) => boolean
 ): { x: number; y: number } | null {
   const { bfsMaxRadius } = STAMP_PLANNER;
   const queue: Array<{ x: number; y: number }> = [{ x: startX, y: startY }];
@@ -255,10 +373,10 @@ function findNearestBuildable(
     if (dist > bfsMaxRadius) continue;
 
     if (
-      terrain.get(cur.x, cur.y) !== TERRAIN_MASK_WALL &&
-      !occupiedSet.has(`${cur.x},${cur.y}`) &&
       cur.x >= 1 && cur.x <= 48 &&
-      cur.y >= 1 && cur.y <= 48
+      cur.y >= 1 && cur.y <= 48 &&
+      !isBlocked(cur.x, cur.y) &&
+      !occupiedSet.has(`${cur.x},${cur.y}`)
     ) {
       return cur;
     }
@@ -324,58 +442,38 @@ function planCardinalArteriesToRemotes(
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
   const meta = (room.memory.plannedStructuresMeta ?? {}) as Record<string, any>;
 
-  const dirsWithRemote = remoteDirectionsFor(room);
-
-  const targets: Record<string, { x: number; y: number } | null> = {
-    cardinal_road_north: dirsWithRemote.has("N") ? { x: anchor.x, y: 2 }  : null,
-    cardinal_road_south: dirsWithRemote.has("S") ? { x: anchor.x, y: 47 } : null,
-    cardinal_road_west:  dirsWithRemote.has("W") ? { x: 2,  y: anchor.y } : null,
-    cardinal_road_east:  dirsWithRemote.has("E") ? { x: 47, y: anchor.y } : null,
-  };
+  const exitsWithRemote = remoteExitsFor(room);
 
   const anchorPos = new RoomPosition(anchor.x, anchor.y, room.name);
-  for (const [key, target] of Object.entries(targets)) {
-    if (!target) {
+  const exitRoadKeys: Array<[ExitConstant, string]> = [
+    [FIND_EXIT_TOP,    "cardinal_road_north"],
+    [FIND_EXIT_BOTTOM, "cardinal_road_south"],
+    [FIND_EXIT_LEFT,   "cardinal_road_west"],
+    [FIND_EXIT_RIGHT,  "cardinal_road_east"],
+  ];
+  for (const [exit, key] of exitRoadKeys) {
+    if (!exitsWithRemote.has(exit)) {
       if (mem[key]) { delete mem[key]; delete meta[key]; }
       continue;
     }
-    const targetPos = new RoomPosition(target.x, target.y, room.name);
-    planRoadKey(room, key, anchorPos, targetPos, cm);
+    // Aim at the nearest real exit tile on that side, not a fixed point that
+    // may be wall or far from where the exit actually is.
+    const exitTiles = room.find(exit);
+    if (exitTiles.length === 0) continue;
+    planRoadKey(room, key, anchorPos, exitTiles, cm);
   }
 }
 
-function remoteDirectionsFor(room: Room): Set<"N" | "S" | "E" | "W"> {
-  const out = new Set<"N" | "S" | "E" | "W">();
+function remoteExitsFor(room: Room): Set<ExitConstant> {
+  const out = new Set<ExitConstant>();
   const remotes = room.memory.remoteRooms ?? [];
   for (const r of remotes) {
     if (r.hostile) continue;
-    const dir = roomExitDirection(room.name, r.roomName);
-    if (dir) out.add(dir);
+    const exit = room.findExitTo(r.roomName);
+    if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) continue;
+    out.add(exit);
   }
   return out;
-}
-
-function roomExitDirection(
-  from: string,
-  to: string
-): "N" | "S" | "E" | "W" | null {
-  const parse = (name: string) => {
-    const m = /^([WE])(\d+)([NS])(\d+)$/.exec(name);
-    if (!m) return null;
-    const x = (m[1] === "W" ? -1 : 1) * parseInt(m[2], 10);
-    const y = (m[3] === "N" ? -1 : 1) * parseInt(m[4], 10);
-    return { x, y };
-  };
-  const a = parse(from);
-  const b = parse(to);
-  if (!a || !b) return null;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  if (dx === 0 && dy === -1) return "N";
-  if (dx === 0 && dy ===  1) return "S";
-  if (dx === 1 && dy ===  0) return "E";
-  if (dx === -1 && dy === 0) return "W";
-  return null;
 }
 
 function buildSharedRoadCostMatrix(room: Room): CostMatrix {
@@ -423,7 +521,7 @@ function planRoadKey(
   room: Room,
   key: string,
   from: RoomPosition,
-  to: RoomPosition,
+  to: RoomPosition | RoomPosition[],
   cm: CostMatrix
 ): void {
   const mem = room.memory.plannedStructures as Record<string, string[]> | undefined;
@@ -439,7 +537,7 @@ function planRoadKey(
 
   const result = PathFinder.search(
     from,
-    { pos: to, range: 1 },
+    Array.isArray(to) ? to.map((pos) => ({ pos, range: 1 })) : { pos: to, range: 1 },
     {
       roomCallback: (rn) => (rn === room.name ? cm : false),
       plainCost: 2,

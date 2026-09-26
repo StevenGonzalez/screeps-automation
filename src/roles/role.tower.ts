@@ -1,6 +1,8 @@
 import { findTowerRepairTarget, findTowerDefenseRepairTarget } from "../services/services.creep";
 
-const TOWER_REPAIR_ENERGY_THRESHOLD = 0.25;
+// Peacetime repair only spends the top of the tank, so a raid that arrives
+// mid-repair still meets towers that can fire for a good while.
+const TOWER_REPAIR_ENERGY_THRESHOLD = 0.7;
 const TOWER_DEFENSE_REPAIR_MIN_ENERGY = 400;
 
 const TWR_POWER_ATTACK   = 600;
@@ -10,6 +12,11 @@ const TWR_FALLOFF        = 0.75;
 
 const HEAL_RANGE         = 1;
 const RANGED_HEAL_RANGE  = 3;
+const ENGAGE_RANGE       = 3;
+
+// Mirrors the boost tables in services.combat (not exported there).
+const HEAL_BOOST_MULT: Record<string, number> = { LO: 2, LHO2: 3, XLHO2: 4 };
+const TOUGH_DAMAGE_MULT: Record<string, number> = { GO: 0.7, GHO2: 0.5, XGHO2: 0.3 };
 
 export function runTower(
   tower: StructureTower,
@@ -88,23 +95,49 @@ export function selectRoomAttackTarget(roomHostiles: Creep[], room?: Room): Cree
     }
   }
 
-  if (!isDamageable(best, hostiles, towers) && room && !shouldKeepFiring(room, hostiles)) {
-    delete room.memory.lastTowerTargetId;
-    return null;
+  if (!isDamageable(best, hostiles, towers) && room) {
+    // Nothing we can out-damage. Still shoot whichever hostile our fighters are
+    // on or that is tearing into our structures (a dismantler in front of its
+    // healer), rather than the healer the tiering prefers.
+    const pressing = [best, ...hostiles.filter((c) => c !== best)].find((c) =>
+      shouldKeepFiring(room, c)
+    );
+    if (!pressing) {
+      delete room.memory.lastTowerTargetId;
+      return null;
+    }
+    best = pressing;
   }
 
   if (room) room.memory.lastTowerTargetId = best.id;
   return best;
 }
 
-function shouldKeepFiring(room: Room, hostiles: Creep[]): boolean {
-  const haveFighters = room
+// Firing at a target that out-heals the towers only burns energy, unless our
+// own fighters are on it (combined damage may break it) or it is tearing into
+// our structures right now.
+function shouldKeepFiring(room: Room, target: Creep): boolean {
+  const engaged = room
     .find(FIND_MY_CREEPS)
-    .some((c) => c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK));
-  if (haveFighters) return true;
-  return hostiles.some((c) =>
-    c.body.some((p) => (p.type === WORK || p.type === ATTACK) && p.hits > 0)
-  );
+    .some(
+      (c) =>
+        c.pos.getRangeTo(target) <= ENGAGE_RANGE &&
+        c.body.some((p) => (p.type === ATTACK || p.type === RANGED_ATTACK) && p.hits > 0)
+    );
+  if (engaged) return true;
+  const active = (type: BodyPartConstant) => target.body.some((p) => p.type === type && p.hits > 0);
+  if (active(WORK) || active(ATTACK)) {
+    if (target.pos.findInRange(FIND_STRUCTURES, 1).some(isOurs)) return true;
+  }
+  if (active(RANGED_ATTACK)) {
+    if (target.pos.findInRange(FIND_STRUCTURES, 3).some(isOurs)) return true;
+  }
+  return false;
+}
+
+function isOurs(s: AnyStructure): boolean {
+  if (s.structureType === STRUCTURE_WALL) return true;
+  return "my" in s && s.my;
 }
 
 function targetScore(creep: Creep, hostiles: Creep[], towers: StructureTower[]): number {
@@ -119,7 +152,28 @@ function isDamageable(creep: Creep, hostiles: Creep[], towers: StructureTower[])
 function effectiveTowerDamage(creep: Creep, towers: StructureTower[]): number {
   let total = 0;
   for (const tower of towers) total += towerDamageAtRange(tower.pos.getRangeTo(creep));
-  return total;
+  return damageAfterTough(creep, total);
+}
+
+// Hits actually lost to `raw` damage: boosted TOUGH parts (first in the body,
+// so hit first) soak damage at their boost multiplier until they break.
+export function damageAfterTough(creep: Creep, raw: number): number {
+  let remaining = raw;
+  let dealt = 0;
+  for (const part of creep.body) {
+    if (remaining <= 0) break;
+    if (part.hits <= 0) continue;
+    const mult = part.type === TOUGH && part.boost ? TOUGH_DAMAGE_MULT[part.boost as string] ?? 1 : 1;
+    const toBreak = part.hits / mult;
+    if (remaining <= toBreak) {
+      dealt += remaining * mult;
+      remaining = 0;
+    } else {
+      dealt += part.hits;
+      remaining -= toBreak;
+    }
+  }
+  return dealt + remaining;
 }
 
 export function towerDamageAtRange(range: number): number {
@@ -136,9 +190,11 @@ function incomingHeal(creep: Creep, hostiles: Creep[]): number {
   for (const ally of hostiles) {
     const range = ally.pos.getRangeTo(creep);
     if (range > RANGED_HEAL_RANGE) continue;
-    const healParts = ally.body.filter((p) => p.type === HEAL && p.hits > 0).length;
-    if (healParts === 0) continue;
-    heal += healParts * (range <= HEAL_RANGE ? HEAL_POWER : RANGED_HEAL_POWER);
+    const power = range <= HEAL_RANGE ? HEAL_POWER : RANGED_HEAL_POWER;
+    for (const p of ally.body) {
+      if (p.type !== HEAL || p.hits <= 0) continue;
+      heal += power * (p.boost ? HEAL_BOOST_MULT[p.boost as string] ?? 1 : 1);
+    }
   }
   return heal;
 }

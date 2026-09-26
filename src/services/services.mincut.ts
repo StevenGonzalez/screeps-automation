@@ -135,12 +135,50 @@ function buildGrid(roomName: string, protect: Rect[], bounds: Rect): Int8Array {
     }
   }
 
+  // Ramparts cannot be built next to an exit, so a tile one step in from an
+  // open border tile is as good as the exit itself: never cut there.
+  for (let y = 1; y < ROOM_SIZE - 1; y++) {
+    for (let x = 1; x < ROOM_SIZE - 1; x++) {
+      if (x !== 1 && x !== ROOM_SIZE - 2 && y !== 1 && y !== ROOM_SIZE - 2) continue;
+      const idx = y * ROOM_SIZE + x;
+      if (grid[idx] !== NORMAL) continue;
+      let nearExit = false;
+      for (let dy = -1; dy <= 1 && !nearExit; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          const onBorder = nx === 0 || ny === 0 || nx === ROOM_SIZE - 1 || ny === ROOM_SIZE - 1;
+          if (onBorder && terrain.get(nx, ny) !== TERRAIN_MASK_WALL) {
+            nearExit = true;
+            break;
+          }
+        }
+      }
+      if (nearExit) grid[idx] = EXIT;
+    }
+  }
+
   for (const rect of protect) {
     const r = normaliseRect(rect);
     for (let y = r.y1; y <= r.y2; y++) {
       for (let x = r.x1; x <= r.x2; x++) {
         const idx = y * ROOM_SIZE + x;
-        if (grid[idx] !== UNWALKABLE) grid[idx] = PROTECTED;
+        if (grid[idx] !== UNWALKABLE && grid[idx] !== EXIT) grid[idx] = PROTECTED;
+      }
+    }
+  }
+
+  // A protected tile touching an exit leaves nothing to cut between them.
+  // Hand those tiles back to the cut; a rampart can stand on them.
+  for (let y = 1; y < ROOM_SIZE - 1; y++) {
+    for (let x = 1; x < ROOM_SIZE - 1; x++) {
+      const idx = y * ROOM_SIZE + x;
+      if (grid[idx] !== PROTECTED) continue;
+      for (const [dx, dy] of NEIGHBOURS) {
+        if (grid[(y + dy) * ROOM_SIZE + x + dx] === EXIT) {
+          grid[idx] = NORMAL;
+          break;
+        }
       }
     }
   }

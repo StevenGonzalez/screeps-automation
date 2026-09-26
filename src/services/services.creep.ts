@@ -4,6 +4,7 @@ import {
   ROLE_MINER,
 } from "../config/config.roles";
 import { pickSignature } from "../config/signatures";
+import { PLANNER_KEYS } from "../config/config.structures";
 
 let assignmentCacheTick = -1;
 const assignedContainerIdsByRoomAndRole: Record<string, Set<string>> = {};
@@ -19,6 +20,9 @@ const criticalRepairByRoom: Record<string, AnyStructure | null> = {};
 
 let towerRepairCacheTick = -1;
 const towerRepairByRoom: Record<string, AnyStructure | null> = {};
+
+let nukeTargetCacheTick = -1;
+const nukeTargetByRoom: Record<string, StructureRampart | null> = {};
 
 function getAssignedContainerIdsByRole(room: Room, role: string): Set<string> {
   if (assignmentCacheTick !== Game.time) {
@@ -164,18 +168,13 @@ export function getClosestSpawn(
   return closestByPath(pos, spawns);
 }
 
-export function getSources(room: Room, ttl: number = 100): Source[] {
-  if (!Memory.sources) Memory.sources = {};
-  if (!Memory.sourcesLastScan) Memory.sourcesLastScan = {};
-  const lastScan = Memory.sourcesLastScan[room.name] || 0;
-  if (!Memory.sources[room.name] || Game.time - lastScan > ttl) {
-    Memory.sources[room.name] = room.find(FIND_SOURCES).map((s) => s.id);
-    Memory.sourcesLastScan[room.name] = Game.time;
-  }
-  const sourceIds: Id<Source>[] = Memory.sources[room.name];
-  return sourceIds
-    .map((id) => Game.getObjectById(id))
-    .filter(Boolean) as Source[];
+export function getSources(room: Room): Source[] {
+  // room.find is already cached per tick by the engine; the old Memory copy
+  // only duplicated room.memory.sourceIds and kept a key for every room ever
+  // visited. Drop it from existing saves.
+  if (Memory.sources) delete Memory.sources;
+  if (Memory.sourcesLastScan) delete Memory.sourcesLastScan;
+  return room.find(FIND_SOURCES);
 }
 
 export function harvestFromSource(creep: Creep, source: Source): void {
@@ -446,7 +445,7 @@ export function transferEnergyTo(creep: Creep, target: Structure): void {
 export function findClosestConstructionSite(
   creep: Creep
 ): ConstructionSite | null {
-  const sites = creep.room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[];
+  const sites = creep.room.find(FIND_MY_CONSTRUCTION_SITES) as ConstructionSite[];
   if (!sites || sites.length === 0) return null;
 
   // Walk priority tiers best-first; return the closest reachable site in the
@@ -553,6 +552,61 @@ export function getRampartTargetHP(rcl: number): number {
   return RAMPART_TARGET_HP[Math.min(8, Math.max(2, rcl))] ?? 10_000;
 }
 
+// Ramparts laid over a structure inside the base only need to outlast a raid
+// that already got past the perimeter, so they stop well short of it.
+const ON_TOP_RAMPART_TARGET_HP: Record<number, number> = {
+  2:  10_000,
+  3:  20_000,
+  4:  50_000,
+  5: 100_000,
+  6: 150_000,
+  7: 200_000,
+  8: 300_000,
+};
+
+// The perimeter only climbs past this once storage has energy to spare.
+const PERIMETER_SOFT_CAP_HP = 1_000_000;
+const PERIMETER_FULL_TARGET_STORAGE = 100_000;
+
+// Repair goal for a wall or rampart. A rampart over another structure is
+// on-top; one on the stored perimeter ring gets the perimeter goal; any other
+// rampart (a stale ring from an older plan, a hand-placed one) gets 0 and is
+// left to decay. Until a room has a stored ring, every bare rampart counts as
+// perimeter so nothing is dropped by mistake.
+export function barrierTargetFn(room: Room): (s: AnyStructure) => number {
+  const rcl = room.controller?.level ?? 0;
+  let perimeter = getRampartTargetHP(rcl);
+  if ((room.storage?.store[RESOURCE_ENERGY] ?? 0) <= PERIMETER_FULL_TARGET_STORAGE) {
+    perimeter = Math.min(perimeter, PERIMETER_SOFT_CAP_HP);
+  }
+  const onTop = Math.min(perimeter, ON_TOP_RAMPART_TARGET_HP[Math.min(8, Math.max(2, rcl))]);
+
+  const ring = room.memory.perimeterTiles;
+  const perimeterSet = ring ? new Set(ring) : undefined;
+  const nukeTiles = room.memory.nukeDefense?.tiles ?? {};
+  let covered: Set<string> | undefined;
+  const coveredTiles = (): Set<string> => {
+    if (!covered) {
+      covered = new Set();
+      for (const s of room.find(FIND_STRUCTURES)) {
+        const t = s.structureType;
+        if (t === STRUCTURE_RAMPART || t === STRUCTURE_ROAD || t === STRUCTURE_WALL) continue;
+        covered.add(`${s.pos.x},${s.pos.y}`);
+      }
+    }
+    return covered;
+  };
+
+  return (s) => {
+    if (s.structureType === STRUCTURE_WALL) return perimeter;
+    if (s.structureType !== STRUCTURE_RAMPART) return 0;
+    const k = `${s.pos.x},${s.pos.y}`;
+    if (!perimeterSet || perimeterSet.has(k)) return perimeter;
+    if (coveredTiles().has(k) || k in nukeTiles) return onTop;
+    return 0;
+  };
+}
+
 function isDamaged(s: AnyStructure): boolean {
   return s.hits < s.hitsMax;
 }
@@ -614,6 +668,17 @@ export function findCriticalDefenseTarget(creep: Creep): AnyStructure | null {
 }
 
 export function getNukeRampartTarget(room: Room): StructureRampart | null {
+  if (nukeTargetCacheTick !== Game.time) {
+    nukeTargetCacheTick = Game.time;
+    for (const k in nukeTargetByRoom) delete nukeTargetByRoom[k];
+  }
+  if (!(room.name in nukeTargetByRoom)) {
+    nukeTargetByRoom[room.name] = computeNukeRampartTarget(room);
+  }
+  return nukeTargetByRoom[room.name];
+}
+
+function computeNukeRampartTarget(room: Room): StructureRampart | null {
   const def = room.memory.nukeDefense;
   if (!def) return null;
   let worst: StructureRampart | null = null;
@@ -648,10 +713,14 @@ export function findMostCriticalRepairTarget(
   const rn = creep.room.name;
   if (rn in criticalRepairByRoom) return criticalRepairByRoom[rn];
 
-  const rcl = creep.room.controller?.level ?? 0;
-  const wallTarget = getRampartTargetHP(rcl);
+  const targetOf = barrierTargetFn(creep.room);
+  const isBarrier = (st: AnyStructure) =>
+    st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART;
 
-  const structures = getRoomStructures(creep.room);
+  // Unplanned ramparts get no repair at all, not even decay rescue.
+  const structures = getRoomStructures(creep.room).filter(
+    (st) => !isBarrier(st) || targetOf(st) > 0
+  );
 
   const dying = structures.filter(
     (st): st is AnyStructure => {
@@ -665,11 +734,9 @@ export function findMostCriticalRepairTarget(
     return result;
   }
 
-  const barrierDanger = Math.min(BREACH_DANGER_FLOOR, wallTarget * 0.5);
   const criticalBarriers = structures.filter(
     (st): st is AnyStructure =>
-      (st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART) &&
-      st.hits < barrierDanger
+      isBarrier(st) && st.hits < Math.min(BREACH_DANGER_FLOOR, targetOf(st) * 0.5)
   );
   if (criticalBarriers.length > 0) {
     const result = criticalBarriers.reduce((a, b) => (a.hits < b.hits ? a : b));
@@ -695,9 +762,7 @@ export function findMostCriticalRepairTarget(
   }
 
   const belowTarget = structures.filter(
-    (st): st is AnyStructure =>
-      (st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART) &&
-      st.hits < wallTarget
+    (st): st is AnyStructure => isBarrier(st) && st.hits < targetOf(st)
   );
   const result = belowTarget.length > 0
     ? belowTarget.reduce((a, b) => (a.hits < b.hits ? a : b))
@@ -720,9 +785,10 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
   const rcl = room.controller?.level ?? 0;
   const towerWallThreshold = Math.min(50_000, Math.max(5_000, getRampartTargetHP(rcl) * 0.05));
 
+  const targetOf = barrierTargetFn(room);
   const candidates = getRoomStructures(room).filter((st): st is AnyStructure => {
     if (st.structureType === STRUCTURE_RAMPART || st.structureType === STRUCTURE_WALL) {
-      return st.hits < towerWallThreshold;
+      return st.hits < Math.min(towerWallThreshold, targetOf(st));
     }
     return st.hits < st.hitsMax * 0.4;
   });
@@ -738,13 +804,22 @@ export function findTowerDefenseRepairTarget(
 ): StructureRampart | StructureWall | null {
   const rcl = room.controller?.level ?? 0;
   const floor = Math.min(TOWER_DEFENSE_REPAIR_FLOOR, getRampartTargetHP(rcl));
+  // Barriers within reach of a hostile that can actually break them come
+  // first; the weakest barrier anywhere is only the fallback.
+  const breakers = room
+    .find(FIND_HOSTILE_CREEPS)
+    .filter((c) => c.body.some((p) => (p.type === ATTACK || p.type === WORK) && p.hits > 0));
   let worst: StructureRampart | StructureWall | null = null;
+  let worstThreatened: StructureRampart | StructureWall | null = null;
   for (const s of getRoomStructures(room)) {
     if (s.structureType !== STRUCTURE_RAMPART && s.structureType !== STRUCTURE_WALL) continue;
     if (s.hits >= floor) continue;
-    if (!worst || s.hits < worst.hits) worst = s as StructureRampart | StructureWall;
+    const barrier = s as StructureRampart | StructureWall;
+    if (!worst || s.hits < worst.hits) worst = barrier;
+    if (!breakers.some((c) => c.pos.getRangeTo(s.pos) <= 3)) continue;
+    if (!worstThreatened || s.hits < worstThreatened.hits) worstThreatened = barrier;
   }
-  return worst;
+  return worstThreatened ?? worst;
 }
 
 export function getClosestContainerOrStorage(creep: Creep): Structure | null {
@@ -1054,7 +1129,11 @@ export function isAssignedRemoteContested(creep: Creep): boolean {
 
 export function flagRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
-  if (entry) entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
+  if (entry) markRemoteInvader(entry);
+}
+
+export function markRemoteInvader(entry: RemoteRoomData): void {
+  entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
 }
 
 export function flagRemotePlayer(creep: Creep): void {
@@ -1076,8 +1155,18 @@ export function markRemotePlayerHostile(entry: RemoteRoomData): void {
 
 export function clearRemotePlayerHostile(entry: RemoteRoomData): void {
   entry.hostile = false;
-  entry.hostileUntil = undefined;
-  entry.hostileStrikes = 0;
+  // Forgive one strike per clean window rather than all of them on the first
+  // clean look, so a player who keeps coming back still escalates the backoff.
+  // While strikes remain, hostileUntil (never left in the future) marks where
+  // the current clean window started.
+  let strikes = entry.hostileStrikes ?? 0;
+  let since = Math.min(entry.hostileUntil ?? Game.time, Game.time);
+  while (strikes > 0 && Game.time - since >= REMOTE_PLAYER_WINDOW) {
+    strikes--;
+    since += REMOTE_PLAYER_WINDOW;
+  }
+  entry.hostileStrikes = strikes;
+  entry.hostileUntil = strikes > 0 ? since : undefined;
 }
 
 export function clearRemoteInvader(creep: Creep): void {

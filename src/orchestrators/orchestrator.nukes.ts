@@ -1,3 +1,5 @@
+import { ROLE_REPAIRER } from "../config/config.roles";
+
 const NUKE_IMPACT_DAMAGE = 10_000_000;
 const NUKE_SPLASH_DAMAGE = 5_000_000;
 
@@ -5,7 +7,7 @@ const REINFORCE_BUFFER_BASE = 600_000;
 const REINFORCE_BUFFER_PER_OVERLAP = 400_000;
 
 const TOWER_REPAIR_EFFICIENCY = 0.5;
-const REPAIRER_ASSUMED_WORK = 20;
+const EVAC_DECISION_WINDOW = 5000;
 const EVAC_SAFETY_TICKS = 50;
 
 const EVAC_MIN_SEND = 100;
@@ -100,50 +102,62 @@ function considerEvacuation(
 
   const earliest = nukes.reduce((min, n) => Math.min(min, n.timeToLand), Infinity);
   if (!isFinite(earliest)) return;
+  // Decide late: by then the repairers the nuke triggers are alive and counted,
+  // and the terminal still has ample cooldowns left to empty itself.
+  if (earliest > EVAC_DECISION_WINDOW) return;
 
   const storeStructures: Structure[] = [];
   if (terminal) storeStructures.push(terminal);
   if (room.storage) storeStructures.push(room.storage);
 
-  let mustEvacuate = false;
-  for (const s of storeStructures) {
-    const required = tiles[`${s.pos.x},${s.pos.y}`];
-    if (required === undefined) continue;
-    if (!canReinforceInTime(room, s.pos, required, earliest)) {
-      mustEvacuate = true;
-      break;
-    }
-  }
-  if (!mustEvacuate) return;
+  const threatensStore = storeStructures.some(
+    (s) => tiles[`${s.pos.x},${s.pos.y}`] !== undefined
+  );
+  if (!threatensStore) return;
 
-  evacuate(room, terminal);
+  if (!canReinforceInTime(room, storeStructures, tiles, earliest)) evacuate(room, terminal);
 }
 
+// Repairers and towers share one budget across every threatened tile, so the
+// question is whether the combined deficit fits, not whether any one tile does.
 function canReinforceInTime(
   room: Room,
-  pos: RoomPosition,
-  required: number,
+  storeStructures: Structure[],
+  tiles: Record<string, number>,
   ticksToLand: number
 ): boolean {
-  const rampart = pos
-    .lookFor(LOOK_STRUCTURES)
-    .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
-  const currentHp = rampart?.hits ?? 0;
-
   const rcl = room.controller?.level ?? 0;
   const rampartCap = RAMPART_HITS_MAX[rcl] ?? 0;
-  if (required > rampartCap) return false;
+  for (const s of storeStructures) {
+    const required = tiles[`${s.pos.x},${s.pos.y}`];
+    if (required !== undefined && required > rampartCap) return false;
+  }
 
-  const deficit = required - currentHp;
+  let deficit = 0;
+  for (const key in tiles) {
+    const [x, y] = key.split(",").map(Number);
+    const rampart = room
+      .lookForAt(LOOK_STRUCTURES, x, y)
+      .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
+    // Repair past a rampart's hitsMax is impossible, so count each tile only up to it.
+    deficit += Math.max(0, Math.min(tiles[key], rampartCap) - (rampart?.hits ?? 0));
+  }
   if (deficit <= 0) return true;
 
   const usableTicks = Math.max(0, ticksToLand - EVAC_SAFETY_TICKS);
   if (usableTicks === 0) return false;
 
-  const towers = (room.memory.towerIds ?? []).filter((id) => Game.getObjectById(id)).length;
+  const towers = (room.memory.towerIds ?? []).filter((id) => {
+    const tower = Game.getObjectById(id);
+    return tower && tower.store[RESOURCE_ENERGY] > 0;
+  }).length;
+  let repairerWork = 0;
+  for (const c of room.find(FIND_MY_CREEPS)) {
+    if (c.memory.role !== ROLE_REPAIRER) continue;
+    repairerWork += c.getActiveBodyparts(WORK);
+  }
   const repairPerTick =
-    towers * TOWER_POWER_REPAIR * TOWER_REPAIR_EFFICIENCY +
-    REPAIRER_ASSUMED_WORK * REPAIR_POWER;
+    towers * TOWER_POWER_REPAIR * TOWER_REPAIR_EFFICIENCY + repairerWork * REPAIR_POWER;
 
   return repairPerTick * usableTicks >= deficit;
 }

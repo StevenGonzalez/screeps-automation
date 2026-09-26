@@ -2,9 +2,9 @@ import { describe, it, expect } from "vitest";
 import { shouldPlanDefensivePerimeter } from "../src/planning/planner.rampart";
 
 describe("shouldPlanDefensivePerimeter", () => {
-  it("starts early enough to shelter the first core at RCL 2 and 3", () => {
+  it("waits for towers at RCL 3 before planning the perimeter", () => {
     expect(shouldPlanDefensivePerimeter(1)).toBe(false);
-    expect(shouldPlanDefensivePerimeter(2)).toBe(true);
+    expect(shouldPlanDefensivePerimeter(2)).toBe(false);
     expect(shouldPlanDefensivePerimeter(3)).toBe(true);
   });
 });

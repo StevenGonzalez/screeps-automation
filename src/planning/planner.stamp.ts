@@ -33,7 +33,7 @@ export const CASTLE_STAMP: StampCell[] = [
   { dx:  0, dy: -6, type: "observer",    minRcl: 8 },
   { dx:  2, dy: -4, type: "power_spawn", minRcl: 8, critical: true },
   { dx: -2, dy: -4, type: "nuker",       minRcl: 8 },
-  { dx:  1, dy:  3, type: "link",        minRcl: 7 },
+  { dx:  1, dy:  3, type: "link",        minRcl: 5 },
   { dx: -4, dy: -4, type: "tower",       minRcl: 3 },
   { dx:  4, dy: -4, type: "tower",       minRcl: 5 },
   { dx: -4, dy:  4, type: "tower",       minRcl: 5 },

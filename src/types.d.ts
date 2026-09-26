@@ -226,6 +226,7 @@ declare global {
     pendingScoutRooms?: string[];
     remoteRooms?: RemoteRoomData[];
     castleAnchor?: { x: number; y: number };
+    perimeterTiles?: string[];
     lastRcl?: number;
     controllerLinkIds?: Id<StructureLink>[];
     controllerLinkScanTick?: number;
@@ -263,6 +264,8 @@ declare global {
     expansion?: ExpansionData;
     sigRotation?: number;
     expansionQueue?: QueuedExpansion[];
+    // Expansion targets whose claim timed out, keyed to the tick they may be retried.
+    claimFailures?: Record<string, number>;
     militaryOp?: MilitaryOp;
     militaryOps?: Record<string, MilitaryOp>;
     militaryQueue?: QueuedMilitaryOp[];

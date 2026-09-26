@@ -17,6 +17,13 @@ g.RoomPosition = class {
 g.TERRAIN_MASK_WALL = 1;
 g.MAX_CONSTRUCTION_SITES = 100;
 g.OK = 0;
+g.CONTROLLER_STRUCTURES = {
+  extractor: { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 1, 7: 1, 8: 1 },
+  road: { 0: 2500, 6: 2500 },
+  rampart: { 0: 0, 6: 2500 },
+  container: { 0: 5, 6: 5 },
+  tower: { 0: 0, 6: 2 },
+};
 
 // Minerals commonly sit on wall terrain. The engine accepts an extractor there,
 // so the planner must not throw the plan away as an invalid wall tile.
@@ -28,6 +35,7 @@ describe("applyPlannedConstruction on wall terrain", () => {
   function wallRoom(planned: Record<string, string[]>, created: string[]) {
     return {
       name: "W1N1",
+      controller: { level: 6 },
       memory: { plannedStructures: planned },
       getTerrain: () => ({ get: () => 1 }),
       find: () => [],
@@ -79,6 +87,7 @@ describe("applyPlannedConstruction at the site cap", () => {
     }));
     const room = {
       name: "W1N1",
+      controller: { level: 6 },
       memory: { plannedStructures: { extractor_m1: ["10,10"] } },
       getTerrain: () => ({ get: () => 1 }),
       find: (type: number) =>

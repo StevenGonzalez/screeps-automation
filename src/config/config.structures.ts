@@ -72,7 +72,7 @@ export const STAMP_PLANNER = {
 };
 
 export const PERIMETER_PLANNER = {
-  minRcl: 2,
+  minRcl: 3,
   margin: 2,
   minEdge: 2,
   maxEdge: 47,

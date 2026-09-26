@@ -115,10 +115,13 @@ export function applyPlannedConstruction(room: Room) {
   const sitesByType = new Map<StructureConstant, Set<string>>();
   const roadByPos = new Map<string, Structure>();
   const roadSiteByPos = new Map<string, ConstructionSite>();
+  // Leftovers from a previous owner sit in builtByType but not against our caps.
+  const ownBuiltCount = new Map<StructureConstant, number>();
   for (const s of room.find(FIND_STRUCTURES) as Structure[]) {
     const t = s.structureType as StructureConstant;
     if (!builtByType.has(t)) builtByType.set(t, new Set());
     builtByType.get(t)!.add(`${s.pos.x},${s.pos.y}`);
+    if ((s as OwnedStructure).my !== false) ownBuiltCount.set(t, (ownBuiltCount.get(t) ?? 0) + 1);
     if (t === STRUCTURE_ROAD) roadByPos.set(`${s.pos.x},${s.pos.y}`, s);
   }
   for (const s of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) {
@@ -208,6 +211,16 @@ export function applyPlannedConstruction(room: Room) {
     return true;
   };
 
+  const rcl = room.controller?.level ?? 0;
+  const placedByType = new Map<StructureConstant, number>();
+  const atStructureLimit = (t: StructureConstant): boolean => {
+    const limit = CONTROLLER_STRUCTURES[t as BuildableStructureConstant]?.[rcl];
+    if (limit === undefined) return false;
+    const count =
+      (ownBuiltCount.get(t) ?? 0) + (sitesByType.get(t)?.size ?? 0) + (placedByType.get(t) ?? 0);
+    return count >= limit;
+  };
+
   const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
   const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
   const rampartSites = sitesByType.get(STRUCTURE_RAMPART);
@@ -231,7 +244,16 @@ export function applyPlannedConstruction(room: Room) {
           const x = +posStr.slice(0, comma);
           const y = +posStr.slice(comma + 1);
           addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, new RoomPosition(x, y, room.name));
-          room.createConstructionSite(x, y, STRUCTURE_RAMPART);
+          // Only place a site where no rampart stands or is queued, and pay for
+          // it out of the same budget as every other site.
+          const rampartSites = sitesByType.get(STRUCTURE_RAMPART) ?? new Set<string>();
+          const covered =
+            builtByType.get(STRUCTURE_RAMPART)?.has(posStr) || rampartSites.has(posStr);
+          if (!covered && budget > 0 && room.createConstructionSite(x, y, STRUCTURE_RAMPART) === OK) {
+            budget--;
+            rampartSites.add(posStr);
+            sitesByType.set(STRUCTURE_RAMPART, rampartSites);
+          }
         }
         continue;
       }
@@ -243,6 +265,9 @@ export function applyPlannedConstruction(room: Room) {
       if (type !== STRUCTURE_EXTRACTOR && terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       keep.push(posStr);
       if (sites?.has(posStr)) continue;
+      // Past the RCL limit the engine rejects the site anyway; check before
+      // evicting, or a lower-priority site is thrown away for nothing.
+      if (atStructureLimit(type as StructureConstant)) continue;
       if (budget <= 0) {
         if (!evictForPriority(buildPriority(key))) continue;
         budget++;
@@ -260,6 +285,7 @@ export function applyPlannedConstruction(room: Room) {
       }
       if (result === OK) {
         budget--;
+        placedByType.set(type as StructureConstant, (placedByType.get(type as StructureConstant) ?? 0) + 1);
         if (isRoad) roadSiteCount++;
         if (key === perimeterKey) perimeterSiteCount++;
       }
@@ -554,7 +580,9 @@ function processRoomStructures(room: Room) {
         .filter((s) => isSourceSafe(s))
         .sort((a, b) => b.pos.getRangeTo(ref) - a.pos.getRangeTo(ref));
       ranked.forEach((source, i) => {
-        if (rcl < (i === 0 ? 6 : 8)) return;
+        // The farthest source gets a link as soon as links unlock at RCL 5,
+        // paired with the storage link; the second waits for RCL 8.
+        if (rcl < (i === 0 ? 5 : 8)) return;
         const key = `${PLANNER_KEYS.LINK_SOURCE_PREFIX}${source.id}`;
         if (plannedPositionsFromMemory(room, key).length > 0) return;
         const builtNearSource =

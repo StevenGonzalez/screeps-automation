@@ -157,3 +157,45 @@ describe("getCutTiles - preferCloserToProtected option", () => {
     }
   });
 });
+
+describe("getCutTiles - tiles beside an exit", () => {
+  it("never cuts on x/y 1 or 48 next to an open border tile", () => {
+    // A 3-wide corridor (x=24..26) runs up to a single gap at (25,1) that opens
+    // onto the top exit. The cheapest cut is that one gap tile, but a rampart
+    // cannot be built beside the exit, so the cut must go across the corridor.
+    currentTerrain = (x: number, y: number) => {
+      if (x === 25 && y <= 1) return 0;
+      if (x >= 24 && x <= 26 && y >= 2 && y <= 30) return 0;
+      return 1;
+    };
+    const cut = getCutTiles("W3N3", [{ x1: 25, y1: 30, x2: 25, y2: 30 }]);
+
+    expect(cut.length).toBe(3);
+    for (const c of cut) expect(c.y).toBeGreaterThan(1);
+  });
+
+  it("still allows x/y 1 when the adjacent border tiles are all wall", () => {
+    // Border row y=0 is wall; the corridor dead-ends at y=1 and leaves by x=0.
+    currentTerrain = (x: number, y: number) => {
+      if (y === 1 && x <= 25) return 0;
+      if (x === 25 && y >= 1 && y <= 30) return 0;
+      return 1;
+    };
+    const cut = getCutTiles("W3N3", [{ x1: 25, y1: 30, x2: 25, y2: 30 }]);
+    for (const c of cut) {
+      expect(c.x).toBeGreaterThan(1);
+    }
+    expect(cut.length).toBe(1);
+  });
+
+  it("rings a protected rect that reaches the tile beside an exit-adjacent tile", () => {
+    // Open room; the rect's left column sits at x=2, next to x=1 which counts as
+    // an exit. Those x=2 tiles must become cuttable so the ring still closes.
+    currentTerrain = () => 0;
+    const cut = getCutTiles("W3N3", [{ x1: 2, y1: 20, x2: 6, y2: 24 }]);
+    const cuts = keySet(cut);
+    expect(cut.length).toBeGreaterThan(0);
+    for (const c of cut) expect(c.x).toBeGreaterThan(1);
+    for (let y = 20; y <= 24; y++) expect(cuts.has(`2,${y}`)).toBe(true);
+  });
+});
