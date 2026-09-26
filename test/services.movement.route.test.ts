@@ -87,6 +87,17 @@ describe("routeRoomCost", () => {
     expect(routeRoomCost("W3N3", "W3N3")).toBe(1);
   });
 
+  it("penalises rooms someone else reserves, but not ours or an ally's", () => {
+    intel.W3N3 = { reservedBy: "Enemy" };
+    intel.W4N3 = { reservedBy: "Invader" };
+    intel.W5N3 = { reservedBy: "Me" };
+    intel.W6N3 = { reservedBy: "Friend" };
+    expect(routeRoomCost("W3N3", "W9N9")).toBe(10);
+    expect(routeRoomCost("W4N3", "W9N9")).toBe(10);
+    expect(routeRoomCost("W5N3", "W9N9")).toBe(2);
+    expect(routeRoomCost("W6N3", "W9N9")).toBe(2);
+  });
+
   it("penalises remotes flagged hostile until the flag expires", () => {
     (Memory.rooms.W1N1 as RoomMemory).remoteRooms = [
       { roomName: "W2N2", sources: [], lastSeen: 0, hostile: true, hostileUntil: tick + 100 },
@@ -156,6 +167,15 @@ describe("cross-room moveTo", () => {
     const opts = originalMoveTo.mock.calls[0][1] as MoveToOpts;
     const cm = opts.costCallback!("W2N2", new PathFinder.CostMatrix()) as CostMatrix;
     expect(cm.get(25, 25)).toBe(0);
+  });
+
+  it("still keeps to the route with traffic handling switched off", () => {
+    (Memory as { trafficDisabled?: boolean }).trafficDisabled = true;
+    creepIn("W1N1").moveTo(new RoomPosition(25, 25, "W3N1"), { range: 20 });
+    const opts = originalMoveTo.mock.calls[0][1] as MoveToOpts;
+    const off = opts.costCallback!("W2N2", new PathFinder.CostMatrix()) as CostMatrix;
+    expect(off.get(25, 25)).toBe(0xff);
+    expect(opts.plainCost).toBeUndefined();
   });
 
   it("does not route same-room moves", () => {

@@ -137,8 +137,9 @@ function isHighwayRoom(roomName: string): boolean {
 
 // Cost of passing through a room on the way to destRoom. Towered enemy rooms are
 // impassable (with no tower count recorded, any enemy-owned room is); Source Keeper
-// rooms and rooms we have flagged hostile are a last resort. The destination itself
-// is always allowed, so SK ops and attacks can still reach their target.
+// rooms, rooms someone else reserves and rooms we have flagged hostile are a last
+// resort. The destination itself is always allowed, so SK ops and attacks can
+// still reach their target.
 export function routeRoomCost(roomName: string, destRoom: string): number {
   if (roomName === destRoom) return 1;
   refreshDangerContext();
@@ -149,6 +150,8 @@ export function routeRoomCost(roomName: string, destRoom: string): number {
     if (intel.towers === undefined || intel.towers > 0) return Infinity;
     return DANGER_ROUTE_COST;
   }
+  const reservedBy = intel?.reservedBy;
+  if (reservedBy && reservedBy !== myName && !isAlly(reservedBy)) return DANGER_ROUTE_COST;
   if (isSourceKeeperRoom(roomName) || markedHostile.has(roomName)) return DANGER_ROUTE_COST;
   if (isHighwayRoom(roomName)) return 1;
   return 2;
@@ -180,12 +183,25 @@ function getBlockedMatrix(): CostMatrix {
   return blockedMatrix;
 }
 
+// Cross-room: keep the path inside the danger-aware room route. With no safe
+// route the path is left unrestricted rather than stranding the creep.
+function restrictToRoute(creep: Creep, tpos: RoomPosition, opts: MoveToOpts): void {
+  if (!(tpos instanceof RoomPosition)) return;
+  const allowed = getRouteRooms(creep.pos.roomName, tpos.roomName);
+  if (!allowed) return;
+  const inner = opts.costCallback;
+  opts.costCallback = (roomName, cm) => {
+    if (!allowed.has(roomName)) return getBlockedMatrix();
+    return inner ? inner(roomName, cm) : cm;
+  };
+}
+
 (Creep.prototype as { moveTo: unknown }).moveTo = function (
   this: Creep,
   ...args: unknown[]
 ): ScreepsReturnCode {
   const target = args[0];
-  if (Memory.trafficDisabled || typeof target === "number") {
+  if (typeof target === "number") {
     return originalMoveTo.apply(this, args);
   }
 
@@ -194,19 +210,19 @@ function getBlockedMatrix(): CostMatrix {
   const sameRoom = tpos instanceof RoomPosition && tpos.roomName === this.pos.roomName;
   const range = (opts?.range as number | undefined) ?? 1;
 
+  // Traffic handling can be switched off on its own; the danger-aware route
+  // still applies, since walking into a towered room is never a traffic choice.
+  if (Memory.trafficDisabled) {
+    const plainOpts: MoveToOpts = { ...(opts ?? {}) };
+    if (!sameRoom) restrictToRoute(this, tpos, plainOpts);
+    return originalMoveTo.call(this, target as never, plainOpts as never);
+  }
+
   const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
   if (!effectiveOpts.costCallback) {
     effectiveOpts.costCallback = roadCostCallback;
   }
-  // Cross-room: keep the path inside the danger-aware room route.
-  if (tpos instanceof RoomPosition && !sameRoom) {
-    const allowed = getRouteRooms(this.pos.roomName, tpos.roomName);
-    if (allowed) {
-      const inner = effectiveOpts.costCallback;
-      effectiveOpts.costCallback = (roomName, cm) =>
-        allowed.has(roomName) ? inner(roomName, cm) : getBlockedMatrix();
-    }
-  }
+  if (!sameRoom) restrictToRoute(this, tpos, effectiveOpts);
 
   pruneStuckState();
 
