@@ -8,8 +8,17 @@ import {
   getSafeSources,
   harvestFromSource,
   isSourceSafe,
+  acquireEnergy,
 } from "../services/services.creep";
 import { ROLE_HARVESTER, ROLE_MINER } from "../config/config.roles";
+
+function hasMiner(source: Source): boolean {
+  return (
+    source.pos.findInRange(FIND_MY_CREEPS, 1, {
+      filter: (c) => c.memory.role === ROLE_MINER,
+    }).length > 0
+  );
+}
 
 export function runHarvester(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
@@ -23,7 +32,12 @@ export function runHarvester(creep: Creep) {
 
   if (creep.memory.working) {
     const depositTarget = findEnergyDepositTarget(creep, ROLE_HARVESTER);
-    if (depositTarget) {
+    // Once miners hold every source this energy came out of a container, and
+    // putting it back into one only starts the same trip again.
+    const backIntoContainer =
+      depositTarget?.structureType === STRUCTURE_CONTAINER &&
+      getSafeSources(creep.room).every(hasMiner);
+    if (depositTarget && !backIntoContainer) {
       transferEnergyTo(creep, depositTarget);
     } else {
       putSurplusEnergyToWork(creep);
@@ -46,10 +60,6 @@ export function runHarvester(creep: Creep) {
   if (!source) return;
 
   const current = source;
-  const hasMiner = (s: Source) =>
-    s.pos.findInRange(FIND_MY_CREEPS, 1, {
-      filter: (c) => c.memory.role === ROLE_MINER,
-    }).length > 0;
 
   if (hasMiner(current)) {
     const uncovered = getSafeSources(creep.room).find((s) => s.id !== current.id && !hasMiner(s));
@@ -58,7 +68,11 @@ export function runHarvester(creep: Creep) {
       harvestFromSource(creep, uncovered);
       return;
     }
-    creep.suicide();
+    // Every source has a miner. Suiciding here threw the rest of the
+    // harvester's life away - the whole crew at once - just as the room was
+    // leaning on its first small hauler to keep the core fed. Carry what the
+    // miners leave in their containers instead, core first, for the rest of it.
+    acquireEnergy(creep);
     return;
   }
 
