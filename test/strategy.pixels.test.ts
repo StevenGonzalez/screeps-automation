@@ -54,6 +54,12 @@ describe("strategy RECOVER triggers", () => {
     expect((g.Memory as Memory).empire?.posture).toBe("RECOVER");
   });
 
+  it("treats a spawnless RCL4+ room as crippled even without the hadSpawn flag", () => {
+    setGame([room("W1N1", 1, 8), room("W2N1", 0, 4)], 10_000);
+    strategyLoop();
+    expect((g.Memory as Memory).empire?.posture).toBe("RECOVER");
+  });
+
   it("ignores the active expansion target even if it once had a spawn", () => {
     setGame([room("W1N1", 1, 8), room("W2N1", 0, 3, { hadSpawn: true })], 10_000);
     (g.Memory as Memory).expansion = { roomName: "W2N1" } as ExpansionData;

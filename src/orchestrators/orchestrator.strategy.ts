@@ -9,6 +9,8 @@ const STRATEGY_INTERVAL = 5;
 
 const MULTI_THREAT_RECOVER_COUNT = 2;
 
+const SPAWNLESS_CRIPPLED_LEVEL = 4;
+
 export function loop() {
   if (Game.time % STRATEGY_INTERVAL !== 0) return;
 
@@ -19,12 +21,15 @@ export function loop() {
   for (const room of ownedRooms) {
     const spawns = room.find(FIND_MY_SPAWNS);
     // Only a room that has had a spawn and lost it is crippled. A colony still
-    // bootstrapping its first spawn is expected to have none.
+    // bootstrapping its first spawn is expected to have none. Rooms that lost
+    // their spawn before hadSpawn existed are caught by level: no bootstrap
+    // gets this far without building one.
     const mem = room.memory as RoomMemory & { hadSpawn?: boolean };
+    const level = room.controller?.level ?? 0;
     if (spawns.length > 0) mem.hadSpawn = true;
     else if (
-      (room.controller?.level ?? 0) >= 2 &&
-      mem.hadSpawn &&
+      level >= 2 &&
+      (mem.hadSpawn || level >= SPAWNLESS_CRIPPLED_LEVEL) &&
       Memory.expansion?.roomName !== room.name
     ) {
       crippled = true;
