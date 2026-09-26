@@ -269,6 +269,8 @@ declare global {
     militaryOp?: MilitaryOp;
     militaryOps?: Record<string, MilitaryOp>;
     militaryQueue?: QueuedMilitaryOp[];
+    // Cleared rooms whose controller is still hostile, keyed by room name.
+    unclaimTargets?: Record<string, UnclaimTarget>;
     defenseOps?: Record<string, DefenseOp>;
     drainOps?: Record<string, DrainOp>;
     warCouncil?: WarCouncilMemory;
@@ -284,6 +286,14 @@ declare global {
     autoExpand?: boolean;
     empire?: EmpireMemory;
     profileRoles?: boolean;
+  }
+
+  interface UnclaimTarget {
+    homeRoom: string;
+    // Give up after this tick.
+    until: number;
+    // Last known tick the controller accepts another attack.
+    blockedUntil?: number;
   }
 
   type EmpirePosture = "EXPAND" | "TURTLE" | "WAR" | "RECOVER";

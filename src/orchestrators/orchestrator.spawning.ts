@@ -28,6 +28,7 @@ import {
   ROLE_SK_MINER,
   ROLE_SK_HAULER,
   ROLE_SCORE_HUNTER,
+  ROLE_UNCLAIMER,
 } from "../config/config.roles";
 import { getThreatInfo, getThreatSeverity, refreshBlockade, isBlockaded } from "../services/services.combat";
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
@@ -484,6 +485,7 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
 
   if (!blockaded && !economyCritical && shouldSpawnOffensiveCreep(room) && spawnNextOffensiveCreep(room, spawn)) return;
   if (!blockaded && !economyCritical && shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
+  if (!blockaded && !economyCritical && spawnUnclaimer(room, spawn)) return;
   if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
@@ -1321,11 +1323,11 @@ function boostMemory(queue: string[]): { boostCompound?: string; boostQueue?: st
   };
 }
 
-// Damage eats body parts left to right, so a combat body is ordered worst-to-
-// best: TOUGH soaks first, MOVE goes next, and the part the creep exists for
-// (ATTACK / RANGED_ATTACK / WORK, then HEAL) is last so it keeps producing
-// until the creep is nearly dead. A body that lists its combat parts first
-// loses its output while still at full mobility, which is backwards.
+// Damage eats body parts left to right. TOUGH soaks first, then the damage
+// parts (ATTACK / RANGED_ATTACK / WORK), then MOVE, then HEAL. Losing MOVE
+// early leaves a hurt creep unable to chase, kite or fall back to its healers,
+// and a stranded creep is lost with every part it has left; keeping MOVE and
+// HEAL to the end lets it limp home and heal.
 // One MOVE per other part so a knight keeps full speed off-road: remote
 // defence and offensive squads rarely have roads under them.
 export function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
@@ -1337,8 +1339,8 @@ export function buildKnightBody(availableEnergy: number): BodyPartConstant[] {
   const groups = Math.max(1, maxGroups);
   return [
     ...Array(groups).fill(TOUGH),
-    ...Array(groups * 2).fill(MOVE),
     ...Array(groups).fill(ATTACK),
+    ...Array(groups * 2).fill(MOVE),
   ] as BodyPartConstant[];
 }
 
@@ -1350,8 +1352,8 @@ export function buildWizardBody(availableEnergy: number): BodyPartConstant[] {
   );
   const pairs = Math.max(1, maxPairs);
   return [
-    ...Array(pairs).fill(MOVE),
     ...Array(pairs).fill(RANGED_ATTACK),
+    ...Array(pairs).fill(MOVE),
   ] as BodyPartConstant[];
 }
 
@@ -1391,8 +1393,8 @@ export function buildSiegerBody(availableEnergy: number): BodyPartConstant[] {
   const groups = Math.max(1, maxGroups);
   return [
     ...Array(groups).fill(TOUGH),
-    ...Array(groups * 3).fill(MOVE),
     ...Array(groups * 2).fill(WORK),
+    ...Array(groups * 3).fill(MOVE),
   ] as BodyPartConstant[];
 }
 
@@ -1476,6 +1478,44 @@ function spawnConqueror(room: Room, spawn: StructureSpawn): boolean {
       homeRoom: room.name,
       targetRoom: exp.roomName,
     },
+  });
+  return res === OK;
+}
+
+// Spawn the next unclaimer this long before the controller accepts another
+// attack, to cover spawning and the walk over.
+const UNCLAIMER_LEAD = 400;
+
+export function findUnclaimTarget(room: Room): string | null {
+  const targets = Memory.unclaimTargets;
+  if (!targets) return null;
+  for (const name in targets) {
+    const t = targets[name];
+    if (t.until <= Game.time) {
+      delete targets[name];
+      continue;
+    }
+    if (t.homeRoom !== room.name) continue;
+    if ((t.blockedUntil ?? 0) - UNCLAIMER_LEAD > Game.time) continue;
+    if (getCreepsByRole(ROLE_UNCLAIMER).some((c) => c.memory.targetRoom === name)) continue;
+    return name;
+  }
+  return null;
+}
+
+export function buildUnclaimerBody(capacity: number): BodyPartConstant[] {
+  const pairCost = BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
+  const pairs = Math.max(1, Math.min(Math.floor(MAX_BODY_PART_COUNT / 2), Math.floor(capacity / pairCost)));
+  return [...Array(pairs).fill(CLAIM), ...Array(pairs).fill(MOVE)] as BodyPartConstant[];
+}
+
+function spawnUnclaimer(room: Room, spawn: StructureSpawn): boolean {
+  const target = findUnclaimTarget(room);
+  if (!target) return false;
+  const body = buildUnclaimerBody(room.energyCapacityAvailable);
+  if (room.energyAvailable < calculateBodyPartCost(body)) return false;
+  const res = trackedSpawn(room, spawn, body, `${ROLE_UNCLAIMER}${Game.time}`, {
+    memory: { role: ROLE_UNCLAIMER, homeRoom: room.name, targetRoom: target },
   });
   return res === OK;
 }
@@ -1864,8 +1904,8 @@ function spawnNextPowerCreep(room: Room, spawn: StructureSpawn): boolean {
 // one MOVE each.
 export function buildPowerAttackerBody(): BodyPartConstant[] {
   return [
-    ...Array(25).fill(MOVE),
     ...Array(25).fill(ATTACK),
+    ...Array(25).fill(MOVE),
   ] as BodyPartConstant[];
 }
 
@@ -1981,8 +2021,8 @@ export function buildSkGuardianBody(availableEnergy: number): BodyPartConstant[]
   );
   const groups = Math.max(5, maxGroups);
   return [
-    ...Array(groups * 2).fill(MOVE),
     ...Array(groups).fill(RANGED_ATTACK),
+    ...Array(groups * 2).fill(MOVE),
     ...Array(groups).fill(HEAL),
   ] as BodyPartConstant[];
 }

@@ -28,6 +28,7 @@ import {
   ROLE_SK_MINER,
   ROLE_SK_HAULER,
   ROLE_SCORE_HUNTER,
+  ROLE_UNCLAIMER,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
@@ -58,6 +59,7 @@ import { runSkGuardian } from "../roles/role.sk_guardian";
 import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
 import { runScoreHunter } from "../roles/role.scoreHunter";
+import { runUnclaimer } from "../roles/role.unclaimer";
 import { resolveTraffic } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 
@@ -91,6 +93,7 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SK_MINER]: runSkMiner,
   [ROLE_SK_HAULER]: runSkHauler,
   [ROLE_SCORE_HUNTER]: runScoreHunter,
+  [ROLE_UNCLAIMER]: runUnclaimer,
 };
 
 const GENERAL_CHATTER = ["circle bk", "synergy", "per email", "quick sync", "noted", "bandwidth?", "EOD pls", "align!"];
@@ -111,6 +114,7 @@ const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_SIEGER]: ["cut costs", "redundant", "line item"],
   [ROLE_DRAINER]: ["no comment", "spin it", "valued!"],
   [ROLE_CONQUEROR]: ["acquired", "new branch", "rightsize"],
+  [ROLE_UNCLAIMER]: ["wind down", "assets?", "closing"],
   [ROLE_SETTLER]: ["day one!", "my desk?", "badge pls"],
 };
 

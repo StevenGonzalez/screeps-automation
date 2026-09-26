@@ -32,6 +32,7 @@ export const ROLE_SK_GUARDIAN = "security";
 export const ROLE_SK_MINER = "overtime";
 export const ROLE_SK_HAULER = "payroll";
 export const ROLE_SCORE_HUNTER = "bizdev";
+export const ROLE_UNCLAIMER = "liquidator";
 
 export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
   [ROLE_HARVESTER]: [

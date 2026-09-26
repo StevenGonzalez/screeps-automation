@@ -31,17 +31,16 @@ import {
 } from "../src/orchestrators/orchestrator.spawning";
 
 /**
- * Damage consumes body parts left to right, so the part a combat creep exists
- * for has to be last: it then keeps firing (or healing) until the creep is
- * nearly dead. TOUGH soaks first and MOVE goes before the payload, because a
- * crippled creep that still shoots is worth more than a mobile one that cannot.
+ * Damage consumes body parts left to right. TOUGH soaks first, then the damage
+ * parts, then MOVE, then HEAL: a hurt creep that can still move and heal gets
+ * home, while one that lost its MOVE first is stranded and lost.
  */
 const RANK: Record<string, number> = {
   tough: 0,
-  move: 1,
-  work: 2,
-  attack: 2,
-  ranged_attack: 2,
+  work: 1,
+  attack: 1,
+  ranged_attack: 1,
+  move: 2,
   heal: 3,
 };
 
@@ -65,7 +64,7 @@ describe("combat body part ordering", () => {
   };
 
   for (const [name, build] of Object.entries(builders)) {
-    it(`${name} puts its payload parts last at every body size`, () => {
+    it(`${name} orders TOUGH, damage, MOVE, HEAL at every body size`, () => {
       for (const energy of ENERGIES) {
         const body = build(energy);
         expect(body.length).toBeGreaterThan(0);
@@ -84,8 +83,8 @@ describe("combat body part ordering", () => {
     expect(body[body.length - 1]).toBe(g.HEAL);
   });
 
-  it("keeps the sieger dismantling after its TOUGH and MOVE parts are gone", () => {
+  it("keeps the sieger mobile after its TOUGH and WORK parts are gone", () => {
     const body = buildSiegerBody(2300);
-    expect(body[body.length - 1]).toBe(g.WORK);
+    expect(body[body.length - 1]).toBe(g.MOVE);
   });
 });

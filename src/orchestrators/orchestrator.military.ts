@@ -436,29 +436,16 @@ function hostileControllerToNeutralize(room: Room): StructureController | null {
   return null;
 }
 
-function neutralizeController(creep: Creep, op: MilitaryOp): boolean {
-  if (creep.room.name !== op.targetRoom) return false;
-  if (!creep.body.some((p) => p.type === CLAIM && p.hits > 0)) return false;
-  if (!roomStructurallyCleared(creep.room)) return false;
-  const ctrl = hostileControllerToNeutralize(creep.room);
-  if (!ctrl) return false;
+// Long enough to walk an RCL8 controller down with a relay of unclaimers.
+const UNCLAIM_WINDOW = 100_000;
 
-  if (creep.attackController(ctrl) === ERR_NOT_IN_RANGE) {
-    creep.moveTo(ctrl, { range: 1, reusePath: 10 });
-  }
-  return true;
-}
-
+// Squads carry no CLAIM, so a cleared room with a live controller is handed to
+// a relay of unclaimer creeps (see role.unclaimer) before the squad disbands.
 function completeOp(op: MilitaryOp): void {
   const room = Game.rooms[op.targetRoom];
   if (room && roomStructurallyCleared(room) && hostileControllerToNeutralize(room)) {
-    const ctrl = hostileControllerToNeutralize(room)!;
-    for (const c of getSquadMembers(op)) {
-      if (c.room.name !== op.targetRoom) continue;
-      if (!c.body.some((p) => p.type === CLAIM && p.hits > 0)) continue;
-      if (c.attackController(ctrl) === ERR_NOT_IN_RANGE) c.moveTo(ctrl, { range: 1, reusePath: 5 });
-      break;
-    }
+    Memory.unclaimTargets = Memory.unclaimTargets ?? {};
+    Memory.unclaimTargets[op.targetRoom] = { homeRoom: op.homeRoom, until: Game.time + UNCLAIM_WINDOW };
   }
   removeOp(op);
 }
@@ -1597,8 +1584,6 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
     else moveToSlot(creep, op, ctx);
     return;
   }
-
-  if (neutralizeController(creep, op)) return;
 
   regroup(creep, op, ctx, isLeader);
 }
