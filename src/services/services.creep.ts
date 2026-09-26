@@ -2,6 +2,7 @@ import {
   ENERGY_DEPOSIT_PRIORITY,
   ROLE_HAULER,
   ROLE_MINER,
+  ROLE_UPGRADER,
 } from "../config/config.roles";
 import { pickSignature } from "../config/signatures";
 import { PLANNER_KEYS } from "../config/config.structures";
@@ -312,10 +313,15 @@ export function acquireEnergy(
     return res === OK;
   }
 
+  // Controller links hold upgrader energy, often relayed from storage; any
+  // other role pulling from them just ships it back.
+  const controllerLinks =
+    creep.memory.role === ROLE_UPGRADER ? undefined : creep.room.memory.controllerLinkIds;
   const links = getRoomStructures(creep.room).filter(
     (s): s is StructureLink =>
       s.structureType === STRUCTURE_LINK &&
-      (s as StructureLink).store[RESOURCE_ENERGY] > 0
+      (s as StructureLink).store[RESOURCE_ENERGY] > 0 &&
+      !controllerLinks?.includes(s.id as Id<StructureLink>)
   );
   if (links.length > 0) {
     const link = closestByPath(creep.pos, links) as StructureLink | null;
