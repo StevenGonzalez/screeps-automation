@@ -11,15 +11,28 @@ import {
   planBreach,
   assessTowers,
   towersAreDrained,
+  isPlayerCreep,
+  canDealDamage,
+  allyInMassAttackRange,
   type BreachPlan,
   type TowerStatus,
 } from "../services/services.combat";
 import { launchNukeFrom } from "./orchestrator.nuker";
+import { getAllies, requestHelp } from "../services/services.allies";
 
 declare global {
   interface WarCouncilMemory {
     lastAutoNukeTick?: number;
     nukedUntil?: Record<string, number>;
+    // Owner (or room) -> tick until which auto-attack leaves it alone after a failed op.
+    targetCooldown?: Record<string, number>;
+    // Player -> last tick one of their armed creeps was seen in our rooms or remotes.
+    hostilePlayers?: Record<string, number>;
+  }
+
+  interface MilitaryOp {
+    attempts?: number;
+    holdSince?: number;
   }
 }
 
@@ -45,6 +58,11 @@ const DEFENSE_CHASE_RADIUS = 12;
 const AUTO_ATTACK_MAX_THREAT = 4;
 const AUTO_ATTACK_MAX_RANGE = 6;
 
+const MAX_OP_ATTEMPTS = 2;
+const FAILED_OP_COOLDOWN = 10_000;
+const HOSTILE_MEMORY_TICKS = 20_000;
+const HOLD_FOR_DRAIN_MAX = 300;
+
 const RETREAT_THRESHOLD: Record<SquadTactic, number> = {
   assault: 0.4,
   siege: 0.35,
@@ -59,6 +77,7 @@ const defensiveRampartCache: Record<string, StructureRampart[]> = {};
 export function loop(): void {
   runWarCouncil();
   runDefenseCouncil();
+  requestAllyDefense();
   cleanupDrainOps();
 
   migrateMilitaryOps();
@@ -141,6 +160,7 @@ function runRallying(op: MilitaryOp, homeRoom: Room, members: Creep[]): void {
 
 function runAttacking(op: MilitaryOp, members: Creep[]): void {
   if (members.length === 0) {
+    if (abandonAfterFailedAttempt(op, "All squad members lost")) return;
     op.phase = "forming";
     op.startedAt = Game.time;
     op.clearedSince = undefined;
@@ -178,9 +198,15 @@ function runAttacking(op: MilitaryOp, members: Creep[]): void {
     return;
   }
 
+  if (targetRoom.controller?.safeMode) {
+    console.log(`[Military] ${op.targetRoom}: Safe mode active - standing down`);
+    removeOp(op);
+    return;
+  }
+
   if (op.tactic === "defend") return;
 
-  const hostiles = targetRoom.find(FIND_HOSTILE_CREEPS);
+  const hostiles = getThreatInfo(targetRoom).hostiles;
   const ownedStructs = targetRoom.find(FIND_HOSTILE_STRUCTURES, {
     filter: (s) => s.structureType !== STRUCTURE_CONTROLLER && s.structureType !== STRUCTURE_RAMPART,
   });
@@ -206,6 +232,12 @@ function runAttacking(op: MilitaryOp, members: Creep[]): void {
 
 function runRetreating(op: MilitaryOp, members: Creep[]): void {
   if (members.length === 0) {
+    // A manual retreat with nobody left is finished, not a reason to respawn.
+    if (op.tactic === "retreat") {
+      removeOp(op);
+      return;
+    }
+    if (abandonAfterFailedAttempt(op, "All squad members lost")) return;
     op.phase = "forming";
     op.startedAt = Game.time;
     op.retreatSince = undefined;
@@ -228,10 +260,39 @@ function runRetreating(op: MilitaryOp, members: Creep[]): void {
     op.phase = "rallying";
     console.log(`[Military] ${op.targetRoom}: Regrouped - re-rallying for another push (${op.tactic})`);
   } else {
+    if (abandonAfterFailedAttempt(op, "Squad depleted after retreat")) return;
     op.phase = "forming";
     op.startedAt = Game.time;
     console.log(`[Military] ${op.targetRoom}: Squad depleted after retreat - reforming`);
   }
+}
+
+// Counts a lost push. After MAX_OP_ATTEMPTS the op is dropped and the target
+// is put on cooldown so the war council doesn't pick it straight back up.
+function abandonAfterFailedAttempt(op: MilitaryOp, reason: string): boolean {
+  op.attempts = (op.attempts ?? 0) + 1;
+  if (op.attempts < MAX_OP_ATTEMPTS) return false;
+  console.log(`[Military] ${op.targetRoom}: ${reason} (${op.attempts} failed attempts) - abandoning op`);
+  startTargetCooldown(op.targetRoom);
+  removeOp(op);
+  return true;
+}
+
+function startTargetCooldown(targetRoom: string): void {
+  if (!Memory.warCouncil) Memory.warCouncil = { autoAttack: false };
+  const wc = Memory.warCouncil;
+  if (!wc.targetCooldown) wc.targetCooldown = {};
+  const until = Game.time + FAILED_OP_COOLDOWN;
+  wc.targetCooldown[targetRoom] = until;
+  const owner =
+    Game.rooms[targetRoom]?.controller?.owner?.username ?? Memory.intel?.[targetRoom]?.owner;
+  if (owner) wc.targetCooldown[owner] = until;
+}
+
+function onTargetCooldown(wc: WarCouncilMemory, key: string | undefined): boolean {
+  if (!key) return false;
+  const until = wc.targetCooldown?.[key];
+  return until !== undefined && Game.time < until;
 }
 
 interface SquadContext {
@@ -359,7 +420,7 @@ function squadBoostReady(members: Creep[]): boolean {
 }
 
 function roomStructurallyCleared(room: Room): boolean {
-  if (room.find(FIND_HOSTILE_CREEPS).length > 0) return false;
+  if (getThreatInfo(room).hostiles.length > 0) return false;
   return (
     room.find(FIND_HOSTILE_STRUCTURES, {
       filter: (s) => s.structureType !== STRUCTURE_CONTROLLER && s.structureType !== STRUCTURE_RAMPART,
@@ -454,6 +515,8 @@ export function getDrainOpsForHome(homeRoom: string): DrainOp[] {
 
 export function launchDrain(targetRoom: string, homeRoom?: string, count = DRAIN_DEFAULT_COUNT): string | null {
   if (Game.rooms[targetRoom]?.controller?.my) return `${targetRoom} is your own room`;
+  const allyErr = allyTargetError(targetRoom);
+  if (allyErr) return allyErr;
   const drainers = Math.max(1, Math.min(DRAIN_MAX_COUNT, Math.floor(count)));
 
   let home = homeRoom;
@@ -538,6 +601,8 @@ export function launchOp(
   composition: { melee: number; ranged: number; healers: number; siege: number; drainers?: number },
   homeRoom: string
 ): string | null {
+  const allyErr = allyTargetError(targetRoom);
+  if (allyErr) return allyErr;
   if (!Memory.militaryOps) Memory.militaryOps = {};
   const existing = Memory.militaryOps[homeRoom];
   if (existing) {
@@ -573,6 +638,8 @@ export function enqueueOp(
   const total =
     composition.melee + composition.ranged + composition.healers + composition.siege;
   if (total <= 0) return "squad must have at least one member";
+  const allyErr = allyTargetError(targetRoom);
+  if (allyErr) return allyErr;
   if (!Memory.militaryQueue) Memory.militaryQueue = [];
   if (Memory.militaryQueue.some((q) => q.targetRoom === targetRoom)) {
     return `${targetRoom} is already queued`;
@@ -600,6 +667,15 @@ export function dequeueOp(targetRoom: string): boolean {
   return Memory.militaryQueue.length !== before;
 }
 
+// Refuses rooms an ally owns or reserves, whether seen now or remembered in intel.
+function allyTargetError(targetRoom: string): string | null {
+  const ctrl = Game.rooms[targetRoom]?.controller;
+  const intel = Memory.intel?.[targetRoom];
+  const names = [ctrl?.owner?.username, ctrl?.reservation?.username, intel?.owner, intel?.reservedBy];
+  const ally = names.find((u) => isAllyPlayer(u));
+  return ally ? `${targetRoom} is held by ally ${ally}` : null;
+}
+
 export function getMilitaryQueue(): QueuedMilitaryOp[] {
   return Memory.militaryQueue ?? [];
 }
@@ -623,7 +699,7 @@ function advanceMilitaryQueue(): void {
     const q = queue[i];
 
     const target = Game.rooms[q.targetRoom];
-    if (target?.controller?.my) {
+    if (target?.controller?.my || allyTargetError(q.targetRoom)) {
       queue.splice(i, 1);
       continue;
     }
@@ -835,8 +911,7 @@ function rebuildPlayerModel(): void {
     p.maxRcl = Math.max(p.maxRcl, intel.rcl);
     p.totalTowers += intel.towers;
     p.totalSpawns += intel.spawns;
-    p.militaryStrength +=
-      intel.towers * 100 + Math.floor((intel.barrierHpMax ?? 0) / 100_000) * 50 + intel.rcl * 10;
+    p.militaryStrength += roomMilitaryStrength(intel.towers, intel.barrierHpMax ?? 0, intel.rcl);
     p.economicStrength +=
       Math.floor(((intel.storageEnergy ?? 0) + (intel.terminalEnergy ?? 0)) / 1000) +
       (intel.storageMineral ?? 0) + (intel.terminalMineral ?? 0);
@@ -863,6 +938,29 @@ function rebuildPlayerModel(): void {
 
 const PLAYER_ROOM_CAP = 30;
 
+function roomMilitaryStrength(towers: number, barrierHpMax: number, rcl: number): number {
+  return towers * 100 + Math.floor(barrierHpMax / 100_000) * 50 + rcl * 10;
+}
+
+// Our own strength on the same scale as Memory.players[*].militaryStrength.
+function ownMilitaryStrength(): number {
+  let total = 0;
+  for (const rn in Game.rooms) {
+    const room = Game.rooms[rn];
+    if (!room.controller?.my) continue;
+    const towers = room.find(FIND_MY_STRUCTURES, {
+      filter: (s) => s.structureType === STRUCTURE_TOWER,
+    }).length;
+    let barrierMax = 0;
+    for (const s of room.find(FIND_STRUCTURES)) {
+      if (s.structureType !== STRUCTURE_RAMPART && s.structureType !== STRUCTURE_WALL) continue;
+      if (s.hits > barrierMax) barrierMax = s.hits;
+    }
+    total += roomMilitaryStrength(towers, barrierMax, room.controller.level);
+  }
+  return total;
+}
+
 function parseRoomCoords(roomName: string): { x: number; y: number } | null {
   const m = /^([WE])(\d+)([NS])(\d+)$/.exec(roomName);
   if (!m) return null;
@@ -886,8 +984,6 @@ function targetValue(intel: RoomIntelData): number {
   value += Math.floor(((intel.storageEnergy ?? 0) + (intel.terminalEnergy ?? 0)) / 2_000);
   value += Math.floor(((intel.storageMineral ?? 0) + (intel.terminalMineral ?? 0)) / 200);
   value += intel.rcl * 8;
-  const player = intel.owner ? Memory.players?.[intel.owner] : undefined;
-  if (player) value += Math.min(40, player.roomCount * 4 + player.maxRcl);
   return Math.max(1, value);
 }
 
@@ -907,6 +1003,8 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
   maintainWarTarget();
 
   maintainNukedTargets(wc);
+  pruneExpired(wc.targetCooldown, (until) => Game.time >= until);
+  pruneExpired(wc.hostilePlayers, (seen) => Game.time - seen > HOSTILE_MEMORY_TICKS);
 
   const posture = Memory.empire?.posture;
   if (posture === "TURTLE" || posture === "RECOVER") return;
@@ -921,6 +1019,7 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
     ownedRooms.map((r) => r.controller?.owner?.username).filter((u): u is string => !!u)
   );
   const capableHomeCount = freeHomes.length;
+  let ourStrength: number | undefined;
 
   let best: RoomIntelData | null = null;
   let bestHome = freeHomes[0].name;
@@ -929,6 +1028,12 @@ function considerAutoAttack(wc: WarCouncilMemory): void {
     const intel = Memory.intel[rn];
     if (!intel.owner || myNames.has(intel.owner)) continue;
     if (isAllyPlayer(intel.owner)) continue;
+    if (onTargetCooldown(wc, rn) || onTargetCooldown(wc, intel.owner)) continue;
+    // Outside of declared war, only strike players who have come at us first.
+    if (posture !== "WAR" && !wasHostileToUs(wc, intel.owner)) continue;
+    const theirStrength = Memory.players?.[intel.owner]?.militaryStrength ?? 0;
+    ourStrength ??= ownMilitaryStrength();
+    if (theirStrength > ourStrength) continue;
     if (intel.safeMode) continue;
     if (intel.threatLevel > AUTO_ATTACK_MAX_THREAT) continue;
     if (nukeInbound(wc, rn)) continue;
@@ -1027,6 +1132,11 @@ function maintainNukedTargets(wc: WarCouncilMemory): void {
   }
 }
 
+function pruneExpired(map: Record<string, number> | undefined, expired: (v: number) => boolean): void {
+  if (!map) return;
+  for (const k in map) if (expired(map[k])) delete map[k];
+}
+
 function considerAutoNuke(wc: WarCouncilMemory, intel: RoomIntelData): boolean {
   try {
     if (nukeInbound(wc, intel.roomName)) return true;
@@ -1082,6 +1192,26 @@ function empireEconomyHealthy(): boolean {
   return false;
 }
 
+function wasHostileToUs(wc: WarCouncilMemory, username: string): boolean {
+  const seen = wc.hostilePlayers?.[username];
+  return seen !== undefined && Game.time - seen <= HOSTILE_MEMORY_TICKS;
+}
+
+// Remembers which players have sent armed creeps into our rooms or remotes.
+function recordHostilePlayers(hostiles: Creep[], ownRoom: boolean): void {
+  const wc = Memory.warCouncil;
+  if (!wc) return;
+  for (const c of hostiles) {
+    if (!isPlayerCreep(c)) continue;
+    const armed = c.body.some(
+      (p) => p.hits > 0 && (p.type === ATTACK || p.type === RANGED_ATTACK || p.type === CLAIM)
+    );
+    if (!armed && !(ownRoom && canDealDamage(c))) continue;
+    if (!wc.hostilePlayers) wc.hostilePlayers = {};
+    wc.hostilePlayers[c.owner.username] = Game.time;
+  }
+}
+
 function isAllyPlayer(username: string | undefined): boolean {
   if (!username) return false;
   const allies = (Memory as unknown as { allies?: string[] }).allies;
@@ -1122,6 +1252,11 @@ function runDefenseCouncil(): void {
     const { score, hostiles } = getThreatInfo(room);
     const severity = getThreatSeverity(room);
     const existing = ops[roomName];
+    recordHostilePlayers(hostiles, true);
+    for (const remote of room.memory.remoteRooms ?? []) {
+      const r = Game.rooms[remote.roomName];
+      if (r) recordHostilePlayers(getThreatInfo(r).hostiles, false);
+    }
 
     const controllerAttacker = hostiles.some((c) => c.body.some((p) => p.type === CLAIM));
 
@@ -1153,6 +1288,23 @@ function runDefenseCouncil(): void {
     if (room?.controller?.my) continue;
     if (!room && Game.time - ops[roomName].lastThreatTick < DEFENSE_CLEAR_TICKS) continue;
     clearDefenseOp(roomName);
+  }
+}
+
+// Ask allies for help every tick a room is under a defense-op-sized threat.
+// runAllies publishes these at the start of next tick.
+function requestAllyDefense(): void {
+  const ops = Memory.defenseOps;
+  if (!ops || getAllies().length === 0) return;
+  for (const roomName in ops) {
+    const op = ops[roomName];
+    if (op.threatScore < DEFENSE_THREAT_SCORE) continue;
+    if (Game.time - op.lastThreatTick > DEFENSE_SCAN_INTERVAL) continue;
+    requestHelp({
+      type: "defense",
+      roomName,
+      priority: Math.min(1, op.threatScore / (DEFENSE_THREAT_SCORE * 4)),
+    });
   }
 }
 
@@ -1196,7 +1348,23 @@ function isNearEdge(pos: RoomPosition): boolean {
   return pos.x <= 1 || pos.x >= 48 || pos.y <= 1 || pos.y >= 48;
 }
 
-function selectDefenseTarget(creep: Creep, rally: RoomPosition, hostiles: Creep[]): Creep | null {
+// The creep the towers last fired on, if it's within this creep's reach.
+function towerFocus(creep: Creep, hostiles: Creep[], reach: number): Creep | null {
+  if (!creep.room.controller?.my) return null;
+  const id = creep.room.memory?.lastTowerTargetId;
+  if (!id) return null;
+  const focus = hostiles.find((h) => h.id === id);
+  return focus && creep.pos.getRangeTo(focus) <= reach ? focus : null;
+}
+
+function selectDefenseTarget(
+  creep: Creep,
+  rally: RoomPosition,
+  hostiles: Creep[],
+  reach: number
+): Creep | null {
+  const focus = towerFocus(creep, hostiles, reach);
+  if (focus) return focus;
   const engageable = hostiles.filter(
     (h) => !isNearEdge(h.pos) && rally.getRangeTo(h) <= DEFENSE_CHASE_RADIUS
   );
@@ -1281,6 +1449,12 @@ function anchorOnRampart(creep: Creep, anchorPos: RoomPosition, range: number): 
   return true;
 }
 
+function isBreaching(room: Room, hostile: Creep): boolean {
+  return room
+    .find(FIND_MY_STRUCTURES)
+    .some((s) => s.structureType !== STRUCTURE_RAMPART && hostile.pos.getRangeTo(s) <= 1);
+}
+
 export function runDefensiveKnight(creep: Creep, roomName: string): void {
   const rally = defenseRallyPoint(roomName);
   if (creep.room.name !== roomName) {
@@ -1289,14 +1463,16 @@ export function runDefensiveKnight(creep: Creep, roomName: string): void {
   }
 
   const { hostiles } = getThreatInfo(creep.room);
-  const target = selectDefenseTarget(creep, rally, hostiles);
+  const target = selectDefenseTarget(creep, rally, hostiles, 1);
   if (target) {
     meleeStrike(creep, target, hostiles);
     if (!anchorOnRampart(creep, target.pos, 1)) {
-      if (getDefensiveRamparts(creep.room).length > 0) {
-        anchorOnRampart(creep, target.pos, 0);
-      } else {
+      // No rampart next to the target. Only leave cover for an attacker already
+      // at work on our base (a breach); one outside the wall is bait.
+      if (getDefensiveRamparts(creep.room).length === 0 || isBreaching(creep.room, target)) {
         defenseMoveToward(creep, rally, target, 1);
+      } else {
+        anchorOnRampart(creep, target.pos, 0);
       }
     }
     return;
@@ -1313,7 +1489,7 @@ export function runDefensiveWizard(creep: Creep, roomName: string): void {
 
   const { hostiles } = getThreatInfo(creep.room);
 
-  rangedStrike(creep, selectDefenseTarget(creep, rally, hostiles), hostiles);
+  rangedStrike(creep, selectDefenseTarget(creep, rally, hostiles, KITE_RANGE), hostiles);
 
   const nearest = creep.pos.findClosestByRange(
     hostiles.filter((h) => !isNearEdge(h.pos) && rally.getRangeTo(h) <= DEFENSE_CHASE_RADIUS)
@@ -1365,10 +1541,12 @@ export function runDefensiveCleric(creep: Creep, roomName: string): void {
 export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
   const ctx = getSquadContext(op);
   if (op.phase === "forming" || op.phase === "rallying") {
+    strikeAdjacent(creep);
     parkNearHomeSpawn(creep, op.homeRoom);
     return;
   }
   if (op.phase === "retreating" || op.tactic === "retreat") {
+    strikeAdjacent(creep);
     retreatToHome(creep, op.homeRoom);
     return;
   }
@@ -1379,8 +1557,7 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
     const healer = creep.pos.findClosestByRange(ctx.members, {
       filter: (c: Creep) => c.memory.role === ROLE_CLERIC,
     });
-    const adjacent = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 1)[0];
-    if (adjacent) creep.attack(adjacent);
+    strikeAdjacent(creep);
     if (healer && !creep.pos.isNearTo(healer)) {
       creep.moveTo(healer, { reusePath: 3 });
       return;
@@ -1388,8 +1565,7 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
   }
 
   if (creep.room.name !== op.targetRoom) {
-    const adjacent = creep.pos.findInRange(FIND_HOSTILE_CREEPS, 1)[0];
-    if (adjacent) creep.attack(adjacent);
+    strikeAdjacent(creep);
     transitMove(creep, op, ctx, isLeader);
     return;
   }
@@ -1430,6 +1606,7 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
 export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
   const ctx = getSquadContext(op);
   if (op.phase === "forming" || op.phase === "rallying") {
+    rangedSnapFire(creep);
     parkNearHomeSpawn(creep, op.homeRoom);
     return;
   }
@@ -1486,11 +1663,12 @@ export function runOffensiveCleric(creep: Creep, op: MilitaryOp): void {
   const ctx = getSquadContext(op);
   if (op.phase === "forming" || op.phase === "rallying") {
     if (creep.hits < creep.hitsMax) creep.heal(creep);
+    else healBest(creep, ctx, false);
     parkNearHomeSpawn(creep, op.homeRoom);
     return;
   }
   if (op.phase === "retreating" || op.tactic === "retreat") {
-    healBest(creep, ctx);
+    healBest(creep, ctx, false);
     retreatToHome(creep, op.homeRoom);
     return;
   }
@@ -1540,7 +1718,7 @@ export function runOffensiveSieger(creep: Creep, op: MilitaryOp): void {
     return;
   }
 
-  if (op.tactic === "siege" && shouldHoldForDrain(creep.room)) {
+  if (op.tactic === "siege" && shouldHoldForDrain(op, creep.room)) {
     holdAtBreachApproach(creep, op, ctx, isLeader);
     return;
   }
@@ -1556,9 +1734,19 @@ export function runOffensiveSieger(creep: Creep, op: MilitaryOp): void {
   regroup(creep, op, ctx, isLeader);
 }
 
-function healBest(creep: Creep, ctx: SquadContext): Creep | null {
+function healBest(creep: Creep, ctx: SquadContext, preHeal = true): Creep | null {
   const wounded = ctx.members.filter((c) => c.hits < c.hitsMax);
-  if (wounded.length === 0) return null;
+  if (wounded.length === 0) {
+    // Nobody hurt: pre-heal the front creep so incoming damage is offset this tick.
+    // Returns null so the cleric keeps its formation slot instead of chasing.
+    const front = ctx.leader;
+    if (preHeal && front) {
+      const range = creep.pos.getRangeTo(front);
+      if (range <= 1) creep.heal(front);
+      else if (range <= 3) creep.rangedHeal(front);
+    }
+    return null;
+  }
   const target = wounded.reduce((a, b) => (a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b));
   const range = creep.pos.getRangeTo(target);
   if (range <= 1) creep.heal(target);
@@ -1567,8 +1755,16 @@ function healBest(creep: Creep, ctx: SquadContext): Creep | null {
 }
 
 function rangedSnapFire(creep: Creep): void {
-  const inRange = creep.pos.findInRange(FIND_HOSTILE_CREEPS, KITE_RANGE);
-  rangedStrike(creep, null, inRange);
+  const hostiles = getThreatInfo(creep.room).hostiles;
+  rangedStrike(creep, towerFocus(creep, hostiles, KITE_RANGE), hostiles);
+}
+
+// Hit a hostile that is already adjacent without leaving the current post.
+function strikeAdjacent(creep: Creep): void {
+  const hostiles = getThreatInfo(creep.room).hostiles;
+  const target =
+    towerFocus(creep, hostiles, 1) ?? selectHostileTarget(creep.pos, creep.pos.findInRange(hostiles, 1));
+  if (target) creep.attack(target);
 }
 
 function meleeStrike(creep: Creep, preferred: Creep, hostiles: Creep[]): void {
@@ -1583,7 +1779,7 @@ function meleeStrike(creep: Creep, preferred: Creep, hostiles: Creep[]): void {
 function rangedStrike(creep: Creep, preferred: Creep | null, hostiles: Creep[]): boolean {
   const inRange = creep.pos.findInRange(hostiles, KITE_RANGE);
   if (inRange.length === 0) return false;
-  if (preferMassAttack(creep.pos, inRange)) {
+  if (preferMassAttack(creep.pos, inRange) && !allyInMassAttackRange(creep.pos)) {
     creep.rangedMassAttack();
     return true;
   }
@@ -1744,10 +1940,20 @@ function regroup(creep: Creep, op: MilitaryOp, ctx: SquadContext, isLeader: bool
   moveToSlot(creep, op, ctx);
 }
 
-function shouldHoldForDrain(room: Room): boolean {
+// Siegers wait for drainers to empty the towers, but not forever: give up if
+// no drainer is alive or the towers have been kept topped up for too long.
+export function shouldHoldForDrain(op: MilitaryOp, room: Room): boolean {
   const status: TowerStatus = assessTowers(room);
-  if (status.count < 2) return false;
-  return !towersAreDrained(status);
+  if (status.count < 2 || towersAreDrained(status)) {
+    delete op.holdSince;
+    return false;
+  }
+  const drainerAlive = Object.values(Game.creeps).some(
+    (c) => c.memory.role === ROLE_DRAINER && c.memory.offensiveTarget === op.targetRoom
+  );
+  if (!drainerAlive) return false;
+  if (op.holdSince === undefined) op.holdSince = Game.time;
+  return Game.time - op.holdSince < HOLD_FOR_DRAIN_MAX;
 }
 
 function holdAtBreachApproach(creep: Creep, op: MilitaryOp, ctx: SquadContext, isLeader: boolean): void {

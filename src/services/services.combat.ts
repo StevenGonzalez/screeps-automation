@@ -1,4 +1,4 @@
-import { isAlly } from "./services.allies";
+import { getAllies, isAlly } from "./services.allies";
 
 export interface ThreatInfo {
   hostiles: Creep[];
@@ -310,10 +310,11 @@ function getAttackableStructures(room: Room): AnyStructure[] {
       if (s.structureType === STRUCTURE_KEEPER_LAIR) return false;
       if (s.structureType === STRUCTURE_POWER_BANK) return false;
       if (s.structureType === STRUCTURE_WALL) return true;
-      if (s.structureType === STRUCTURE_RAMPART) return (s as StructureRampart).hits > 0;
+      const rampart = s.structureType === STRUCTURE_RAMPART;
+      if (rampart && !((s as StructureRampart).hits > 0)) return false;
       const owned = (s as OwnedStructure).owner;
-      if (owned) return !(s as OwnedStructure).my;
-      return false;
+      if (owned) return !(s as OwnedStructure).my && !isAlly(owned.username);
+      return rampart;
     },
   }) as AnyStructure[];
 
@@ -372,6 +373,15 @@ function massAttackDamage(pos: RoomPosition, hostiles: Creep[]): number {
 
 export function preferMassAttack(pos: RoomPosition, hostiles: Creep[]): boolean {
   return massAttackDamage(pos, hostiles) > RANGED_ATTACK_POWER;
+}
+
+// rangedMassAttack hits every non-own creep and structure within 3, allies included.
+export function allyInMassAttackRange(pos: RoomPosition): boolean {
+  if (getAllies().length === 0) return false;
+  if (pos.findInRange(FIND_HOSTILE_CREEPS, 3).some((c) => isAlly(c.owner?.username))) return true;
+  return pos
+    .findInRange(FIND_HOSTILE_STRUCTURES, 3)
+    .some((s) => isAlly((s as OwnedStructure).owner?.username));
 }
 
 const TOWER_OPTIMAL_RANGE = 5;

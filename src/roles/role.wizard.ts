@@ -1,4 +1,5 @@
-import { preferMassAttack, seekBoost } from "../services/services.combat";
+import { allyInMassAttackRange, preferMassAttack, seekBoost } from "../services/services.combat";
+import { isAlly } from "../services/services.allies";
 import { getDefenseOp, getOffensiveOp, runDefensiveWizard, runOffensiveWizard } from "../orchestrators/orchestrator.military";
 
 const KITE_RANGE = 3;
@@ -23,7 +24,8 @@ export function runWizard(creep: Creep) {
     delete creep.memory.defensiveTarget;
   }
 
-  const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
+  const notAlly = (c: Creep) => !isAlly(c.owner?.username);
+  const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS, { filter: notAlly });
   if (!hostile) {
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn && !creep.pos.isNearTo(spawn)) {
@@ -33,9 +35,9 @@ export function runWizard(creep: Creep) {
   }
 
   const range = creep.pos.getRangeTo(hostile);
-  const inRangeHostiles = creep.pos.findInRange(FIND_HOSTILE_CREEPS, KITE_RANGE);
+  const inRangeHostiles = creep.pos.findInRange(FIND_HOSTILE_CREEPS, KITE_RANGE, { filter: notAlly });
 
-  if (preferMassAttack(creep.pos, inRangeHostiles)) {
+  if (preferMassAttack(creep.pos, inRangeHostiles) && !allyInMassAttackRange(creep.pos)) {
     creep.rangedMassAttack();
   } else if (range <= KITE_RANGE) {
     creep.rangedAttack(hostile);

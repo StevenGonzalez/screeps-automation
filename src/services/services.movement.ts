@@ -18,6 +18,7 @@ interface StuckState {
   st: number;
   lp: number;
   lpr: string;
+  t: number;
 }
 const stuckState = new Map<string, StuckState>();
 let stuckPruneTick = -1;
@@ -61,10 +62,6 @@ function getRoomCostMatrix(roomName: string): CostMatrix {
   }
   costMatrixCache[roomName] = { cm, tick: Game.time, structures: structures.length };
   return cm;
-}
-
-export function invalidateCostMatrix(roomName: string): void {
-  delete costMatrixCache[roomName];
 }
 
 function structureCostCallback(roomName: string): CostMatrix {
@@ -126,15 +123,28 @@ function roadCostCallback(roomName: string): CostMatrix {
 
   const posKey = this.pos.x * 50 + this.pos.y;
   const prev = stuckState.get(this.name);
+  // Count ticks, not calls: a second moveTo in the same tick changes nothing,
+  // and a gap of more than one tick starts the count over.
+  if (prev && prev.t === Game.time) {
+    return originalMoveTo.call(this, target as never, effectiveOpts as never);
+  }
   let st = 0;
-  if (prev && prev.lpr === this.pos.roomName && prev.lp === posKey && this.fatigue === 0) {
+  if (
+    prev &&
+    prev.t === Game.time - 1 &&
+    prev.lpr === this.pos.roomName &&
+    prev.lp === posKey &&
+    this.fatigue === 0
+  ) {
     st = prev.st + 1;
   }
-  stuckState.set(this.name, { st, lp: posKey, lpr: this.pos.roomName });
+  stuckState.set(this.name, { st, lp: posKey, lpr: this.pos.roomName, t: Game.time });
 
   if (st >= STUCK_THRESHOLD) {
-    stuckState.set(this.name, { st: 0, lp: posKey, lpr: this.pos.roomName });
-    if (sameRoom) registerShove(this, tpos, range);
+    stuckState.set(this.name, { st: 0, lp: posKey, lpr: this.pos.roomName, t: Game.time });
+    // Step straight into our blocker's tile; resolveTraffic moves it into ours, so they swap.
+    const blocker = sameRoom ? registerShove(this, tpos, range) : null;
+    if (blocker) return this.move(this.pos.getDirectionTo(blocker.pos));
     effectiveOpts.reusePath = 0;
     return originalMoveTo.call(this, target as never, effectiveOpts as never);
   }
@@ -153,13 +163,13 @@ const MAX_SHOVE_PATHFINDS_PER_ROOM = 3;
 let shovePathfindTick = -1;
 const shovePathfindsThisTick: Record<string, number> = {};
 
-function registerShove(creep: Creep, targetPos: RoomPosition, range: number): void {
+function registerShove(creep: Creep, targetPos: RoomPosition, range: number): Creep | null {
   const roomName = creep.pos.roomName;
   if (shovePathfindTick !== Game.time) {
     shovePathfindTick = Game.time;
     for (const k in shovePathfindsThisTick) delete shovePathfindsThisTick[k];
   }
-  if ((shovePathfindsThisTick[roomName] ?? 0) >= MAX_SHOVE_PATHFINDS_PER_ROOM) return;
+  if ((shovePathfindsThisTick[roomName] ?? 0) >= MAX_SHOVE_PATHFINDS_PER_ROOM) return null;
   shovePathfindsThisTick[roomName] = (shovePathfindsThisTick[roomName] ?? 0) + 1;
 
   const result = PathFinder.search(
@@ -168,15 +178,17 @@ function registerShove(creep: Creep, targetPos: RoomPosition, range: number): vo
     { roomCallback: structureCostCallback, plainCost: 2, swampCost: 10, maxOps: 1000 }
   );
   const next = result.path[0];
-  if (!next || next.roomName !== creep.pos.roomName) return;
+  if (!next || next.roomName !== creep.pos.roomName) return null;
   const blocker = next.lookFor(LOOK_CREEPS).find((c) => c.my);
-  if (!blocker) return;
+  // A blocker that can't move this tick won't swap; let the caller path around it.
+  if (!blocker || blocker.fatigue > 0 || isOnWorkingPost(blocker)) return null;
 
   if (shoveTick !== Game.time) {
     shoveTick = Game.time;
     pendingShoves = [];
   }
   pendingShoves.push({ stuck: creep, blocker });
+  return blocker;
 }
 
 export function resolveTraffic(): void {

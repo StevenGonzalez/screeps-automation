@@ -104,7 +104,9 @@ function sanitizeRequest(raw: unknown): AllyRequest | null {
 let foreignIndex = 0;
 
 export function runAllies(): void {
-  const toSend = outgoingTick === Game.time ? outgoing : [];
+  // runAllies runs early in the tick, so requests made later last tick are
+  // published now. Anything older than that is stale and dropped.
+  const toSend = outgoingTick === Game.time || outgoingTick === Game.time - 1 ? outgoing : [];
   outgoing = [];
   outgoingTick = Game.time;
 
