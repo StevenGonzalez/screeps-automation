@@ -17,6 +17,8 @@ import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
 import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
 import { planDefensivePerimeter } from "../planning/planner.rampart";
 import { isSourceSafe } from "../services/services.creep";
+import { remoteRoadsEnabled } from "../services/services.remote";
+import { getActiveRemoteRooms } from "./orchestrator.spawning";
 
 const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
   [STRUCTURE_SPAWN]: 0,
@@ -40,6 +42,10 @@ const PERIMETER_PRIORITY = 12;
 
 // How many remote container sites may be open at once, across all rooms.
 const MAX_REMOTE_CONTAINER_SITES = 2;
+// How many remote road sites may be open at once, across all rooms. Haulers
+// build them a tick at a time as they pass, so a handful keeps them busy
+// without holding the global site cap against the owned rooms.
+const MAX_REMOTE_ROAD_SITES = 10;
 
 function buildPriority(key: string): number {
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY) return PERIMETER_PRIORITY;
@@ -349,16 +355,30 @@ function ensureRampartsForExistingStructures(room: Room) {
   }
 }
 
-// Source containers are the only thing we place outside owned rooms. Anything
-// else out there is an orphan from an earlier planner: no role builds it, no
-// role repairs it, and it holds a slot against the global site cap forever.
+// Outside owned rooms we place source containers, and roads in the remotes a
+// home is actively working once it lays remote roads (its haulers build and
+// repair those). Anything else out there - including road sites in a remote
+// that has since dropped out of the active set - is an orphan: nothing builds
+// it and it holds a slot against the global site cap forever.
 export function cleanupSitesOutsideOwnedRooms() {
+  const roadRooms = remoteRoadRooms();
   for (const id in Game.constructionSites) {
     const site = Game.constructionSites[id];
     if (Game.rooms[site.pos.roomName]?.controller?.my) continue;
     if (site.structureType === STRUCTURE_CONTAINER) continue;
+    if (site.structureType === STRUCTURE_ROAD && roadRooms.has(site.pos.roomName)) continue;
     site.remove();
   }
+}
+
+function remoteRoadRooms(): Set<string> {
+  const out = new Set<string>();
+  for (const rn in Game.rooms) {
+    const room = Game.rooms[rn];
+    if (!room.controller?.my || !remoteRoadsEnabled(room)) continue;
+    for (const r of getActiveRemoteRooms(room)) out.add(r.roomName);
+  }
+  return out;
 }
 
 export function loop() {
@@ -378,11 +398,15 @@ export function loop() {
 
   if (Game.time % 100 === 0) {
     let budget = MAX_REMOTE_CONTAINER_SITES - countRemoteContainerSites();
+    let roadBudget = MAX_REMOTE_ROAD_SITES - countRemoteSites(STRUCTURE_ROAD);
     for (const roomName in Game.rooms) {
-      if (budget <= 0) break;
       const room = Game.rooms[roomName];
       if (!room.controller || !room.controller.my) continue;
-      budget = planRemoteRoomContainers(room, budget);
+      const remotes = getActiveRemoteRooms(room);
+      if (budget > 0) budget = planRemoteRoomContainers(room, remotes, budget);
+      if (roadBudget > 0 && remoteRoadsEnabled(room)) {
+        roadBudget = planRemoteRoads(room, remotes, roadBudget);
+      }
     }
   }
 }
@@ -393,10 +417,14 @@ export function loop() {
 // in-flight count so each remote comes online and starts paying before the next
 // one starts costing.
 export function countRemoteContainerSites(): number {
+  return countRemoteSites(STRUCTURE_CONTAINER);
+}
+
+function countRemoteSites(type: BuildableStructureConstant): number {
   let count = 0;
   for (const id in Game.constructionSites) {
     const site = Game.constructionSites[id];
-    if (site.structureType !== STRUCTURE_CONTAINER) continue;
+    if (site.structureType !== type) continue;
     if (Game.rooms[site.pos.roomName]?.controller?.my) continue;
     count++;
   }
@@ -415,11 +443,17 @@ export function canBuildInRemote(remoteRoom: Room, myName: string | undefined): 
   return true;
 }
 
-export function planRemoteRoomContainers(homeRoom: Room, budget: number): number {
+// Containers go only to the remotes the home is working (see
+// getActiveRemoteRooms): a site in one nobody mines is never built and holds
+// one of the few container slots against a remote that would be.
+export function planRemoteRoomContainers(
+  homeRoom: Room,
+  remotes: RemoteRoomData[],
+  budget: number
+): number {
   const myName = homeRoom.controller?.owner?.username;
-  for (const remote of homeRoom.memory.remoteRooms ?? []) {
+  for (const remote of remotes) {
     if (budget <= 0) return budget;
-    if (remote.hostile) continue;
     const remoteRoom = Game.rooms[remote.roomName];
     if (!remoteRoom) continue;
     if (!canBuildInRemote(remoteRoom, myName)) continue;
@@ -461,6 +495,36 @@ export function planRemoteRoomContainers(homeRoom: Room, budget: number): number
         }
       }
       if (placed) budget--;
+    }
+  }
+  return budget;
+}
+
+// Road sites along each active remote source's path from home, inside the
+// remote room (the home's side is the planner's cardinal artery). A source
+// gets its road once its container stands, so the miner is not splitting its
+// energy between the two. The path comes from the profit ranking's distance
+// cache (getRemoteSourcePathLength), so no search runs here.
+export function planRemoteRoads(
+  homeRoom: Room,
+  remotes: RemoteRoomData[],
+  budget: number
+): number {
+  const myName = homeRoom.controller?.owner?.username;
+  for (const remote of remotes) {
+    const remoteRoom = Game.rooms[remote.roomName];
+    if (!remoteRoom || !canBuildInRemote(remoteRoom, myName)) continue;
+    for (const src of remote.sources) {
+      if (!src.containerId || !src.roadTiles) continue;
+      for (const tile of src.roadTiles.split(";")) {
+        if (budget <= 0) return budget;
+        const [x, y] = tile.split(",").map(Number);
+        const hasRoad = remoteRoom
+          .lookForAt(LOOK_STRUCTURES, x, y)
+          .some((s) => s.structureType === STRUCTURE_ROAD);
+        if (hasRoad || remoteRoom.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0) continue;
+        if (remoteRoom.createConstructionSite(x, y, STRUCTURE_ROAD) === OK) budget--;
+      }
     }
   }
   return budget;
@@ -598,7 +662,7 @@ function processRoomStructures(room: Room) {
 
   planMineralStructures(room);
 
-  planCardinalArteries(room);
+  planCardinalArteries(room, getActiveRemoteRooms(room));
 
   removeRoadsAroundStructures(room);
   pruneRoadsUnderStructures(room);

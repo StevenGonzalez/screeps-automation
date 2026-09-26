@@ -49,6 +49,7 @@ import {
   MAX_BODY_PART_COUNT,
 } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
+import { getRemoteSourcePathLength, remoteRoadsEnabled } from "../services/services.remote";
 import { getSources } from "../services/services.creep";
 import {
   getUnclaimedScoreTargetCount,
@@ -1030,26 +1031,182 @@ function inheritMinerPost(room: Room): Pick<CreepMemory, "assignedSourceId" | "a
   return {};
 }
 
-// Remotes worth sending creeps to. A room we have since claimed, one someone
+// Remotes we could send creeps to. A room we have since claimed, one someone
 // else owns or reserves, and one with invaders currently in it are all left out.
 // An Invader reservation stops harvesting too, but a reserver can take it back,
 // so the "reserve" view keeps those rooms. Remote defenders read the raw list.
-function getActiveRemoteRooms(
+function isRemoteEligible(
+  room: Room,
+  r: RemoteRoomData,
+  purpose: "harvest" | "reserve"
+): boolean {
+  if (r.hostile || r.sources.length === 0) return false;
+  if (r.invaderUntil !== undefined && r.invaderUntil > Game.time) return false;
+  const ctrl = Game.rooms[r.roomName]?.controller;
+  const intel = Memory.intel?.[r.roomName];
+  const owner = ctrl ? ctrl.owner?.username : intel?.owner;
+  if (ctrl?.my || owner) return false;
+  const reservedBy = ctrl ? ctrl.reservation?.username : intel?.reservedBy;
+  if (!reservedBy || reservedBy === room.controller?.owner?.username) return true;
+  return reservedBy === "Invader" && purpose === "reserve";
+}
+
+// Remotes worth sending creeps to: the eligible ones cut down to the sources
+// this home picked (see pickRemoteSources), best room first. Each entry is a
+// copy holding only the picked sources; the source entries themselves are the
+// ones in memory.
+export function getActiveRemoteRooms(
   room: Room,
   purpose: "harvest" | "reserve" = "harvest"
 ): RemoteRoomData[] {
-  const me = room.controller?.owner?.username;
-  return (room.memory.remoteRooms ?? []).filter((r) => {
-    if (r.hostile || r.sources.length === 0) return false;
-    if (r.invaderUntil !== undefined && r.invaderUntil > Game.time) return false;
-    const ctrl = Game.rooms[r.roomName]?.controller;
-    const intel = Memory.intel?.[r.roomName];
-    const owner = ctrl ? ctrl.owner?.username : intel?.owner;
-    if (ctrl?.my || owner) return false;
-    const reservedBy = ctrl ? ctrl.reservation?.username : intel?.reservedBy;
-    if (!reservedBy || reservedBy === me) return true;
-    return reservedBy === "Invader" && purpose === "reserve";
-  });
+  const picked = pickRemoteSources(room);
+  const out: RemoteRoomData[] = [];
+  for (const r of room.memory.remoteRooms ?? []) {
+    if (!isRemoteEligible(room, r, purpose)) continue;
+    const sources = r.sources.filter((s) => picked.has(s.sourceId));
+    if (sources.length > 0) out.push({ ...r, sources });
+  }
+  const rank = (r: RemoteRoomData) => Math.min(...r.sources.map((s) => picked.get(s.sourceId)!));
+  return out.sort((a, b) => rank(a) - rank(b));
+}
+
+// A hard ceiling on remote sources per home, whatever the budget says. Remotes
+// are adjacent rooms only, so this is at most four rooms' worth anyway.
+const MAX_REMOTE_SOURCES = 6;
+// Share of the home's spawn time remotes may plan on. The rest is headroom for
+// defenders and for replacements that happen to come due together.
+const REMOTE_SPAWN_SHARE = 0.8;
+// Below this bucket, keep working the remotes already mined but add none.
+const REMOTE_CPU_BUCKET_FLOOR = 5000;
+const REMOTE_ECONOMY_ROLES = new Set<string>([
+  ROLE_REMOTE_MINER,
+  ROLE_REMOTE_HAULER,
+  ROLE_RESERVER,
+]);
+
+// Energy per tick a remote source yields: full while we hold the reservation,
+// half when the home cannot afford a reserver and the source stays neutral.
+function remoteSourceOutput(room: Room): number {
+  const canReserve =
+    room.energyCapacityAvailable >= BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
+  return (
+    (canReserve ? SOURCE_ENERGY_CAPACITY : SOURCE_ENERGY_NEUTRAL_CAPACITY) / ENERGY_REGEN_TIME
+  );
+}
+
+// CARRY parts it takes to move a source's output over a round trip of `dist`.
+function remoteHaulCarry(output: number, dist: number): number {
+  return (output * 2 * dist) / CARRY_CAPACITY;
+}
+
+function getRemoteSourceDistance(
+  room: Room,
+  remote: RemoteRoomData,
+  src: RemoteSourceData
+): number {
+  return (
+    getRemoteSourcePathLength(room, remote, src) ?? estimateRemoteDistance(room, remote.roomName)
+  );
+}
+
+// Net energy per tick a remote source earns, and the spawn time per creep
+// lifetime it takes to keep it worked. Upkeep is the miner, the hauler carry
+// for its round trip, its share of the room's reserver, and decay on its
+// container and (once roads are laid) the road out to it.
+export function planRemoteSource(
+  room: Room,
+  remote: RemoteRoomData,
+  src: RemoteSourceData
+): { profit: number; spawnTime: number } {
+  const capacity = room.energyCapacityAvailable;
+  const output = remoteSourceOutput(room);
+  const dist = getRemoteSourceDistance(room, remote, src);
+  const roads = remoteRoadsEnabled(room);
+
+  const miner = buildRemoteMinerBody(capacity);
+  const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads);
+  const haulerCarry = Math.max(1, hauler.filter((p) => p === CARRY).length);
+  const carry = remoteHaulCarry(output, dist);
+  const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
+  const haulerPartsPerCarry = hauler.length / haulerCarry;
+  // A reserver lives CREEP_CLAIM_LIFE_TIME, so it is bought that much more
+  // often than the others, and it serves every source in its room.
+  const reserver = buildReserverBody(capacity);
+  const reserverShare = 1 / remote.sources.length;
+  const reserverRespawns = CREEP_LIFE_TIME / CREEP_CLAIM_LIFE_TIME;
+
+  const roadTiles = src.roadTiles ? src.roadTiles.split(";").length : dist;
+  const decay =
+    (CONTAINER_DECAY / CONTAINER_DECAY_TIME) * REPAIR_COST +
+    (roads ? (roadTiles * ROAD_DECAY_AMOUNT * REPAIR_COST) / ROAD_DECAY_TIME : 0);
+
+  const upkeep =
+    calculateBodyPartCost(miner) / CREEP_LIFE_TIME +
+    (carry * haulerCostPerCarry) / CREEP_LIFE_TIME +
+    (calculateBodyPartCost(reserver) * reserverShare) / CREEP_CLAIM_LIFE_TIME +
+    decay;
+  const parts =
+    miner.length + carry * haulerPartsPerCarry + reserver.length * reserverShare * reserverRespawns;
+  return { profit: output - upkeep, spawnTime: parts * CREEP_SPAWN_TIME };
+}
+
+// Spawn time per creep lifetime the home has left for remotes, after what its
+// own creeps (and anything else it has spawned) already take.
+function remoteSpawnBudget(room: Room): number {
+  const spawns = room.find(FIND_MY_SPAWNS).length;
+  let used = 0;
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (REMOTE_ECONOMY_ROLES.has(c.memory.role)) continue;
+    if ((c.memory.homeRoom ?? c.room.name) !== room.name) continue;
+    used += c.body.length * CREEP_SPAWN_TIME;
+  }
+  return spawns * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE - used;
+}
+
+const remotePickCache: Record<
+  string,
+  { tick: number; remotes: RemoteRoomData[] | undefined; picked: Map<string, number> }
+> = {};
+
+// The remote sources this home works, mapped to their rank (0 = best). Every
+// eligible source is ranked by net energy per tick and taken best first while
+// the home's spawn time covers it, up to MAX_REMOTE_SOURCES. A source that
+// costs more than it earns is never taken. On a low CPU bucket only sources
+// that already have a miner stay in.
+function pickRemoteSources(room: Room): Map<string, number> {
+  const cached = remotePickCache[room.name];
+  if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
+    return cached.picked;
+  }
+
+  const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR;
+  const mined = new Set(
+    getCreepsByRole(ROLE_REMOTE_MINER)
+      .filter((c) => c.memory.homeRoom === room.name)
+      .map((c) => c.memory.remoteSourceId)
+  );
+  const plans: Array<{ sourceId: string; profit: number; spawnTime: number }> = [];
+  for (const r of room.memory.remoteRooms ?? []) {
+    if (!isRemoteEligible(room, r, "reserve")) continue;
+    for (const s of r.sources) {
+      if (lowCpu && !mined.has(s.sourceId)) continue;
+      const plan = planRemoteSource(room, r, s);
+      if (plan.profit > 0) plans.push({ sourceId: s.sourceId, ...plan });
+    }
+  }
+  plans.sort((a, b) => b.profit - a.profit);
+
+  let budget = remoteSpawnBudget(room);
+  const picked = new Map<string, number>();
+  for (const p of plans) {
+    if (picked.size >= MAX_REMOTE_SOURCES) break;
+    if (p.spawnTime > budget) continue;
+    budget -= p.spawnTime;
+    picked.set(p.sourceId, picked.size);
+  }
+  remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
+  return picked;
 }
 
 function getScoutsForRoom(room: Room): Creep[] {
@@ -1181,33 +1338,37 @@ function estimateRemoteDistance(homeRoom: Room, remoteRoomName: string): number 
 // rooms out need about this many full-size haulers.
 const MAX_REMOTE_HAULERS_PER_ROOM = 6;
 
-function getRemoteHaulerTarget(room: Room): number {
-  const activeRooms = getActiveRemoteRooms(room);
-  if (activeRooms.length === 0) return 0;
-
+// Haulers each active remote needs, sized per source from its path distance.
+function getRemoteHaulerTargets(room: Room): Record<string, number> {
   // Ask the body builder how much CARRY a hauler actually gets rather than
   // re-deriving it here. The copy this replaces divided by 200 while the body
   // pattern costs 150, so every remote was credited a quarter less carry than it
   // has and over-hauled to match.
   const carryPerHauler = Math.max(
     1,
-    buildRemoteHaulerBody(bodyBudget(room, "capacity")).filter((p) => p === CARRY).length
+    buildRemoteHaulerBody(bodyBudget(room, "capacity"), remoteRoadsEnabled(room)).filter(
+      (p) => p === CARRY
+    ).length
   );
+  const output = remoteSourceOutput(room);
 
-  let total = 0;
-  for (const remote of activeRooms) {
-    const sourceCount = remote.sources.length;
-    const dist = estimateRemoteDistance(room, remote.roomName);
-    const requiredCarry =
-      (HAULER_SPAWN.SOURCE_OUTPUT * 2 * dist * sourceCount) / HAULER_SPAWN.CARRY_CAPACITY;
-    total += Math.min(
+  const targets: Record<string, number> = {};
+  for (const remote of getActiveRemoteRooms(room)) {
+    let requiredCarry = 0;
+    for (const src of remote.sources) {
+      requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
+    }
+    targets[remote.roomName] = Math.min(
       MAX_REMOTE_HAULERS_PER_ROOM,
       Math.max(1, Math.ceil(requiredCarry / carryPerHauler))
     );
   }
-  return total;
+  return targets;
 }
 
+function getRemoteHaulerTarget(room: Room): number {
+  return Object.values(getRemoteHaulerTargets(room)).reduce((a, b) => a + b, 0);
+}
 
 function shouldSpawnRemoteHauler(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 3) return false;
@@ -1236,19 +1397,24 @@ function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
     haulersByRoom[r] = (haulersByRoom[r] ?? 0) + 1;
   }
 
+  // Send it where the shortfall against that room's target is biggest, so a
+  // far remote is not held to the same count as a near one.
+  const targets = getRemoteHaulerTargets(room);
   let targetRoomName = activeRooms[0].roomName;
-  let minHaulers = Infinity;
+  let maxShortfall = -Infinity;
   for (const remote of activeRooms) {
-    const count = haulersByRoom[remote.roomName] ?? 0;
-    if (count < minHaulers) {
-      minHaulers = count;
+    const shortfall = (targets[remote.roomName] ?? 0) - (haulersByRoom[remote.roomName] ?? 0);
+    if (shortfall > maxShortfall) {
+      maxShortfall = shortfall;
       targetRoomName = remote.roomName;
     }
   }
 
-  // Remotes have no roads, so a 2:1 CARRY:MOVE body crawls at half speed.
+  // Remotes have no roads until the home can lay them, so the body keeps one
+  // MOVE per CARRY; once roads are going in it also carries a WORK to build
+  // and repair them on the way home.
   const allowedEnergy = bodyBudget(room, "available");
-  const body = buildRemoteHaulerBody(allowedEnergy);
+  const body = buildRemoteHaulerBody(allowedEnergy, remoteRoadsEnabled(room));
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const res = trackedSpawn(room, spawn, body, `${ROLE_REMOTE_HAULER}${Game.time}`, {
@@ -1279,13 +1445,21 @@ function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[] {
   return body;
 }
 
-function buildRemoteHaulerBody(availableEnergy: number): BodyPartConstant[] {
+// `withWork` adds one WORK (and its MOVE) for building and repairing remote
+// roads on the way; the CARRY pairs fill whatever is left.
+export function buildRemoteHaulerBody(
+  availableEnergy: number,
+  withWork = false
+): BodyPartConstant[] {
+  const head: BodyPartConstant[] = withWork ? [WORK, MOVE] : [];
   const pattern: BodyPartConstant[] = [CARRY, MOVE];
   const patternCost = calculateBodyPartCost(pattern);
-  const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
-  const maxByEnergy = Math.floor(availableEnergy / patternCost);
+  const maxByParts = Math.floor((MAX_BODY_PART_COUNT - head.length) / pattern.length);
+  const maxByEnergy = Math.floor(
+    (availableEnergy - calculateBodyPartCost(head)) / patternCost
+  );
   const repeats = Math.max(2, Math.min(maxByParts, maxByEnergy));
-  const body: BodyPartConstant[] = [];
+  const body: BodyPartConstant[] = [...head];
   for (let i = 0; i < repeats; i++) body.push(...pattern);
   return body;
 }

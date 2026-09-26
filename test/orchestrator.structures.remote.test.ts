@@ -113,7 +113,7 @@ describe("remote container budgeting", () => {
   it("places exactly one container per source, not one per free tile", () => {
     const { home, created } = scenario(1);
 
-    planRemoteRoomContainers(home, 5);
+    planRemoteRoomContainers(home, home.memory.remoteRooms!, 5);
 
     expect(created).toHaveLength(1);
   });
@@ -121,7 +121,7 @@ describe("remote container budgeting", () => {
   it("stops placing once the budget is spent", () => {
     const { home, created } = scenario(4);
 
-    const left = planRemoteRoomContainers(home, 2);
+    const left = planRemoteRoomContainers(home, home.memory.remoteRooms!, 2);
 
     expect(created).toHaveLength(2);
     expect(left).toBe(0);
@@ -130,7 +130,7 @@ describe("remote container budgeting", () => {
   it("places nothing when the budget is already exhausted", () => {
     const { home, created } = scenario(3);
 
-    planRemoteRoomContainers(home, 0);
+    planRemoteRoomContainers(home, home.memory.remoteRooms!, 0);
 
     expect(created).toHaveLength(0);
   });
@@ -138,7 +138,7 @@ describe("remote container budgeting", () => {
   it("returns the unspent budget so later rooms can use it", () => {
     const { home } = scenario(1);
 
-    expect(planRemoteRoomContainers(home, 3)).toBe(2);
+    expect(planRemoteRoomContainers(home, home.memory.remoteRooms!, 3)).toBe(2);
   });
 });
 

@@ -159,6 +159,13 @@ declare global {
   interface RemoteSourceData {
     sourceId: Id<Source>;
     containerId?: Id<StructureContainer>;
+    // Path from home to this source, measured once and refreshed rarely. The
+    // key is origin and target ids, so a new storage or container re-measures.
+    pathLength?: number;
+    pathKey?: string;
+    pathTick?: number;
+    // The path's tiles inside the remote room, "x,y" joined by ";".
+    roadTiles?: string;
   }
 
   interface RemoteRoomData {

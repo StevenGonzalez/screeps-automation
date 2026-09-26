@@ -61,7 +61,6 @@ const REMOTE_RESCAN_INTERVAL = 3000;
 const DEVELOPING_SCAN_INTERVAL = 10;
 const ESTABLISHED_SCAN_INTERVAL = 100;
 const REMOTE_HOSTILE_EXPIRY = 2000;
-const MAX_REMOTE_ROOMS = 3;
 
 const SCOUT_BFS_DEPTH = 2;
 const SCOUT_REFRESH_INTERVAL = 10_000;
@@ -304,7 +303,7 @@ export function applyRemoteControllerStatus(
   return true;
 }
 
-function discoverAdjacentRooms(room: Room) {
+export function discoverAdjacentRooms(room: Room) {
   if (!room.memory.pendingScoutRooms) room.memory.pendingScoutRooms = [];
   if (!room.memory.remoteRooms) room.memory.remoteRooms = [];
 
@@ -332,11 +331,8 @@ function discoverAdjacentRooms(room: Room) {
     }
   }
 
-  const activeRemoteCount = room.memory.remoteRooms.filter(
-    (r) => !r.hostile && r.sources.length > 0
-  ).length;
-  if (activeRemoteCount >= MAX_REMOTE_ROOMS) return;
-
+  // Every adjacent room is a candidate; spawning ranks them by profit and
+  // works as many as the home can afford (see getActiveRemoteRooms).
   const exits = Game.map.describeExits(room.name);
   for (const dir in exits) {
     const adjacentName = exits[dir as ExitKey];
@@ -346,8 +342,6 @@ function discoverAdjacentRooms(room: Room) {
 
     room.memory.pendingScoutRooms.push(adjacentName);
     knownNames.add(adjacentName);
-
-    if (room.memory.pendingScoutRooms.length + activeRemoteCount >= MAX_REMOTE_ROOMS) break;
   }
 }
 

@@ -17,6 +17,7 @@ import {
   applyRemoteControllerStatus,
   collectRoomMemoryGarbage,
   refreshVisibleRemoteRooms,
+  discoverAdjacentRooms,
 } from "../src/orchestrators/orchestrator.memory";
 import { recordRoomIntel } from "../src/orchestrators/orchestrator.military";
 
@@ -147,6 +148,22 @@ describe("refreshVisibleRemoteRooms", () => {
     refreshVisibleRemoteRooms(room as unknown as Room);
     expect(entry.invaderUntil).toBeGreaterThan(5000);
     expect(entry.hostile).toBe(false);
+  });
+});
+
+describe("discoverAdjacentRooms", () => {
+  it("scouts every adjacent room, not just the first three", () => {
+    // Profit ranking and the spawn budget decide how many are worked, so a
+    // fourth neighbour is still worth knowing about.
+    const home = "W2N2";
+    (g.Game as any).map.describeExits = () => ({ "1": "W2N3", "3": "W3N2", "5": "W2N1", "7": "W1N2" });
+    const remotes = ["W2N3", "W3N2", "W2N1"].map(
+      (roomName) =>
+        ({ roomName, sources: [{ sourceId: `${roomName}-src` }], lastSeen: 5000, hostile: false }) as RemoteRoomData
+    );
+    const room = { name: home, memory: { remoteRooms: remotes, pendingScoutRooms: [] } } as unknown as Room;
+    discoverAdjacentRooms(room);
+    expect(room.memory.pendingScoutRooms).toEqual(["W1N2"]);
   });
 });
 

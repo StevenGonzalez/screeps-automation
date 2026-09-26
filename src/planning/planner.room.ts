@@ -398,7 +398,9 @@ function findNearestBuildable(
   return null;
 }
 
-export function planCardinalArteries(room: Room): void {
+// `remotes` are the remotes the home is working; only their exits get an
+// artery, so a remote dropped from the active set stops pulling roads.
+export function planCardinalArteries(room: Room, remotes: RemoteRoomData[]): void {
   const anchor = getOrFindAnchor(room);
   if (!anchor) return;
 
@@ -431,18 +433,19 @@ export function planCardinalArteries(room: Room): void {
     planRoadKey(room, `cardinal_connector_mineral_${mineral.id}`, anchorPos, target, cm);
   }
 
-  planCardinalArteriesToRemotes(room, anchor, cm);
+  planCardinalArteriesToRemotes(room, anchor, cm, remotes);
 }
 
 function planCardinalArteriesToRemotes(
   room: Room,
   anchor: { x: number; y: number },
-  cm: CostMatrix
+  cm: CostMatrix,
+  remotes: RemoteRoomData[]
 ): void {
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
   const meta = (room.memory.plannedStructuresMeta ?? {}) as Record<string, any>;
 
-  const exitsWithRemote = remoteExitsFor(room);
+  const exitsWithRemote = remoteExitsFor(room, remotes);
 
   const anchorPos = new RoomPosition(anchor.x, anchor.y, room.name);
   const exitRoadKeys: Array<[ExitConstant, string]> = [
@@ -464,11 +467,9 @@ function planCardinalArteriesToRemotes(
   }
 }
 
-function remoteExitsFor(room: Room): Set<ExitConstant> {
+function remoteExitsFor(room: Room, remotes: RemoteRoomData[]): Set<ExitConstant> {
   const out = new Set<ExitConstant>();
-  const remotes = room.memory.remoteRooms ?? [];
   for (const r of remotes) {
-    if (r.hostile) continue;
     const exit = room.findExitTo(r.roomName);
     if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) continue;
     out.add(exit);

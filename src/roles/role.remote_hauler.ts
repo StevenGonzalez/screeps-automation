@@ -66,8 +66,32 @@ export function runRemoteHauler(creep: Creep) {
   if (!creep.memory.working) {
     collectEnergy(creep, targetRoom);
   } else {
+    if (creep.room.name !== homeRoom) tendRemoteRoad(creep);
     depositEnergy(creep, homeRoom);
   }
+}
+
+// Remote roads have no builder or repairer of their own: a hauler with a WORK
+// part keeps them up from the load it is carrying home, without stopping. It
+// patches the road under it first, otherwise puts a tick into a road site in
+// reach. The home room's roads are the home repairer's.
+const ROAD_REPAIR_THRESHOLD = 0.8;
+
+function tendRemoteRoad(creep: Creep) {
+  if (creep.store[RESOURCE_ENERGY] === 0) return;
+  if (!creep.body.some((p) => p.type === WORK && p.hits > 0)) return;
+
+  const road = creep.pos
+    .lookFor(LOOK_STRUCTURES)
+    .find((s) => s.structureType === STRUCTURE_ROAD && s.hits < s.hitsMax * ROAD_REPAIR_THRESHOLD);
+  if (road) {
+    creep.repair(road);
+    return;
+  }
+  const site = creep.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 3, {
+    filter: (s) => s.structureType === STRUCTURE_ROAD,
+  })[0];
+  if (site) creep.build(site);
 }
 
 function collectEnergy(creep: Creep, targetRoom: string) {
