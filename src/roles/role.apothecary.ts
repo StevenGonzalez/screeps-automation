@@ -1,3 +1,5 @@
+import { getBoostRequests, assignBoostLabs } from "../services/services.labs";
+
 const MIN_REFILL_AMOUNT = 200;
 
 export function runApothecary(creep: Creep) {
@@ -23,6 +25,9 @@ export function runApothecary(creep: Creep) {
     (r) => creep.store.getUsedCapacity(r) > 0
   );
 
+  const boostRequests = getBoostRequests(room);
+  const boostLabs = assignBoostLabs(outputLabs, boostRequests.keys());
+
   if (carrying.length > 0) {
     const resource = carrying[0];
 
@@ -38,13 +43,22 @@ export function runApothecary(creep: Creep) {
       }
     }
 
+    for (const [compound, lab] of boostLabs) {
+      const fits =
+        resource === RESOURCE_ENERGY
+          ? lab.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+          : resource === compound && (!lab.mineralType || lab.mineralType === compound);
+      if (fits && deliverTo(creep, lab, resource)) return;
+    }
+
     if (ls.inputCompounds) {
       for (let i = 0; i < 2; i++) {
-        if (ls.inputCompounds[i] === resource) {
-          const lab = inputLabs[i];
-          if (creep.transfer(lab, resource) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(lab, { reusePath: 5 });
-          }
+        const lab = inputLabs[i];
+        if (
+          ls.inputCompounds[i] === resource &&
+          (!lab.mineralType || lab.mineralType === resource) &&
+          deliverTo(creep, lab, resource)
+        ) {
           return;
         }
       }
@@ -88,6 +102,39 @@ export function runApothecary(creep: Creep) {
     }
   }
 
+  for (const [compound, lab] of boostLabs) {
+    if (lab.mineralType && lab.mineralType !== compound) {
+      if (creep.withdraw(lab, lab.mineralType) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(lab, { reusePath: 5 });
+      }
+      return;
+    }
+    const rc = compound as ResourceConstant;
+    const needed = boostRequests.get(compound) ?? 0;
+    const missing = Math.min(needed, LAB_MINERAL_CAPACITY) - (lab.store.getUsedCapacity(rc) ?? 0);
+    if (missing > 0) {
+      const src = findStoreWith(room, rc);
+      if (src) {
+        const amount = Math.min(creep.store.getFreeCapacity(), missing, src.store.getUsedCapacity(rc));
+        if (creep.withdraw(src, rc, amount) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(src, { reusePath: 5 });
+        }
+        return;
+      }
+    }
+    const energyMissing = Math.min(
+      (needed / LAB_BOOST_MINERAL) * LAB_BOOST_ENERGY - lab.store[RESOURCE_ENERGY],
+      lab.store.getFreeCapacity(RESOURCE_ENERGY)
+    );
+    if (energyMissing > 0 && storage.store[RESOURCE_ENERGY] > 0) {
+      const amount = Math.min(creep.store.getFreeCapacity(), energyMissing, storage.store[RESOURCE_ENERGY]);
+      if (creep.withdraw(storage, RESOURCE_ENERGY, amount) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(storage, { reusePath: 5 });
+      }
+      return;
+    }
+  }
+
   for (const outputLab of outputLabs) {
     const used = outputLab.store.getUsedCapacity() ?? 0;
     const cap = outputLab.store.getCapacity() ?? 0;
@@ -128,10 +175,11 @@ export function runApothecary(creep: Creep) {
       const lab = inputLabs[i];
       const labFree = lab.store.getFreeCapacity(compound) ?? 0;
       if (labFree < MIN_REFILL_AMOUNT) continue;
-      if ((storage.store.getUsedCapacity(compound) ?? 0) <= 0) continue;
-      const amount = Math.min(creep.store.getFreeCapacity() ?? 0, labFree);
-      if (creep.withdraw(storage, compound, amount) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(storage, { reusePath: 5 });
+      const src = findStoreWith(room, compound);
+      if (!src) continue;
+      const amount = Math.min(creep.store.getFreeCapacity() ?? 0, labFree, src.store.getUsedCapacity(compound));
+      if (creep.withdraw(src, compound, amount) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(src, { reusePath: 5 });
       }
       return;
     }
@@ -153,4 +201,19 @@ export function runApothecary(creep: Creep) {
   }
 
   if (!creep.pos.isNearTo(storage)) creep.moveTo(storage, { reusePath: 20 });
+}
+
+function deliverTo(creep: Creep, target: Structure, resource: ResourceConstant): boolean {
+  const res = creep.transfer(target, resource);
+  if (res === ERR_NOT_IN_RANGE) {
+    creep.moveTo(target, { reusePath: 5 });
+    return true;
+  }
+  return res === OK;
+}
+
+function findStoreWith(room: Room, resource: ResourceConstant): StructureStorage | StructureTerminal | undefined {
+  return [room.storage, room.terminal].find(
+    (s): s is StructureStorage | StructureTerminal => !!s && s.store.getUsedCapacity(resource) > 0
+  );
 }

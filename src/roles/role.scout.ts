@@ -136,9 +136,20 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
   creep.memory.targetRoom = undefined;
 }
 
+const UNREACHABLE_RETRY_TICKS = 10000;
+
 function markRoomUnreachable(homeRoomName: string, targetRoomName: string) {
   const mem = Memory.rooms[homeRoomName];
   if (!mem) return;
+  if (!mem.remoteRooms) mem.remoteRooms = [];
+  let entry = mem.remoteRooms.find((r) => r.roomName === targetRoomName);
+  if (!entry) {
+    entry = { roomName: targetRoomName, sources: [], lastSeen: Game.time, hostile: true };
+    mem.remoteRooms.push(entry);
+  }
+  entry.lastSeen = Game.time;
+  entry.hostile = true;
+  entry.hostileUntil = Game.time + UNREACHABLE_RETRY_TICKS;
   if (mem.pendingScoutRooms) {
     mem.pendingScoutRooms = mem.pendingScoutRooms.filter(
       (r) => r !== targetRoomName

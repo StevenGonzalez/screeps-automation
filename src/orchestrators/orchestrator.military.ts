@@ -4,6 +4,7 @@ import {
   getThreatSeverity,
   selectHostileTarget,
   selectStructureTarget,
+  preferMassAttack,
   formationOffset,
   evaluateRoomThreatLevel,
   buildTowerCostMatrix,
@@ -180,7 +181,9 @@ function runAttacking(op: MilitaryOp, members: Creep[]): void {
   if (op.tactic === "defend") return;
 
   const hostiles = targetRoom.find(FIND_HOSTILE_CREEPS);
-  const ownedStructs = targetRoom.find(FIND_HOSTILE_STRUCTURES);
+  const ownedStructs = targetRoom.find(FIND_HOSTILE_STRUCTURES, {
+    filter: (s) => s.structureType !== STRUCTURE_CONTROLLER && s.structureType !== STRUCTURE_RAMPART,
+  });
   const cleared =
     op.tactic === "raid"
       ? hostiles.length === 0 &&
@@ -357,7 +360,11 @@ function squadBoostReady(members: Creep[]): boolean {
 
 function roomStructurallyCleared(room: Room): boolean {
   if (room.find(FIND_HOSTILE_CREEPS).length > 0) return false;
-  return room.find(FIND_HOSTILE_STRUCTURES).length === 0;
+  return (
+    room.find(FIND_HOSTILE_STRUCTURES, {
+      filter: (s) => s.structureType !== STRUCTURE_CONTROLLER && s.structureType !== STRUCTURE_RAMPART,
+    }).length === 0
+  );
 }
 
 function hostileControllerToNeutralize(room: Room): StructureController | null {
@@ -702,7 +709,10 @@ function scanIntel(): void {
   if (!Memory.intel) Memory.intel = {};
   for (const rn in Game.rooms) {
     const room = Game.rooms[rn];
-    if (room.controller?.my) continue;
+    if (room.controller?.my) {
+      delete Memory.intel[rn];
+      continue;
+    }
     recordRoomIntel(room);
   }
 
@@ -1281,7 +1291,7 @@ export function runDefensiveKnight(creep: Creep, roomName: string): void {
   const { hostiles } = getThreatInfo(creep.room);
   const target = selectDefenseTarget(creep, rally, hostiles);
   if (target) {
-    if (creep.pos.isNearTo(target)) creep.attack(target);
+    meleeStrike(creep, target, hostiles);
     if (!anchorOnRampart(creep, target.pos, 1)) {
       if (getDefensiveRamparts(creep.room).length > 0) {
         anchorOnRampart(creep, target.pos, 0);
@@ -1303,14 +1313,7 @@ export function runDefensiveWizard(creep: Creep, roomName: string): void {
 
   const { hostiles } = getThreatInfo(creep.room);
 
-  const inMass = creep.pos.findInRange(hostiles, KITE_RANGE);
-  if (inMass.length >= 3) {
-    creep.rangedMassAttack();
-  } else {
-    const target = selectDefenseTarget(creep, rally, hostiles);
-    if (target && creep.pos.getRangeTo(target) <= 3) creep.rangedAttack(target);
-    else if (inMass.length > 0) creep.rangedAttack(creep.pos.findClosestByRange(inMass)!);
-  }
+  rangedStrike(creep, selectDefenseTarget(creep, rally, hostiles), hostiles);
 
   const nearest = creep.pos.findClosestByRange(
     hostiles.filter((h) => !isNearEdge(h.pos) && rally.getRangeTo(h) <= DEFENSE_CHASE_RADIUS)
@@ -1395,7 +1398,7 @@ export function runOffensiveKnight(creep: Creep, op: MilitaryOp): void {
   const target = selectHostileTarget(creep.pos, hostiles);
 
   if (target) {
-    if (creep.pos.isNearTo(target)) creep.attack(target);
+    meleeStrike(creep, target, hostiles);
     if (op.tactic === "defend") {
       holdNearRally(creep, op, ctx, isLeader);
     } else if (isLeader) {
@@ -1446,19 +1449,9 @@ export function runOffensiveWizard(creep: Creep, op: MilitaryOp): void {
 
   const hostiles = getThreatInfo(creep.room).hostiles;
 
-  const inMass = creep.pos.findInRange(hostiles, KITE_RANGE);
-  if (inMass.length >= 3) {
-    creep.rangedMassAttack();
-  } else {
-    const target = selectHostileTarget(creep.pos, hostiles);
-    if (target && creep.pos.getRangeTo(target) <= 3) {
-      creep.rangedAttack(target);
-    } else if (inMass.length > 0) {
-      creep.rangedAttack(creep.pos.findClosestByRange(inMass)!);
-    } else if (op.tactic !== "defend") {
-      const struct = attackStructureTarget(creep, op);
-      if (struct && creep.pos.getRangeTo(struct) <= 3) creep.rangedAttack(struct);
-    }
+  if (!rangedStrike(creep, selectHostileTarget(creep.pos, hostiles), hostiles) && op.tactic !== "defend") {
+    const struct = attackStructureTarget(creep, op);
+    if (struct && creep.pos.getRangeTo(struct) <= 3) creep.rangedAttack(struct);
   }
 
   const nearest = creep.pos.findClosestByRange(hostiles);
@@ -1575,8 +1568,31 @@ function healBest(creep: Creep, ctx: SquadContext): Creep | null {
 
 function rangedSnapFire(creep: Creep): void {
   const inRange = creep.pos.findInRange(FIND_HOSTILE_CREEPS, KITE_RANGE);
-  if (inRange.length >= 3) creep.rangedMassAttack();
-  else if (inRange.length > 0) creep.rangedAttack(inRange[0]);
+  rangedStrike(creep, null, inRange);
+}
+
+function meleeStrike(creep: Creep, preferred: Creep, hostiles: Creep[]): void {
+  if (creep.pos.isNearTo(preferred)) {
+    creep.attack(preferred);
+    return;
+  }
+  const fallback = selectHostileTarget(creep.pos, creep.pos.findInRange(hostiles, 1));
+  if (fallback) creep.attack(fallback);
+}
+
+function rangedStrike(creep: Creep, preferred: Creep | null, hostiles: Creep[]): boolean {
+  const inRange = creep.pos.findInRange(hostiles, KITE_RANGE);
+  if (inRange.length === 0) return false;
+  if (preferMassAttack(creep.pos, inRange)) {
+    creep.rangedMassAttack();
+    return true;
+  }
+  const target =
+    preferred && creep.pos.getRangeTo(preferred) <= KITE_RANGE
+      ? preferred
+      : selectHostileTarget(creep.pos, inRange);
+  if (target) creep.rangedAttack(target);
+  return true;
 }
 
 function fleeFrom(creep: Creep, threat: RoomPosition): void {

@@ -72,6 +72,56 @@ export function resolveChain(
   return result;
 }
 
+function boostedPartType(compound: string): BodyPartConstant | undefined {
+  for (const part of Object.keys(BOOSTS) as BodyPartConstant[]) {
+    if ((BOOSTS as Record<string, Record<string, unknown>>)[part][compound]) return part;
+  }
+  return undefined;
+}
+
+// Compound -> mineral needed by creeps (spawning included) waiting on their current boost.
+export function getBoostRequests(room: Room): Map<string, number> {
+  const requests = new Map<string, number>();
+  for (const c of room.find(FIND_MY_CREEPS)) {
+    const compound = c.memory.boostCompound;
+    if (!compound || c.memory.boosted) continue;
+    const part = boostedPartType(compound);
+    if (!part) continue;
+    const parts = c.body.filter((b) => b.type === part && !b.boost).length;
+    if (parts > 0) {
+      requests.set(compound, (requests.get(compound) ?? 0) + parts * LAB_BOOST_MINERAL);
+    }
+  }
+  return requests;
+}
+
+// One output lab per requested compound: a lab already holding it, else a free one
+// taken from the end of the list. Reactions skip these labs while the boost is pending.
+export function assignBoostLabs(
+  outputLabs: StructureLab[],
+  compounds: Iterable<string>
+): Map<string, StructureLab> {
+  const assigned = new Map<string, StructureLab>();
+  const taken = new Set<string>();
+  const unplaced: string[] = [];
+  for (const compound of compounds) {
+    const lab = outputLabs.find((l) => l.mineralType === compound && !taken.has(l.id));
+    if (lab) {
+      assigned.set(compound, lab);
+      taken.add(lab.id);
+    } else {
+      unplaced.push(compound);
+    }
+  }
+  for (const compound of unplaced) {
+    const lab = [...outputLabs].reverse().find((l) => !taken.has(l.id));
+    if (!lab) break;
+    assigned.set(compound, lab);
+    taken.add(lab.id);
+  }
+  return assigned;
+}
+
 export function getStockForCompound(compound: string, room: Room): number {
   const rc = compound as ResourceConstant;
   return (

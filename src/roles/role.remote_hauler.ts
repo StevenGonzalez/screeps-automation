@@ -49,7 +49,20 @@ export function runRemoteHauler(creep: Creep) {
 
   if (inTarget && !core) clearRemoteInvader(creep);
 
-  if (creep.store[RESOURCE_ENERGY] === 0) {
+  // Fill up before the trip home: deciding on "empty vs not" sent haulers back
+  // across rooms with a few dozen energy from a near-empty container. Near death,
+  // bring home whatever is carried rather than let it die with the load.
+  if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
+    creep.memory.working = false;
+  } else if (
+    !creep.memory.working &&
+    (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 ||
+      (creep.store[RESOURCE_ENERGY] > 0 && (creep.ticksToLive ?? Infinity) < 150))
+  ) {
+    creep.memory.working = true;
+  }
+
+  if (!creep.memory.working) {
     collectEnergy(creep, targetRoom);
   } else {
     depositEnergy(creep, homeRoom);

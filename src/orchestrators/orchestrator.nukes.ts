@@ -61,7 +61,7 @@ function reinforce(room: Room, nukes: Nuke[]): void {
     for (const n of nukes) {
       const range = s.pos.getRangeTo(n.pos);
       if (range === 0) {
-        damage += NUKE_IMPACT_DAMAGE + NUKE_SPLASH_DAMAGE;
+        damage += NUKE_IMPACT_DAMAGE;
         overlap++;
       } else if (range <= 2) {
         damage += NUKE_SPLASH_DAMAGE;

@@ -1,4 +1,4 @@
-import { seekBoost } from "../services/services.combat";
+import { preferMassAttack, seekBoost } from "../services/services.combat";
 import { getDefenseOp, getOffensiveOp, runDefensiveWizard, runOffensiveWizard } from "../orchestrators/orchestrator.military";
 
 const KITE_RANGE = 3;
@@ -35,7 +35,7 @@ export function runWizard(creep: Creep) {
   const range = creep.pos.getRangeTo(hostile);
   const inRangeHostiles = creep.pos.findInRange(FIND_HOSTILE_CREEPS, KITE_RANGE);
 
-  if (inRangeHostiles.length >= 3) {
+  if (preferMassAttack(creep.pos, inRangeHostiles)) {
     creep.rangedMassAttack();
   } else if (range <= KITE_RANGE) {
     creep.rangedAttack(hostile);

@@ -145,7 +145,12 @@ function processTerminal(room: Room): void {
     const mineralType = mineral.mineralType;
     const mineralAmount = terminal.store.getUsedCapacity(mineralType) ?? 0;
     if (mineralAmount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD) {
-      attemptMineralSale(room, terminal, mineralType, mineralAmount);
+      const pending = room.memory.pendingSend;
+      const reserved = pending?.resource === mineralType ? pending.loadTarget : 0;
+      const keepStock = room.memory.labSystem?.inputLabIds?.length ? BUY_CONFIG.TARGET_STOCK : 0;
+      const totalStock = (room.storage?.store.getUsedCapacity(mineralType) ?? 0) + mineralAmount;
+      const sellable = Math.min(mineralAmount - reserved, totalStock - keepStock);
+      if (sellable > 0) attemptMineralSale(room, terminal, mineralType, sellable);
     }
   }
 

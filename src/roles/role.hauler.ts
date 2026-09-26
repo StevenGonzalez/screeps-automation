@@ -12,6 +12,7 @@ import {
   findSmartEnergyFallbackTarget,
   repairStructure,
   upgradeController,
+  getMinerContainerIds,
 } from "../services/services.creep";
 import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
@@ -34,6 +35,15 @@ function hasActiveFiller(room: Room): boolean {
 export function runHauler(creep: Creep) {
   if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
+  // Drop an assignment whose container is gone or is no longer a miner
+  // container, so the hauler picks up the replacement.
+  const assignedId = creep.memory.assignedContainerId;
+  if (
+    assignedId &&
+    (!Game.getObjectById(assignedId) || !getMinerContainerIds(creep.room).includes(assignedId))
+  ) {
+    creep.memory.assignedContainerId = undefined;
+  }
   if (!creep.memory.assignedContainerId) {
     const assignment = findUnclaimedHaulerAssignment(creep.room);
     if (assignment) {

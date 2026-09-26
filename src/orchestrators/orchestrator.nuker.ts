@@ -1,4 +1,5 @@
 import { ROLE_HAULER } from "../config/config.roles";
+import { mayBorrowHauler } from "../services/services.creep";
 
 export const NUKER_GHODIUM_RESERVE = NUKER_GHODIUM_CAPACITY;
 
@@ -131,22 +132,26 @@ function commandCourier(room: Room, nuker: StructureNuker, job: FillJob): void {
 function acquireCourier(room: Room): Creep | null {
   const ns = room.memory.nukerSystem!;
 
+  const haulers = room.find(FIND_MY_CREEPS, {
+    filter: (c) => c.memory.role === ROLE_HAULER && c.spawning !== true,
+  });
+  const mayBorrow = mayBorrowHauler(room, haulers);
+
   if (ns.courierName) {
     const existing = Game.creeps[ns.courierName];
     if (existing && existing.room.name === room.name && existing.memory.role === ROLE_HAULER) {
-      return existing;
+      const holdsNonEnergy =
+        (existing.store.getUsedCapacity() ?? 0) > (existing.store[RESOURCE_ENERGY] ?? 0);
+      if (mayBorrow || holdsNonEnergy) return existing;
     }
     delete ns.courierName;
   }
 
-  const nuker = ns.nukerId ? Game.getObjectById(ns.nukerId) : null;
-  const haulers = room.find(FIND_MY_CREEPS, {
-    filter: (c) => c.memory.role === ROLE_HAULER && c.spawning !== true,
-  });
-  if (haulers.length === 0) return null;
+  if (!mayBorrow) return null;
 
-  const empty = haulers.filter((c) => (c.store.getUsedCapacity() ?? 0) === 0);
-  const pool = empty.length > 0 ? empty : haulers;
+  const nuker = ns.nukerId ? Game.getObjectById(ns.nukerId) : null;
+  const pool = haulers.filter((c) => (c.store.getUsedCapacity() ?? 0) === 0);
+  if (pool.length === 0) return null;
 
   const chosen = nuker
     ? pool.reduce((best, c) => (c.pos.getRangeTo(nuker) < best.pos.getRangeTo(nuker) ? c : best))

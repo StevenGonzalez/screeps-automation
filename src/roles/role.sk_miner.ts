@@ -3,6 +3,8 @@ import { isSourceKeeper } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
 const KEEPER_DANGER_RANGE = 4;
+// After fleeing a keeper, stay out of the room this long before trying again.
+const RETREAT_HOLD_TICKS = 50;
 const GUARDIAN_GUARD_RANGE = 6;
 
 export function runSkMiner(creep: Creep) {
@@ -21,6 +23,13 @@ export function runSkMiner(creep: Creep) {
   }
 
   if (creep.room.name !== op.roomName) {
+    // Just fled a keeper: wait off the exit instead of walking straight back in.
+    if ((creep.memory.retreatUntil ?? 0) > Game.time) {
+      if (creep.pos.x <= 2 || creep.pos.x >= 47 || creep.pos.y <= 2 || creep.pos.y >= 47) {
+        creep.moveTo(new RoomPosition(25, 25, creep.room.name), { range: 20, reusePath: 10 });
+      }
+      return;
+    }
     moveToRoom(creep, op.roomName);
     return;
   }
@@ -35,6 +44,7 @@ export function runSkMiner(creep: Creep) {
       })
       .length > 0;
     if (!guardianNear || creep.hits < creep.hitsMax * 0.4) {
+      creep.memory.retreatUntil = Game.time + RETREAT_HOLD_TICKS;
       moveToRoom(creep, op.homeRoom);
       return;
     }

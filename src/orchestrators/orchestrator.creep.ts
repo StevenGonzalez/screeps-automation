@@ -131,14 +131,19 @@ export function loop() {
     if (creep.spawning) continue;
     const handler = ROLE_HANDLERS[creep.memory.role];
     if (handler) {
-      if (profile) {
-        const start = Game.cpu.getUsed();
-        handler(creep);
-        recordRole(creep.memory.role, Game.cpu.getUsed() - start);
-      } else {
-        handler(creep);
+      try {
+        if (profile) {
+          const start = Game.cpu.getUsed();
+          handler(creep);
+          recordRole(creep.memory.role, Game.cpu.getUsed() - start);
+        } else {
+          handler(creep);
+        }
+        maybeChatter(creep);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? `${e.message}\n${e.stack}` : String(e);
+        console.log(`[ERROR] Creep ${name} (${creep.memory.role}) threw: ${msg}`);
       }
-      maybeChatter(creep);
     } else if (Game.time % 100 === 0) {
       console.log(`[creep] no handler for role "${creep.memory.role}" on ${name}`);
     }

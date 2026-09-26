@@ -512,11 +512,7 @@ export function removeRoadsAroundStructures(room: Room) {
 export function pruneRoadsUnderStructures(room: Room) {
   if (!room.memory.plannedStructures) return;
   const mem = room.memory.plannedStructures as Record<string, string[]>;
-  const roadKeys = Object.keys(mem).filter(
-    (k) =>
-      k.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
-      k.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX)
-  );
+  const roadKeys = Object.keys(mem).filter((k) => structureTypeForKey(k) === STRUCTURE_ROAD);
   if (roadKeys.length === 0) return;
 
   const nonRoadPosSet = new Set<string>();

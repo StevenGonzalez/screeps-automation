@@ -9,6 +9,7 @@ const BOOTSTRAP_INVASION_PAUSE = 200;
 const BOOTSTRAP_TIMEOUT = 6_000;
 
 const CLAIM_TIMEOUT = 1_500;
+const CLAIM_FAILED_COOLDOWN = 20_000;
 
 const ESTABLISHED_RETENTION = 1_000;
 
@@ -364,6 +365,7 @@ function advanceExpansionQueue(): void {
 
     const targetRoom = Game.rooms[next.roomName];
     if (targetRoom?.controller?.my) continue;
+    if (targetRoom?.controller?.owner) continue;
 
     const rec = findRemoteRecord(next.roomName);
     if ((targetRoom && isRoomContested(targetRoom)) || (rec && isRemoteContested(rec))) {
@@ -391,7 +393,7 @@ function advanceExpansionQueue(): void {
   }
 }
 
-function resolveFundingHome(roomName: string, preferred?: string): string | undefined {
+export function resolveFundingHome(roomName: string, preferred?: string): string | undefined {
   if (preferred) {
     const room = Game.rooms[preferred];
     if (room && isHomeRoomHealthy(room)) return preferred;
@@ -450,7 +452,11 @@ function manageActiveExpansion() {
   if (exp.phase === "claiming") {
     const rec = findRemoteRecord(exp.roomName);
     if (rec && isRemoteContested(rec)) {
-      clearExpansion(`contested: scout flagged ${exp.roomName} hostile pre-claim`);
+      if (!Memory.expansionQueue) Memory.expansionQueue = [];
+      if (!Memory.expansionQueue.some((q) => q.roomName === exp.roomName)) {
+        Memory.expansionQueue.push({ roomName: exp.roomName, homeRoom: exp.homeRoom, queuedAt: Game.time });
+      }
+      clearExpansion(`contested: scout flagged ${exp.roomName} hostile pre-claim - re-queued`);
       return;
     }
     if (Game.time - exp.startedAt > CLAIM_TIMEOUT) {
@@ -461,6 +467,10 @@ function manageActiveExpansion() {
           c.room.name === exp.roomName
       );
       if (!claimerInRoom) {
+        if (rec) {
+          rec.hostile = true;
+          rec.hostileUntil = Game.time + CLAIM_FAILED_COOLDOWN;
+        }
         clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
         return;
       }
@@ -470,7 +480,12 @@ function manageActiveExpansion() {
   if (exp.phase === "bootstrapping") {
     if (exp.bootstrapStartedAt === undefined) exp.bootstrapStartedAt = Game.time;
     if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
-      clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks`);
+      if (child?.controller?.my && child.find(FIND_MY_SPAWNS).length === 0) {
+        child.controller.unclaim();
+        clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks - no spawn, unclaimed`);
+      } else {
+        clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks`);
+      }
       return;
     }
 

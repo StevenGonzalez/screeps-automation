@@ -64,7 +64,7 @@ function autoUpgrade(pc: PowerCreep): void {
 }
 
 function trySpawn(pc: PowerCreep): void {
-  if (pc.spawnCooldownTime && Game.time < pc.spawnCooldownTime) return;
+  if (pc.spawnCooldownTime && Date.now() < pc.spawnCooldownTime) return;
 
   const home = pc.memory.homeRoom ? Game.rooms[pc.memory.homeRoom] : undefined;
   if (home?.controller?.my && home.memory.powerSpawnId) {
@@ -176,8 +176,8 @@ function pickTarget(power: PowerConstant, room: Room): Source | Structure | null
     }
     case PWR_OPERATE_LAB: {
       const ls = room.memory.labSystem;
-      if (!ls?.activeCompound || !ls.inputLabIds?.length) return null;
-      const lab = ls.inputLabIds
+      if (!ls?.activeCompound || !ls.outputLabIds?.length) return null;
+      const lab = ls.outputLabIds
         .map((id) => Game.getObjectById(id))
         .find((l): l is StructureLab => {
           if (!l) return false;

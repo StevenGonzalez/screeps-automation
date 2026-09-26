@@ -420,6 +420,15 @@ export function withdrawFromControllerContainer(creep: Creep): boolean {
   return false;
 }
 
+// Borrowed-courier guard for the factory and nuker: they may only take a courier
+// when the base doesn't need it: spawn/extensions full, no hostiles (towers
+// need refills), and at least one other courier left on normal duty.
+export function mayBorrowHauler(room: Room, haulers: Creep[]): boolean {
+  if (haulers.length < 2) return false;
+  if (room.energyAvailable < room.energyCapacityAvailable) return false;
+  return room.find(FIND_HOSTILE_CREEPS).length === 0;
+}
+
 export function isCreepEmpty(creep: Creep): boolean {
   return creep.store[RESOURCE_ENERGY] === 0;
 }
@@ -616,7 +625,8 @@ export function getNukeRampartTarget(room: Room): StructureRampart | null {
       .lookForAt(LOOK_STRUCTURES, x, y)
       .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
     if (!rampart) continue;
-    const deficit = required - rampart.hits;
+    // A rampart can't exceed its RCL hitsMax; once there, more repair is wasted.
+    const deficit = Math.min(required, rampart.hitsMax) - rampart.hits;
     if (deficit > worstDeficit) {
       worstDeficit = deficit;
       worst = rampart;

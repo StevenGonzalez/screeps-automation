@@ -1,9 +1,24 @@
 import { getThreatInfo } from "../services/services.combat";
 import { pickSignature } from "../config/signatures";
 
+const RETREAT_HOLD_TICKS = 50;
+
 export function runConqueror(creep: Creep) {
   const targetRoom = creep.memory.targetRoom;
   if (!targetRoom) { creep.suicide(); return; }
+
+  if (Memory.expansion?.roomName !== targetRoom || Memory.expansion.phase !== "claiming") {
+    creep.suicide();
+    return;
+  }
+
+  if (creep.room.name !== targetRoom && (creep.memory.retreatUntil ?? 0) > Game.time) {
+    const { x, y } = creep.pos;
+    if (x <= 2 || x >= 47 || y <= 2 || y >= 47) {
+      creep.moveTo(new RoomPosition(25, 25, creep.room.name), { range: 20, reusePath: 20 });
+    }
+    return;
+  }
 
   if (creep.room.name !== targetRoom) {
     const exit = creep.room.findExitTo(targetRoom);
@@ -19,9 +34,7 @@ export function runConqueror(creep: Creep) {
   if (!controller) { creep.suicide(); return; }
 
   if (controller.my) {
-    if (Memory.expansion?.roomName === targetRoom) {
-      Memory.expansion.phase = "bootstrapping";
-    }
+    Memory.expansion.phase = "bootstrapping";
     creep.suicide();
     return;
   }
@@ -30,12 +43,13 @@ export function runConqueror(creep: Creep) {
     console.log(
       `[Expansion] Aborting claim of ${targetRoom} - owned by ${controller.owner.username}.`
     );
-    if (Memory.expansion?.roomName === targetRoom) delete Memory.expansion;
+    delete Memory.expansion;
     creep.suicide();
     return;
   }
 
   if (getThreatInfo(creep.room).score > 0) {
+    creep.memory.retreatUntil = Game.time + RETREAT_HOLD_TICKS;
     const exits = creep.room.find(FIND_EXIT);
     const exit = creep.pos.findClosestByRange(exits);
     if (exit) creep.moveTo(exit, { reusePath: 5 });
@@ -56,9 +70,7 @@ export function runConqueror(creep: Creep) {
   if (result === ERR_NOT_IN_RANGE) {
     creep.moveTo(controller, { reusePath: 10 });
   } else if (result === OK) {
-    if (Memory.expansion?.roomName === targetRoom) {
-      Memory.expansion.phase = "bootstrapping";
-    }
+    Memory.expansion.phase = "bootstrapping";
     console.log(`[Expansion] Claimed ${targetRoom}!`);
     try {
       const sig = pickSignature(creep.room.name);
@@ -70,5 +82,11 @@ export function runConqueror(creep: Creep) {
       }
     } catch (e) {
     }
+  } else if (result === ERR_GCL_NOT_ENOUGH) {
+    console.log(`[Expansion] Can't claim ${targetRoom} - GCL too low. Re-queued.`);
+    Memory.expansionQueue = (Memory.expansionQueue ?? []).filter((q) => q.roomName !== targetRoom);
+    Memory.expansionQueue.unshift({ roomName: targetRoom, homeRoom: Memory.expansion.homeRoom, queuedAt: Game.time });
+    delete Memory.expansion;
+    creep.suicide();
   }
 }

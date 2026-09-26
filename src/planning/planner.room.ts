@@ -2,6 +2,7 @@ import { PLANNER_KEYS, STAMP_PLANNER } from "../config/config.structures";
 import {
   addPlannedStructureToMemory,
   plannedPositionsFromMemory,
+  structureTypeForKey,
 } from "../services/services.structures";
 import type { StampCell } from "./planner.stamp";
 import {
@@ -132,6 +133,7 @@ export function applyCastleStamp(room: Room): void {
 
   let towerCount = 0;
   const towerCap = CONTROLLER_STRUCTURES[STRUCTURE_TOWER][rcl] ?? 0;
+  const naturalCells = new Set(cells.map((c) => `${anchor.x + c.dx},${anchor.y + c.dy}`));
 
   for (const cell of cells) {
     const absX = anchor.x + cell.dx;
@@ -150,8 +152,29 @@ export function applyCastleStamp(room: Room): void {
     let finalX = absX;
     let finalY = absY;
 
+    const memKey = stampMemoryKeyFor(cell);
+
     if (terrain.get(absX, absY) === TERRAIN_MASK_WALL) {
       if (!shouldUseFallbackForStampCell(cell)) continue;
+      const plan = room.memory.plannedStructures as Record<string, string[]> | undefined;
+      const prior = plan?.[memKey];
+      const type = structureTypeForKey(memKey);
+      if (plan && prior && prior.length > 0) {
+        if (prior.length > 1) plan[memKey] = [prior[0]];
+        occupiedSet.add(prior[0]);
+        continue;
+      }
+      const builtRelocated = room.find(FIND_MY_STRUCTURES, {
+        filter: (st) =>
+          st.structureType === type &&
+          !naturalCells.has(`${st.pos.x},${st.pos.y}`) &&
+          !occupiedSet.has(`${st.pos.x},${st.pos.y}`) &&
+          Math.max(Math.abs(st.pos.x - absX), Math.abs(st.pos.y - absY)) <= STAMP_PLANNER.bfsMaxRadius,
+      })[0];
+      if (builtRelocated) {
+        occupiedSet.add(`${builtRelocated.pos.x},${builtRelocated.pos.y}`);
+        continue;
+      }
       const fallback = findNearestBuildable(
         room,
         absX,
@@ -164,7 +187,6 @@ export function applyCastleStamp(room: Room): void {
       finalY = fallback.y;
     }
 
-    const memKey = stampMemoryKeyFor(cell);
     addPlannedStructureToMemory(
       room,
       memKey,
@@ -363,6 +385,17 @@ function buildSharedRoadCostMatrix(room: Room): CostMatrix {
   for (let x = 0; x < 50; x++) {
     for (let y = 0; y < 50; y++) {
       if (terrain.get(x, y) === TERRAIN_MASK_WALL) cm.set(x, y, 255);
+    }
+  }
+
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_ROAD) {
+      if (cm.get(s.pos.x, s.pos.y) !== 255) cm.set(s.pos.x, s.pos.y, 1);
+    } else if (
+      s.structureType !== STRUCTURE_CONTAINER &&
+      !(s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my)
+    ) {
+      cm.set(s.pos.x, s.pos.y, 255);
     }
   }
 

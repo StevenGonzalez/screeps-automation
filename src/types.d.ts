@@ -194,6 +194,7 @@ declare global {
     offensiveTarget?: string;
     drainRetreat?: boolean;
     defensiveTarget?: string;
+    retreatUntil?: number;
     powerOpId?: number;
     depositOpId?: number;
     skOpId?: number;

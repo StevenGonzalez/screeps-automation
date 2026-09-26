@@ -286,7 +286,9 @@ function cleanupUnplannedConstructionSites(room: Room) {
 
   for (const site of sites) {
     const set = plannedByType.get(site.structureType as StructureConstant);
-    if (set?.has(`${site.pos.x},${site.pos.y}`)) continue;
+    // Only police types the planner lays out; hand-placed sites of other types survive.
+    if (!set) continue;
+    if (set.has(`${site.pos.x},${site.pos.y}`)) continue;
     if (site.progress > 0) continue;
     site.remove();
   }

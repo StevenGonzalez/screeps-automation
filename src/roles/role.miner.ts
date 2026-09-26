@@ -20,6 +20,14 @@ export function runMiner(creep: Creep) {
     const source = Game.getObjectById(creep.memory.assignedSourceId) as Source | null;
     const container = Game.getObjectById(creep.memory.assignedContainerId) as StructureContainer | null;
 
+    // Container destroyed or rebuilt under a new id: drop the stale assignment so
+    // the next tick picks an unclaimed container instead of the blind fallback.
+    if (!container) {
+      creep.memory.assignedSourceId = undefined;
+      creep.memory.assignedContainerId = undefined;
+      return;
+    }
+
     if (source && !isSourceSafe(source)) {
       creep.memory.assignedSourceId = undefined;
       creep.memory.assignedContainerId = undefined;

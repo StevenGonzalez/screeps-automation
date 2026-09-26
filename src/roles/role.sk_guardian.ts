@@ -1,4 +1,4 @@
-import { seekBoost, isSourceKeeper } from "../services/services.combat";
+import { seekBoost, isSourceKeeper, preferMassAttack } from "../services/services.combat";
 import { getSkOp, isOpPaused } from "../orchestrators/orchestrator.sourcekeeper";
 
 const KITE_RANGE = 3;
@@ -36,7 +36,7 @@ export function runSkGuardian(creep: Creep) {
   if (target) {
     const range = creep.pos.getRangeTo(target);
     const cluster = creep.pos.findInRange(hostiles, KITE_RANGE);
-    if (cluster.length >= 2 || range === 1) creep.rangedMassAttack();
+    if (preferMassAttack(creep.pos, cluster)) creep.rangedMassAttack();
     else creep.rangedAttack(target);
 
     if (range < KITE_RANGE) creep.move(target.pos.getDirectionTo(creep.pos));
@@ -50,7 +50,7 @@ export function runSkGuardian(creep: Creep) {
   const pending = lairs.filter((l) => l.ticksToSpawn !== undefined);
   if (pending.length > 0) {
     const next = pending.reduce((a, b) => (a.ticksToSpawn! < b.ticksToSpawn! ? a : b));
-    if (!creep.pos.isNearTo(next)) creep.moveTo(next, { range: 1, reusePath: 10 });
+    if (!creep.pos.inRangeTo(next, KITE_RANGE + 1)) creep.moveTo(next, { range: KITE_RANGE, reusePath: 10 });
     return;
   }
 

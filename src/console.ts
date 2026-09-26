@@ -38,6 +38,7 @@ import {
   enqueueExpansion,
   dequeueExpansion,
   getExpansionQueue,
+  resolveFundingHome,
 } from "./orchestrators/orchestrator.expansion";
 import {
   describeFactories,
@@ -134,18 +135,11 @@ export function setupConsole() {
         }
       }
 
-      const ownedRooms = Object.values(Game.rooms).filter(
-        (r) => r.controller?.my
-      );
-      if (ownedRooms.length === 0) {
-        console.log("[ARCA] No owned rooms to fund expansion");
+      const homeRoom = resolveFundingHome(roomName);
+      if (!homeRoom) {
+        console.log("[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, 50k stored energy, no threats)");
         return;
       }
-      const homeRoom = ownedRooms.reduce((best, r) => {
-        const d = Game.map.getRoomLinearDistance(r.name, roomName);
-        const bd = Game.map.getRoomLinearDistance(best.name, roomName);
-        return d < bd ? r : best;
-      }).name;
 
       Memory.expansion = {
         roomName,
@@ -884,8 +878,8 @@ export function setupConsole() {
       for (const name of names) {
         const pc = Game.powerCreeps[name];
         const loc = pc.ticksToLive === undefined
-          ? pc.spawnCooldownTime && Game.time < pc.spawnCooldownTime
-            ? `unspawned (cooldown ${pc.spawnCooldownTime - Game.time}t)`
+          ? pc.spawnCooldownTime && Date.now() < pc.spawnCooldownTime
+            ? `unspawned (cooldown ${Math.ceil((pc.spawnCooldownTime - Date.now()) / 60000)}min)`
             : "unspawned (ready)"
           : `${pc.room?.name ?? "?"}  ttl=${pc.ticksToLive}`;
         const ops = pc.store?.getUsedCapacity(RESOURCE_OPS) ?? 0;

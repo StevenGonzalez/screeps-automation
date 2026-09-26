@@ -67,6 +67,7 @@ export function runRemoteMiner(creep: Creep) {
     }
     if (container.hits < container.hitsMax * 0.5 && creep.store[RESOURCE_ENERGY] > 0) {
       creep.repair(container);
+      return;
     }
     creep.harvest(source);
   } else {

@@ -2,6 +2,8 @@ import {
   resolveChain,
   getStorageStockForCompound,
   REACTION_RECIPES,
+  getBoostRequests,
+  assignBoostLabs,
 } from "../services/services.labs";
 import { advanceBoost } from "../services/services.combat";
 
@@ -11,8 +13,10 @@ const LAB_PLAN_INTERVAL = 100;
 
 const AUTO_PRODUCTION_TARGETS: Record<string, number> = {
   XUH2O: 3000,
-  XUHO2: 3000,
   XKHO2: 3000,
+  XLHO2: 3000,
+  XZH2O: 2000,
+  XUHO2: 3000,
   XZHO2: 2000,
   XGH2O: 3000,
   OH:    10000,
@@ -130,7 +134,12 @@ function processLabSystem(room: Room) {
     (inputLabs[0].store.getUsedCapacity(rc0) ?? 0) > 0 &&
     (inputLabs[1].store.getUsedCapacity(rc1) ?? 0) > 0
   ) {
+    const boostLabIds = new Set<string>();
+    for (const lab of assignBoostLabs(outputLabs, getBoostRequests(room).keys()).values()) {
+      boostLabIds.add(lab.id);
+    }
     for (const outputLab of outputLabs) {
+      if (boostLabIds.has(outputLab.id)) continue;
       outputLab.runReaction(inputLabs[0], inputLabs[1]);
     }
   }

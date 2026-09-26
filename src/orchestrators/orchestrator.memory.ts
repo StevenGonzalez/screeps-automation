@@ -274,7 +274,9 @@ function discoverAdjacentRooms(room: Room) {
     }
   }
 
-  const activeRemoteCount = room.memory.remoteRooms.filter((r) => !r.hostile).length;
+  const activeRemoteCount = room.memory.remoteRooms.filter(
+    (r) => !r.hostile && r.sources.length > 0
+  ).length;
   if (activeRemoteCount >= MAX_REMOTE_ROOMS) return;
 
   const exits = Game.map.describeExits(room.name);
@@ -282,7 +284,7 @@ function discoverAdjacentRooms(room: Room) {
     const adjacentName = exits[dir as ExitKey];
     if (!adjacentName || knownNames.has(adjacentName)) continue;
 
-    if (isSourceKeeperRoom(adjacentName)) continue;
+    if (isSourceKeeperRoom(adjacentName) || isHighwayRoom(adjacentName)) continue;
 
     room.memory.pendingScoutRooms.push(adjacentName);
     knownNames.add(adjacentName);
@@ -342,3 +344,9 @@ function cleanupEstablishedExpansion() {
 }
 
 type ExitKey = "1" | "3" | "5" | "7";
+
+function isHighwayRoom(roomName: string): boolean {
+  const m = roomName.match(/^[WE](\d+)[NS](\d+)$/);
+  if (!m) return false;
+  return parseInt(m[1], 10) % 10 === 0 || parseInt(m[2], 10) % 10 === 0;
+}

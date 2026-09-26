@@ -12,7 +12,7 @@ const originalMoveTo = Creep.prototype.moveTo as (
   ...args: unknown[]
 ) => ScreepsReturnCode;
 
-const costMatrixCache: Record<string, { cm: CostMatrix; tick: number }> = {};
+const costMatrixCache: Record<string, { cm: CostMatrix; tick: number; structures: number }> = {};
 
 interface StuckState {
   st: number;
@@ -32,13 +32,25 @@ function pruneStuckState(): void {
 
 function getRoomCostMatrix(roomName: string): CostMatrix {
   const cached = costMatrixCache[roomName];
-  if (cached && Game.time - cached.tick < COSTMATRIX_TTL) return cached.cm;
-
   const room = Game.rooms[roomName];
-  if (!room) return new PathFinder.CostMatrix();
+  if (!room) {
+    if (cached && Game.time - cached.tick < COSTMATRIX_TTL) return cached.cm;
+    return new PathFinder.CostMatrix();
+  }
+
+  // Rebuild early when a structure appears or disappears, so a freshly built
+  // extension isn't treated as walkable for the rest of the TTL.
+  const structures = room.find(FIND_STRUCTURES);
+  if (
+    cached &&
+    Game.time - cached.tick < COSTMATRIX_TTL &&
+    cached.structures === structures.length
+  ) {
+    return cached.cm;
+  }
 
   const cm = new PathFinder.CostMatrix();
-  for (const s of room.find(FIND_STRUCTURES)) {
+  for (const s of structures) {
     if (s.structureType === STRUCTURE_ROAD) {
       if (cm.get(s.pos.x, s.pos.y) === 0) cm.set(s.pos.x, s.pos.y, 1);
     } else if (s.structureType === STRUCTURE_RAMPART) {
@@ -47,7 +59,7 @@ function getRoomCostMatrix(roomName: string): CostMatrix {
       cm.set(s.pos.x, s.pos.y, 255);
     }
   }
-  costMatrixCache[roomName] = { cm, tick: Game.time };
+  costMatrixCache[roomName] = { cm, tick: Game.time, structures: structures.length };
   return cm;
 }
 

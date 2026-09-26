@@ -1,6 +1,8 @@
 import { getThreatInfo } from "../services/services.combat";
 import { pickSignature } from "../config/signatures";
 
+const RETREAT_HOLD_TICKS = 50;
+
 export function runSettler(creep: Creep) {
   const targetRoom = creep.memory.targetRoom;
   if (!targetRoom) { creep.suicide(); return; }
@@ -13,6 +15,7 @@ export function runSettler(creep: Creep) {
 
   const homeRoom = creep.memory.homeRoom ?? exp?.homeRoom;
   if (creep.room.name === targetRoom && getThreatInfo(creep.room).score > 0) {
+    creep.memory.retreatUntil = Game.time + RETREAT_HOLD_TICKS;
     if (homeRoom && homeRoom !== targetRoom) {
       moveToRoom(creep, homeRoom);
     } else {
@@ -20,6 +23,11 @@ export function runSettler(creep: Creep) {
       const exit = creep.pos.findClosestByRange(exits);
       if (exit) creep.moveTo(exit, { reusePath: 5 });
     }
+    return;
+  }
+
+  if (creep.room.name !== targetRoom && (creep.memory.retreatUntil ?? 0) > Game.time) {
+    holdAwayFromEdge(creep);
     return;
   }
 
@@ -100,6 +108,12 @@ function harvest(creep: Creep) {
   if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
     creep.moveTo(source, { reusePath: 10 });
   }
+}
+
+function holdAwayFromEdge(creep: Creep) {
+  const { x, y } = creep.pos;
+  if (x > 2 && x < 47 && y > 2 && y < 47) return;
+  creep.moveTo(new RoomPosition(25, 25, creep.room.name), { range: 20, reusePath: 20 });
 }
 
 function moveToRoom(creep: Creep, roomName: string) {

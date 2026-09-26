@@ -4,12 +4,15 @@ import {
   FACTORY_MIN_RESERVE_ENERGY,
   FACTORY_MAX_INPUT_LOAD,
   FACTORY_PRODUCT_EVICT_THRESHOLD,
+  FACTORY_MIN_RESERVE_MINERAL,
   FACTORY_RESOLVE_MAX_DEPTH,
   MANAGED_COMMODITIES,
   COMMODITY_VALUE,
   COMMODITY_TERMINAL_STOCK,
 } from "../config/config.factory";
+import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
 import { ROLE_HAULER } from "../config/config.roles";
+import { mayBorrowHauler } from "../services/services.creep";
 
 declare global {
   interface FactorySystemMemory {
@@ -144,7 +147,7 @@ function resolveProduction(
     const needPerBatch = recipe.components[rc] ?? 0;
     if (needPerBatch <= 0) continue;
 
-    const inStores = totalStock(room, rc) + (factory.store.getUsedCapacity(rc) ?? 0);
+    const inStores = totalStock(room, rc) - mineralReserve(rc) + (factory.store.getUsedCapacity(rc) ?? 0);
 
     if (rc === RESOURCE_ENERGY) {
       const spendable =
@@ -243,7 +246,8 @@ function findEvictResource(
     const amt = factory.store.getUsedCapacity(r) ?? 0;
     if (amt <= 0) continue;
     if (!wanted.has(r)) {
-      if (amt >= FACTORY_PRODUCT_EVICT_THRESHOLD || r !== RESOURCE_ENERGY) return r;
+      const batched = r === RESOURCE_ENERGY || MANAGED_COMMODITIES.has(r);
+      if (!batched || amt >= FACTORY_PRODUCT_EVICT_THRESHOLD) return r;
     }
   }
   return null;
@@ -270,11 +274,14 @@ function findLoadResource(room: Room, factory: StructureFactory, recipe: Recipe)
 
     const want = desired - inFactory;
 
+    const spare = totalStock(room, rc) - mineralReserve(rc);
     for (const src of [storage, terminal]) {
       if (!src) continue;
       let avail = src.store.getUsedCapacity(rc) ?? 0;
       if (rc === RESOURCE_ENERGY && src === storage) {
         avail = Math.max(0, avail - FACTORY_MIN_RESERVE_ENERGY);
+      } else if (rc !== RESOURCE_ENERGY) {
+        avail = Math.min(avail, spare);
       }
       if (avail <= 0) continue;
       return { resource: rc, source: src, amount: Math.min(want, avail) };
@@ -286,22 +293,26 @@ function findLoadResource(room: Room, factory: StructureFactory, recipe: Recipe)
 function acquireCourier(room: Room): Creep | null {
   const fs = room.memory.factorySystem!;
 
+  const haulers = room.find(FIND_MY_CREEPS, {
+    filter: (c) => c.memory.role === ROLE_HAULER && c.spawning !== true,
+  });
+  const mayBorrow = mayBorrowHauler(room, haulers);
+
   if (fs.courierName) {
     const existing = Game.creeps[fs.courierName];
     if (existing && existing.room.name === room.name && existing.memory.role === ROLE_HAULER) {
-      return existing;
+      const holdsNonEnergy =
+        (existing.store.getUsedCapacity() ?? 0) > (existing.store[RESOURCE_ENERGY] ?? 0);
+      if (mayBorrow || holdsNonEnergy) return existing;
     }
     delete fs.courierName;
   }
 
-  const factory = fs.factoryId ? Game.getObjectById(fs.factoryId) : null;
-  const haulers = room.find(FIND_MY_CREEPS, {
-    filter: (c) => c.memory.role === ROLE_HAULER && c.spawning !== true,
-  });
-  if (haulers.length === 0) return null;
+  if (!mayBorrow) return null;
 
-  const empty = haulers.filter((c) => (c.store.getUsedCapacity() ?? 0) === 0);
-  const pool = empty.length > 0 ? empty : haulers;
+  const factory = fs.factoryId ? Game.getObjectById(fs.factoryId) : null;
+  const pool = haulers.filter((c) => (c.store.getUsedCapacity() ?? 0) === 0);
+  if (pool.length === 0) return null;
 
   const chosen = factory
     ? pool.reduce((best, c) => (c.pos.getRangeTo(factory) < best.pos.getRangeTo(factory) ? c : best))
@@ -314,6 +325,21 @@ function acquireCourier(room: Room): Creep | null {
 function releaseCourier(room: Room): void {
   const fs = room.memory.factorySystem;
   if (fs) delete fs.courierName;
+}
+
+const LAB_MINERALS: ReadonlySet<string> = new Set<string>([
+  RESOURCE_HYDROGEN,
+  RESOURCE_OXYGEN,
+  RESOURCE_UTRIUM,
+  RESOURCE_LEMERGIUM,
+  RESOURCE_KEANIUM,
+  RESOURCE_ZYNTHIUM,
+  RESOURCE_CATALYST,
+]);
+
+function mineralReserve(resource: ResourceConstant): number {
+  if (resource === RESOURCE_GHODIUM) return FACTORY_MIN_RESERVE_MINERAL + NUKER_GHODIUM_RESERVE;
+  return LAB_MINERALS.has(resource) ? FACTORY_MIN_RESERVE_MINERAL : 0;
 }
 
 function totalStock(room: Room, resource: ResourceConstant): number {

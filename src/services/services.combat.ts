@@ -35,9 +35,9 @@ export function seekBoost(creep: Creep): boolean {
     .find((l) => (l.store.getUsedCapacity(compound) ?? 0) >= 30);
 
   if (!boostLab) {
-    delete creep.memory.boostCompound;
-    delete creep.memory.boostQueue;
-    return false;
+    const wait = creep.room.storage;
+    if (wait && !creep.pos.inRangeTo(wait, 3)) creep.moveTo(wait, { range: 3, reusePath: 10 });
+    return true;
   }
 
   if (!creep.pos.isNearTo(boostLab)) {
@@ -350,19 +350,28 @@ export function selectStructureTarget(
     }
   }
 
-  if (chosen) {
-    const shield = chosen.pos
-      .lookFor(LOOK_STRUCTURES)
-      .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
-    if (shield && shield.hits > 0) return shield;
-    return chosen;
-  }
+  if (!chosen) return null;
 
-  const barriers = all.filter(
-    (s) => s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART
-  );
-  if (barriers.length === 0) return null;
-  return barriers.reduce((a, b) => (a.hits < b.hits ? a : b));
+  const shield = chosen.pos
+    .lookFor(LOOK_STRUCTURES)
+    .find((s) => s.structureType === STRUCTURE_RAMPART) as StructureRampart | undefined;
+  if (shield && shield.hits > 0) return shield;
+  return chosen;
+}
+
+function massAttackDamage(pos: RoomPosition, hostiles: Creep[]): number {
+  let total = 0;
+  for (const h of hostiles) {
+    const range = pos.getRangeTo(h);
+    if (range === 1) total += 10;
+    else if (range === 2) total += 4;
+    else if (range === 3) total += 1;
+  }
+  return total;
+}
+
+export function preferMassAttack(pos: RoomPosition, hostiles: Creep[]): boolean {
+  return massAttackDamage(pos, hostiles) > RANGED_ATTACK_POWER;
 }
 
 const TOWER_OPTIMAL_RANGE = 5;
