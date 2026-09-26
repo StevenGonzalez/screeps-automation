@@ -1,5 +1,5 @@
 import { ROLE_SK_GUARDIAN } from "../config/config.roles";
-import { isSourceKeeperRoom } from "../services/services.combat";
+import { isSourceKeeperRoom, isPlayerCreep, canDealDamage } from "../services/services.combat";
 
 export const SK_CONTEST_COOLDOWN = 1000;
 const SK_DISCOVERY_TIMEOUT = 3000;
@@ -38,9 +38,9 @@ function updateOp(op: SourceKeeperOp): void {
   }
 
   if (room) {
+    // Allies and unarmed creeps (scouts) don't contest the op.
     const playerHostiles = room.find(FIND_HOSTILE_CREEPS, {
-      filter: (c) =>
-        c.owner.username !== "Source Keeper" && c.owner.username !== "Invader",
+      filter: (c) => isPlayerCreep(c) && canDealDamage(c),
     });
     if (playerHostiles.length > 0) op.lastFailure = Game.time;
   }

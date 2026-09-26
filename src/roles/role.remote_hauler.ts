@@ -21,7 +21,8 @@ export function runRemoteHauler(creep: Creep) {
   creep.memory._hp = creep.hits;
   if (tookDamage && creep.room.name !== homeRoom) {
     creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF;
-    flagRemotePlayer(creep);
+    // Damage taken passing through another room says nothing about the remote.
+    if (creep.room.name === targetRoom) flagRemotePlayer(creep);
   }
   if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
     if (creep.store[RESOURCE_ENERGY] > 0) depositEnergy(creep, homeRoom);

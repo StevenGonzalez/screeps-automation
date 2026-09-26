@@ -32,14 +32,14 @@ const W_ENEMY_PENALTY = 20;
 const ENEMY_DANGER_RADIUS = 4;
 const STRONG_ENEMY_MILITARY = 8;
 
-const ENEMY_PENALTY_SCALE_WITH_GCL_HEADROOM = 0.4;
-
 const W_SWAMP_PENALTY = 40;
 const SWAMP_TOLERANCE = 0.35;
 const MAX_TERRAIN_SCANS_PER_TICK = 6;
 
 const MAX_CLAIM_RANGE = 4;
 const MAX_INTEL_CANDIDATES = 25;
+// Longest room-to-room route from the funding home we'll try to claim across.
+const MAX_CLAIM_ROUTE = 10;
 
 const AUTO_EXPAND_CHECK_INTERVAL = 50;
 
@@ -60,6 +60,7 @@ export interface ExpansionCandidate {
 
 export function rankExpansionCandidates(): ExpansionCandidate[] {
   const ownedMinerals = scanOwnedMinerals();
+  const claimFailed = recentClaimFailures();
   const terrainBudget = { remaining: MAX_TERRAIN_SCANS_PER_TICK };
 
   const byRoom = new Map<string, { home: string; dist: number; sourceCount: number }>();
@@ -77,6 +78,9 @@ export function rankExpansionCandidates(): ExpansionCandidate[] {
     if (!room.controller?.my) continue;
     for (const remote of room.memory.remoteRooms ?? []) {
       if (isRemoteContested(remote)) continue;
+      if (claimFailed.has(remote.roomName)) continue;
+      const remoteIntel = Memory.intel?.[remote.roomName];
+      if (remoteIntel && intelIsHostile(remoteIntel)) continue;
       const targetRoom = Game.rooms[remote.roomName];
       if (targetRoom?.controller?.my) continue;
       if (targetRoom && isRoomContested(targetRoom)) continue;
@@ -93,6 +97,7 @@ export function rankExpansionCandidates(): ExpansionCandidate[] {
     for (const rn in Memory.intel) {
       if (intelSeen >= MAX_INTEL_CANDIDATES) break;
       if (byRoom.has(rn)) continue;
+      if (claimFailed.has(rn)) continue;
       if (Game.rooms[rn]?.controller?.my) continue;
       const intel = Memory.intel[rn];
       if (intelIsHostile(intel)) continue;
@@ -113,10 +118,10 @@ export function rankExpansionCandidates(): ExpansionCandidate[] {
     }
   }
 
-  const enemyPenaltyScale = expansionEnemyPenaltyScale();
   const candidates: ExpansionCandidate[] = [];
   for (const [roomName, info] of byRoom) {
-    const scored = scoreCandidate(roomName, info.home, info.dist, info.sourceCount, ownedMinerals, terrainBudget, enemyPenaltyScale);
+    if (!isReachable(info.home, roomName)) continue;
+    const scored = scoreCandidate(roomName, info.home, info.dist, info.sourceCount, ownedMinerals, terrainBudget);
     if (scored) candidates.push(scored);
   }
 
@@ -130,8 +135,7 @@ function scoreCandidate(
   dist: number,
   sourceCount: number,
   ownedMinerals: Set<MineralConstant>,
-  terrainBudget: { remaining: number },
-  enemyPenaltyScale: number
+  terrainBudget: { remaining: number }
 ): ExpansionCandidate | undefined {
   if (sourceCount <= 0) return undefined;
   let score = W_SOURCE_FIRST;
@@ -153,7 +157,7 @@ function scoreCandidate(
   const remotes = countFreeRemoteNeighbours(roomName);
   score += remotes * W_REMOTE;
 
-  score -= enemyProximityPenalty(roomName) * enemyPenaltyScale;
+  score -= enemyProximityPenalty(roomName);
 
   if (terrainBudget.remaining > 0) {
     const swamp = swampFraction(roomName);
@@ -241,13 +245,23 @@ function enemyProximityPenalty(roomName: string): number {
   return penalty;
 }
 
-function expansionEnemyPenaltyScale(): number {
-  let owned = 0;
-  for (const rn in Game.rooms) {
-    if (Game.rooms[rn].controller?.my) owned++;
+// A linear-distance neighbour can still be walled off or a long detour away.
+function isReachable(home: string, roomName: string): boolean {
+  const route = Game.map.findRoute(home, roomName);
+  return route !== ERR_NO_PATH && route.length <= MAX_CLAIM_ROUTE;
+}
+
+// Rooms whose claim recently timed out, with expired entries dropped.
+function recentClaimFailures(): Set<string> {
+  const failures = Memory.claimFailures;
+  const result = new Set<string>();
+  if (!failures) return result;
+  for (const rn in failures) {
+    if (failures[rn] > Game.time) result.add(rn);
+    else delete failures[rn];
   }
-  const spareGcl = Game.gcl.level - owned;
-  return spareGcl >= 1 ? ENEMY_PENALTY_SCALE_WITH_GCL_HEADROOM : 1;
+  if (result.size === 0) delete Memory.claimFailures;
+  return result;
 }
 
 function swampFraction(roomName: string): number | undefined {
@@ -467,10 +481,9 @@ function manageActiveExpansion() {
           c.room.name === exp.roomName
       );
       if (!claimerInRoom) {
-        if (rec) {
-          rec.hostile = true;
-          rec.hostileUntil = Game.time + CLAIM_FAILED_COOLDOWN;
-        }
+        // Cool the room down as an expansion target only; it stays minable as a remote.
+        if (!Memory.claimFailures) Memory.claimFailures = {};
+        Memory.claimFailures[exp.roomName] = Game.time + CLAIM_FAILED_COOLDOWN;
         clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
         return;
       }

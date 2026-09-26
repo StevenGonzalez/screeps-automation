@@ -12,12 +12,19 @@ export function runReserver(creep: Creep) {
   }
 
   const controller = creep.room.controller;
-  if (!controller) {
+  // Nothing to reserve in a room another player owns.
+  if (!controller || (controller.owner && !controller.my)) {
     creep.suicide();
     return;
   }
 
-  const result = creep.reserveController(controller);
+  // reserveController fails on someone else's reservation (Invader cores
+  // included); attacking it wears the reservation down so ours can start.
+  const reservedBy = controller.reservation?.username;
+  const result =
+    reservedBy && reservedBy !== creep.owner.username
+      ? creep.attackController(controller)
+      : creep.reserveController(controller);
   if (result === ERR_NOT_IN_RANGE) {
     creep.moveTo(controller, { reusePath: 30 });
   }

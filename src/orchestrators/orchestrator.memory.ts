@@ -1,13 +1,15 @@
-import { isSourceKeeperRoom, isPlayerCreep, canDealDamage } from "../services/services.combat";
+import { isSourceKeeperRoom, isPlayerCreep, canDealDamage, findInvaderCore } from "../services/services.combat";
 import {
   markRemotePlayerHostile,
   clearRemotePlayerHostile,
+  markRemoteInvader,
 } from "../services/services.creep";
-import { invalidateCostMatrix } from "../services/services.movement";
 
 declare global {
   interface RoomMemory {
     lastDeepScout?: number;
+    // Deep (non-adjacent) rooms a scout could not reach, keyed to the retry tick.
+    scoutSkipUntil?: Record<string, number>;
   }
 
   interface CreepMemory {
@@ -69,6 +71,7 @@ export function loop() {
   }
   processRemoteRoomDiscovery();
   cleanupEstablishedExpansion();
+  if (Game.time % ROOM_MEMORY_GC_INTERVAL === 0) collectRoomMemoryGarbage();
 }
 
 function cleanupDeadCreeps() {
@@ -89,10 +92,7 @@ function processRoomMemory(room: Room) {
   if (!room.controller || !room.controller.my) return;
   const scanInterval =
     room.controller.level <= 3 ? DEVELOPING_SCAN_INTERVAL : ESTABLISHED_SCAN_INTERVAL;
-  const structureDestroyed = room
-    .getEventLog()
-    .some((e) => e.event === EVENT_OBJECT_DESTROYED && e.data.type !== "creep");
-  if (structureDestroyed) invalidateCostMatrix(room.name);
+  const structureDestroyed = hasStructureDestroyedEvent(room);
   if (
     structureDestroyed ||
     !room.memory.lastScan ||
@@ -177,10 +177,22 @@ function processRoomMemory(room: Room) {
   }
 }
 
+// The raw event log is a JSON string; only parse it on the rare tick that
+// something was destroyed. Movement's cost matrix already rebuilds itself when
+// the structure count changes, so this only triggers the memory rescan.
+function hasStructureDestroyedEvent(room: Room): boolean {
+  const raw = room.getEventLog(true) as unknown as string;
+  if (!raw.includes(`"event":${EVENT_OBJECT_DESTROYED},`)) return false;
+  return (JSON.parse(raw) as EventItem[]).some(
+    (e) => e.event === EVENT_OBJECT_DESTROYED && e.data.type !== "creep"
+  );
+}
+
 function processRemoteRoomDiscovery() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
+    pruneRemoteRooms(room);
     discoverAdjacentRooms(room);
     discoverDeepRooms(room);
     refreshVisibleRemoteRooms(room);
@@ -193,6 +205,12 @@ function discoverDeepRooms(room: Room): void {
   const last = room.memory.lastDeepScout ?? 0;
   if (Game.time - last < BFS_RUN_INTERVAL) return;
   room.memory.lastDeepScout = Game.time;
+
+  const skip = room.memory.scoutSkipUntil;
+  if (skip) {
+    for (const rn in skip) if (skip[rn] <= Game.time) delete skip[rn];
+    if (Object.keys(skip).length === 0) delete room.memory.scoutSkipUntil;
+  }
 
   if (room.memory.pendingScoutRooms.length >= MAX_PENDING_SCOUT_ROOMS) return;
 
@@ -232,6 +250,7 @@ function discoverDeepRooms(room: Room): void {
         next.push(neighbor);
 
         if (isFresh(neighbor)) continue;
+        if ((room.memory.scoutSkipUntil?.[neighbor] ?? 0) > Game.time) continue;
         if (room.memory.pendingScoutRooms.includes(neighbor)) continue;
         if (room.memory.pendingScoutRooms.length >= MAX_PENDING_SCOUT_ROOMS) return;
 
@@ -244,6 +263,39 @@ function discoverDeepRooms(room: Room): void {
     if (next.length === 0) break;
     frontier = next;
   }
+}
+
+// Remotes are only mined next door to home: deep scouting used to turn every
+// surveyed room into one. A room we now own is a colony, not a remote to drain.
+export function pruneRemoteRooms(room: Room): void {
+  const remotes = room.memory.remoteRooms;
+  if (!remotes || remotes.length === 0) return;
+  const adjacent = new Set(Object.values(Game.map.describeExits(room.name)));
+  const keep = remotes.filter(
+    (r) => adjacent.has(r.roomName) && !Game.rooms[r.roomName]?.controller?.my
+  );
+  if (keep.length !== remotes.length) room.memory.remoteRooms = keep;
+}
+
+const FOREIGN_OWNED_RETRY = 20_000;
+
+// Marks the remote hostile when another player owns or reserves its controller,
+// and returns true if so. An Invader reservation is left to our reserver to clear.
+export function applyRemoteControllerStatus(
+  entry: RemoteRoomData,
+  controller: StructureController | undefined,
+  me: string | undefined
+): boolean {
+  if (!controller) return false;
+  if (controller.owner && !controller.my) {
+    entry.hostile = true;
+    entry.hostileUntil = Game.time + FOREIGN_OWNED_RETRY;
+    return true;
+  }
+  const reserver = controller.reservation?.username;
+  if (!reserver || reserver === me || reserver === "Invader") return false;
+  markRemotePlayerHostile(entry);
+  return true;
 }
 
 function discoverAdjacentRooms(room: Room) {
@@ -293,13 +345,18 @@ function discoverAdjacentRooms(room: Room) {
   }
 }
 
-function refreshVisibleRemoteRooms(room: Room) {
+export function refreshVisibleRemoteRooms(room: Room) {
   if (!room.memory.remoteRooms) return;
   for (const remote of room.memory.remoteRooms) {
     const visible = Game.rooms[remote.roomName];
     if (!visible) continue;
 
     remote.lastSeen = Game.time;
+    if (applyRemoteControllerStatus(remote, visible.controller, room.controller?.owner?.username)) {
+      continue;
+    }
+    // An Invader core reserves the room and blocks harvesting; a knight has to clear it.
+    if (findInvaderCore(visible)) markRemoteInvader(remote);
     const hostiles = visible.find(FIND_HOSTILE_CREEPS).filter(canDealDamage);
     if (hostiles.some(isPlayerCreep)) {
       markRemotePlayerHostile(remote);
@@ -325,6 +382,41 @@ function refreshVisibleRemoteRooms(room: Room) {
       }) as StructureContainer[];
       entry.containerId = containers.length > 0 ? containers[0].id : undefined;
     }
+  }
+}
+
+const ROOM_MEMORY_GC_INTERVAL = 1000;
+
+// Every room a creep walks through gets a Memory.rooms entry via room.memory.
+// Drop the ones nothing refers to; anything possibly in use is kept.
+export function collectRoomMemoryGarbage(): void {
+  if (!Memory.rooms) return;
+  const keep = new Set<string>();
+  for (const rn in Game.rooms) {
+    // Visible rooms may be mid-use this tick; they get another chance next pass.
+    keep.add(rn);
+    const mem = Memory.rooms[rn];
+    if (!Game.rooms[rn].controller?.my || !mem) continue;
+    for (const r of mem.remoteRooms ?? []) keep.add(r.roomName);
+    for (const r of mem.pendingScoutRooms ?? []) keep.add(r);
+  }
+  for (const op of Memory.skOps ?? []) keep.add(op.roomName);
+  for (const op of Memory.powerOps ?? []) keep.add(op.roomName);
+  for (const op of Memory.depositOps ?? []) keep.add(op.roomName);
+  if (Memory.expansion) keep.add(Memory.expansion.roomName);
+  for (const q of Memory.expansionQueue ?? []) keep.add(q.roomName);
+  if (Memory.militaryOp) keep.add(Memory.militaryOp.targetRoom);
+  for (const k in Memory.militaryOps ?? {}) keep.add(Memory.militaryOps![k].targetRoom);
+  for (const q of Memory.militaryQueue ?? []) keep.add(q.targetRoom);
+  for (const k in Memory.defenseOps ?? {}) keep.add(Memory.defenseOps![k].room);
+  for (const k in Memory.drainOps ?? {}) keep.add(Memory.drainOps![k].targetRoom);
+
+  for (const rn in Memory.rooms) {
+    if (keep.has(rn)) continue;
+    const mem = Memory.rooms[rn];
+    // Planned-structure data has its own unseen-age cleanup in the structures orchestrator.
+    if (mem?.plannedStructures || mem?.plannedStructuresMeta) continue;
+    delete Memory.rooms[rn];
   }
 }
 

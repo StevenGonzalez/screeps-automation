@@ -3,6 +3,8 @@ import {
   clearRemotePlayerHostile,
 } from "../services/services.creep";
 import { recordRoomIntel } from "../orchestrators/orchestrator.military";
+import { applyRemoteControllerStatus } from "../orchestrators/orchestrator.memory";
+import { isPlayerCreep, canDealDamage } from "../services/services.combat";
 
 const SCOUT_HOSTILE_DURATION = 2000;
 const SCOUT_TRAVEL_BUDGET = 150;
@@ -95,21 +97,42 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
 
   if (!homeRoomMemory.remoteRooms) homeRoomMemory.remoteRooms = [];
 
-  if (!creep.room.controller?.my) recordRoomIntel(creep.room);
+  const controller = creep.room.controller;
+  if (!controller?.my) recordRoomIntel(creep.room);
+
+  if (homeRoomMemory.pendingScoutRooms) {
+    homeRoomMemory.pendingScoutRooms = homeRoomMemory.pendingScoutRooms.filter(
+      (r) => r !== targetRoomName
+    );
+  }
+  creep.memory.targetRoom = undefined;
+
+  // A room we own is a colony, not a remote.
+  if (controller?.my) {
+    homeRoomMemory.remoteRooms = homeRoomMemory.remoteRooms.filter(
+      (r) => r.roomName !== targetRoomName
+    );
+    return;
+  }
+
+  let entry = homeRoomMemory.remoteRooms.find((r) => r.roomName === targetRoomName);
+  // Deep-scouted rooms only feed intel; remotes are mined next door to home.
+  if (!entry && !isAdjacent(homeRoomName, targetRoomName)) return;
+  if (!entry) {
+    entry = { roomName: targetRoomName, sources: [], lastSeen: Game.time, hostile: false };
+    homeRoomMemory.remoteRooms.push(entry);
+  }
+  entry.lastSeen = Game.time;
+
+  if (applyRemoteControllerStatus(entry, controller, creep.owner.username)) return;
 
   const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
   const sourceKeepers = hostiles.filter(
     (c) => c.owner.username === "Source Keeper"
   );
-  const hasPlayer = hostiles.some(isPlayerCreep);
+  // Unarmed or allied creeps (other players' scouts) don't make a room hostile.
+  const hasPlayer = hostiles.some((c) => isPlayerCreep(c) && canDealDamage(c));
 
-  let entry = homeRoomMemory.remoteRooms.find((r) => r.roomName === targetRoomName);
-  if (!entry) {
-    entry = { roomName: targetRoomName, sources: [], lastSeen: Game.time, hostile: false };
-    homeRoomMemory.remoteRooms.push(entry);
-  }
-
-  entry.lastSeen = Game.time;
   if (hasPlayer) {
     markRemotePlayerHostile(entry);
   } else if (sourceKeepers.length > 0) {
@@ -126,14 +149,10 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
       };
     });
   }
+}
 
-  if (homeRoomMemory.pendingScoutRooms) {
-    homeRoomMemory.pendingScoutRooms = homeRoomMemory.pendingScoutRooms.filter(
-      (r) => r !== targetRoomName
-    );
-  }
-
-  creep.memory.targetRoom = undefined;
+function isAdjacent(homeRoomName: string, roomName: string): boolean {
+  return Object.values(Game.map.describeExits(homeRoomName)).includes(roomName);
 }
 
 const UNREACHABLE_RETRY_TICKS = 10000;
@@ -141,8 +160,19 @@ const UNREACHABLE_RETRY_TICKS = 10000;
 function markRoomUnreachable(homeRoomName: string, targetRoomName: string) {
   const mem = Memory.rooms[homeRoomName];
   if (!mem) return;
+  if (mem.pendingScoutRooms) {
+    mem.pendingScoutRooms = mem.pendingScoutRooms.filter(
+      (r) => r !== targetRoomName
+    );
+  }
   if (!mem.remoteRooms) mem.remoteRooms = [];
   let entry = mem.remoteRooms.find((r) => r.roomName === targetRoomName);
+  // A deep room is only remembered as "don't retry yet", not as a remote.
+  if (!entry && !isAdjacent(homeRoomName, targetRoomName)) {
+    if (!mem.scoutSkipUntil) mem.scoutSkipUntil = {};
+    mem.scoutSkipUntil[targetRoomName] = Game.time + UNREACHABLE_RETRY_TICKS;
+    return;
+  }
   if (!entry) {
     entry = { roomName: targetRoomName, sources: [], lastSeen: Game.time, hostile: true };
     mem.remoteRooms.push(entry);
@@ -150,13 +180,4 @@ function markRoomUnreachable(homeRoomName: string, targetRoomName: string) {
   entry.lastSeen = Game.time;
   entry.hostile = true;
   entry.hostileUntil = Game.time + UNREACHABLE_RETRY_TICKS;
-  if (mem.pendingScoutRooms) {
-    mem.pendingScoutRooms = mem.pendingScoutRooms.filter(
-      (r) => r !== targetRoomName
-    );
-  }
-}
-
-function isPlayerCreep(creep: Creep): boolean {
-  return creep.owner.username !== "Source Keeper" && creep.owner.username !== "Invader";
 }

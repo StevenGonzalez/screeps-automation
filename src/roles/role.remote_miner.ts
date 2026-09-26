@@ -20,7 +20,8 @@ export function runRemoteMiner(creep: Creep) {
   creep.memory._hp = creep.hits;
   if (tookDamage && creep.room.name !== homeRoom) {
     creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF;
-    flagRemotePlayer(creep);
+    // Damage taken passing through another room says nothing about the remote.
+    if (creep.room.name === targetRoom) flagRemotePlayer(creep);
   }
   if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
     if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
@@ -62,14 +63,14 @@ export function runRemoteMiner(creep: Creep) {
       // Moving and harvesting are separate intents, so the last steps of the
       // walk out are still productive, including while a replacement overlaps
       // the miner it relieves.
-      if (creep.pos.isNearTo(source)) creep.harvest(source);
+      if (creep.pos.isNearTo(source)) harvest(creep, source);
       return;
     }
     if (container.hits < container.hitsMax * 0.5 && creep.store[RESOURCE_ENERGY] > 0) {
       creep.repair(container);
       return;
     }
-    creep.harvest(source);
+    harvest(creep, source);
   } else {
     // Nothing else builds in remotes, so the miner finishes its own container.
     const site = source.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 1, {
@@ -79,10 +80,25 @@ export function runRemoteMiner(creep: Creep) {
       if (creep.build(site) === ERR_NOT_IN_RANGE) creep.moveTo(site, { reusePath: 30 });
       return;
     }
-    if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
+    if (harvest(creep, source) === ERR_NOT_IN_RANGE) {
       creep.moveTo(source, { reusePath: 30 });
     }
   }
+}
+
+// ERR_NOT_OWNER means someone else holds the controller, so the source can't be
+// mined. A player's claim makes the remote hostile; an Invader reservation is
+// cleared by our reserver, so just step away for a while.
+function harvest(creep: Creep, source: Source): ScreepsReturnCode {
+  const res = creep.harvest(source);
+  if (res === ERR_NOT_OWNER) {
+    if (creep.room.controller?.reservation?.username === "Invader") {
+      creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF;
+    } else {
+      flagRemotePlayer(creep);
+    }
+  }
+  return res;
 }
 
 function moveToRoom(creep: Creep, targetRoom: string) {

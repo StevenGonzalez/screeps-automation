@@ -6,6 +6,7 @@ const KEEPER_DANGER_RANGE = 5;
 // After fleeing a keeper, stay out of the room this long before trying again.
 const RETREAT_HOLD_TICKS = 50;
 const GUARDIAN_GUARD_RANGE = 6;
+const DELIVER_TTL = 150;
 
 export function runSkHauler(creep: Creep) {
   const opId = creep.memory.skOpId;
@@ -25,10 +26,23 @@ export function runSkHauler(creep: Creep) {
     return;
   }
 
-  if (creep.store.getUsedCapacity(RESOURCE_ENERGY) === 0) {
-    collect(creep, op);
-  } else {
+  // Fill up before the trip home, like the remote hauler; near death, bring
+  // home whatever is carried.
+  const carried = creep.store.getUsedCapacity(RESOURCE_ENERGY);
+  if (creep.memory.working && carried === 0) {
+    creep.memory.working = false;
+  } else if (
+    !creep.memory.working &&
+    (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 ||
+      (carried > 0 && (creep.ticksToLive ?? Infinity) < DELIVER_TTL))
+  ) {
+    creep.memory.working = true;
+  }
+
+  if (creep.memory.working) {
     deposit(creep, op.homeRoom);
+  } else {
+    collect(creep, op);
   }
 }
 
