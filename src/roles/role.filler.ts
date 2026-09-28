@@ -10,6 +10,14 @@ import { findRelayLink } from "../orchestrators/orchestrator.links";
 const POWER_SPAWN_POWER_LOW = 50;
 const POWER_SPAWN_ENERGY_STORAGE_FLOOR = 100000;
 
+// Working energy kept in the terminal: it pays the fee on every send and deal,
+// and the terminal orchestrator does nothing while it holds under 1000.
+const TERMINAL_ENERGY_TARGET = 10_000;
+// Energy above target + slack (a network delivery, a market buy) goes to storage.
+const TERMINAL_ENERGY_DRAIN_SLACK = 5_000;
+// Storage keeps at least this much before feeding the terminal.
+const TERMINAL_FILL_STORAGE_FLOOR = 20_000;
+
 export function runFiller(creep: Creep) {
   const storage = creep.room.storage;
   const underThreat = getThreatInfo(creep.room).hostiles.length > 0;
@@ -26,10 +34,15 @@ export function runFiller(creep: Creep) {
   // a controller link the source links are not keeping up with. Upgrading comes
   // before topping up the power spawn's energy.
   const relay = coreTarget ? null : findRelayLink(creep.room);
+  // Then keep the terminal at its working energy, ahead of the power spawn.
+  const terminalJob = coreTarget || relay ? null : getTerminalEnergyJob(creep.room, storage);
   const powerSpawn = coreTarget ? null : getPowerSpawn(creep.room);
   const target: AnyStoreStructure | null =
     coreTarget ??
-    (!relay && powerSpawn && powerSpawnWantsEnergy(powerSpawn, storage) ? powerSpawn : null);
+    (terminalJob?.kind === "fill" ? terminalJob.terminal : null) ??
+    (!relay && !terminalJob && powerSpawn && powerSpawnWantsEnergy(powerSpawn, storage)
+      ? powerSpawn
+      : null);
 
   if (creep.store[RESOURCE_ENERGY] === 0) {
     if (powerSpawn && loadPower(creep, powerSpawn, storage)) return;
@@ -40,7 +53,19 @@ export function runFiller(creep: Creep) {
         }
         return;
       }
+      if (terminalJob?.kind === "drain") {
+        if (creep.withdraw(terminalJob.terminal, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(terminalJob.terminal, { range: 1, reusePath: 20 });
+        }
+        return;
+      }
       if (storage && !creep.pos.isNearTo(storage)) {
+        creep.moveTo(storage, { range: 1, reusePath: 20 });
+      }
+      return;
+    }
+    if (terminalJob?.kind === "fill" && storage) {
+      if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(storage, { range: 1, reusePath: 20 });
       }
       return;
@@ -97,6 +122,38 @@ function getCoreFillTarget(creep: Creep): AnyStoreStructure | null {
   const target = findCoreFillTarget(creep);
   if (target) creep.memory.fillTargetId = target.id;
   return target;
+}
+
+type TerminalEnergyJob = { kind: "fill" | "drain"; terminal: StructureTerminal };
+
+/**
+ * Whether the terminal needs energy from storage or holds more than it should.
+ * A queued energy send raises the target to what the send has to load, so the
+ * filler helps load it and never drains it.
+ */
+export function getTerminalEnergyJob(
+  room: Room,
+  storage: StructureStorage | undefined
+): TerminalEnergyJob | null {
+  const terminal = room.terminal;
+  if (!terminal || !storage) return null;
+  const pending = room.memory.pendingSend;
+  const want = Math.max(
+    TERMINAL_ENERGY_TARGET,
+    pending?.resource === RESOURCE_ENERGY ? pending.loadTarget : 0
+  );
+  const have = terminal.store[RESOURCE_ENERGY] ?? 0;
+  if (
+    have < want &&
+    (storage.store[RESOURCE_ENERGY] ?? 0) > TERMINAL_FILL_STORAGE_FLOOR &&
+    terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+  ) {
+    return { kind: "fill", terminal };
+  }
+  if (have > want + TERMINAL_ENERGY_DRAIN_SLACK && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+    return { kind: "drain", terminal };
+  }
+  return null;
 }
 
 function getPowerSpawn(room: Room): StructurePowerSpawn | null {
