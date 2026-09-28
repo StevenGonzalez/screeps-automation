@@ -98,7 +98,8 @@ function drawRoomHUD(room: Room) {
     const icon = PHASE_ICON[clock.phase];
     const folk = counts[ROLE_TOWNSFOLK] ?? 0;
     const hh = String(clock.hour).padStart(2, "0");
-    v.text(`${icon} Day ${clock.day}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+    const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
+    v.text(`${icon} ${phase}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
     y += lineH;
   }
 

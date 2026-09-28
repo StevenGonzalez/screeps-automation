@@ -1,7 +1,6 @@
 import { TOWN_DAY_LENGTH, TOWN_PHASES, TownPhase } from "../config/config.town";
 
 export interface TownClock {
-  day: number;
   phase: TownPhase;
   // 0-23, for the HUD.
   hour: number;
@@ -12,7 +11,6 @@ export function townClock(time: number): TownClock {
   let phase: TownPhase = TOWN_PHASES[0].name;
   for (const p of TOWN_PHASES) if (t >= p.start) phase = p.name;
   return {
-    day: Math.floor(time / TOWN_DAY_LENGTH) + 1,
     phase,
     hour: Math.floor((t * 24) / TOWN_DAY_LENGTH),
   };

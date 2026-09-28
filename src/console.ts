@@ -933,7 +933,7 @@ export function setupConsole() {
         return;
       }
       const clock = townClock(Game.time);
-      console.log(`[Town] Day ${clock.day}, ${String(clock.hour).padStart(2, "0")}:00 (${clock.phase})`);
+      console.log(`[Town] ${String(clock.hour).padStart(2, "0")}:00, ${clock.phase}`);
       for (const room of rooms) {
         for (const line of describeTown(room)) console.log(line);
         const folk = Object.values(Game.creeps).filter(

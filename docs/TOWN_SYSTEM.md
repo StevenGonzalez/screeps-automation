@@ -154,7 +154,7 @@ A town day lasts 1000 ticks:
 | 600-699 | Dusk |
 | 700-999 | Night |
 
-The room HUD shows the day and hour: `Day 42, 19:00  8 townsfolk`.
+The room HUD shows the part of the day and the hour: `Night, 19:00  8 townsfolk`.
 
 ---
 
