@@ -32,6 +32,16 @@ yarn deploy        # Deploy to MMO
 yarn deploy:sim    # Deploy to simulation
 ```
 
+`yarn deploy` builds, uploads `dist/main.js` with the token in `screeps.json`,
+then reads the branch back and fails if the code did not land.
+
+Pushes to `main` deploy on their own: the GitHub workflow uploads to World and
+Season, then commits the bundle to `deploy/main.js`. That copy is for the
+Screeps account's GitHub sync, which on every push to `main` copies the files
+in its configured folder to the World `default` branch. The sync folder must be
+set to `deploy` in Screeps account settings; pointed anywhere without the
+bundle, each push leaves World with no code.
+
 ### 3. Watch the Colony Come to Life
 
 The bot automatically spawns villagers and miners to gather energy, porters to haul

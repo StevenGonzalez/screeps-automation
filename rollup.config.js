@@ -1,12 +1,5 @@
 import clear from 'rollup-plugin-clear';
-import screeps from 'rollup-plugin-screeps';
 import typescript from 'rollup-plugin-typescript2';
-import { readFileSync } from 'fs';
-
-const shouldDeploy = process.env.DEPLOY === 'true';
-const screepsConfig = shouldDeploy
-    ? JSON.parse(readFileSync('./screeps.json', 'utf8'))
-    : null;
 
 export default {
     input: "src/main.ts",
@@ -20,7 +13,6 @@ export default {
         clear({ targets: ["dist"] }),
         typescript({
             tsconfig: "./tsconfig.json"
-        }),
-        shouldDeploy ? screeps({ config: screepsConfig }) : null
-    ].filter(Boolean)
+        })
+    ]
 };

@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
 
+# The job commits the built bundle back to main, so deploys must not overlap.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -22,3 +30,20 @@ jobs:
         run: |
           echo '{"token":"${{ secrets.SCREEPS_TOKEN }}","protocol":"https","hostname":"screeps.com","port":443,"path":"/season","branch":"default"}' > screeps.json
           yarn deploy
+      # The Screeps account's GitHub sync copies the files in one repo folder to
+      # the World `default` branch on every push to main. It is set to `deploy`,
+      # so keep the built bundle there; otherwise a push wipes World.
+      - name: Commit the bundle for GitHub sync
+        run: |
+          rm -f screeps.json
+          mkdir -p deploy
+          cp dist/main.js deploy/main.js
+          git add deploy/main.js
+          if git diff --cached --quiet; then
+            echo "deploy/main.js is already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Build bundle for ${GITHUB_SHA::7} [skip ci]"
+          git push origin HEAD:main
