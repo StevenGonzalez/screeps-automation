@@ -2,6 +2,7 @@ import { PLANNER_KEYS, PERIMETER_PLANNER, STAMP_PLANNER } from "../config/config
 import { addPlannedStructureToMemory } from "../services/services.structures";
 import { getCutTiles, Rect } from "../services/services.mincut";
 import { CASTLE_STAMP, MERCHANT_RING_EXTENSION_OFFSETS } from "./planner.stamp";
+import { townProtectedRects } from "./planner.town";
 
 function isCoreStructureKey(key: string): boolean {
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY) return false;
@@ -19,6 +20,9 @@ function isCoreStructureKey(key: string): boolean {
   if (key.startsWith(PLANNER_KEYS.EXTRACTOR_PREFIX)) return false;
   if (key.startsWith(PLANNER_KEYS.LINK_SOURCE_PREFIX)) return false;
   if (key === PLANNER_KEYS.LINK_CONTROLLER) return false;
+  // The town sits inside the ring already, or asks for its own rect.
+  if (key === PLANNER_KEYS.TOWN_WALL_KEY) return false;
+  if (key === PLANNER_KEYS.TOWN_RAMPART_KEY) return false;
   return true;
 }
 
@@ -100,6 +104,7 @@ function protectedRects(
       });
     }
   }
+  rects.push(...townProtectedRects(room));
   return rects;
 }
 

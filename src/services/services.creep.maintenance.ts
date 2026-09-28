@@ -1,3 +1,5 @@
+import { TOWN } from "../config/config.town";
+import { townBarrierTiles } from "./services.town";
 import {
   closestByPath,
   getRoomStructures,
@@ -151,7 +153,9 @@ const PERIMETER_FULL_TARGET_STORAGE = 100_000;
 // on-top; one on the stored perimeter ring gets the perimeter goal; any other
 // rampart (a stale ring from an older plan, a hand-placed one) gets 0 and is
 // left to decay. Until a room has a stored ring, every bare rampart counts as
-// perimeter so nothing is dropped by mistake.
+// perimeter so nothing is dropped by mistake. The town's walls and ramparts
+// (cottages, fountain, watch posts) are kept at a low goal of their own; they
+// are homes, not fortifications.
 export function barrierTargetFn(room: Room): (s: AnyStructure) => number {
   const rcl = room.controller?.level ?? 0;
   let perimeter = getRampartTargetHP(rcl);
@@ -176,10 +180,14 @@ export function barrierTargetFn(room: Room): (s: AnyStructure) => number {
     return covered;
   };
 
+  const town = townBarrierTiles(room.memory.town);
+  const townTarget = Math.min(perimeter, TOWN.barrierHits);
+
   return (s) => {
-    if (s.structureType === STRUCTURE_WALL) return perimeter;
-    if (s.structureType !== STRUCTURE_RAMPART) return 0;
+    if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART) return 0;
     const k = `${s.pos.x},${s.pos.y}`;
+    if (town.has(k)) return townTarget;
+    if (s.structureType === STRUCTURE_WALL) return perimeter;
     if (!perimeterSet || perimeterSet.has(k)) return perimeter;
     if (coveredTiles().has(k) || k in nukeTiles) return onTop;
     return 0;

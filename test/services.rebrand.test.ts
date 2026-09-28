@@ -53,8 +53,9 @@ describe("migrateRoleNames", () => {
 
     migrateRoleNames();
 
+    // Townsfolk came after the rebrand, so no corporate title maps onto them.
     const current = Object.entries(roles)
-      .filter(([k]) => k.startsWith("ROLE_"))
+      .filter(([k]) => k.startsWith("ROLE_") && k !== "ROLE_TOWNSFOLK")
       .map(([, v]) => v);
     const migrated = corporate.map((r) => (g.Memory as any).creeps[r].role);
     expect(new Set(migrated).size).toBe(corporate.length);

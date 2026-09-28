@@ -34,6 +34,9 @@ export const ROLE_SK_MINER = "delver";
 export const ROLE_SK_HAULER = "packmule";
 export const ROLE_SCORE_HUNTER = "seeker";
 export const ROLE_UNCLAIMER = "usurper";
+// The townsfolk of the castle's quarter: militia archers who sleep in the
+// cottages and man the walls, and lookouts posted in the neighbouring rooms.
+export const ROLE_TOWNSFOLK = "townsfolk";
 
 export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {
   [ROLE_HARVESTER]: [

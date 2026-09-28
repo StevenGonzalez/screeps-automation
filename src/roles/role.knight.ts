@@ -2,6 +2,7 @@ import { seekBoost, findInvaderCore } from "../services/services.combat";
 import { isAlly } from "../services/services.allies";
 import { clearRemoteInvader } from "../services/services.creep";
 import { ROLE_CLERIC } from "../config/config.roles";
+import { parkIdle } from "../services/services.town";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
 
 const RETREAT_THRESHOLD = 0.2;
@@ -72,6 +73,8 @@ export function runKnight(creep: Creep) {
   }
 
   if (creep.memory.targetRoom === creep.room.name) clearRemoteInvader(creep);
+  // Idle at home: stand watch behind the walls rather than crowd the spawn.
+  if (parkIdle(creep, "watch")) return;
   const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
   if (spawn && !creep.pos.isNearTo(spawn)) {
     creep.moveTo(spawn, { reusePath: 20 });

@@ -125,6 +125,8 @@ High-RCL opportunistic income. All auto-managed once launched; these are status 
 |---|---|---|
 | `Game.arca.cpu()` | Per-subsystem CPU breakdown | Diagnosing slow ticks / CPU limit |
 | `Game.arca.traffic(false)` | Disable the traffic manager (falls back to vanilla movement) | Kill-switch if creep movement ever misbehaves |
+| `Game.arca.town()` | Town clock, cottages, watch posts and townsfolk of every room (pass `'W1N1'` for one) | Checking on the town quarter |
+| `Game.arca.razeTown('W1N1')` | Tears the town's walls and ramparts down so it is planned afresh | After a layout change leaves the town in the wrong place |
 
 ---
 

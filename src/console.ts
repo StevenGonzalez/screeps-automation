@@ -33,6 +33,7 @@ import {
   ROLE_POWER_CARRIER,
   ROLE_DEPOSIT_MINER,
   ROLE_DEPOSIT_HAULER,
+  ROLE_TOWNSFOLK,
 } from "./config/config.roles";
 import {
   rankExpansionCandidates,
@@ -47,6 +48,8 @@ import {
   setAuto as setFactoryAuto,
 } from "./orchestrators/orchestrator.factory";
 import { describeNukers, launchNukeFrom } from "./orchestrators/orchestrator.nuker";
+import { describeTown, razeTown } from "./planning/planner.town";
+import { townClock } from "./services/services.town";
 
 const VALID_FORMATIONS: SquadFormation[] = ["line", "box", "wedge", "scatter"];
 const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "retreat"];
@@ -919,6 +922,42 @@ export function setupConsole() {
         return;
       }
       console.log(`[Factory] ${roomName}: now producing ${commodity}`);
+    },
+
+    town: (roomName?: string) => {
+      const rooms = roomName
+        ? [Game.rooms[roomName]].filter((r) => r?.controller?.my)
+        : Object.values(Game.rooms).filter((r) => r.controller?.my);
+      if (rooms.length === 0) {
+        console.log(`[Town] ${roomName ?? "No room"} is not a room you own`);
+        return;
+      }
+      const clock = townClock(Game.time);
+      console.log(`[Town] Day ${clock.day}, ${String(clock.hour).padStart(2, "0")}:00 (${clock.phase})`);
+      for (const room of rooms) {
+        for (const line of describeTown(room)) console.log(line);
+        const folk = Object.values(Game.creeps).filter(
+          (c) => c.memory.role === ROLE_TOWNSFOLK && c.memory.homeRoom === room.name
+        );
+        if (folk.length === 0) continue;
+        const militia = folk.filter((c) => c.memory.job !== "lookout");
+        const lookouts = folk.filter((c) => c.memory.job === "lookout");
+        console.log(`  Militia: ${militia.length}${militia.some((c) => c.memory.working) ? " (on the walls!)" : ""}`);
+        for (const c of lookouts) {
+          const away = c.memory.retreatUntil !== undefined && Game.time < c.memory.retreatUntil;
+          console.log(`  Lookout ${c.name} -> ${c.memory.targetRoom}${away ? " (fled home)" : ""}`);
+        }
+      }
+    },
+
+    razeTown: (roomName: string) => {
+      const room = Game.rooms[roomName];
+      if (!room?.controller?.my) {
+        console.log("[Town] Usage: Game.arca.razeTown('W1N1') - tears the quarter down to be planned afresh");
+        return;
+      }
+      const razed = razeTown(room);
+      console.log(`[Town] ${roomName}: ${razed} town walls and ramparts torn down; the quarter will be planned anew`);
     },
 
     autoFactory: (roomName: string, enabled: boolean) => {

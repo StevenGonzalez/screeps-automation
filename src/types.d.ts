@@ -180,8 +180,37 @@ declare global {
     invaderStrength?: { heal: number; damage: number; hits: number };
   }
 
+  // A cottage by its top-left corner; the walls run round the 5x5 edge, the
+  // door is one edge tile and the 3x3 inside is beds.
+  interface TownCottage {
+    x: number;
+    y: number;
+    door: string;
+    name: string;
+    // Placed outside the perimeter ring, so the ring is re-planned around it.
+    outside?: boolean;
+  }
+
+  interface TownMemory {
+    posts: string[];
+    square: string[];
+    fountain?: string;
+    cottages: TownCottage[];
+    // The perimeter plan the posts were laid against; a new ring moves them.
+    perimeterAt?: number;
+    failedAt?: number;
+  }
+
   interface CreepMemory {
     role: string;
+    // Townsfolk: "militia" sleep in cottages and man the walls, "lookout"
+    // stands in a neighbouring room.
+    job?: "militia" | "lookout";
+    lookoutPos?: string;
+    // A town tile (bed, watch post, square) this creep holds, and the last tick
+    // it used it; a claim goes stale a tick after the creep stops using it.
+    townSpot?: string;
+    townSpotTick?: number;
     working?: boolean;
     room?: string;
     sourceId?: string;
@@ -259,6 +288,7 @@ declare global {
     };
     spawnHold?: { role: string; since: number; lastTick: number };
     bodyWait?: Record<string, number>;
+    town?: TownMemory;
   }
 
   interface Memory {

@@ -72,7 +72,8 @@ See [QUICKSTART.md](QUICKSTART.md) for the full command list. There is no
 `Game.arca.showPlan()`, `intel()`, `threats()`, or `sendEnergy()` - those were
 never built. The real commands include `expand`, `queueExpand`, `claim`,
 `status`, `ops`, `labs`, `produce`, `network`, `attack`, `squads`, `warcouncil`,
-`threat`, `nukes`, `nuker`, `launchNuke`, `factory`, `sk`, `power`, `deposits`, and more.
+`threat`, `nukes`, `nuker`, `launchNuke`, `factory`, `sk`, `power`, `deposits`,
+`town`, `razeTown`, and more.
 
 ---
 
@@ -112,6 +113,9 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
 - **Nuke defense** (`orchestrators/orchestrator.nukes.ts`). Reinforces ramparts
   on impact tiles when an incoming nuke is detected. Distinct from the *offensive*
   nuker (see [NUKER_SYSTEM.md](NUKER_SYSTEM.md)).
+- **The town quarter** (`planning/planner.town.ts`). At RCL 6+ watch posts sit
+  behind the ring at each exit side, and at RCL 7+ cottages house an archer
+  militia that mans the ramparts in a raid. See [TOWN_SYSTEM.md](TOWN_SYSTEM.md).
 - **Standing defense** (DefenseCouncil in `orchestrator.military.ts`). Auto-raises
   a defensive squad when an owned room is meaningfully threatened. See
   [MILITARY_GUIDE.md](MILITARY_GUIDE.md).
@@ -130,9 +134,11 @@ src/
 |   +-- config.spawning.ts           # Body patterns and spawn energy reserve
 |   +-- config.structures.ts         # Stamp / planner config, perimeter, towers
 |   +-- config.factory.ts            # Commodity tiers + factory tunables
+|   +-- config.town.ts               # Town quarter gates, day phases, cottage names
 +-- orchestrators/
 |   +-- orchestrator.creep.ts        # Dispatches creep roles each tick (lookup map)
 |   +-- orchestrator.spawning.ts     # Spawn priority logic per room
+|   +-- orchestrator.spawning.town.ts # Townsfolk spawning (militia + lookouts)
 |   +-- orchestrator.structures.ts   # Stamp + road + rampart-perimeter planning
 |   +-- orchestrator.tower.ts        # Tower targeting + safe-mode triggers
 |   +-- orchestrator.links.ts        # Link energy distribution
@@ -179,10 +185,12 @@ src/
 |   +-- role.powercarrier.ts         # looter - power collection
 |   +-- role.depositminer.ts         # nomad - highway deposit harvesting
 |   +-- role.deposithauler.ts        # caravan - highway deposit hauling
+|   +-- role.townsfolk.ts            # townsfolk - militia archers + lookouts
 +-- planning/
 |   +-- planner.stamp.ts             # Core stamp layout generation
 |   +-- planner.room.ts              # Road planning and structure placement
 |   +-- planner.rampart.ts           # Defensive rampart perimeter (RCL 4+)
+|   +-- planner.town.ts              # Town quarter: watch posts, square, cottages (RCL 6+)
 +-- services/
     +-- services.memory.ts           # Room memory helpers
     +-- services.creep.ts            # Creep utilities + shared find caches
@@ -193,6 +201,7 @@ src/
     +-- services.structures.ts       # Structure planning helpers
     +-- services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache) + civilian shelter
     +-- services.coordination.ts     # Per-tick fill-target claims + hauler-to-worker energy handoff
+    +-- services.town.ts             # Town clock, cottage geometry, parking-spot claims
 ```
 
 ---
@@ -228,6 +237,7 @@ in creep names and `Game.arca` output; the right is what it does.
 | **looter** | `role.powercarrier.ts` | Power collection |
 | **nomad** | `role.depositminer.ts` | Highway deposit harvesting (silicon/metal/biomass/mist) |
 | **caravan** | `role.deposithauler.ts` | Highway deposit hauling home |
+| **townsfolk** | `role.townsfolk.ts` | Town militia (watch posts by day, cottage beds by night, ramparts in a raid) and lookouts in neighbouring rooms |
 
 (Source Keeper roles: **delver** (`role.sk_miner.ts`), **packmule** (`role.sk_hauler.ts`),
 **lancer** (`role.sk_guardian.ts`). The season-only score chaser is **seeker** (`role.scoreHunter.ts`).)
@@ -245,3 +255,4 @@ in creep names and `Game.arca` output; the right is what it does.
 - [NUKER_SYSTEM.md](NUKER_SYSTEM.md) - offensive nuker loading + launch
 - [OBSERVER_SYSTEM.md](OBSERVER_SYSTEM.md) - scouting + observer power-bank hunting
 - [CPU_OPTIMIZATION.md](CPU_OPTIMIZATION.md) - performance tuning
+- [TOWN_SYSTEM.md](TOWN_SYSTEM.md) - the town quarter, its cottages and townsfolk

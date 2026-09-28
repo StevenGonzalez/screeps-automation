@@ -11,6 +11,7 @@ import {
 } from "../config/config.roles";
 import { getThreatInfo, isSourceKeeperRoom } from "./services.combat";
 import { isAlly } from "./services.allies";
+import { bedTiles, claimSpot, goToSpot, parseTile } from "./services.town";
 
 const STUCK_THRESHOLD = 3;
 const COSTMATRIX_TTL = 1000;
@@ -300,6 +301,10 @@ const RANGED_REACH = 4;
 const MELEE_REACH = 2;
 // How far a sheltering creep backs off.
 const SHELTER_DISTANCE = 6;
+// How far a civilian will run for a cottage bed, and how much further off the
+// danger must be before it comes back out.
+const BED_SHELTER_RANGE = 12;
+const BED_LINGER_RANGE = 3;
 
 /**
  * Moves a civilian out of reach of any armed hostile that could hit it next
@@ -312,6 +317,13 @@ export function shelterFromHostiles(creep: Creep): boolean {
   if (hostiles.length === 0) return false;
   if (creep.room.controller?.my && creep.room.controller.safeMode) return false;
 
+  // A creep already barred in a cottage bed waits a little longer before it
+  // comes out, or it would step out and straight back in.
+  const here = `${creep.pos.x},${creep.pos.y}`;
+  const beds = creep.room.controller?.my ? bedTiles(creep.room.memory.town) : [];
+  const inBed = creep.memory.townSpot === here && beds.includes(here);
+  const margin = inBed ? BED_LINGER_RANGE : 0;
+
   const threats: RoomPosition[] = [];
   for (const h of hostiles) {
     const reach =
@@ -320,16 +332,41 @@ export function shelterFromHostiles(creep: Creep): boolean {
         : h.getActiveBodyparts(ATTACK) > 0
           ? MELEE_REACH
           : 0;
-    if (reach > 0 && creep.pos.inRangeTo(h.pos, reach)) threats.push(h.pos);
+    if (reach > 0 && creep.pos.inRangeTo(h.pos, reach + margin)) threats.push(h.pos);
   }
   if (threats.length === 0) return false;
+
+  if (inBed) {
+    claimSpot(creep, [here]);
+    return true;
+  }
 
   const onRampart = creep.pos
     .lookFor(LOOK_STRUCTURES)
     .some((s) => s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my);
   if (onRampart) return false;
 
+  // A free bed close by, and not toward the danger, beats open ground.
+  const bed = shelterBed(creep, beds, threats);
+  if (bed) {
+    goToSpot(creep, bed);
+    return true;
+  }
+
   return fleeFrom(creep, threats, SHELTER_DISTANCE);
+}
+
+function shelterBed(creep: Creep, beds: string[], threats: RoomPosition[]): string | null {
+  if (beds.length === 0) return null;
+  const nearestThreat = (x: number, y: number): number =>
+    Math.min(...threats.map((t) => Math.max(Math.abs(t.x - x), Math.abs(t.y - y))));
+  const mine = nearestThreat(creep.pos.x, creep.pos.y);
+  const usable = beds.filter((k) => {
+    const { x, y } = parseTile(k);
+    const far = Math.max(Math.abs(creep.pos.x - x), Math.abs(creep.pos.y - y));
+    return far <= BED_SHELTER_RANGE && nearestThreat(x, y) >= mine;
+  });
+  return usable.length > 0 ? claimSpot(creep, usable) : null;
 }
 
 interface ShoveReq {

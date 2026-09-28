@@ -1,3 +1,4 @@
+import { parkIdle } from "../services/services.town";
 import {
   acquireEnergy,
   transferEnergyTo,
@@ -163,7 +164,10 @@ export function runHauler(creep: Creep) {
   parkNearCore(creep);
 }
 
+// Wait on the market square when the room has one, out of the core's lanes;
+// otherwise beside storage.
 function parkNearCore(creep: Creep): void {
+  if (parkIdle(creep, "square")) return;
   const anchor = creep.room.storage ?? creep.room.find(FIND_MY_SPAWNS)[0];
   if (anchor && !creep.pos.inRangeTo(anchor, 1)) {
     creep.moveTo(anchor, { reusePath: 20, range: 1 });

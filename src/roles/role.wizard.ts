@@ -1,5 +1,6 @@
 import { allyInMassAttackRange, preferMassAttack, seekBoost } from "../services/services.combat";
 import { isAlly } from "../services/services.allies";
+import { parkIdle } from "../services/services.town";
 import { getDefenseOp, getOffensiveOp, runDefensiveWizard, runOffensiveWizard } from "../orchestrators/orchestrator.military";
 
 const KITE_RANGE = 3;
@@ -27,6 +28,7 @@ export function runWizard(creep: Creep) {
   const notAlly = (c: Creep) => !isAlly(c.owner?.username);
   const hostile = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS, { filter: notAlly });
   if (!hostile) {
+    if (parkIdle(creep, "watch")) return;
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn && !creep.pos.isNearTo(spawn)) {
       creep.moveTo(spawn, { reusePath: 20 });

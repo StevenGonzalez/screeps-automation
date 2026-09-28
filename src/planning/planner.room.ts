@@ -5,6 +5,7 @@ import {
   structureTypeForKey,
 } from "../services/services.structures";
 import type { StampCell } from "./planner.stamp";
+import { parseTile, townFootprint } from "../services/services.town";
 import {
   CASTLE_STAMP,
   MERCHANT_RING_EXTENSION_OFFSETS,
@@ -514,6 +515,12 @@ function buildSharedRoadCostMatrix(room: Room): CostMatrix {
         }
       }
     }
+  }
+  // Roads go round the town: its ramparts are walkable, but a road through a
+  // cottage or across the square would turn it into a thoroughfare.
+  for (const k of townFootprint(room.memory.town)) {
+    const { x, y } = parseTile(k);
+    cm.set(x, y, 255);
   }
   return cm;
 }

@@ -16,6 +16,7 @@ import {
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
 import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
 import { planDefensivePerimeter } from "../planning/planner.rampart";
+import { planTown } from "../planning/planner.town";
 import { isSourceSafe } from "../services/services.creep";
 import { remoteRoadsEnabled } from "../services/services.remote";
 import { getActiveRemoteRooms, getPickedRemoteRoomNames } from "./orchestrator.spawning";
@@ -40,6 +41,9 @@ const BUILD_PRIORITY: Partial<Record<StructureConstant, number>> = {
 
 const PERIMETER_PRIORITY = 12;
 
+// The town comes after everything the castle needs.
+const TOWN_PRIORITY = 13;
+
 // How many remote container sites may be open at once, across all rooms.
 const MAX_REMOTE_CONTAINER_SITES = 2;
 // How many remote road sites may be open at once, across all rooms. Haulers
@@ -49,6 +53,7 @@ const MAX_REMOTE_ROAD_SITES = 10;
 
 function buildPriority(key: string): number {
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY) return PERIMETER_PRIORITY;
+  if (key === PLANNER_KEYS.TOWN_WALL_KEY || key === PLANNER_KEYS.TOWN_RAMPART_KEY) return TOWN_PRIORITY;
   const type = structureTypeForKey(key);
   return type ? BUILD_PRIORITY[type] ?? 11 : 11;
 }
@@ -317,6 +322,9 @@ function cleanupUnplannedConstructionSites(room: Room) {
   }
 
   for (const site of sites) {
+    // Walls are only planned for the town; a hand-placed wall site survives
+    // as it always has.
+    if (site.structureType === STRUCTURE_WALL) continue;
     const set = plannedByType.get(site.structureType as StructureConstant);
     // Only police types the planner lays out; hand-placed sites of other types survive.
     if (!set) continue;
@@ -575,6 +583,8 @@ function processRoomStructures(room: Room) {
   applyCastleStamp(room);
 
   planDefensivePerimeter(room);
+
+  planTown(room);
 
   const sources = room.find(FIND_SOURCES);
   for (const source of sources) {

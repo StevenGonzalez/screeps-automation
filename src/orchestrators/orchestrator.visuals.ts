@@ -6,7 +6,9 @@ import {
   ROLE_MINERAL_MINER,
   ROLE_REPAIRER,
   ROLE_UPGRADER,
+  ROLE_TOWNSFOLK,
 } from "../config/config.roles";
+import { cottageLayout, parseTile, spotHolder, townClock } from "../services/services.town";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -20,6 +22,7 @@ export function loop() {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
     drawRoomHUD(room);
+    drawTown(room);
   }
 }
 
@@ -90,10 +93,72 @@ function drawRoomHUD(room: Room) {
     y += lineH;
   }
 
+  if (room.memory.town) {
+    const clock = townClock(Game.time);
+    const icon = PHASE_ICON[clock.phase];
+    const folk = counts[ROLE_TOWNSFOLK] ?? 0;
+    const hh = String(clock.hour).padStart(2, "0");
+    v.text(`${icon} Day ${clock.day}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+    y += lineH;
+  }
+
   const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) as StructureSpawn | null : null;
   if (spawn?.spawning) {
     const remaining = spawn.spawning.remainingTime;
     v.text(`Spawning: ${spawn.spawning.name} (${remaining}t)`, x, y, dimStyle);
+  }
+}
+
+const PHASE_ICON: Record<string, string> = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
+
+// How dark the town gets through the day.
+const NIGHT_SHADE: Record<string, number> = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
+
+function drawTown(room: Room): void {
+  const town = room.memory.town;
+  if (!town) return;
+  const v = room.visual;
+  const clock = townClock(Game.time);
+
+  const shade = NIGHT_SHADE[clock.phase];
+  if (shade > 0) v.rect(-0.5, -0.5, 50, 50, { fill: "#0a1030", opacity: shade });
+
+  const label: TextStyle = { font: 0.45, color: "#ffe9a8", stroke: "#000000", strokeWidth: 0.06 };
+  const lit = clock.phase === "dusk" || clock.phase === "night";
+
+  for (const c of town.cottages) {
+    const l = cottageLayout(c);
+    // Roof over the floor, and a lamp in each occupied bed.
+    v.rect(c.x + 0.5, c.y + 0.5, 3, 3, { fill: "#8a5a2b", opacity: 0.18, stroke: "#c08a4a", strokeWidth: 0.05 });
+    for (const b of l.beds) {
+      if (!spotHolder(room.name, b)) continue;
+      const { x, y } = parseTile(b);
+      v.circle(x, y, { radius: 0.18, fill: lit ? "#ffcc55" : "#c9a36b", opacity: lit ? 0.9 : 0.5 });
+    }
+    v.text(`House of ${c.name}`, c.x + 2, c.y - 0.3, label);
+  }
+
+  for (const p of town.posts) {
+    const { x, y } = parseTile(p);
+    const manned = spotHolder(room.name, p) !== undefined;
+    v.poly(
+      [[x, y + 0.35], [x, y - 0.4], [x + 0.35, y - 0.25], [x, y - 0.1]],
+      { stroke: manned ? "#ff5544" : "#aa6655", strokeWidth: 0.06, fill: manned ? "#ff5544" : "transparent", opacity: 0.8 }
+    );
+  }
+
+  if (town.fountain) {
+    const { x, y } = parseTile(town.fountain);
+    const ripple = 0.3 + 0.1 * Math.sin(Game.time / 3);
+    v.circle(x, y, { radius: ripple + 0.15, fill: "transparent", stroke: "#66ccff", strokeWidth: 0.05, opacity: 0.6 });
+    v.circle(x, y, { radius: 0.25, fill: "#3399ff", opacity: 0.6 });
+    const name = room.memory.townName ?? room.name;
+    v.text(`${name} Square`, x, y - 1.8, label);
+  } else {
+    for (const k of town.square) {
+      const { x, y } = parseTile(k);
+      v.circle(x, y, { radius: 0.12, fill: "#ffe9a8", opacity: 0.3 });
+    }
   }
 }
 

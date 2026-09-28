@@ -10,6 +10,9 @@ g.OBSTACLE_OBJECT_TYPES = [];
 g.STRUCTURE_RAMPART = "rampart";
 g.LOOK_STRUCTURES = "structure";
 g.OK = 0;
+g.RoomPosition = class {
+  constructor(public x: number, public y: number, public roomName: string) {}
+};
 
 class FakeMatrix {
   get() { return 0; }
@@ -54,13 +57,23 @@ function hostile(x: number, parts: { ranged?: number; attack?: number }) {
   };
 }
 
+let town: TownMemory | undefined;
+
 function civilian(role: string, x: number, under: unknown[] = []) {
   const room = {
     name: "W1N1",
     controller: { my: true, safeMode },
+    memory: { town },
     find: (type: number) => (type === g.FIND_HOSTILE_CREEPS ? hostiles : []),
   };
-  return { name: "c", memory: { role }, room, pos: pos(x, under), move: vi.fn(() => 0) } as unknown as Creep;
+  return {
+    name: "c",
+    memory: { role },
+    room,
+    pos: pos(x, under),
+    move: vi.fn(() => 0),
+    moveTo: vi.fn(() => 0),
+  } as unknown as Creep;
 }
 
 beforeEach(() => {
@@ -69,6 +82,7 @@ beforeEach(() => {
   g.Memory = {};
   hostiles = [];
   safeMode = undefined;
+  town = undefined;
   search.mockReset();
   search.mockReturnValue({ path: [{ x: 9, y: 10, roomName: "W1N1" }] });
 });
@@ -113,5 +127,31 @@ describe("shelterFromHostiles", () => {
     search.mockReturnValue({ path: [] });
     hostiles = [hostile(11, { attack: 1 })];
     expect(shelterFromHostiles(civilian(ROLE_BUILDER, 10))).toBe(false);
+  });
+
+  // A cottage west of the creep: beds at x 5-7, y 10-12.
+  const COTTAGE: TownMemory = {
+    posts: [],
+    square: [],
+    cottages: [{ x: 4, y: 9, door: "8,11", name: "Pasi" }],
+  };
+
+  it("runs for a free cottage bed away from the danger instead of open ground", () => {
+    town = COTTAGE;
+    hostiles = [hostile(14, { ranged: 1 })];
+    const c = civilian(ROLE_BUILDER, 10);
+    expect(shelterFromHostiles(c)).toBe(true);
+    expect(search).not.toHaveBeenCalled();
+    const target = (c.moveTo as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(target.x).toBe(7);
+    expect(c.memory.townSpot).toBe("7,10");
+  });
+
+  it("will not run toward the danger for a bed", () => {
+    town = COTTAGE;
+    hostiles = [hostile(6, { ranged: 1 })];
+    const c = civilian(ROLE_BUILDER, 10);
+    expect(shelterFromHostiles(c)).toBe(true);
+    expect(search).toHaveBeenCalled();
   });
 });

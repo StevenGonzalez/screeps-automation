@@ -6,6 +6,7 @@ import {
   isBlockaded,
 } from "../services/services.combat";
 import { isEnergyEmergency } from "../services/services.creep";
+import { spawnTownsfolk } from "./orchestrator.spawning.town";
 import { countByRoleInRoom, getRoomPhase } from "./orchestrator.spawning.shared";
 import {
   hasEnergyGatherers,
@@ -211,4 +212,6 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!blockaded && spawnSkCreeps(room, spawn)) return;
   if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
+  // Townsfolk last of all: the town lives on what the castle does not need.
+  if (!blockaded && !economyCritical && spawnTownsfolk(room, spawn)) return;
 }

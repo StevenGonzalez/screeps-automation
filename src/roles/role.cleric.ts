@@ -1,5 +1,6 @@
 import { seekBoost } from "../services/services.combat";
 import { isAlly } from "../services/services.allies";
+import { parkIdle } from "../services/services.town";
 import { ROLE_KNIGHT, ROLE_WIZARD } from "../config/config.roles";
 import { getDefenseOp, getOffensiveOp, runDefensiveCleric, runOffensiveCleric } from "../orchestrators/orchestrator.military";
 
@@ -49,6 +50,7 @@ export function runCleric(creep: Creep) {
   });
 
   if (wounded.length === 0) {
+    if (parkIdle(creep, "watch")) return;
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
     if (spawn && !creep.pos.isNearTo(spawn)) {
       creep.moveTo(spawn, { reusePath: 20 });

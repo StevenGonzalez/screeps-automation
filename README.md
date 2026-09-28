@@ -7,6 +7,7 @@ A Screeps automation project themed around a small medieval kingdom where every 
 - A court of castle role units: villager, barmaid, mason, blacksmith, nomad, and caravan
 - Tick-driven orchestration for memory, spawning, structures, towers, and pixels
 - Room planning with roads, containers, ramparts, towers, and expansion support
+- A living town quarter at RCL 6+: watch posts, a market square, cottages built from walls and ramparts, and a militia that keeps a day and night routine (see [docs/TOWN_SYSTEM.md](docs/TOWN_SYSTEM.md))
 - Practical automation priorities for economy stability, fortification, and controller progress
 - Designed for clarity, modularity, and ease of iteration
 

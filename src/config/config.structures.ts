@@ -63,6 +63,10 @@ export const PLANNER_KEYS = {
   STAMP_ROAD_KEY:        "stamp_roads",
   STAMP_RAMPART_KEY:     "stamp_ramparts",
   CARDINAL_ROAD_PREFIX:  "cardinal_road_",
+  // The town quarter (see planner.town.ts): cottage walls and the square's
+  // fountain, and the rampart doors, beds and watch posts.
+  TOWN_WALL_KEY:         "town_walls",
+  TOWN_RAMPART_KEY:      "town_ramparts",
 };
 
 export const STAMP_PLANNER = {

@@ -1,0 +1,206 @@
+# The Town Quarter
+
+Once a castle is rich and well walled, a town grows up inside its perimeter:
+watch posts behind the ramparts, a market square around a fountain, stone
+cottages for the townsfolk, and the townsfolk themselves, a militia of archers
+who keep the watch by day and sleep in their beds by night.
+
+Everything in the town is built from plain walls and ramparts. Walls block
+movement and never decay; ramparts let our own creeps walk through and shelter
+whoever stands on them. The town is therefore also a set of places to stand:
+posts to guard from, a square to idle in, and beds to hide in.
+
+It is not a fortification. The perimeter is. Town barriers are kept at a modest
+20k hits, and the whole quarter costs about 2 energy a tick at RCL 8.
+
+---
+
+## How it grows
+
+Each stage waits for the room to afford it.
+
+| Stage | Needs | Adds |
+|---|---|---|
+| Watch posts + square | RCL 6, anchor and perimeter planned, 90% of the perimeter built | Up to 3 rampart posts behind the ring for each side with exits; a 3x3 square around a fountain wall |
+| First cottage | RCL 7, 150k energy in storage | The House of Hanzo: 15 walls, a rampart door, 9 rampart beds |
+| Militia | A built bed each, the storage gate, posture not `RECOVER`, no energy emergency | Up to 4 militia at RCL 7, 8 at RCL 8 |
+| Second cottage | RCL 8, 250k energy in storage | The House of Pasi |
+| Lookouts | RCL 8, militia at strength | Up to 4, one per neighbouring room nobody else owns or reserves and we do not already mine |
+
+Townsfolk spawn last, after every economic and military role, and never while
+the room is blockaded or its economy is critical. Below the storage gate the
+town keeps what it has and stops growing.
+
+All thresholds live in `src/config/config.town.ts`.
+
+---
+
+## The layout
+
+Planning runs in `planning/planner.town.ts`, on the normal 50-tick structure
+pass, after the defensive perimeter. The result is saved in
+`room.memory.town`, and the unbuilt tiles go into two planner keys,
+`town_walls` and `town_ramparts`, which the ordinary construction pipeline
+builds at priority 13 (after the core, before cosmetic roads).
+
+Everything the planner places avoids planned and built structures, the castle
+stamp and merchant quarter, the stamp's core square, roads, and the ring
+itself. Road planning in turn treats the town's tiles as impassable, so roads
+route around it.
+
+**Watch posts.** For each room edge with exits, the planner finds the middle of
+the exits, takes the ring tile nearest it as the gate, and places up to three
+posts just inside the ring within three tiles of that gate. Each post is a
+rampart, so whoever stands there is covered. When the perimeter is re-planned,
+the posts move with it.
+
+**The market square.** The planner looks for a clear 3x3 plaza inside the ring,
+3 to 10 tiles from storage, with no structure next to it. The centre becomes a
+fountain (one wall) and the eight tiles around it are the square, where idle
+porters and resting lookouts wait. With no room for a plaza, it falls back to
+six loose tiles near storage. If a later structure lands next to the square,
+the square is planned again.
+
+**Cottages.** A cottage is a 5x5 footprint:
+
+```
+W W W W W
+W b b b W
+D b b b W      W  wall
+W b b b W      D  door (rampart), on the side facing the castle
+W W W W W      b  bed (rampart)
+```
+
+The planner scans every position that is clear of the stamp, three tiles from
+sources and the mineral, four from the controller, with a free one-tile margin
+around it. Positions inside the ring come first, nearest the castle first. For
+each of up to 40 candidates it checks, with a flood fill, that the tile outside
+the door can be reached from the castle and that the new walls cut nothing off.
+A cottage never walls in a source, a road or a corner of the base.
+
+When no position inside the ring works, a cottage may sit just outside it,
+within 14 tiles of the anchor. The planner then asks the perimeter to be
+re-planned, and the min-cut wraps the new house inside the walls. A failed
+search is retried 1500 ticks later.
+
+Cottages take their names from the townsfolk of Lorencia: Hanzo, Pasi, Lumen,
+Martin, Liaman, Zienna, Thompson and Caren.
+
+---
+
+## The townsfolk
+
+Townsfolk are role `townsfolk` (`roles/role.townsfolk.ts`), spawned by
+`orchestrators/orchestrator.spawning.town.ts`. Their `job` in memory says which
+kind they are.
+
+### Militia: `[RANGED_ATTACK, MOVE]`, 200 energy
+
+A militiaman shoots the weakest hostile within range 3 every tick, whatever else
+it is doing.
+
+In peace it follows the town clock:
+
+- **Dawn and day:** stand the watch posts. With every post taken, wait in the
+  square, then in a bed.
+- **Dusk and night:** sleep in a cottage bed, or wait in the square if every
+  bed is taken.
+- On the first tick of each phase the whole town calls it out ("cock-a-doo!",
+  "all's well", "lamps lit", "zzz").
+
+When raiders are in the room and safe mode is off:
+
+1. The militiaman shouts "To arms!" and drops the post or bed it held.
+2. It runs for the free built rampart, on the perimeter or at a post, nearest
+   the closest raider, and fights from under it.
+3. With no rampart free, it bars itself into a bed.
+
+Each tile is claimed by one creep at a time. A claim lapses after one tick
+unused, so a dead or reassigned creep frees its spot at once.
+
+### Lookout: `[MOVE]`, 50 energy
+
+A lookout walks to a tile three steps inside a neighbouring room, facing our
+exit, and stands there so the castle keeps vision of its approaches. Rooms we
+already mine are skipped, since our miners already see them.
+
+It runs home when an armed, non-allied creep comes within six tiles, or when it
+finds the room has been claimed by another player (towers). It shouts
+"Raiders!", then waits in the square for 300 ticks before going back out.
+
+---
+
+## Everyone else uses the town too
+
+- **Idle porters** wait in the market square instead of crowding the spawn.
+- **Idle knights, wizards and clerics** of the home guard stand the watch posts,
+  so the posts face the exits and each guard stands under a rampart.
+- **Civilians under attack** (builders, upgraders, repairers, haulers and the
+  rest) run for a free cottage bed within 12 tiles, provided the bed is no
+  closer to any threat than they already are. Once inside they stay until the
+  threat is at least 3 tiles beyond its reach. With no safe bed, they flee
+  across open ground as before.
+
+---
+
+## Day and night
+
+A town day lasts 1000 ticks:
+
+| Ticks | Phase |
+|---|---|
+| 0-99 | Dawn |
+| 100-599 | Day |
+| 600-699 | Dusk |
+| 700-999 | Night |
+
+The room HUD shows the day and hour: `Day 42, 19:00  8 townsfolk`.
+
+---
+
+## Visuals
+
+When room visuals are on, the town draws itself:
+
+- the whole room darkens at night, and a little at dawn and dusk;
+- each cottage gets a roof and a "House of ..." sign, and a lamp is lit in
+  every occupied bed;
+- a flag at each watch post, turned red when someone stands there;
+- rippling water in the fountain and a "... Square" sign.
+
+---
+
+## Upkeep
+
+| Item | Energy |
+|---|---|
+| Militia, 8 at RCL 8 | 8 x 200 per 1500 ticks = about 1.1 a tick |
+| Lookouts, up to 4 | 4 x 50 per 1500 ticks = about 0.13 a tick |
+| Rampart decay, about 30 town ramparts | 3 hits a tick each, at 0.01 energy per hit = about 0.9 a tick |
+| Walls | Never decay; repaired only when shot |
+| One-off build and reinforcement to 20k | About 200 energy a barrier, roughly 12k in all |
+
+About 2 energy a tick at RCL 8, a few percent of a mature room's income. The
+storage gate keeps it from ever competing with the economy.
+
+---
+
+## Console
+
+| Command | Does |
+|---|---|
+| `Game.arca.town()` | Town clock, then each town: posts, square, cottages and whether they are built, militia (and whether they are on the walls), lookouts (and whether they have fled home) |
+| `Game.arca.town('W1N1')` | The same for one room |
+| `Game.arca.razeTown('W1N1')` | Tears every town wall and rampart down and forgets the plan. The next structure pass plans the quarter afresh (useful after a stamp change) |
+
+---
+
+## Files
+
+| File | Holds |
+|---|---|
+| `config/config.town.ts` | Every threshold, the day phases, cottage family names |
+| `services/services.town.ts` | Town clock, cottage geometry, tile claims, `parkIdle` for other roles |
+| `planning/planner.town.ts` | Site analysis, post / square / cottage placement, `describeTown`, `razeTown` |
+| `roles/role.townsfolk.ts` | Militia and lookout behaviour |
+| `orchestrators/orchestrator.spawning.town.ts` | What the town spawns next |

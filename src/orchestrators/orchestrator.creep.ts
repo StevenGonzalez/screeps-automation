@@ -29,6 +29,7 @@ import {
   ROLE_SK_HAULER,
   ROLE_SCORE_HUNTER,
   ROLE_UNCLAIMER,
+  ROLE_TOWNSFOLK,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
@@ -60,6 +61,7 @@ import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
 import { runScoreHunter } from "../roles/role.scoreHunter";
 import { runUnclaimer } from "../roles/role.unclaimer";
+import { runTownsfolk } from "../roles/role.townsfolk";
 import { resolveTraffic, shelterFromHostiles } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 
@@ -94,6 +96,7 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SK_HAULER]: runSkHauler,
   [ROLE_SCORE_HUNTER]: runScoreHunter,
   [ROLE_UNCLAIMER]: runUnclaimer,
+  [ROLE_TOWNSFOLK]: runTownsfolk,
 };
 
 const GENERAL_CHATTER = ["for Mu!", "zen?", "+13 plz", "Jewel!", "party?", "lvl up!", "Lorencia", "Kundun?!"];
@@ -118,6 +121,7 @@ const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_CONQUEROR]: ["kneel!", "my castle", "Earthshake"],
   [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
   [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
+  [ROLE_TOWNSFOLK]: ["fresh bread", "nice day", "hail Arca!", "Lorencia!", "tax again?"],
 };
 
 const SAY_PERIOD = 30;
