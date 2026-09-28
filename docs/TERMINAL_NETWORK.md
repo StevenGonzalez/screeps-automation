@@ -60,4 +60,4 @@ Game.arca.network()   // per-room storage/terminal energy, pending sends, and mi
 (There is no `Game.arca.sendEnergy()` - inter-room energy moves are planned
 automatically by the balancing pass, not commanded manually.)
 
-Resources get routed to every branch office. Please advise if you have questions.
+Resources get carted to every castle in the realm; the terminal still takes its toll in energy.

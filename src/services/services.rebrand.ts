@@ -1,45 +1,29 @@
 // One-time migration of live creeps' memory.role to the CURRENT role vocabulary.
 //
-// The theme has changed more than once (medieval -> crime -> dumb bugs -> corporate). memory.role
-// is the single source of truth for behavior, so any creep alive across a deploy still carries
-// its OLD role string and would fall through ROLE_HANDLERS (going inert, wasting a population
-// slot) until it dies. This maps every prior value to its current "corporate" value. It's
-// guarded by a version tag so it runs exactly once per theme change: bump ROLE_THEME (and
-// extend the map) whenever the roster is renamed again.
+// The theme has changed more than once (medieval -> crime -> dumb bugs -> corporate -> MU
+// Online fantasy). memory.role is the single source of truth for behavior, so any creep alive
+// across a deploy still carries its OLD role string and would fall through ROLE_HANDLERS (going
+// inert, wasting a population slot) until it dies. This maps every corporate value to its
+// current "mu" value. It's guarded by a version tag so it runs exactly once per theme change:
+// bump ROLE_THEME (and rewrite the map) whenever the roster is renamed again.
 //
-// The crime-era "courier" (power carrier) is deliberately absent: "courier" is now the hauler.
+// Only the previous theme is mapped. Creeps live 1500 ticks, so nothing older survives, and
+// several older names ("caravan", "delver", ...) are reused by the current roster for a
+// different role, so mapping them could misroute a creep.
 //
 // Iterating Memory.creeps (not Game.creeps) also covers creeps still spawning this tick.
 
-const ROLE_THEME = "corporate";
+const ROLE_THEME = "mu";
 
 const ROLE_RENAMES: Record<string, string> = {
-  // medieval -> corporate
-  peasant: "intern", miner: "associate", porter: "courier", steward: "admin",
-  scholar: "consultant", mason: "facilities", blacksmith: "helpdesk", prospector: "procurement",
-  apothecary: "research", ranger: "recruiter", outrider: "freelancer", peddler: "logistics",
-  herald: "legal", knight: "hr", wizard: "compliance", cleric: "wellness",
-  sapper: "auditor", leech: "pr", conqueror: "regional", settler: "onboarding",
-  breacher: "downsizer", battlepriest: "benefits", caravan: "treasury", quarrier: "offshore",
-  carter: "shipping", huntsman: "security", delver: "overtime", wain: "payroll",
-  seeker: "bizdev",
-  // crime -> corporate
-  runner: "intern", digger: "associate", bagman: "courier", busboy: "admin",
-  launderer: "consultant", contractor: "facilities", fixer: "helpdesk", cooker: "procurement",
-  chemist: "research", lookout: "recruiter", stringer: "freelancer", mule: "logistics",
-  collector: "legal", enforcer: "hr", triggerman: "compliance", medic: "wellness",
-  wrecker: "auditor", decoy: "pr", capo: "regional", transplant: "onboarding",
-  legbreaker: "downsizer", sawbones: "benefits", wildcatter: "offshore",
-  trucker: "shipping", muscle: "security", tunneler: "overtime", carrier: "payroll",
-  grifter: "bizdev",
-  // bugs -> corporate
-  stacker: "facilities", nibbler: "intern", poker: "consultant", patcher: "helpdesk",
-  muncher: "associate", dragger: "courier", stuffer: "admin", gnawer: "procurement",
-  wobbler: "recruiter", rover: "freelancer", plodder: "logistics", squatter: "legal",
-  biter: "hr", spitter: "compliance", licker: "wellness", chewer: "auditor", wiggler: "pr",
-  sprawler: "regional", nester: "onboarding", mixer: "research", basher: "downsizer",
-  drooler: "benefits", lugger: "treasury", scraper: "offshore", toter: "shipping",
-  stomper: "security", burrower: "overtime", packer: "payroll", snatcher: "bizdev",
+  intern: "villager", associate: "miner", courier: "porter", admin: "barmaid",
+  consultant: "enchanter", facilities: "mason", helpdesk: "blacksmith", procurement: "jeweler",
+  research: "goblin", recruiter: "raven", freelancer: "wanderer", logistics: "merchant",
+  legal: "envoy", hr: "dragonknight", compliance: "darkwizard", wellness: "fairyelf",
+  auditor: "ragefighter", pr: "gladiator", regional: "darklord", onboarding: "pilgrim",
+  downsizer: "blademaster", benefits: "museelf", treasury: "looter", offshore: "nomad",
+  shipping: "caravan", security: "lancer", overtime: "delver", payroll: "packmule",
+  bizdev: "seeker", liquidator: "usurper",
 };
 
 export function migrateRoleNames(): void {
@@ -59,7 +43,7 @@ export function migrateRoleNames(): void {
 
   (Memory as any).roleTheme = ROLE_THEME;
   if (migrated > 0) {
-    console.log(`[rebrand] per the reorg, ${migrated} creeps have new titles. Same pay.`);
+    console.log(`[rebrand] by royal decree, ${migrated} creeps have sworn new oaths to the castle.`);
   }
 }
 

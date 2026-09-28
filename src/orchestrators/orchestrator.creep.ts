@@ -96,26 +96,28 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_UNCLAIMER]: runUnclaimer,
 };
 
-const GENERAL_CHATTER = ["circle bk", "synergy", "per email", "quick sync", "noted", "bandwidth?", "EOD pls", "align!"];
+const GENERAL_CHATTER = ["for Mu!", "zen?", "+13 plz", "Jewel!", "party?", "lvl up!", "Lorencia", "Kundun?!"];
 const ROLE_CHATTER: Record<string, string[]> = {
-  [ROLE_MINER]: ["heads down", "KPIs met", "grinding"],
-  [ROLE_HARVESTER]: ["paid?", "learning!", "coffee?"],
-  [ROLE_HAULER]: ["en route", "sign here", "package!"],
-  [ROLE_FILLER]: ["restocked", "label it", "who took?"],
-  [ROLE_UPGRADER]: ["value-add", "invoiced", "leverage"],
-  [ROLE_BUILDER]: ["wet paint", "on it", "ticket!"],
-  [ROLE_REPAIRER]: ["reboot it", "fixed?", "closed"],
-  [ROLE_MINERAL_MINER]: ["sourcing", "PO sent", "vendor ok"],
-  [ROLE_SCOUT]: ["great fit!", "hiring?", "connect?"],
-  [ROLE_RESERVER]: ["on hold", "per terms", "cease!"],
-  [ROLE_KNIGHT]: ["a word?", "my office", "noted."],
-  [ROLE_WIZARD]: ["audit!", "cc: legal", "flagged"],
-  [ROLE_CLERIC]: ["self-care", "breathe", "you ok?"],
-  [ROLE_SIEGER]: ["cut costs", "redundant", "line item"],
-  [ROLE_DRAINER]: ["no comment", "spin it", "valued!"],
-  [ROLE_CONQUEROR]: ["acquired", "new branch", "rightsize"],
-  [ROLE_UNCLAIMER]: ["wind down", "assets?", "closing"],
-  [ROLE_SETTLER]: ["day one!", "my desk?", "badge pls"],
+  [ROLE_MINER]: ["dig dig", "ore ho!", "rock+stone"],
+  [ROLE_HARVESTER]: ["lvl 1", "spiders!", "Budge?!"],
+  [ROLE_HAULER]: ["make way", "heavy!", "delivery"],
+  [ROLE_FILLER]: ["ale's up!", "refilled", "tavern!"],
+  [ROLE_UPGRADER]: ["Bless +1", "Soul +1", "it glows!"],
+  [ROLE_BUILDER]: ["stone up", "mortar!", "new wall"],
+  [ROLE_REPAIRER]: ["clang!", "mended", "repair?"],
+  [ROLE_MINERAL_MINER]: ["Chaos!", "gems!", "Jewel?"],
+  [ROLE_SCOUT]: ["caw!", "caw caw", "I see you"],
+  [ROLE_REMOTE_MINER]: ["passing by", "barter?", "fresh ore"],
+  [ROLE_REMOTE_HAULER]: ["zen only", "fair trade", "wares!"],
+  [ROLE_RESERVER]: ["by decree", "king's law", "claimed"],
+  [ROLE_KNIGHT]: ["Twisting!", "Death Stab", "for Mu!"],
+  [ROLE_WIZARD]: ["Meteorite!", "Hellfire!", "Ice Storm"],
+  [ROLE_CLERIC]: ["heal!", "buffed!", "stay close"],
+  [ROLE_SIEGER]: ["smash!", "Uppercut!", "wall down"],
+  [ROLE_DRAINER]: ["hit me!", "over here!", "tanking"],
+  [ROLE_CONQUEROR]: ["kneel!", "my castle", "Earthshake"],
+  [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
+  [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
 };
 
 const SAY_PERIOD = 30;

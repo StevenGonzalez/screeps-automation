@@ -4,7 +4,7 @@
 
 Two separate things gather information here:
 
-- **Recruiter scouts** (`role.scout.ts`) survey adjacent rooms and record source
+- **Raven scouts** (`role.scout.ts`) survey adjacent rooms and record source
   positions + hostile status - the data the expansion and remote-mining systems
   rank candidates from.
 - The **Observer** (`orchestrator.observer.ts`), at RCL 8, scans distant **highway**
@@ -18,7 +18,7 @@ rooms the bot can currently see (including rooms an observer just scanned). See
 
 ---
 
-## Recruiter Scouts (`role.scout.ts`)
+## Raven Scouts (`role.scout.ts`)
 
 ### What They Do
 
@@ -30,7 +30,7 @@ rooms the bot can currently see (including rooms an observer just scanned). See
 
 ### Hostile Detection
 
-- **Source Keepers**: flagged but recorded so freelancers avoid them.
+- **Source Keepers**: flagged but recorded so wanderers avoid them.
 - **Player creeps**: any non-Source-Keeper, non-Invader creep marks the room hostile
   for **2,000 ticks** (`hostileUntil`).
 - Hostile rooms are skipped both when selecting remote-mining targets and when
@@ -57,26 +57,26 @@ Body: `[MOVE]` - minimal cost, just needs to enter and read the room.
 ## Remote Room Pipeline
 
 ```
-pendingScoutRooms[] -> recruiter surveys -> remoteRooms[]
+pendingScoutRooms[] -> raven surveys    -> remoteRooms[]
                                               v
-                               freelancers mine sources
-                               logistics crews haul energy home
-                               legal reserve the controller
+                               wanderers mine sources
+                               merchants haul energy home
+                               envoys reserve the controller
                                (expander ranks them as colony candidates)
 ```
 
 ### Invader contention
 
-When a freelancer or logistics crew sees an **Invader creep** in its remote it flags the room
-(`invaderUntil`, 1,500 ticks) and waits at home; the spawner raises one HR rep
+When a wanderer or merchant sees an **Invader creep** in its remote it flags the room
+(`invaderUntil`, 1,500 ticks) and waits at home; the spawner raises one dragon knight
 (`spawnRemoteDefender`) to clear it. The same flag is raised by an **Invader Core**
 (`findInvaderCore`) - the NPC structure that reserves the room for "Invader" and
 periodically re-spawns defenders. Because the core is a *structure*, the defending
-HR rep engages hostile creeps first and then **attacks the core itself**; it only lifts
-the flag once the room holds neither creeps nor a core. Without this the HR rep would
+dragon knight engages hostile creeps first and then **attacks the core itself**; it only lifts
+the flag once the room holds neither creeps nor a core. Without this the dragon knight would
 kill the spawned creeps, declare the room clear, and leave the core to re-reserve and
 re-spawn indefinitely - the remote stays bricked. A **player** creep instead marks the
-room hostile and we abandon it rather than send a lone HR rep.
+room hostile and we abandon it rather than send a lone dragon knight.
 
 ---
 
@@ -109,12 +109,12 @@ can only be made from market-bought raw materials. See [FACTORY_SYSTEM.md](FACTO
 
 - A fresh-ish deposit (`lastCooldown <= 100`) with >= 3,000 ticks-to-decay spawns a
   `DepositOp` (`Memory.depositOps`), funded by the closest owned room.
-- **No combat squad** - deposits are unguarded, so the op is just offshore crews + haulers
-  (unlike the power-bank squad). One WORK-heavy **offshore** crew works the deposit and one
-  or two **shipping** crews ferry the resource home to storage. A single big offshore crew is used on
+- **No combat squad** - deposits are unguarded, so the op is just nomads + caravans
+  (unlike the power-bank squad). One WORK-heavy **nomad** works the deposit and one
+  or two **caravans** ferry the resource home to storage. A single big nomad is used on
   purpose: harvesting triggers a *deposit-wide* cooldown, so one large body out-yields
-  several small ones. The offshore crew accumulates into its CARRY buffer and drops the load
-  when full so harvesting never stalls; shipping crews collect the dropped piles.
+  several small ones. The nomad accumulates into its CARRY buffer and drops the load
+  when full so harvesting never stalls; caravans collect the dropped piles.
 - The op runs `mining -> done`. It ends when the deposit decays, when its harvest
   cooldown climbs past 100 (`DEPOSIT_MAX_COOLDOWN` - no longer worth hauling), or after
   a 20,000-tick hard timeout if it never makes contact. Check status with

@@ -2,11 +2,11 @@
 
 ## Overview
 
-**"Per my last message, this room has been acquired. Thanks!"**
+**"By decree of the crown, this room now flies our banner."**
 
-This is a Screeps automation bot built around a mid-sized corporation.
-Interns and associates gather the energy, consultants and facilities crews build up the office,
-and HR reps and compliance officers deal with anything that comes near. The flavor is corporate;
+This is a Screeps automation bot built around a small MU-style kingdom where every owned room is a castle.
+Villagers and miners gather the energy, enchanters and masons build up the keep,
+and dragon knights and dark wizards deal with anything that comes near the walls. The flavor is medieval;
 the architecture is a flat, pragmatic set of per-system loops - no central AI
 object, no class hierarchy.
 
@@ -76,23 +76,23 @@ never built. The real commands include `expand`, `queueExpand`, `claim`,
 
 ---
 
-## The Office Layout
+## The Castle Layout
 
 Automatic structure placement (`planning/planner.stamp.ts`,
-`planning/planner.room.ts`) follows a fixed office layout:
+`planning/planner.room.ts`) follows a fixed castle layout:
 
-**THE CORNER OFFICE** - Storage at the heart of the base (where the money is). Terminal, Factory,
+**THE VAULT** - Storage at the heart of the base (where the zen is). Terminal, Factory,
 Power Spawn, Nuker, and Observer sit around it.
 
-**THE HIRING FLOOR** - Spawns placed within the stamp, where new staff are onboarded.
+**THE GREAT HALL** - Spawns placed within the stamp, where new subjects are sworn in.
 
-**THE CUBICLE FARM** - Extensions in concentric rings around the corner office,
+**THE VILLAGE** - Extensions in concentric rings around the vault,
 growing outward as RCL rises.
 
-**SECURITY DESKS** - Towers placed around the corner office (count scales with RCL: 1 at
+**WATCHTOWERS** - Towers placed around the vault (count scales with RCL: 1 at
 RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
 
-**R&D** - Labs clustered so reaction chains stay in range.
+**THE CHAOS MACHINE** - Labs clustered so reaction chains stay in range.
 
 ### Defense layers
 
@@ -101,8 +101,8 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
   observer, containers) so a nuke can't one-shot them.
 - **Defensive perimeter** (`planning/planner.rampart.ts`). At RCL 4+ a **min-cut**
   rampart wall is computed (`services/services.mincut.ts`, max-flow/min-cut on the
-  50x50 grid) to seal the core structures (the core stamp + cubicle-farm extensions,
-  plus the controller when it sits near the corner office) from the room exits with the
+  50x50 grid) to seal the core structures (the core stamp + village extensions,
+  plus the controller when it sits near the vault) from the room exits with the
   *fewest* tiles - concentrating HP on far fewer ramparts than a bounding box. It
   hugs natural walls automatically and re-plans only every ~1500 ticks. If the
   min-cut is degenerate (already sealed by terrain), it falls back to the old
@@ -151,34 +151,34 @@ src/
 |   +-- orchestrator.visuals.ts      # Room visuals
 |   +-- orchestrator.pixels.ts       # Pixel generation
 +-- roles/
-|   +-- role.harvester.ts            # intern - early energy gathering
-|   +-- role.miner.ts                # associate - stationary source miner
-|   +-- role.hauler.ts               # courier - energy logistics
-|   +-- role.filler.ts               # admin - storage -> keep-core distribution (RCL 4+)
-|   +-- role.upgrader.ts             # consultant - controller upgrading
-|   +-- role.builder.ts              # facilities - construction
-|   +-- role.repairer.ts             # helpdesk - structure repair
-|   +-- role.mineral_miner.ts        # procurement - mineral extraction
-|   +-- role.apothecary.ts           # research - lab compound logistics
-|   +-- role.scout.ts                # recruiter - room scouting
-|   +-- role.remote_miner.ts         # freelancer - remote source mining
-|   +-- role.remote_hauler.ts        # logistics - remote energy hauling
-|   +-- role.reserver.ts             # legal - remote room reservation
-|   +-- role.conqueror.ts            # regional - room claiming
-|   +-- role.settler.ts              # onboarding - new-room bootstrap
-|   +-- role.knight.ts               # hr - melee (offense + defense)
-|   +-- role.wizard.ts               # compliance - ranged (offense + defense)
-|   +-- role.cleric.ts               # wellness - healing (offense + defense)
-|   +-- role.sieger.ts               # auditor - boosted dismantler/breacher
+|   +-- role.harvester.ts            # villager - early energy gathering
+|   +-- role.miner.ts                # miner - stationary source miner
+|   +-- role.hauler.ts               # porter - energy logistics
+|   +-- role.filler.ts               # barmaid - storage -> keep-core distribution (RCL 4+)
+|   +-- role.upgrader.ts             # enchanter - controller upgrading
+|   +-- role.builder.ts              # mason - construction
+|   +-- role.repairer.ts             # blacksmith - structure repair
+|   +-- role.mineral_miner.ts        # jeweler - mineral extraction
+|   +-- role.apothecary.ts           # goblin - lab compound logistics
+|   +-- role.scout.ts                # raven - room scouting
+|   +-- role.remote_miner.ts         # wanderer - remote source mining
+|   +-- role.remote_hauler.ts        # merchant - remote energy hauling
+|   +-- role.reserver.ts             # envoy - remote room reservation
+|   +-- role.conqueror.ts            # darklord - room claiming
+|   +-- role.settler.ts              # pilgrim - new-room bootstrap
+|   +-- role.knight.ts               # dragonknight - melee (offense + defense)
+|   +-- role.wizard.ts               # darkwizard - ranged (offense + defense)
+|   +-- role.cleric.ts               # fairyelf - healing (offense + defense)
+|   +-- role.sieger.ts               # ragefighter - boosted dismantler/breacher
 |   +-- role.tower.ts                # tower targeting + safe-mode helpers
 |   +-- role.sk_miner.ts             # Source Keeper room miner
 |   +-- role.sk_hauler.ts            # Source Keeper room hauler
 |   +-- role.sk_guardian.ts          # Source Keeper killer / guardian
-|   +-- role.powerattacker.ts        # downsizer - PowerBank assault
-|   +-- role.powerhealer.ts          # benefits - PowerBank squad healing
-|   +-- role.powercarrier.ts         # treasury - power collection
-|   +-- role.depositminer.ts         # offshore - highway deposit harvesting
-|   +-- role.deposithauler.ts        # shipping - highway deposit hauling
+|   +-- role.powerattacker.ts        # blademaster - PowerBank assault
+|   +-- role.powerhealer.ts          # museelf - PowerBank squad healing
+|   +-- role.powercarrier.ts         # looter - power collection
+|   +-- role.depositminer.ts         # nomad - highway deposit harvesting
+|   +-- role.deposithauler.ts        # caravan - highway deposit hauling
 +-- planning/
 |   +-- planner.stamp.ts             # Core stamp layout generation
 |   +-- planner.room.ts              # Road planning and structure placement
@@ -198,38 +198,38 @@ src/
 
 ## Role-name mapping
 
-The corporate titles map to plain Screeps roles. The left column is what shows up
+The castle titles map to plain Screeps roles. The left column is what shows up
 in creep names and `Game.arca` output; the right is what it does.
 
 | Name | Role file | Responsibility |
 |------|-----------|----------------|
-| **intern** | `role.harvester.ts` | Early energy gathering (phases out once associates are up) |
-| **associate** | `role.miner.ts` | Stationary source miner on a container |
-| **courier** | `role.hauler.ts` | Source -> storage hauling (fills the keep core directly until a admin exists; also borrowed by factory/nuker as a courier) |
-| **admin** | `role.filler.ts` | Distributes storage energy to spawn/extensions/towers; spawned once storage exists (RCL 4+) |
-| **consultant** | `role.upgrader.ts` | Controller upgrading |
-| **facilities** | `role.builder.ts` | Construction |
-| **helpdesk** | `role.repairer.ts` | Structure repair |
-| **procurement** | `role.mineral_miner.ts` | Mineral extraction (RCL 6+) |
-| **research** | `role.apothecary.ts` | Lab reagent/product logistics + boosting |
-| **recruiter** | `role.scout.ts` | Adjacent-room scouting |
-| **freelancer** | `role.remote_miner.ts` | Remote source mining |
-| **logistics** | `role.remote_hauler.ts` | Remote energy hauling |
-| **legal** | `role.reserver.ts` | Remote controller reservation |
-| **regional** | `role.conqueror.ts` | Room claiming |
-| **onboarding** | `role.settler.ts` | New-room bootstrap |
-| **hr** | `role.knight.ts` | Melee (offensive squads + home defense) |
-| **compliance** | `role.wizard.ts` | Ranged kiter (offensive squads + home defense) |
-| **wellness** | `role.cleric.ts` | Healer (offensive squads + home defense) |
-| **auditor** | `role.sieger.ts` | Boosted dismantler / rampart breacher |
-| **downsizer** | `role.powerattacker.ts` | PowerBank assault |
-| **benefits** | `role.powerhealer.ts` | PowerBank squad healing |
-| **treasury** | `role.powercarrier.ts` | Power collection |
-| **offshore** | `role.depositminer.ts` | Highway deposit harvesting (silicon/metal/biomass/mist) |
-| **shipping** | `role.deposithauler.ts` | Highway deposit hauling home |
+| **villager** | `role.harvester.ts` | Early energy gathering (phases out once miners are up) |
+| **miner** | `role.miner.ts` | Stationary source miner on a container |
+| **porter** | `role.hauler.ts` | Source -> storage hauling (fills the keep core directly until a barmaid exists; also borrowed by factory/nuker as a courier) |
+| **barmaid** | `role.filler.ts` | Distributes storage energy to spawn/extensions/towers; spawned once storage exists (RCL 4+) |
+| **enchanter** | `role.upgrader.ts` | Controller upgrading |
+| **mason** | `role.builder.ts` | Construction |
+| **blacksmith** | `role.repairer.ts` | Structure repair |
+| **jeweler** | `role.mineral_miner.ts` | Mineral extraction (RCL 6+) |
+| **goblin** | `role.apothecary.ts` | Lab reagent/product logistics + boosting |
+| **raven** | `role.scout.ts` | Adjacent-room scouting |
+| **wanderer** | `role.remote_miner.ts` | Remote source mining |
+| **merchant** | `role.remote_hauler.ts` | Remote energy hauling |
+| **envoy** | `role.reserver.ts` | Remote controller reservation |
+| **darklord** | `role.conqueror.ts` | Room claiming |
+| **pilgrim** | `role.settler.ts` | New-room bootstrap |
+| **dragonknight** | `role.knight.ts` | Melee (offensive squads + home defense) |
+| **darkwizard** | `role.wizard.ts` | Ranged kiter (offensive squads + home defense) |
+| **fairyelf** | `role.cleric.ts` | Healer (offensive squads + home defense) |
+| **ragefighter** | `role.sieger.ts` | Boosted dismantler / rampart breacher |
+| **blademaster** | `role.powerattacker.ts` | PowerBank assault |
+| **museelf** | `role.powerhealer.ts` | PowerBank squad healing |
+| **looter** | `role.powercarrier.ts` | Power collection |
+| **nomad** | `role.depositminer.ts` | Highway deposit harvesting (silicon/metal/biomass/mist) |
+| **caravan** | `role.deposithauler.ts` | Highway deposit hauling home |
 
-(Source Keeper roles: **overtime** (`role.sk_miner.ts`), **payroll** (`role.sk_hauler.ts`),
-**security** (`role.sk_guardian.ts`). The season-only score chaser is **bizdev** (`role.scoreHunter.ts`).)
+(Source Keeper roles: **delver** (`role.sk_miner.ts`), **packmule** (`role.sk_hauler.ts`),
+**lancer** (`role.sk_guardian.ts`). The season-only score chaser is **seeker** (`role.scoreHunter.ts`).)
 
 ---
 

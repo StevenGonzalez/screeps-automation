@@ -60,7 +60,7 @@ function setup(opts: { full: boolean }) {
   const creep = {
     name: "harvester1",
     room,
-    memory: { role: "intern", working: opts.full, assignedSourceId: "src1" },
+    memory: { role: "villager", working: opts.full, assignedSourceId: "src1" },
     store: {
       energy: opts.full ? 50 : 0,
       getFreeCapacity: () => (opts.full ? 0 : 50),

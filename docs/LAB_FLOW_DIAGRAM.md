@@ -114,7 +114,7 @@
 |  INTEGRATION WITH OTHER SYSTEMS                                     |
 +---------------------------------------------------------------------+
 
-    research (role)                 orchestrator.terminal       military system
+    goblin (role)                   orchestrator.terminal       military system
          |                            |                          |
          +-> Fill input labs          +-> Buy missing minerals  +-> Request boosts
          |    from storage            |    (H, O, X, etc.)      |    for combat creeps

@@ -1,17 +1,17 @@
-// Corporate memos for controller signing. Passive-aggressive, relentlessly polite. Keep under 100 chars.
+// Royal proclamations for controller signing, in the voice of an MU Online castle. Keep under 100 chars.
 export const SIGNATURES: string[] = [
-  "Per my last message, this room has been acquired. Thanks!",
-  "Circling back: this controller now reports to us.",
-  "This room is now a synergy hub. Please update your calendars.",
-  "Friendly reminder: this space is booked through end of quarter.",
-  "We've taken this offline. Happy to sync if you have questions.",
-  "Going forward, please route all harvesting through our team.",
-  "Not sure if you saw my previous email, but this room is ours.",
-  "Excited to announce this room has joined our family of rooms!",
-  "Let's take this conversation offline. Also, the room. We took it.",
-  "Moving forward, this room is aligned with our core values.",
-  "Kindly vacate. There is cake in the break room (there is no cake).",
-  "New hire orientation is at 9am. You are not invited. Thanks!",
+  "By order of the Dark Lord, this land now answers to the castle.",
+  "Traveling merchants welcome. Invaders are not.",
+  "The Castle Siege is over. We won. Please wipe your boots.",
+  "Taxes are due in Zen. Pay at the castle gate.",
+  "Blessed +15 by our enchanters. Do not touch.",
+  "Here be Budge Dragons. And us. Mostly us.",
+  "Our Dragon Knights patrol these walls. Mind your step.",
+  "Lorencia sends its regards. Now leave.",
+  "The Chaos Machine said fail. So did your claim.",
+  "Kundun stirs in the deep. This room is under our protection.",
+  "Trade, barter, pass through. Just don't stay.",
+  "A Dark Wizard lives here. Knock at your own risk.",
 ];
 
 export function pickSignature(roomName: string): string {

@@ -2,14 +2,14 @@
 
 > **Status**: Implemented. `orchestrators/orchestrator.labs.ts` runs full compound
 > production - multi-tier reaction chains, T4 boost auto-production, and creep
-> boosting. Procurement creeps (`role.mineral_miner.ts`) supply the raw minerals; the
-> research creep (`role.apothecary.ts`) ferries reagents into the labs and product out.
+> boosting. Jeweler creeps (`role.mineral_miner.ts`) supply the raw minerals; the
+> goblin (`role.apothecary.ts`, keeper of the Chaos Machine) ferries reagents into the labs and product out.
 
 ---
 
 ## Mineral Supply
 
-**Procurement** creeps (RCL 6+) mine the room's mineral deposit and haul the output
+**Jeweler** creeps (RCL 6+) mine the room's mineral deposit and haul the output
 to storage. Base minerals the room lacks are bought / balanced in by the terminal
 (see [TERMINAL_NETWORK.md](TERMINAL_NETWORK.md)). This is the raw-material feed the
 lab system consumes.
@@ -32,7 +32,7 @@ Per owned room, every tick:
 ### Lab identity
 
 Labs are split by proximity to storage:
-- **2 input labs** - the two closest to storage (easiest for the research creep to
+- **2 input labs** - the two closest to storage (easiest for the goblin to
   load with reagents).
 - **Output labs** - all remaining labs, each running `runReaction()`.
 
