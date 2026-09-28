@@ -13,6 +13,7 @@ import {
   isEnergyEmergency,
   putSurplusEnergyToWork,
 } from "../services/services.creep";
+import { meetIncomingHandoff } from "../services/services.coordination";
 
 export function runBuilder(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
@@ -25,6 +26,7 @@ export function runBuilder(creep: Creep) {
     creep.memory.working = true;
   }
   if (!creep.memory.working) {
+    if (meetIncomingHandoff(creep)) return;
     const acquired = acquireEnergy(creep, { bufferOnly: !!creep.room.storage });
     if (acquired || isCreepEmpty(creep)) return;
     creep.memory.working = true;

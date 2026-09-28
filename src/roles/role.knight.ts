@@ -1,6 +1,7 @@
 import { seekBoost, findInvaderCore } from "../services/services.combat";
 import { isAlly } from "../services/services.allies";
 import { clearRemoteInvader } from "../services/services.creep";
+import { ROLE_CLERIC } from "../config/config.roles";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
 
 const RETREAT_THRESHOLD = 0.2;
@@ -39,10 +40,15 @@ export function runKnight(creep: Creep) {
     return;
   }
 
+  // Fall back to a cleric when one is in the room, since it heals and the
+  // spawn does not; the cleric comes toward us too.
   if (creep.hits < creep.hitsMax * RETREAT_THRESHOLD) {
-    const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
-    if (spawn) {
-      if (!creep.pos.isNearTo(spawn)) creep.moveTo(spawn, { reusePath: 5 });
+    const cleric = creep.pos.findClosestByRange(FIND_MY_CREEPS, {
+      filter: (c) => c.memory.role === ROLE_CLERIC && !c.spawning,
+    });
+    const refuge = cleric ?? creep.room.find(FIND_MY_SPAWNS)[0];
+    if (refuge) {
+      if (!creep.pos.isNearTo(refuge)) creep.moveTo(refuge, { reusePath: 5 });
       return;
     }
   }

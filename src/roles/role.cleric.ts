@@ -1,8 +1,10 @@
 import { seekBoost } from "../services/services.combat";
 import { isAlly } from "../services/services.allies";
+import { ROLE_KNIGHT, ROLE_WIZARD } from "../config/config.roles";
 import { getDefenseOp, getOffensiveOp, runDefensiveCleric, runOffensiveCleric } from "../orchestrators/orchestrator.military";
 
 const SELF_HEAL_THRESHOLD = 0.5;
+const FRONTLINE_ROLES = new Set<string>([ROLE_KNIGHT, ROLE_WIZARD]);
 
 export function runCleric(creep: Creep) {
   const underImmediateThreat = creep.pos
@@ -54,7 +56,9 @@ export function runCleric(creep: Creep) {
     return;
   }
 
-  const target = wounded.reduce((a, b) =>
+  // Fighters come first: they are the ones holding the hostiles off.
+  const fighters = wounded.filter((c) => FRONTLINE_ROLES.has(c.memory.role));
+  const target = (fighters.length > 0 ? fighters : wounded).reduce((a, b) =>
     a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b
   );
 

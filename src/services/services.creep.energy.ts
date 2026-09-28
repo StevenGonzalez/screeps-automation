@@ -6,6 +6,7 @@ import {
   getSafeSources,
   getMinerContainerIds,
 } from "./services.creep.room";
+import { energyClaimedByOthers } from "./services.coordination";
 
 export function findEnergyDepositTarget(
   creep: Creep,
@@ -246,7 +247,7 @@ export function isCreepFull(creep: Creep): boolean {
   return creep.store.getFreeCapacity() === 0;
 }
 
-export function transferEnergyTo(creep: Creep, target: Structure): void {
+export function transferEnergyTo(creep: Creep, target: Structure | Creep): void {
   if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
     creep.moveTo(target, { reusePath: 5 });
   }
@@ -364,6 +365,9 @@ export function findEmptiestTower(room: Room): StructureTower | null {
   );
 }
 
+// Skips anything other creeps are already bringing enough energy to fill, so
+// haulers, the filler and builders spread across the core instead of all
+// walking to the same extension.
 export function findCoreFillTarget(creep: Creep): AnyStoreStructure | null {
   const targets = getRoomStructures(creep.room).filter(
     (s): s is AnyStoreStructure =>
@@ -371,7 +375,7 @@ export function findCoreFillTarget(creep: Creep): AnyStoreStructure | null {
         s.structureType === STRUCTURE_EXTENSION ||
         s.structureType === STRUCTURE_TOWER) &&
       "store" in s &&
-      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > energyClaimedByOthers(s.id, creep)
   );
   if (targets.length === 0) return null;
   return (creep.pos.findClosestByPath(targets, { ignoreCreeps: true }) as AnyStoreStructure | null) ?? null;

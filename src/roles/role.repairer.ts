@@ -9,6 +9,7 @@ import {
   acquireEnergy,
   putSurplusEnergyToWork,
 } from "../services/services.creep";
+import { meetIncomingHandoff } from "../services/services.coordination";
 
 export function runRepairer(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
@@ -22,6 +23,7 @@ export function runRepairer(creep: Creep) {
   }
 
   if (!creep.memory.working) {
+    if (meetIncomingHandoff(creep)) return;
     if (creep.room.storage) {
       acquireEnergy(creep, { bufferOnly: true });
       return;

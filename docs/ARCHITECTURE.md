@@ -191,7 +191,8 @@ src/
     +-- services.mincut.ts           # Min-cut max-flow utility (defensive wall planning)
     +-- services.labs.ts             # Compound stock + reaction-chain helpers
     +-- services.structures.ts       # Structure planning helpers
-    +-- services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache)
+    +-- services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache) + civilian shelter
+    +-- services.coordination.ts     # Per-tick fill-target claims + hauler-to-worker energy handoff
 ```
 
 ---

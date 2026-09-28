@@ -2,8 +2,14 @@ import {
   ROLE_UPGRADER,
   ROLE_HAULER,
   ROLE_REMOTE_HAULER,
+  ROLE_BUILDER,
+  ROLE_FILLER,
+  ROLE_HARVESTER,
+  ROLE_MINER,
+  ROLE_MINERAL_MINER,
+  ROLE_REPAIRER,
 } from "../config/config.roles";
-import { isSourceKeeperRoom } from "./services.combat";
+import { getThreatInfo, isSourceKeeperRoom } from "./services.combat";
 import { isAlly } from "./services.allies";
 
 const STUCK_THRESHOLD = 3;
@@ -261,6 +267,70 @@ function restrictToRoute(creep: Creep, tpos: RoomPosition, opts: MoveToOpts): vo
 
   return originalMoveTo.call(this, target as never, effectiveOpts as never);
 };
+
+// Steps one tile away from every threat, aiming to end at least `range` from
+// each. False when there is nowhere to go, so the caller can carry on instead.
+function fleeFrom(creep: Creep, threats: RoomPosition[], range: number): boolean {
+  const result = PathFinder.search(
+    creep.pos,
+    threats.map((pos) => ({ pos, range })),
+    { flee: true, maxRooms: 1, plainCost: 2, swampCost: 10, roomCallback: roadCostCallback, maxOps: 500 }
+  );
+  const next = result.path[0];
+  if (!next || next.roomName !== creep.pos.roomName) return false;
+  return creep.move(creep.pos.getDirectionTo(next)) === OK;
+}
+
+// Home-economy roles that step away from armed hostiles. Military and remote
+// roles already have their own handling.
+const CIVILIAN_ROLES = new Set<string>([
+  ROLE_HARVESTER,
+  ROLE_MINER,
+  ROLE_HAULER,
+  ROLE_FILLER,
+  ROLE_BUILDER,
+  ROLE_REPAIRER,
+  ROLE_UPGRADER,
+  ROLE_MINERAL_MINER,
+]);
+
+// How close a hostile can get before it can hit us next tick: a ranged hostile
+// steps once and fires at range 3, a melee one steps once and hits adjacent.
+const RANGED_REACH = 4;
+const MELEE_REACH = 2;
+// How far a sheltering creep backs off.
+const SHELTER_DISTANCE = 6;
+
+/**
+ * Moves a civilian out of reach of any armed hostile that could hit it next
+ * tick. A creep standing on one of our ramparts stays put. Returns true when
+ * the creep spent its tick moving away.
+ */
+export function shelterFromHostiles(creep: Creep): boolean {
+  if (!CIVILIAN_ROLES.has(creep.memory.role)) return false;
+  const { hostiles } = getThreatInfo(creep.room);
+  if (hostiles.length === 0) return false;
+  if (creep.room.controller?.my && creep.room.controller.safeMode) return false;
+
+  const threats: RoomPosition[] = [];
+  for (const h of hostiles) {
+    const reach =
+      h.getActiveBodyparts(RANGED_ATTACK) > 0
+        ? RANGED_REACH
+        : h.getActiveBodyparts(ATTACK) > 0
+          ? MELEE_REACH
+          : 0;
+    if (reach > 0 && creep.pos.inRangeTo(h.pos, reach)) threats.push(h.pos);
+  }
+  if (threats.length === 0) return false;
+
+  const onRampart = creep.pos
+    .lookFor(LOOK_STRUCTURES)
+    .some((s) => s.structureType === STRUCTURE_RAMPART && (s as StructureRampart).my);
+  if (onRampart) return false;
+
+  return fleeFrom(creep, threats, SHELTER_DISTANCE);
+}
 
 interface ShoveReq {
   stuck: Creep;

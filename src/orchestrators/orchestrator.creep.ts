@@ -60,7 +60,7 @@ import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
 import { runScoreHunter } from "../roles/role.scoreHunter";
 import { runUnclaimer } from "../roles/role.unclaimer";
-import { resolveTraffic } from "../services/services.movement";
+import { resolveTraffic, shelterFromHostiles } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 
 const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
@@ -140,9 +140,9 @@ export function loop() {
       try {
         if (profile) {
           const start = Game.cpu.getUsed();
-          handler(creep);
+          if (!shelterFromHostiles(creep)) handler(creep);
           recordRole(creep.memory.role, Game.cpu.getUsed() - start);
-        } else {
+        } else if (!shelterFromHostiles(creep)) {
           handler(creep);
         }
         maybeChatter(creep);

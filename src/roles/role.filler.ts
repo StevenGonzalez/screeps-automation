@@ -5,6 +5,7 @@ import {
 } from "../services/services.creep";
 import { getThreatInfo } from "../services/services.combat";
 import { findRelayLink } from "../orchestrators/orchestrator.links";
+import { setFillTarget } from "../services/services.coordination";
 
 // Power spawn upkeep, done only once spawns/extensions/towers are full.
 const POWER_SPAWN_POWER_LOW = 50;
@@ -117,10 +118,10 @@ function getCoreFillTarget(creep: Creep): AnyStoreStructure | null {
     ) {
       return cached;
     }
-    creep.memory.fillTargetId = undefined;
+    setFillTarget(creep, undefined);
   }
   const target = findCoreFillTarget(creep);
-  if (target) creep.memory.fillTargetId = target.id;
+  if (target) setFillTarget(creep, target.id);
   return target;
 }
 

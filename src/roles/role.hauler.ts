@@ -16,6 +16,10 @@ import {
 } from "../services/services.creep";
 import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
+import { findHandoffTarget, setFillTarget } from "../services/services.coordination";
+
+// How far a hauler detours to hand energy to a worker before banking it.
+const HANDOFF_RANGE = 10;
 
 let fillerCheckTick = -1;
 const roomHasFiller: Record<string, boolean> = {};
@@ -63,7 +67,7 @@ export function runHauler(creep: Creep) {
   }
 
   if (!creep.memory.working) {
-    creep.memory.fillTargetId = undefined;
+    setFillTarget(creep, undefined);
     if (collectEnergy(creep, storageModel)) return;
     if (creep.store[RESOURCE_ENERGY] === 0) return;
     creep.memory.working = true;
@@ -72,7 +76,7 @@ export function runHauler(creep: Creep) {
   if (getThreatInfo(creep.room).hostiles.length > 0) {
     const tower = findEmptiestTower(creep.room);
     if (tower) {
-      creep.memory.fillTargetId = tower.id;
+      setFillTarget(creep, tower.id);
       transferEnergyTo(creep, tower);
       return;
     }
@@ -81,16 +85,22 @@ export function runHauler(creep: Creep) {
   if (!storageModel || creep.memory.coreRelief) {
     if (creep.memory.fillTargetId) {
       const cached = Game.getObjectById(creep.memory.fillTargetId as Id<AnyStoreStructure>) as AnyStoreStructure | null;
-      if (cached && "store" in cached && cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+      // A cached worker handoff is re-checked below, not here.
+      if (
+        cached &&
+        "structureType" in cached &&
+        "store" in cached &&
+        cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      ) {
         transferEnergyTo(creep, cached as Structure);
         return;
       }
-      creep.memory.fillTargetId = undefined;
+      setFillTarget(creep, undefined);
     }
 
     const coreTarget = findCoreFillTarget(creep);
     if (coreTarget) {
-      creep.memory.fillTargetId = coreTarget.id;
+      setFillTarget(creep, coreTarget.id);
       transferEnergyTo(creep, coreTarget);
       return;
     }
@@ -101,17 +111,35 @@ export function runHauler(creep: Creep) {
     const termId = creep.room.memory.terminalId;
     const terminal = termId ? (Game.getObjectById(termId) as StructureTerminal | null) : null;
     if (terminal && (terminal.store[RESOURCE_ENERGY] ?? 0) < pending.loadTarget) {
-      creep.memory.fillTargetId = terminal.id;
+      setFillTarget(creep, terminal.id);
       transferEnergyTo(creep, terminal);
       return;
     }
   }
 
+  // A builder or repairer out of energy close by gets it straight from us,
+  // saving it the walk to storage and back.
+  const handoff = findHandoffTarget(creep, HANDOFF_RANGE);
+  if (handoff) {
+    setFillTarget(creep, handoff.id);
+    transferEnergyTo(creep, handoff);
+    return;
+  }
+
   const depositTarget = findDepositTargetExcludingMiner(creep);
   if (depositTarget) {
-    creep.memory.fillTargetId = depositTarget.id;
+    setFillTarget(creep, depositTarget.id);
     if (Memory.debugHaulers === creep.room.name) debugDeposit(creep, depositTarget);
     transferEnergyTo(creep, depositTarget);
+    return;
+  }
+
+  // Nothing to deposit, so any worker in the room that needs energy is worth
+  // the walk.
+  const farHandoff = findHandoffTarget(creep, Infinity);
+  if (farHandoff) {
+    setFillTarget(creep, farHandoff.id);
+    transferEnergyTo(creep, farHandoff);
     return;
   }
 
