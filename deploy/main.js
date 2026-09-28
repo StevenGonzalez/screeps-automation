@@ -3134,8 +3134,8 @@ const REACTION_RECIPES = {
     XGH2O: ['GH2O', 'X'],
     XGHO2: ['GHO2', 'X'],
 };
-function resolveChain(compound, amount, storage) {
-    var _a, _b, _c, _d;
+function resolveChain(compound, amount, room) {
+    var _a, _b, _c;
     const post = [];
     const visited = new Set();
     function dfs(c) {
@@ -3152,14 +3152,14 @@ function resolveChain(compound, amount, storage) {
     const netNeed = new Map();
     for (let i = post.length - 1; i >= 0; i--) {
         const c = post[i];
-        const have = (_a = storage === null || storage === void 0 ? void 0 : storage.store.getUsedCapacity(c)) !== null && _a !== void 0 ? _a : 0;
-        const net = Math.max(0, ((_b = grossNeed.get(c)) !== null && _b !== void 0 ? _b : 0) - have);
+        const have = room ? getStockForCompound(c, room) : 0;
+        const net = Math.max(0, ((_a = grossNeed.get(c)) !== null && _a !== void 0 ? _a : 0) - have);
         if (net <= 0)
             continue;
         netNeed.set(c, net);
         const [a, b] = REACTION_RECIPES[c];
-        grossNeed.set(a, ((_c = grossNeed.get(a)) !== null && _c !== void 0 ? _c : 0) + net);
-        grossNeed.set(b, ((_d = grossNeed.get(b)) !== null && _d !== void 0 ? _d : 0) + net);
+        grossNeed.set(a, ((_b = grossNeed.get(a)) !== null && _b !== void 0 ? _b : 0) + net);
+        grossNeed.set(b, ((_c = grossNeed.get(b)) !== null && _c !== void 0 ? _c : 0) + net);
     }
     const result = [];
     for (const c of post) {
@@ -3221,24 +3221,54 @@ function getStockForCompound(compound, room) {
     return (((_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store.getUsedCapacity(rc)) !== null && _b !== void 0 ? _b : 0) +
         ((_d = (_c = room.terminal) === null || _c === void 0 ? void 0 : _c.store.getUsedCapacity(rc)) !== null && _d !== void 0 ? _d : 0));
 }
-function getStorageStockForCompound(compound, room) {
-    var _a, _b;
-    return (_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store.getUsedCapacity(compound)) !== null && _b !== void 0 ? _b : 0;
-}
 const BASE_MINERAL_SET = new Set(["H", "O", "U", "L", "K", "Z", "X"]);
-function queuedBaseMineralNeed(queue) {
-    var _a;
+function queuedBaseMineralNeed(queue, producedOnFirst = 0) {
     const need = new Map();
-    for (const entry of queue) {
+    queue.forEach((entry, i) => {
+        var _a;
         const recipe = REACTION_RECIPES[entry.compound];
         if (!recipe)
-            continue;
+            return;
+        const amount = i === 0 ? Math.max(0, entry.amount - producedOnFirst) : entry.amount;
         for (const input of recipe) {
             if (BASE_MINERAL_SET.has(input))
-                need.set(input, ((_a = need.get(input)) !== null && _a !== void 0 ? _a : 0) + entry.amount);
+                need.set(input, ((_a = need.get(input)) !== null && _a !== void 0 ? _a : 0) + amount);
         }
-    }
+    });
     return need;
+}
+function labMineralNeed(room) {
+    var _a, _b;
+    const ls = room.memory.labSystem;
+    return queuedBaseMineralNeed((_a = ls === null || ls === void 0 ? void 0 : ls.queue) !== null && _a !== void 0 ? _a : [], (ls === null || ls === void 0 ? void 0 : ls.activeCompound) ? (_b = ls.lastProduced) !== null && _b !== void 0 ? _b : 0 : 0);
+}
+function labInputStock(room, resource) {
+    var _a, _b, _c;
+    let total = getStockForCompound(resource, room);
+    for (const id of (_b = (_a = room.memory.labSystem) === null || _a === void 0 ? void 0 : _a.inputLabIds) !== null && _b !== void 0 ? _b : []) {
+        const lab = Game.getObjectById(id);
+        total += (_c = lab === null || lab === void 0 ? void 0 : lab.store.getUsedCapacity(resource)) !== null && _c !== void 0 ? _c : 0;
+    }
+    return total;
+}
+function incomingSends(room, resource) {
+    var _a;
+    let total = 0;
+    for (const name in Game.rooms) {
+        const pending = (_a = Game.rooms[name].memory) === null || _a === void 0 ? void 0 : _a.pendingSend;
+        if (pending && pending.to === room.name && pending.resource === resource)
+            total += pending.amount;
+    }
+    return total;
+}
+function labMineralShortfall(room) {
+    const shortfall = new Map();
+    for (const [mineral, need] of labMineralNeed(room)) {
+        const missing = need - labInputStock(room, mineral) - incomingSends(room, mineral);
+        if (missing > 0)
+            shortfall.set(mineral, missing);
+    }
+    return shortfall;
 }
 
 const TERMINAL_CONFIG = {
@@ -3251,10 +3281,10 @@ const TERMINAL_CONFIG = {
 };
 const BUY_CONFIG = {
     INTERVAL: 500,
-    MIN_STOCK: 500,
+    RETRY_AFTER_DEAL: 20,
     TARGET_STOCK: 3000,
     MAX_PRICE_RATIO: 1.2,
-    MAX_AMOUNT: 1000,
+    MAX_AMOUNT: 5000,
     MIN_AMOUNT: 100,
     MAX_ENERGY_COST_RATIO: 0.3,
 };
@@ -3273,7 +3303,7 @@ const NETWORK_CONFIG = {
     ENERGY_TRANSFER_AMOUNT: 30000,
     ENERGY_MAX_TRANSFERS_PER_PASS: 4,
     MINERAL_SURPLUS_THRESHOLD: 2000,
-    MINERAL_TRANSFER_AMOUNT: 1000,
+    MINERAL_TRANSFER_AMOUNT: 3000,
     MAX_DISTANCE: 10,
 };
 const MARKET_MAKER_CONFIG = {
@@ -3377,12 +3407,12 @@ function processTerminal(room) {
         }
     }
     if ((_b = (_a = room.memory.labSystem) === null || _a === void 0 ? void 0 : _a.inputLabIds) === null || _b === void 0 ? void 0 : _b.length) {
-        const lastBuy = (_c = room.memory.lastMarketBuyTick) !== null && _c !== void 0 ? _c : 0;
-        if (Game.time - lastBuy >= BUY_CONFIG.INTERVAL) {
-            if (buyMissingMinerals(room, terminal)) {
-                room.memory.lastMarketBuyTick = Game.time;
+        if (Game.time >= ((_c = room.memory.nextMarketBuyTick) !== null && _c !== void 0 ? _c : 0)) {
+            const bought = buyMissingMinerals(room, terminal);
+            room.memory.nextMarketBuyTick =
+                Game.time + (bought ? BUY_CONFIG.RETRY_AFTER_DEAL : BUY_CONFIG.INTERVAL);
+            if (bought)
                 return;
-            }
         }
     }
     const lastGBuy = (_d = room.memory.lastGhodiumBuyTick) !== null && _d !== void 0 ? _d : 0;
@@ -3412,12 +3442,13 @@ function processTerminal(room) {
     }
 }
 function sellableMineral(room, terminal, mineralType) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const inTerminal = (_a = terminal.store.getUsedCapacity(mineralType)) !== null && _a !== void 0 ? _a : 0;
     const pending = room.memory.pendingSend;
     const reserved = (pending === null || pending === void 0 ? void 0 : pending.resource) === mineralType ? pending.loadTarget : 0;
     const total = ((_c = (_b = room.storage) === null || _b === void 0 ? void 0 : _b.store.getUsedCapacity(mineralType)) !== null && _c !== void 0 ? _c : 0) + inTerminal;
-    return Math.max(0, Math.min(inTerminal - reserved, total - MINERAL_LAB_RESERVE));
+    const keep = Math.max(MINERAL_LAB_RESERVE, (_d = labMineralNeed(room).get(mineralType)) !== null && _d !== void 0 ? _d : 0);
+    return Math.max(0, Math.min(inTerminal - reserved, total - keep));
 }
 function ghodiumTarget(room) {
     var _a, _b;
@@ -3559,37 +3590,42 @@ function planEnergyTransfers(infos) {
     }
 }
 function planMineralTransfers(infos) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b;
     for (const receiver of infos) {
         if (receiver.room.memory.pendingSend)
             continue;
         if (!((_b = (_a = receiver.room.memory.labSystem) === null || _a === void 0 ? void 0 : _a.inputLabIds) === null || _b === void 0 ? void 0 : _b.length))
             continue;
-        for (const mineral of BASE_MINERALS) {
-            const rc = mineral;
-            const receiverStock = ((_d = (_c = receiver.room.storage) === null || _c === void 0 ? void 0 : _c.store.getUsedCapacity(rc)) !== null && _d !== void 0 ? _d : 0) +
-                ((_e = receiver.terminal.store.getUsedCapacity(rc)) !== null && _e !== void 0 ? _e : 0);
-            if (receiverStock >= BUY_CONFIG.MIN_STOCK)
+        for (const [mineral, missing] of labMineralShortfall(receiver.room)) {
+            if (missing < BUY_CONFIG.MIN_AMOUNT)
                 continue;
-            const amount = Math.min(BUY_CONFIG.TARGET_STOCK - receiverStock, NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT);
-            const donor = infos.find((d) => {
-                var _a, _b, _c;
-                if (d.room.name === receiver.room.name || d.room.memory.pendingSend)
-                    return false;
-                const dist = Game.map.getRoomLinearDistance(d.room.name, receiver.room.name);
-                if (dist > NETWORK_CONFIG.MAX_DISTANCE)
-                    return false;
-                const donorStock = ((_b = (_a = d.room.storage) === null || _a === void 0 ? void 0 : _a.store.getUsedCapacity(rc)) !== null && _b !== void 0 ? _b : 0) +
-                    ((_c = d.terminal.store.getUsedCapacity(rc)) !== null && _c !== void 0 ? _c : 0);
-                return donorStock >= NETWORK_CONFIG.MINERAL_SURPLUS_THRESHOLD + amount;
-            });
+            const amount = Math.min(missing, NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT);
+            const donor = findMineralDonor(receiver.room, mineral, amount);
             if (!donor)
                 continue;
-            donor.room.memory.pendingSend = { resource: mineral, amount, loadTarget: amount, to: receiver.room.name };
-            console.log(`[Network] Planned: ${amount} ${mineral} ${donor.room.name}->${receiver.room.name}`);
+            donor.memory.pendingSend = { resource: mineral, amount, loadTarget: amount, to: receiver.room.name };
+            console.log(`[Network] Planned: ${amount} ${mineral} ${donor.name}->${receiver.room.name}`);
             break;
         }
     }
+}
+function findMineralDonor(receiver, mineral, amount) {
+    var _a, _b, _c, _d, _e;
+    for (const name in Game.rooms) {
+        const donor = Game.rooms[name];
+        if (donor.name === receiver.name || !((_a = donor.controller) === null || _a === void 0 ? void 0 : _a.my) || !donor.terminal)
+            continue;
+        if (donor.memory.pendingSend)
+            continue;
+        if (Game.map.getRoomLinearDistance(donor.name, receiver.name) > NETWORK_CONFIG.MAX_DISTANCE)
+            continue;
+        const stock = ((_c = (_b = donor.storage) === null || _b === void 0 ? void 0 : _b.store.getUsedCapacity(mineral)) !== null && _c !== void 0 ? _c : 0) +
+            ((_d = donor.terminal.store.getUsedCapacity(mineral)) !== null && _d !== void 0 ? _d : 0);
+        const ownNeed = (_e = labMineralNeed(donor).get(mineral)) !== null && _e !== void 0 ? _e : 0;
+        if (stock - ownNeed - NETWORK_CONFIG.MINERAL_SURPLUS_THRESHOLD >= amount)
+            return donor;
+    }
+    return undefined;
 }
 function planGhodiumTransfers(infos) {
     for (const receiver of infos) {
@@ -3762,14 +3798,13 @@ function feedsLocalRecipe(room, resource) {
     return false;
 }
 function buyMissingMinerals(room, terminal) {
-    var _a, _b, _c, _d, _e;
-    const storage = room.storage;
-    const need = queuedBaseMineralNeed((_b = (_a = room.memory.labSystem) === null || _a === void 0 ? void 0 : _a.queue) !== null && _b !== void 0 ? _b : []);
+    var _a;
+    const shortfall = labMineralShortfall(room);
     for (const mineral of BASE_MINERALS) {
-        const stock = ((_c = storage === null || storage === void 0 ? void 0 : storage.store.getUsedCapacity(mineral)) !== null && _c !== void 0 ? _c : 0) +
-            ((_d = terminal.store.getUsedCapacity(mineral)) !== null && _d !== void 0 ? _d : 0);
-        const needed = ((_e = need.get(mineral)) !== null && _e !== void 0 ? _e : 0) - stock;
+        const needed = (_a = shortfall.get(mineral)) !== null && _a !== void 0 ? _a : 0;
         if (needed < BUY_CONFIG.MIN_AMOUNT)
+            continue;
+        if (findMineralDonor(room, mineral, Math.min(needed, NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT)))
             continue;
         const avg = getMarketHistoryAvg(mineral);
         if (avg === undefined)
@@ -3791,7 +3826,7 @@ function buyMissingMinerals(room, terminal) {
             continue;
         const result = Game.market.deal(best.id, amount, room.name);
         if (result === OK) {
-            console.log(`[Terminal] ${room.name}: Bought ${amount} ${mineral} @ ${best.price.toFixed(2)} (stock was ${stock})`);
+            console.log(`[Terminal] ${room.name}: Bought ${amount} ${mineral} @ ${best.price.toFixed(2)} for labs (short ${needed})`);
             return true;
         }
     }
@@ -9375,6 +9410,9 @@ function loop$d() {
 }
 
 const LAB_STALL_TIMEOUT = 200;
+const LAB_SUPPLY_WAIT_TIMEOUT = 3000;
+const SUPPLIED_INPUTS = new Set(["H", "O", "U", "L", "K", "Z", "X", "G"]);
+const REACTION_INPUT_MIN = 5;
 const LAB_PLAN_INTERVAL = 100;
 const AUTO_PRODUCTION_TARGETS = {
     XUH2O: 3000,
@@ -9479,9 +9517,9 @@ function processLabSystem(room) {
         ls.lastProduced = produced;
         ls.lastProgressTick = Game.time;
     }
-    else if (Game.time - ((_d = ls.lastProgressTick) !== null && _d !== void 0 ? _d : Game.time) > LAB_STALL_TIMEOUT) {
+    else if (Game.time - ((_d = ls.lastProgressTick) !== null && _d !== void 0 ? _d : Game.time) > stallTimeout(room, ls.inputCompounds)) {
         console.log(`[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
-            `${LAB_STALL_TIMEOUT} ticks) - aborting and advancing queue.`);
+            `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`);
         ls.queue.shift();
         delete ls.activeCompound;
         delete ls.inputCompounds;
@@ -9505,6 +9543,10 @@ function processLabSystem(room) {
             outputLab.runReaction(inputLabs[0], inputLabs[1]);
         }
     }
+}
+function stallTimeout(room, inputs) {
+    const awaitingSupply = inputs.some((c) => SUPPLIED_INPUTS.has(c) && labInputStock(room, c) < REACTION_INPUT_MIN);
+    return awaitingSupply ? LAB_SUPPLY_WAIT_TIMEOUT : LAB_STALL_TIMEOUT;
 }
 function producedStock(compound, room, outputLabs) {
     var _a, _b, _c;
@@ -9540,12 +9582,11 @@ function refreshLabIdentity(room) {
     ls.outputLabIds = labs.filter((l) => !inputIds.has(l.id)).map((l) => l.id);
 }
 function planAutoProduction(room) {
-    var _a;
     const ls = room.memory.labSystem;
     for (const [compound, target] of Object.entries(AUTO_PRODUCTION_TARGETS)) {
-        const stock = getStorageStockForCompound(compound, room);
+        const stock = getStockForCompound(compound, room);
         if (stock < target) {
-            const chain = resolveChain(compound, target, (_a = room.storage) !== null && _a !== void 0 ? _a : null);
+            const chain = resolveChain(compound, target, room);
             if (chain.length > 0) {
                 ls.queue.push(...chain);
                 return;
@@ -16991,7 +17032,6 @@ function setupConsole() {
                 console.log("[Labs] No owned rooms found");
         },
         produce: (compound, amount, roomName) => {
-            var _a;
             if (!compound || !amount) {
                 console.log("[Labs] Usage: Game.arca.produce('XGH2O', 3000)  or  Game.arca.produce('XGH2O', 3000, 'W1N1')");
                 return;
@@ -17004,7 +17044,7 @@ function setupConsole() {
             const room = candidates[0];
             if (!room.memory.labSystem)
                 room.memory.labSystem = { queue: [] };
-            const chain = resolveChain(compound, amount, (_a = room.storage) !== null && _a !== void 0 ? _a : null);
+            const chain = resolveChain(compound, amount, room);
             if (chain.length === 0) {
                 console.log(`[Labs] ${room.name}: Nothing to queue - stock may already be sufficient`);
                 return;
