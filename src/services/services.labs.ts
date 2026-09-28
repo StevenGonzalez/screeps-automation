@@ -38,7 +38,7 @@ export const REACTION_RECIPES: Record<string, [string, string]> = {
 export function resolveChain(
   compound: string,
   amount: number,
-  storage: StructureStorage | null
+  room: Room | null
 ): LabQueueEntry[] {
   const post: string[] = [];
   const visited = new Set<string>();
@@ -56,7 +56,7 @@ export function resolveChain(
   const netNeed = new Map<string, number>();
   for (let i = post.length - 1; i >= 0; i--) {
     const c = post[i];
-    const have = storage?.store.getUsedCapacity(c as ResourceConstant) ?? 0;
+    const have = room ? getStockForCompound(c, room) : 0;
     const net = Math.max(0, (grossNeed.get(c) ?? 0) - have);
     if (net <= 0) continue;
     netNeed.set(c, net);
@@ -130,22 +130,59 @@ export function getStockForCompound(compound: string, room: Room): number {
   );
 }
 
-export function getStorageStockForCompound(compound: string, room: Room): number {
-  return room.storage?.store.getUsedCapacity(compound as ResourceConstant) ?? 0;
-}
-
 const BASE_MINERAL_SET = new Set<string>(["H", "O", "U", "L", "K", "Z", "X"]);
 
 // Base minerals the queued reactions will consume, summed per mineral. Queue
 // entries are already net of stock on hand, so this is what the labs still need.
-export function queuedBaseMineralNeed(queue: LabQueueEntry[]): Map<string, number> {
+// `producedOnFirst` is what the running reaction (always queue[0]) has made.
+export function queuedBaseMineralNeed(
+  queue: LabQueueEntry[],
+  producedOnFirst = 0
+): Map<string, number> {
   const need = new Map<string, number>();
-  for (const entry of queue) {
+  queue.forEach((entry, i) => {
     const recipe = REACTION_RECIPES[entry.compound];
-    if (!recipe) continue;
+    if (!recipe) return;
+    const amount = i === 0 ? Math.max(0, entry.amount - producedOnFirst) : entry.amount;
     for (const input of recipe) {
-      if (BASE_MINERAL_SET.has(input)) need.set(input, (need.get(input) ?? 0) + entry.amount);
+      if (BASE_MINERAL_SET.has(input)) need.set(input, (need.get(input) ?? 0) + amount);
     }
-  }
+  });
   return need;
+}
+
+/** Base minerals this room's lab queue still has to consume. */
+export function labMineralNeed(room: Room): Map<string, number> {
+  const ls = room.memory.labSystem;
+  return queuedBaseMineralNeed(ls?.queue ?? [], ls?.activeCompound ? ls.lastProduced ?? 0 : 0);
+}
+
+/** A lab input held in the room: storage, terminal and the input labs. */
+export function labInputStock(room: Room, resource: string): number {
+  let total = getStockForCompound(resource, room);
+  for (const id of room.memory.labSystem?.inputLabIds ?? []) {
+    const lab = Game.getObjectById(id) as StructureLab | null;
+    total += lab?.store.getUsedCapacity(resource as ResourceConstant) ?? 0;
+  }
+  return total;
+}
+
+/** Queued terminal sends from our other rooms to `room` of `resource`. */
+export function incomingSends(room: Room, resource: string): number {
+  let total = 0;
+  for (const name in Game.rooms) {
+    const pending = Game.rooms[name].memory?.pendingSend;
+    if (pending && pending.to === room.name && pending.resource === resource) total += pending.amount;
+  }
+  return total;
+}
+
+/** Base minerals the lab queue needs beyond what the room holds or has on the way. */
+export function labMineralShortfall(room: Room): Map<string, number> {
+  const shortfall = new Map<string, number>();
+  for (const [mineral, need] of labMineralNeed(room)) {
+    const missing = need - labInputStock(room, mineral) - incomingSends(room, mineral);
+    if (missing > 0) shortfall.set(mineral, missing);
+  }
+  return shortfall;
 }

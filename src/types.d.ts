@@ -270,7 +270,7 @@ declare global {
     controllerLinkScanTick?: number;
     lastTowerTargetId?: Id<Creep>;
     labSystem?: LabSystemMemory;
-    lastMarketBuyTick?: number;
+    nextMarketBuyTick?: number;
     lastGhodiumBuyTick?: number;
     lastCommoditySaleTick?: number;
     pendingSend?: PendingTerminalSend;

@@ -1,6 +1,6 @@
 import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
 import { MANAGED_COMMODITIES } from "../config/config.factory";
-import { queuedBaseMineralNeed } from "../services/services.labs";
+import { labMineralNeed, labMineralShortfall } from "../services/services.labs";
 
 declare global {
   interface Memory {
@@ -23,12 +23,14 @@ const TERMINAL_CONFIG = {
 };
 
 const BUY_CONFIG = {
+  // Wait between checks when nothing needed buying; after a deal, check again
+  // soon so a large shortfall is bought over a few deals, not a few thousand ticks.
   INTERVAL: 500,
-  MIN_STOCK: 500,
+  RETRY_AFTER_DEAL: 20,
   TARGET_STOCK: 3000,
   // Pay at most this multiple of the history average for a base mineral.
   MAX_PRICE_RATIO: 1.2,
-  MAX_AMOUNT: 1000,
+  MAX_AMOUNT: 5000,
   MIN_AMOUNT: 100,
   // Skip sellers so far away that the energy fee exceeds this share of the amount.
   MAX_ENERGY_COST_RATIO: 0.3,
@@ -53,7 +55,7 @@ const NETWORK_CONFIG = {
   ENERGY_TRANSFER_AMOUNT: 30_000,
   ENERGY_MAX_TRANSFERS_PER_PASS: 4,
   MINERAL_SURPLUS_THRESHOLD: 2_000,
-  MINERAL_TRANSFER_AMOUNT: 1_000,
+  MINERAL_TRANSFER_AMOUNT: 3_000,
   MAX_DISTANCE: 10,
 };
 
@@ -166,12 +168,11 @@ function processTerminal(room: Room): void {
   }
 
   if (room.memory.labSystem?.inputLabIds?.length) {
-    const lastBuy = room.memory.lastMarketBuyTick ?? 0;
-    if (Game.time - lastBuy >= BUY_CONFIG.INTERVAL) {
-      if (buyMissingMinerals(room, terminal)) {
-        room.memory.lastMarketBuyTick = Game.time;
-        return;
-      }
+    if (Game.time >= (room.memory.nextMarketBuyTick ?? 0)) {
+      const bought = buyMissingMinerals(room, terminal);
+      room.memory.nextMarketBuyTick =
+        Game.time + (bought ? BUY_CONFIG.RETRY_AFTER_DEAL : BUY_CONFIG.INTERVAL);
+      if (bought) return;
     }
   }
 
@@ -207,7 +208,8 @@ function processTerminal(room: Room): void {
 /**
  * Terminal stock of the room's own mineral that may be sold: what is in the
  * terminal beyond any pending send, and never eating into the lab reserve
- * across storage and terminal combined.
+ * across storage and terminal combined. The reserve grows to cover the lab
+ * queue when that needs more.
  */
 export function sellableMineral(
   room: Room,
@@ -218,7 +220,8 @@ export function sellableMineral(
   const pending = room.memory.pendingSend;
   const reserved = pending?.resource === mineralType ? pending.loadTarget : 0;
   const total = (room.storage?.store.getUsedCapacity(mineralType) ?? 0) + inTerminal;
-  return Math.max(0, Math.min(inTerminal - reserved, total - MINERAL_LAB_RESERVE));
+  const keep = Math.max(MINERAL_LAB_RESERVE, labMineralNeed(room).get(mineralType) ?? 0);
+  return Math.max(0, Math.min(inTerminal - reserved, total - keep));
 }
 
 function ghodiumTarget(room: Room): number {
@@ -391,36 +394,36 @@ function planMineralTransfers(infos: Array<{ room: Room; terminal: StructureTerm
     if (receiver.room.memory.pendingSend) continue;
     if (!receiver.room.memory.labSystem?.inputLabIds?.length) continue;
 
-    for (const mineral of BASE_MINERALS) {
-      const rc = mineral as ResourceConstant;
-      const receiverStock =
-        (receiver.room.storage?.store.getUsedCapacity(rc) ?? 0) +
-        (receiver.terminal.store.getUsedCapacity(rc) ?? 0);
-
-      if (receiverStock >= BUY_CONFIG.MIN_STOCK) continue;
-
-      const amount = Math.min(
-        BUY_CONFIG.TARGET_STOCK - receiverStock,
-        NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT
-      );
-
-      const donor = infos.find((d) => {
-        if (d.room.name === receiver.room.name || d.room.memory.pendingSend) return false;
-        const dist = Game.map.getRoomLinearDistance(d.room.name, receiver.room.name);
-        if (dist > NETWORK_CONFIG.MAX_DISTANCE) return false;
-        const donorStock =
-          (d.room.storage?.store.getUsedCapacity(rc) ?? 0) +
-          (d.terminal.store.getUsedCapacity(rc) ?? 0);
-        return donorStock >= NETWORK_CONFIG.MINERAL_SURPLUS_THRESHOLD + amount;
-      });
-
+    for (const [mineral, missing] of labMineralShortfall(receiver.room)) {
+      if (missing < BUY_CONFIG.MIN_AMOUNT) continue;
+      const amount = Math.min(missing, NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT);
+      const donor = findMineralDonor(receiver.room, mineral as MineralConstant, amount);
       if (!donor) continue;
 
-      donor.room.memory.pendingSend = { resource: mineral, amount, loadTarget: amount, to: receiver.room.name };
-      console.log(`[Network] Planned: ${amount} ${mineral} ${donor.room.name}->${receiver.room.name}`);
+      donor.memory.pendingSend = { resource: mineral, amount, loadTarget: amount, to: receiver.room.name };
+      console.log(`[Network] Planned: ${amount} ${mineral} ${donor.name}->${receiver.room.name}`);
       break;
     }
   }
+}
+
+/**
+ * One of our rooms that can send `amount` of `mineral` to `receiver` without
+ * cutting into what its own lab queue needs.
+ */
+function findMineralDonor(receiver: Room, mineral: MineralConstant, amount: number): Room | undefined {
+  for (const name in Game.rooms) {
+    const donor = Game.rooms[name];
+    if (donor.name === receiver.name || !donor.controller?.my || !donor.terminal) continue;
+    if (donor.memory.pendingSend) continue;
+    if (Game.map.getRoomLinearDistance(donor.name, receiver.name) > NETWORK_CONFIG.MAX_DISTANCE) continue;
+    const stock =
+      (donor.storage?.store.getUsedCapacity(mineral) ?? 0) +
+      (donor.terminal.store.getUsedCapacity(mineral) ?? 0);
+    const ownNeed = labMineralNeed(donor).get(mineral) ?? 0;
+    if (stock - ownNeed - NETWORK_CONFIG.MINERAL_SURPLUS_THRESHOLD >= amount) return donor;
+  }
+  return undefined;
 }
 
 function planGhodiumTransfers(
@@ -629,14 +632,12 @@ export function feedsLocalRecipe(room: Room, resource: ResourceConstant): boolea
 }
 
 function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
-  const storage = room.storage;
-  const need = queuedBaseMineralNeed(room.memory.labSystem?.queue ?? []);
+  const shortfall = labMineralShortfall(room);
   for (const mineral of BASE_MINERALS) {
-    const stock =
-      (storage?.store.getUsedCapacity(mineral) ?? 0) +
-      (terminal.store.getUsedCapacity(mineral) ?? 0);
-    const needed = (need.get(mineral) ?? 0) - stock;
+    const needed = shortfall.get(mineral) ?? 0;
     if (needed < BUY_CONFIG.MIN_AMOUNT) continue;
+    // Another of our rooms has it to spare: the network will send it for free.
+    if (findMineralDonor(room, mineral, Math.min(needed, NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT))) continue;
 
     const avg = getMarketHistoryAvg(mineral);
     if (avg === undefined) continue;
@@ -663,7 +664,7 @@ function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
     const result = Game.market.deal(best.id, amount, room.name);
     if (result === OK) {
       console.log(
-        `[Terminal] ${room.name}: Bought ${amount} ${mineral} @ ${best.price.toFixed(2)} (stock was ${stock})`
+        `[Terminal] ${room.name}: Bought ${amount} ${mineral} @ ${best.price.toFixed(2)} for labs (short ${needed})`
       );
       return true;
     }

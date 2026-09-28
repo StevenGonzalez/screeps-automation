@@ -232,7 +232,7 @@ export function setupConsole() {
       }
       const room = candidates[0];
       if (!room.memory.labSystem) room.memory.labSystem = { queue: [] };
-      const chain = resolveChain(compound, amount, room.storage ?? null);
+      const chain = resolveChain(compound, amount, room);
       if (chain.length === 0) {
         console.log(`[Labs] ${room.name}: Nothing to queue - stock may already be sufficient`);
         return;

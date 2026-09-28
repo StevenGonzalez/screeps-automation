@@ -1,6 +1,7 @@
 import {
   resolveChain,
-  getStorageStockForCompound,
+  getStockForCompound,
+  labInputStock,
   REACTION_RECIPES,
   getBoostRequests,
   assignBoostLabs,
@@ -8,6 +9,12 @@ import {
 import { advanceBoost } from "../services/services.combat";
 
 const LAB_STALL_TIMEOUT = 200;
+// A reaction short of an input the market or another room can supply waits
+// this long for it before being dropped.
+const LAB_SUPPLY_WAIT_TIMEOUT = 3000;
+const SUPPLIED_INPUTS = new Set(["H", "O", "U", "L", "K", "Z", "X", "G"]);
+// LAB_REACTION_AMOUNT: what one reaction takes of each input.
+const REACTION_INPUT_MIN = 5;
 
 const LAB_PLAN_INTERVAL = 100;
 
@@ -113,10 +120,10 @@ function processLabSystem(room: Room) {
   if (produced > (ls.lastProduced ?? 0)) {
     ls.lastProduced = produced;
     ls.lastProgressTick = Game.time;
-  } else if (Game.time - (ls.lastProgressTick ?? Game.time) > LAB_STALL_TIMEOUT) {
+  } else if (Game.time - (ls.lastProgressTick ?? Game.time) > stallTimeout(room, ls.inputCompounds)) {
     console.log(
       `[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
-      `${LAB_STALL_TIMEOUT} ticks) - aborting and advancing queue.`
+      `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`
     );
     ls.queue.shift();
     delete ls.activeCompound;
@@ -143,6 +150,17 @@ function processLabSystem(room: Room) {
       outputLab.runReaction(inputLabs[0], inputLabs[1]);
     }
   }
+}
+
+/**
+ * How long a reaction may go without progress. Running dry on an input the
+ * terminal is buying or another room is sending is a wait, not a fault.
+ */
+export function stallTimeout(room: Room, inputs: [string, string]): number {
+  const awaitingSupply = inputs.some(
+    (c) => SUPPLIED_INPUTS.has(c) && labInputStock(room, c) < REACTION_INPUT_MIN
+  );
+  return awaitingSupply ? LAB_SUPPLY_WAIT_TIMEOUT : LAB_STALL_TIMEOUT;
 }
 
 function producedStock(compound: string, room: Room, outputLabs: StructureLab[]): number {
@@ -186,9 +204,9 @@ function refreshLabIdentity(room: Room) {
 function planAutoProduction(room: Room) {
   const ls = room.memory.labSystem!;
   for (const [compound, target] of Object.entries(AUTO_PRODUCTION_TARGETS)) {
-    const stock = getStorageStockForCompound(compound, room);
+    const stock = getStockForCompound(compound, room);
     if (stock < target) {
-      const chain = resolveChain(compound, target, room.storage ?? null);
+      const chain = resolveChain(compound, target, room);
       if (chain.length > 0) {
         ls.queue.push(...chain);
         return;
