@@ -65,9 +65,7 @@ export function runTower(
 }
 
 export function selectRoomAttackTarget(roomHostiles: Creep[], room?: Room): Creep | null {
-  const hostiles = roomHostiles.filter(
-    (c) => c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48
-  );
+  const hostiles = roomHostiles.filter((c) => inTowerReach(c, room));
   if (hostiles.length === 0) {
     if (room) delete room.memory.lastTowerTargetId;
     return null;
@@ -114,6 +112,14 @@ export function selectRoomAttackTarget(roomHostiles: Creep[], room?: Room): Cree
   return best;
 }
 
+// A hostile on the two edge rows can step out of the room to heal, so firing
+// at it mostly drains the towers. The exception is one working on our
+// structures from there, such as a perimeter rampart two tiles in.
+function inTowerReach(creep: Creep, room?: Room): boolean {
+  if (creep.pos.x > 1 && creep.pos.x < 48 && creep.pos.y > 1 && creep.pos.y < 48) return true;
+  return !!room && shouldKeepFiring(room, creep);
+}
+
 // Firing at a target that out-heals the towers only burns energy, unless our
 // own fighters are on it (combined damage may break it) or it is tearing into
 // our structures right now.
@@ -144,14 +150,15 @@ function isOurs(s: AnyStructure): boolean {
 // Whether the towers alone will kill every hostile they can shoot: each one has
 // to take more damage (after TOUGH) than the whole group could heal into it, and
 // the towers need the energy to keep firing until the last one is dead. Edge
-// tiles are left out as selectRoomAttackTarget leaves them out.
+// tiles are left out unless the hostile is pressing us, as in
+// selectRoomAttackTarget.
 export function towersCanHold(room: Room, hostiles: Creep[]): boolean {
   const towers = activeTowers(room);
   if (towers.length === 0) return false;
   const groupHeal = summarizeHostiles(hostiles).heal;
   let ticks = 0;
   for (const c of hostiles) {
-    if (c.pos.x <= 1 || c.pos.x >= 48 || c.pos.y <= 1 || c.pos.y >= 48) continue;
+    if (!inTowerReach(c, room)) continue;
     const net = effectiveTowerDamage(c, towers) - groupHeal;
     if (net <= 0) return false;
     ticks += Math.ceil(c.hits / net);

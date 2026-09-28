@@ -94,3 +94,25 @@ describe("selectRoomAttackTarget on an undamageable attacker", () => {
     expect(selectRoomAttackTarget([tank([rampart]), healer()], makeRoom())?.id).toBe("t");
   });
 });
+
+describe("selectRoomAttackTarget on the edge rows", () => {
+  // The live case: an invader on row 1 working a rampart on row 2.
+  const invaderBody = () => [
+    ...parts(TOUGH as string, 16),
+    ...parts(WORK as string, 4),
+    ...parts(ATTACK as string, 2),
+    ...parts(RANGED_ATTACK as string, 3),
+    ...parts(MOVE as string, 25),
+  ];
+
+  it("fires at an edge hostile hitting one of our ramparts", () => {
+    const rampart = { structureType: "rampart", my: true };
+    const invader = creep("i", 38, 1, invaderBody(), [rampart]);
+    expect(selectRoomAttackTarget([invader], makeRoom())?.id).toBe("i");
+  });
+
+  it("leaves an edge hostile that is touching nothing of ours", () => {
+    const invader = creep("i", 38, 1, invaderBody());
+    expect(selectRoomAttackTarget([invader], makeRoom())).toBeNull();
+  });
+});
