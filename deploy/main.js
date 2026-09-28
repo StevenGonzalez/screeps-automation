@@ -824,7 +824,6 @@ function townClock(time) {
         if (t >= p.start)
             phase = p.name;
     return {
-        day: Math.floor(time / TOWN_DAY_LENGTH) + 1,
         phase,
         hour: Math.floor((t * 24) / TOWN_DAY_LENGTH),
     };
@@ -16748,7 +16747,8 @@ function drawRoomHUD(room) {
         const icon = PHASE_ICON[clock.phase];
         const folk = (_b = counts[ROLE_TOWNSFOLK]) !== null && _b !== void 0 ? _b : 0;
         const hh = String(clock.hour).padStart(2, "0");
-        v.text(`${icon} Day ${clock.day}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+        const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
+        v.text(`${icon} ${phase}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
         y += lineH;
     }
     const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) : null;
@@ -17685,7 +17685,7 @@ function setupConsole() {
                 return;
             }
             const clock = townClock(Game.time);
-            console.log(`[Town] Day ${clock.day}, ${String(clock.hour).padStart(2, "0")}:00 (${clock.phase})`);
+            console.log(`[Town] ${String(clock.hour).padStart(2, "0")}:00, ${clock.phase}`);
             for (const room of rooms) {
                 for (const line of describeTown(room))
                     console.log(line);
