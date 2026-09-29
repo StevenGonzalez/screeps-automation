@@ -144,6 +144,23 @@ describe("upgrader storage floor", () => {
     expect(calls).not.toContain("withdraw:storage1");
   });
 
+  it("takes nothing from storage or a source link below the floor", () => {
+    // Here the room's structure scan sees storage and a stocked source link,
+    // the buffer the upgrader used to fall back on.
+    const room = roomWithStorage(5_000);
+    const sourceLink = {
+      id: "srcLink",
+      structureType: "link",
+      store: { [g.RESOURCE_ENERGY as string]: 600 },
+      pos: { x: 40, y: 20, getRangeTo: () => 20 },
+    };
+    (room as unknown as { find: () => unknown[] }).find = () => [room.storage, sourceLink];
+
+    const calls = runEmptyUpgraderIn(room);
+
+    expect(calls).toEqual([]);
+  });
+
   it("empties storage anyway rather than let the controller downgrade", () => {
     const room = roomWithStorage(5_000);
     (room.controller as unknown as { ticksToDowngrade: number }).ticksToDowngrade = 1000;

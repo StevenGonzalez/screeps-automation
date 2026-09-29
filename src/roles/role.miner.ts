@@ -4,6 +4,7 @@ import {
   findUnclaimedMinerAssignment,
   isSourceSafe,
 } from "../services/services.creep";
+import { sourceLinksHaveOutlet } from "../orchestrators/orchestrator.links";
 
 const CONTAINER_REPAIR_THRESHOLD = 0.9;
 
@@ -53,7 +54,7 @@ export function runMiner(creep: Creep) {
         return;
       }
 
-      if (creep.store.getFreeCapacity() === 0) {
+      if (creep.store.getFreeCapacity() === 0 && sourceLinksHaveOutlet(creep.room)) {
         const link = findAdjacentLink(creep);
         // Transfer and harvest are separate intents, so empty into the link
         // and still harvest this tick.

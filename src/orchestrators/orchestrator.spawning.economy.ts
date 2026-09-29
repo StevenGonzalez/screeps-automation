@@ -9,7 +9,7 @@ import {
   ROLE_MINERAL_MINER,
   ROLE_APOTHECARY,
 } from "../config/config.roles";
-import { barrierTargetFn, isEnergyEmergency } from "../services/services.creep";
+import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services.creep";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
@@ -409,17 +409,20 @@ export function shouldSpawnBuilder(room: Room): boolean {
 
 const repairerTargetCache: Record<string, { value: number; tick: number }> = {};
 
-function getRepairerPopulationTarget(room: Room): number {
+export function getRepairerPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
   const cached = repairerTargetCache[room.name];
   if (cached && Game.time - cached.tick < 50) return cached.value;
 
   // 0.8 matches where the repair target picker starts caring about a structure.
+  // Roads left off the blueprint decay on purpose and nobody repairs them, so
+  // they must not call for repairers either.
+  const kept = keptUp(room);
   const worn = room.find(FIND_STRUCTURES, {
     filter: (s) => {
       if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) return false;
       const st = s as AnyStructure;
-      return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.8;
+      return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.8 && kept(st);
     },
   }) as AnyStructure[];
   const critical = worn.filter((s) => s.hits < s.hitsMax * 0.5);

@@ -40,6 +40,7 @@ export {
   getRoomBuildTarget,
   getRampartTargetHP,
   barrierTargetFn,
+  keptUp,
   findClosestRepairTarget,
   findClosestDamagedRampart,
   findCriticalDefenseTarget,

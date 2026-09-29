@@ -201,7 +201,7 @@ function isDamaged(s: AnyStructure): boolean {
 
 // A room with a blueprint keeps up only the roads the plan wants; the rest
 // are left to decay. Rooms without one (remotes) keep every road.
-function keptUp(room: Room): (s: AnyStructure) => boolean {
+export function keptUp(room: Room): (s: AnyStructure) => boolean {
   const roads = keptRoadTiles(room);
   if (!roads) return () => true;
   return (s) => s.structureType !== STRUCTURE_ROAD || roads.has(`${s.pos.x},${s.pos.y}`);

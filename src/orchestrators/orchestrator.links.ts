@@ -1,4 +1,4 @@
-import { UPGRADER_STORAGE_FLOOR } from "../roles/role.upgrader";
+import { upgradingFunded } from "../roles/role.upgrader";
 
 const LINK_TRANSFER_THRESHOLD = 400;
 const LINK_MIN_TRANSFER = 150;
@@ -20,8 +20,14 @@ function processRoomLinks(room: Room) {
   const links = getRoomLinks(room);
   if (links.length < 2) return;
 
-  const { sources, sinks } = classifyLinks(room, links);
-  let hungry = findHungryControllerLink(room, links);
+  // Below the upgrader's storage floor the controller link gets nothing, or
+  // the source links carry the room's whole income past storage to the
+  // controller.
+  const funded = upgradingFunded(room);
+  const roles = getLinkRoles(room, links);
+  const { sources, sinks: allSinks } = classifyLinks(room, links);
+  const sinks = funded ? allSinks : allSinks.filter((l) => roles[l.id] !== "controller");
+  let hungry = funded ? findHungryControllerLink(room, links) : null;
 
   for (const src of sources) {
     if (src.cooldown > 0) continue;
@@ -80,15 +86,26 @@ function findHungryControllerLink(
  * upgrader energy by another route, so it stops where they would.
  */
 export function findRelayLink(room: Room): StructureLink | null {
-  const storage = room.storage;
-  if (!storage || storage.store[RESOURCE_ENERGY] <= UPGRADER_STORAGE_FLOOR) {
-    return null;
-  }
+  if (!room.storage || !upgradingFunded(room)) return null;
   const links = getRoomLinks(room);
   if (links.length < 2) return null;
   if (!findHungryControllerLink(room, links)) return null;
   const roles = getLinkRoles(room, links);
   return links.find((l) => roles[l.id] === "storage") ?? null;
+}
+
+/**
+ * Whether a miner should empty into its source link. A source link can only
+ * send to the controller link or the storage link. With no storage link, and
+ * the controller link shut off below the storage floor, the energy has nowhere
+ * useful to go, so the miner leaves it in its container for the haulers to
+ * carry to storage.
+ */
+export function sourceLinksHaveOutlet(room: Room): boolean {
+  if (upgradingFunded(room)) return true;
+  const links = getRoomLinks(room);
+  const roles = getLinkRoles(room, links);
+  return links.some((l) => roles[l.id] === "storage");
 }
 
 type LinkRole = "source" | "controller" | "storage" | "neutral";

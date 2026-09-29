@@ -9,6 +9,25 @@ import { seekBoost } from "../services/services.combat";
 
 export const UPGRADER_STORAGE_FLOOR = 10_000;
 
+const UPGRADER_DOWNGRADE_GUARD = 5000;
+
+function nearDowngrade(room: Room): boolean {
+  const ctrl = room.controller;
+  return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
+}
+
+/**
+ * Whether the room can afford to spend energy on upgrading: it has no storage
+ * yet, storage is above the floor, or the controller is close to downgrading.
+ * Every route energy takes to the controller checks this, the controller link
+ * included, so no route slips past the floor.
+ */
+export function upgradingFunded(room: Room): boolean {
+  const storage = room.storage;
+  if (!storage) return true;
+  return storage.store[RESOURCE_ENERGY] > UPGRADER_STORAGE_FLOOR || nearDowngrade(room);
+}
+
 export function runUpgrader(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
 
@@ -43,28 +62,26 @@ export function runUpgrader(creep: Creep) {
     }
   }
 
-  const ctrl = creep.room.controller;
-  const nearDowngrade = !!ctrl && ctrl.my && ctrl.ticksToDowngrade < 5000;
-
   // The population target stops adding upgraders when storage runs low, but the
   // ones already alive kept drawing on it for the rest of their 1500 ticks and
-  // took it to zero. Leave a floor and fall through to the buffer, the same
-  // discipline the builder and repairer already follow. Upgrading is the most
+  // took it to zero. Leave a floor. Upgrading is the most
   // deferrable consumer in the room - except when the controller is about to
   // downgrade, which costs more than the energy does.
   const storage = creep.room.storage;
-  if (
-    storage &&
-    (storage.store[RESOURCE_ENERGY] > UPGRADER_STORAGE_FLOOR || nearDowngrade) &&
-    storage.store[RESOURCE_ENERGY] > 0
-  ) {
+  if (storage && upgradingFunded(creep.room) && storage.store[RESOURCE_ENERGY] > 0) {
     if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
       creep.moveTo(storage, { reusePath: 50 });
     }
     return;
   }
 
-  acquireEnergy(creep, { bufferOnly: !!creep.room.storage && !nearDowngrade });
+  // Below the floor the upgrader waits. The buffer it used to fall back on
+  // included storage itself and the source links, so the floor held nothing
+  // back and the room's income went to the controller instead of the spawn.
+  // Near a downgrade it takes energy from anywhere.
+  if (storage && !nearDowngrade(creep.room)) return;
+
+  acquireEnergy(creep);
 }
 
 const CONTROLLER_LINK_SCAN_TTL = 200;

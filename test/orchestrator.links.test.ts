@@ -9,6 +9,7 @@ g.OK = 0;
 import {
   loop as linksLoop,
   findRelayLink,
+  sourceLinksHaveOutlet,
 } from "../src/orchestrators/orchestrator.links";
 
 type Transfer = { from: string; to: string };
@@ -51,7 +52,11 @@ function makeRoom(sinkCooldown: number) {
   const source = makeLink("srcLink", { x: 40, y: 20 }, 800, 0);
   const sink = makeLink("sinkLink", { x: 24, y: 24 }, 0, sinkCooldown);
 
-  const storage = { id: "storage1", pos: { x: 25, y: 25 } };
+  const storage = {
+    id: "storage1",
+    pos: { x: 25, y: 25 },
+    store: { [g.RESOURCE_ENERGY as string]: 50_000 },
+  };
   const minerContainer = { id: "cont1", pos: { x: 41, y: 20 } };
 
   const room = {
@@ -112,15 +117,19 @@ function makeRelayRoom(opts: {
   srcEnergy: number;
   srcCooldown?: number;
   ctrlEnergy: number;
-  storageLinkEnergy: number;
+  storageLinkEnergy?: number;
   storageEnergy: number;
 }) {
   const roomName = `W48S8-${clock}`;
   const links: Record<string, unknown> = {
     srcLink: makeLink("srcLink", { x: 40, y: 20 }, opts.srcEnergy, opts.srcCooldown ?? 0),
-    storageLink: makeLink("storageLink", { x: 24, y: 24 }, opts.storageLinkEnergy, 0),
     ctrlLink: makeLink("ctrlLink", { x: 10, y: 7 }, opts.ctrlEnergy, 0),
   };
+  // Leaving the storage link out gives the RCL 6 layout: two source links and
+  // the controller link, and nothing beside storage.
+  if (opts.storageLinkEnergy !== undefined) {
+    links.storageLink = makeLink("storageLink", { x: 24, y: 24 }, opts.storageLinkEnergy, 0);
+  }
 
   const storage = {
     id: "storage1",
@@ -131,10 +140,10 @@ function makeRelayRoom(opts: {
 
   const room = {
     name: roomName,
-    controller: { my: true, pos: { x: 9, y: 5 } },
+    controller: { my: true, ticksToDowngrade: 100_000, pos: { x: 9, y: 5 } },
     storage,
     memory: {
-      linkIds: ["srcLink", "storageLink", "ctrlLink"],
+      linkIds: Object.keys(links),
       minerContainerIds: ["cont1"],
     } as unknown as RoomMemory,
   } as unknown as Room;
@@ -209,5 +218,50 @@ describe("controller link supply", () => {
     clock += 1;
     const stocked = makeRelayRoom({ srcEnergy: 0, ctrlEnergy: 600, storageLinkEnergy: 0, storageEnergy: 50_000 });
     expect(findRelayLink(stocked)).toBeNull();
+  });
+});
+
+describe("link supply below the upgrader's storage floor", () => {
+  it("keeps the controller link off the source links' round", () => {
+    makeRelayRoom({ srcEnergy: 800, ctrlEnergy: 100, storageLinkEnergy: 0, storageEnergy: 5_000 });
+
+    linksLoop();
+
+    expect(transfers).toEqual([{ from: "srcLink", to: "storageLink" }]);
+  });
+
+  it("sends nothing when the controller link is the only way out", () => {
+    makeRelayRoom({ srcEnergy: 800, ctrlEnergy: 100, storageEnergy: 5_000 });
+
+    linksLoop();
+
+    expect(transfers).toEqual([]);
+  });
+
+  it("feeds the controller anyway when it is about to downgrade", () => {
+    const room = makeRelayRoom({ srcEnergy: 800, ctrlEnergy: 100, storageEnergy: 5_000 });
+    (room.controller as unknown as { ticksToDowngrade: number }).ticksToDowngrade = 1000;
+
+    linksLoop();
+
+    expect(transfers).toEqual([{ from: "srcLink", to: "ctrlLink" }]);
+  });
+});
+
+describe("sourceLinksHaveOutlet", () => {
+  it("is false with no storage link while storage is below the floor", () => {
+    expect(sourceLinksHaveOutlet(makeRelayRoom({ srcEnergy: 0, ctrlEnergy: 100, storageEnergy: 5_000 }))).toBe(false);
+  });
+
+  it("is true once a storage link can take the energy", () => {
+    expect(
+      sourceLinksHaveOutlet(
+        makeRelayRoom({ srcEnergy: 0, ctrlEnergy: 100, storageLinkEnergy: 0, storageEnergy: 5_000 })
+      )
+    ).toBe(true);
+  });
+
+  it("is true while storage can pay for upgrading", () => {
+    expect(sourceLinksHaveOutlet(makeRelayRoom({ srcEnergy: 0, ctrlEnergy: 100, storageEnergy: 50_000 }))).toBe(true);
   });
 });
