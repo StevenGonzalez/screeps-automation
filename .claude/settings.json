@@ -4,7 +4,9 @@
       "Bash(npx tsc --noEmit)",
       "Bash(npx tsc --noEmit *)",
       "Bash(yarn test)",
-      "Bash(npx vitest run)"
+      "Bash(npx vitest run)",
+      "Bash(git branch -d:*)",
+      "Bash(git push origin --delete:*)"
     ]
   }
 }
