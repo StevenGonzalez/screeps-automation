@@ -5,8 +5,6 @@ export const MU_TOWN_NAMES = [
 ];
 
 export const STRUCTURE_PLANNER = {
-  containerOffset: 1,
-  upgradeContainerOffset: 2,
   roadPadding: 0,
   rampartPadding: 1,
   towerOffsetsFromSpawn: [
@@ -21,7 +19,6 @@ export const STRUCTURE_PLANNER = {
   maxPerimeterConstructionSites: 10,
   plannedCleanupInterval: 1000,
   plannedCleanupUnseenAge: 10000,
-  plannedRoadPruneTicks: 5000,
   rampartOnTopFor: [
     STRUCTURE_CONTAINER,
     STRUCTURE_SPAWN,
@@ -71,8 +68,6 @@ export const PLANNER_KEYS = {
 
 export const STAMP_PLANNER = {
   halfSize: 6,
-  anchorMinEdgeDistance: 8,
-  bfsMaxRadius: 5,
 };
 
 export const PERIMETER_PLANNER = {

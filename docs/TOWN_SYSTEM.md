@@ -43,10 +43,11 @@ pass, after the defensive perimeter. The result is saved in
 `town_walls` and `town_ramparts`, which the ordinary construction pipeline
 builds at priority 13 (after the core, before cosmetic roads).
 
-Everything the planner places avoids planned and built structures, the castle
-stamp and merchant quarter, the stamp's core square, roads, and the ring
-itself. Road planning in turn treats the town's tiles as impassable, so roads
-route around it.
+Everything the planner places avoids planned and built structures, every
+tile of the castle's blueprint (all ages, not just the current one), the
+stamp's core square, roads, and the ring itself. The blueprint in turn keeps
+off the town's tiles, so roads route around it (see
+[BLUEPRINT.md](BLUEPRINT.md)).
 
 **Watch posts.** For each room edge with exits, the planner finds the middle of
 the exits, takes the ring tile nearest it as the gate, and places up to three

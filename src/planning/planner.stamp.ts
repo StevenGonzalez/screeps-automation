@@ -1,4 +1,4 @@
-import { PLANNER_KEYS, STAMP_PLANNER } from "../config/config.structures";
+import { STAMP_PLANNER } from "../config/config.structures";
 
 export type StampStructureType =
   | "spawn"
@@ -80,29 +80,6 @@ export const CASTLE_STAMP: StampCell[] = [
   { dx:  1, dy: -4, type: "road", minRcl: 1 },
   { dx: -1, dy: -4, type: "road", minRcl: 1 },
 ];
-
-export function stampMemoryKeyFor(cell: StampCell): string {
-  switch (cell.type) {
-    case "spawn":       return `${PLANNER_KEYS.STAMP_SPAWN_PREFIX}${cell.minRcl}`;
-    case "tower":       return `${PLANNER_KEYS.STAMP_TOWER_PREFIX}${cell.dx}_${cell.dy}`;
-    case "extension":   return PLANNER_KEYS.STAMP_EXTENSION_KEY;
-    case "lab":         return PLANNER_KEYS.STAMP_LAB_KEY;
-    case "road":        return PLANNER_KEYS.STAMP_ROAD_KEY;
-    case "rampart":     return PLANNER_KEYS.STAMP_RAMPART_KEY;
-    case "storage":     return PLANNER_KEYS.STAMP_STORAGE_KEY;
-    case "terminal":    return PLANNER_KEYS.STAMP_TERMINAL_KEY;
-    case "factory":     return PLANNER_KEYS.STAMP_FACTORY_KEY;
-    case "observer":    return PLANNER_KEYS.STAMP_OBSERVER_KEY;
-    case "link":        return PLANNER_KEYS.STAMP_LINK_KEY;
-    case "nuker":       return PLANNER_KEYS.STAMP_NUKER_KEY;
-    case "power_spawn": return PLANNER_KEYS.STAMP_POWER_SPAWN_KEY;
-    default:            return PLANNER_KEYS.CASTLE_STAMP_KEY;
-  }
-}
-
-export function getStampCellsForRcl(rcl: number): StampCell[] {
-  return CASTLE_STAMP.filter((cell) => cell.minRcl <= rcl);
-}
 
 const MERCHANT_RING_ROAD_RADII: ReadonlySet<number> = new Set([3, 5]);
 const MERCHANT_RING_MAX_RADIUS = STAMP_PLANNER.halfSize;

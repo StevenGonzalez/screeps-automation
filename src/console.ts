@@ -49,6 +49,8 @@ import {
 } from "./orchestrators/orchestrator.factory";
 import { describeNukers, launchNukeFrom } from "./orchestrators/orchestrator.nuker";
 import { describeTown, razeTown } from "./planning/planner.town";
+import { describeBlueprint } from "./planning/planner.blueprint";
+import { showBlueprint } from "./orchestrators/orchestrator.visuals";
 import { townClock } from "./services/services.town";
 
 const VALID_FORMATIONS: SquadFormation[] = ["line", "box", "wedge", "scatter"];
@@ -947,6 +949,26 @@ export function setupConsole() {
           const away = c.memory.retreatUntil !== undefined && Game.time < c.memory.retreatUntil;
           console.log(`  Lookout ${c.name} -> ${c.memory.targetRoom}${away ? " (fled home)" : ""}`);
         }
+      }
+    },
+
+    blueprint: (roomName?: string, action?: string) => {
+      const rooms = roomName
+        ? [Game.rooms[roomName]].filter((r) => r?.controller?.my)
+        : Object.values(Game.rooms).filter((r) => r.controller?.my);
+      if (rooms.length === 0) {
+        console.log("[Blueprint] Usage: Game.arca.blueprint('W1N1')  or  Game.arca.blueprint('W1N1', 'replan')");
+        return;
+      }
+      for (const room of rooms) {
+        if (action === "replan") {
+          delete room.memory.blueprint;
+          room.memory.lastStructurePlanTick = 0;
+          console.log(`[Blueprint] ${room.name}: planned afresh on the next tick`);
+          continue;
+        }
+        for (const line of describeBlueprint(room)) console.log(line);
+        showBlueprint(room.name);
       }
     },
 

@@ -2,6 +2,7 @@ import { PLANNER_KEYS, STAMP_PLANNER } from "../config/config.structures";
 import { TOWN, COTTAGE_FAMILIES } from "../config/config.town";
 import { cottageLayout, parseTile, townBarrierTiles, townFootprint } from "../services/services.town";
 import { CASTLE_STAMP, MERCHANT_RING_EXTENSION_OFFSETS } from "./planner.stamp";
+import { readBlueprint } from "./planner.blueprint";
 
 // The town quarter. Laid out once the perimeter mostly stands:
 //
@@ -85,6 +86,15 @@ export function buildTownSite(room: Room): TownSite | null {
       if (!passable) blocked.add(p);
     }
   }
+  // The castle's later ages are as good as built: a cottage must not take
+  // their ground.
+  const bp = readBlueprint(room);
+  for (const e of bp?.entries ?? []) {
+    const k = tileKey(e.x, e.y);
+    occupied.add(k);
+    if (e.type !== STRUCTURE_ROAD) structures.add(k);
+    if (!PASSABLE_TYPES.has(e.type)) blocked.add(k);
+  }
   for (const s of room.find(FIND_STRUCTURES)) {
     const k = tileKey(s.pos.x, s.pos.y);
     if (ownTiles.has(k)) continue;
@@ -148,9 +158,11 @@ export function buildTownSite(room: Room): TownSite | null {
   const plannedStorage = mem[PLANNER_KEYS.STAMP_STORAGE_KEY]?.[0];
   const storage = storagePos
     ? { x: storagePos.x, y: storagePos.y }
-    : plannedStorage
-      ? parseTile(plannedStorage)
-      : { x: anchor.x, y: anchor.y + 2 };
+    : bp
+      ? bp.hub
+      : plannedStorage
+        ? parseTile(plannedStorage)
+        : { x: anchor.x, y: anchor.y + 2 };
 
   return { anchor, occupied, structures, walkable, interior, reserved, clearOf, ring, storage };
 }
@@ -441,6 +453,9 @@ function squareStillClear(room: Room, town: TownMemory): boolean {
   for (const key of Object.keys(mem)) {
     if (TOWN_KEYS.has(key) || isRoadKey(key)) continue;
     for (const p of mem[key]) busy.add(p);
+  }
+  for (const e of readBlueprint(room)?.entries ?? []) {
+    if (e.type !== STRUCTURE_ROAD) busy.add(tileKey(e.x, e.y));
   }
   return town.square.every((k) => !busy.has(k));
 }

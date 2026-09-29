@@ -9,6 +9,7 @@ import {
   ROLE_TOWNSFOLK,
 } from "../config/config.roles";
 import { cottageLayout, parseTile, spotHolder, townClock } from "../services/services.town";
+import { readBlueprint } from "../planning/planner.blueprint";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -23,6 +24,48 @@ export function loop() {
     if (!room.controller?.my) continue;
     drawRoomHUD(room);
     drawTown(room);
+    drawBlueprint(room);
+  }
+}
+
+// Rooms whose blueprint is on show, to the tick the preview ends. Kept on the
+// heap: a preview lost to a global reset is no loss.
+const blueprintShownUntil: Record<string, number> = {};
+const BLUEPRINT_PREVIEW_TICKS = 50;
+
+/** Shows the room's blueprint for a while (Game.arca.blueprint). */
+export function showBlueprint(roomName: string): void {
+  blueprintShownUntil[roomName] = Game.time + BLUEPRINT_PREVIEW_TICKS;
+}
+
+// One colour per age, from the founding's pale gold to the empire's purple.
+const AGE_COLOURS = ["", "#f5e6a8", "#f2c14e", "#f08a4b", "#e05a5a", "#5ab4e0", "#4fc49a", "#6b8cff", "#b06bff"];
+const BLUEPRINT_LETTERS: Partial<Record<string, string>> = {
+  spawn: "S", extension: "e", tower: "T", lab: "L", storage: "O", terminal: "M",
+  factory: "F", observer: "B", powerSpawn: "P", nuker: "N", link: "K", container: "C", extractor: "X",
+};
+
+function drawBlueprint(room: Room): void {
+  const until = blueprintShownUntil[room.name];
+  if (until === undefined) return;
+  if (Game.time > until) {
+    delete blueprintShownUntil[room.name];
+    return;
+  }
+  const bp = readBlueprint(room);
+  if (!bp) return;
+  const v = room.visual;
+  for (const side of room.memory.blueprint?.lanes ?? []) {
+    for (const p of bp.exits[side] ?? []) v.circle(p.x, p.y, { radius: 0.12, fill: "#cccccc", opacity: 0.5 });
+  }
+  for (const e of bp.entries) {
+    const colour = AGE_COLOURS[e.rcl];
+    if (e.type === STRUCTURE_ROAD) {
+      v.circle(e.x, e.y, { radius: 0.15, fill: colour, opacity: 0.6 });
+      continue;
+    }
+    v.rect(e.x - 0.4, e.y - 0.4, 0.8, 0.8, { fill: "transparent", stroke: colour, strokeWidth: 0.06, opacity: 0.8 });
+    v.text(`${BLUEPRINT_LETTERS[e.type] ?? "?"}${e.rcl}`, e.x, e.y + 0.15, { font: 0.35, color: colour });
   }
 }
 

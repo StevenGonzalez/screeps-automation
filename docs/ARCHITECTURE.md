@@ -73,14 +73,17 @@ See [QUICKSTART.md](QUICKSTART.md) for the full command list. There is no
 never built. The real commands include `expand`, `queueExpand`, `claim`,
 `status`, `ops`, `labs`, `produce`, `network`, `attack`, `squads`, `warcouncil`,
 `threat`, `nukes`, `nuker`, `launchNuke`, `factory`, `sk`, `power`, `deposits`,
-`town`, `razeTown`, and more.
+`town`, `razeTown`, `blueprint`, and more.
 
 ---
 
 ## The Castle Layout
 
-Automatic structure placement (`planning/planner.stamp.ts`,
-`planning/planner.room.ts`) follows a fixed castle layout:
+Automatic structure placement follows a castle layout
+(`planning/planner.stamp.ts`), fitted to each room's terrain by the blueprint
+planner (`planning/planner.blueprint.ts`). The blueprint plans every structure
+and road up to RCL 8 at once, and each RCL unlocks the next "age" of it. See
+[BLUEPRINT.md](BLUEPRINT.md).
 
 **THE VAULT** - Storage at the heart of the base (where the zen is). Terminal, Factory,
 Power Spawn, Nuker, and Observer sit around it.
@@ -102,7 +105,7 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
   observer, containers) so a nuke can't one-shot them.
 - **Defensive perimeter** (`planning/planner.rampart.ts`). At RCL 4+ a **min-cut**
   rampart wall is computed (`services/services.mincut.ts`, max-flow/min-cut on the
-  50x50 grid) to seal the core structures (the core stamp + village extensions,
+  50x50 grid) to seal the core structures (the blueprint's buildings at RCL 8,
   plus the controller when it sits near the vault) from the room exits with the
   *fewest* tiles - concentrating HP on far fewer ramparts than a bounding box. It
   hugs natural walls automatically and re-plans only every ~1500 ticks. If the
@@ -188,7 +191,7 @@ src/
 |   +-- role.townsfolk.ts            # townsfolk - militia archers + lookouts
 +-- planning/
 |   +-- planner.stamp.ts             # Core stamp layout generation
-|   +-- planner.room.ts              # Road planning and structure placement
+|   +-- planner.blueprint.ts         # The room's plan for every RCL: structures, roads, ages
 |   +-- planner.rampart.ts           # Defensive rampart perimeter (RCL 4+)
 |   +-- planner.town.ts              # Town quarter: watch posts, square, cottages (RCL 6+)
 +-- services/

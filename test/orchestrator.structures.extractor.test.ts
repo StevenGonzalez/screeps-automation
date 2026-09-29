@@ -2,15 +2,11 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 
-import {
-  applyPlannedConstruction,
-  planMineralStructures,
-} from "../src/orchestrators/orchestrator.structures";
+import { applyPlannedConstruction } from "../src/orchestrators/orchestrator.structures";
 
 g.FIND_STRUCTURES = 107;
 g.FIND_CONSTRUCTION_SITES = 111;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
-g.FIND_MINERALS = 116;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -104,41 +100,5 @@ describe("applyPlannedConstruction at the site cap", () => {
 
     expect(created).toEqual(["10,10:extractor"]);
     expect(roads.filter((r) => r.removed)).toHaveLength(1);
-  });
-});
-
-describe("planMineralStructures", () => {
-  beforeEach(() => {
-    g.Game = { time: 1 };
-  });
-
-  function mineralRoom(level: number, planned: Record<string, string[]>) {
-    const mineral = {
-      id: "m1",
-      // A container already stands beside the mineral, so no new one is planned.
-      pos: { x: 10, y: 10, findInRange: () => [{}] },
-    };
-    return {
-      name: "W1N1",
-      controller: { level },
-      memory: { plannedStructures: planned, plannedStructuresMeta: {} },
-      find: (type: number) => (type === g.FIND_MINERALS ? [mineral] : []),
-    } as unknown as Room;
-  }
-
-  it("drops a mineral container plan before the extractor unlocks", () => {
-    const room = mineralRoom(5, { container_mineral_m1: ["11,10"] });
-
-    planMineralStructures(room);
-
-    expect(room.memory.plannedStructures).toEqual({});
-  });
-
-  it("plans the extractor once the room reaches RCL 6", () => {
-    const room = mineralRoom(6, {});
-
-    planMineralStructures(room);
-
-    expect(room.memory.plannedStructures).toEqual({ extractor_m1: ["10,10"] });
   });
 });

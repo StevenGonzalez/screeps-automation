@@ -8,6 +8,7 @@ g.STRUCTURE_WALL = "constructedWall";
 import {
   findMostCriticalRepairTarget,
   findTowerDefenseRepairTarget,
+  findTowerRepairTarget,
   clearRemotePlayerHostile,
   markRemotePlayerHostile,
 } from "../src/services/services.creep";
@@ -184,5 +185,39 @@ describe("remote player strikes", () => {
     clearRemotePlayerHostile(e);
     expect(e.hostileStrikes).toBe(0);
     expect(e.hostileUntil).toBeUndefined();
+  });
+});
+
+describe("road upkeep under a blueprint", () => {
+  function road(id: string, x: number, y: number, hits: number) {
+    return { id, structureType: "road", pos: { x, y }, hits, hitsMax: 5000 } as unknown as AnyStructure;
+  }
+
+  function plannedRoom(structures: AnyStructure[], lanes: Array<"top" | "left"> = []): Room {
+    const room = makeRoom({ level: 6, structures });
+    // Blueprint roads at 10,10; the top exit road runs through 10,2.
+    room.memory.blueprint = { v: 1, at: tick, anchor: { x: 10, y: 12 }, hub: { x: 10, y: 11 }, s: "R10,10,2", exits: { top: "10,2" }, lanes };
+    return room;
+  }
+
+  beforeEach(() => {
+    tick++;
+    g.Game = { time: tick };
+  });
+
+  it("lets a road off the plan decay", () => {
+    const room = plannedRoom([road("stray", 30, 30, 100)]);
+    expect(repairFor(room)).toBeNull();
+    expect(findTowerRepairTarget(room)).toBeNull();
+  });
+
+  it("keeps up the plan's roads and the exit roads in use", () => {
+    // Repair targets are cached for the tick, so each room gets a tick of its own.
+    const next = () => (g.Game = { time: ++tick });
+    expect(repairFor(plannedRoom([road("kept", 10, 10, 100)]))?.id).toBe("kept");
+    next();
+    expect(repairFor(plannedRoom([road("lane", 10, 2, 100)], ["top"]))?.id).toBe("lane");
+    next();
+    expect(repairFor(plannedRoom([road("idle", 10, 2, 100)]))).toBeNull();
   });
 });

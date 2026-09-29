@@ -38,6 +38,7 @@ describe("findSmartEnergyFallbackTarget", () => {
     const controller = { my: true, pos: { x: 20, y: 20 }, id: "controller" } as unknown as StructureController;
     const room = {
       name: "W1N1",
+      memory: {},
       controller,
       find: (type: number) => {
         if (type === g.FIND_MY_CONSTRUCTION_SITES) return [];

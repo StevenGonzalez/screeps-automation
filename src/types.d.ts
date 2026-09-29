@@ -289,6 +289,23 @@ declare global {
     spawnHold?: { role: string; since: number; lastTick: number };
     bodyWait?: Record<string, number>;
     town?: TownMemory;
+    blueprint?: BlueprintMemory;
+  }
+
+  // The room's plan for every age (see docs/BLUEPRINT.md).
+  interface BlueprintMemory {
+    // Planner version; a newer planner plans the room again.
+    v: number;
+    // Tick the plan was made.
+    at: number;
+    anchor: { x: number; y: number };
+    hub: { x: number; y: number };
+    // Entries as "<type letter>x,y,rcl[,tag]" joined by ";".
+    s: string;
+    // Exit roads by side, as "x,y" joined by ";".
+    exits: Partial<Record<"top" | "right" | "bottom" | "left", string>>;
+    // Exit sides with remote traffic, whose roads are built and repaired.
+    lanes?: Array<"top" | "right" | "bottom" | "left">;
   }
 
   interface Memory {

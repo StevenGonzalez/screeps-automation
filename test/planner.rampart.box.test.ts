@@ -14,14 +14,30 @@ vi.mock("../src/services/services.mincut", () => ({
 }));
 
 import { planDefensivePerimeter } from "../src/planning/planner.rampart";
+import { encodeBlueprint, BlueprintEntry } from "../src/planning/planner.blueprint";
 
-function makeRoom(level: number, planned: Record<string, string[]>): Room {
+let planTick = 0;
+function makeRoom(level: number, entries: BlueprintEntry[]): Room {
+  const bp = { anchor: { x: 25, y: 25 }, hub: { x: 25, y: 27 }, entries, exits: {} };
   return {
     name: "W1N1",
     controller: { level, pos: { x: 45, y: 45 } },
-    memory: { castleAnchor: { x: 25, y: 25 }, plannedStructures: planned, plannedStructuresMeta: {} },
+    memory: {
+      castleAnchor: { x: 25, y: 25 },
+      plannedStructures: {},
+      plannedStructuresMeta: {},
+      // A new plan tick per room, so the decoded-plan cache never hands back a stale one.
+      blueprint: encodeBlueprint(bp, ++planTick),
+    },
   } as unknown as Room;
 }
+
+const castle: BlueprintEntry[] = [
+  { type: "spawn", x: 25, y: 25, rcl: 1 },
+  { type: "extension", x: 20, y: 22, rcl: 2 },
+  { type: "tower", x: 30, y: 31, rcl: 8 },
+  { type: "link", x: 26, y: 28, rcl: 5, tag: "storage" },
+];
 
 describe("planDefensivePerimeter protected box", () => {
   beforeEach(() => {
@@ -29,27 +45,29 @@ describe("planDefensivePerimeter protected box", () => {
     captured.length = 0;
   });
 
-  it("covers the full RCL 8 stamp even at RCL 3", () => {
-    planDefensivePerimeter(makeRoom(3, { stamp_spawn_1: ["25,25"] }));
-    expect(captured[0][0]).toEqual({ x1: 19, y1: 19, x2: 31, y2: 31 });
+  it("covers the whole RCL 8 castle even at RCL 3", () => {
+    planDefensivePerimeter(makeRoom(3, castle));
+    expect(captured[0][0]).toEqual({ x1: 20, y1: 22, x2: 30, y2: 31 });
   });
 
-  it("does not stretch to the extractor or outlying links", () => {
+  it("does not stretch to the outposts or along the roads", () => {
     planDefensivePerimeter(
-      makeRoom(8, {
-        stamp_spawn_1: ["25,25"],
-        extractor_m1: ["5,5"],
-        link_source_s1: ["40,10"],
-        link_controller: ["44,44"],
-      })
+      makeRoom(8, [
+        ...castle,
+        { type: "extractor", x: 5, y: 5, rcl: 6, tag: "mineral:m1" },
+        { type: "container", x: 6, y: 5, rcl: 6, tag: "mineral:m1" },
+        { type: "link", x: 40, y: 10, rcl: 5, tag: "source:s1" },
+        { type: "link", x: 44, y: 44, rcl: 5, tag: "controller" },
+        { type: "road", x: 40, y: 11, rcl: 2 },
+      ])
     );
-    expect(captured[0][0]).toEqual({ x1: 19, y1: 19, x2: 31, y2: 31 });
+    expect(captured[0][0]).toEqual({ x1: 20, y1: 22, x2: 30, y2: 31 });
   });
 
-  it("leaves make-up extensions outside the stamp out of the box", () => {
-    planDefensivePerimeter(
-      makeRoom(8, { stamp_spawn_1: ["25,25"], stamp_extensions: ["26,27", "36,25"] })
-    );
-    expect(captured[0][0]).toEqual({ x1: 19, y1: 19, x2: 31, y2: 31 });
+  it("waits for a blueprint", () => {
+    const room = makeRoom(8, castle);
+    delete room.memory.blueprint;
+    planDefensivePerimeter(room);
+    expect(captured).toHaveLength(0);
   });
 });

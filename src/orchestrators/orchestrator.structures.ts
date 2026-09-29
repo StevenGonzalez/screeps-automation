@@ -1,20 +1,18 @@
 import {
-  planSourceContainer,
-  planControllerContainer,
-  planControllerLink,
-  planSourceLink,
-  planMineralContainer,
   addPlannedStructureToMemory,
   ensureMemoryRoomStructures,
-  plannedPositionsFromMemory,
-  removeRoadsAroundStructures,
-  pruneRoadsUnderStructures,
-  removeConnectorRoads,
   structureTypeForKey,
   nextSpawnName,
 } from "../services/services.structures";
 import { PLANNER_KEYS, STRUCTURE_PLANNER } from "../config/config.structures";
-import { applyCastleStamp, planCardinalArteries } from "../planning/planner.room";
+import {
+  Blueprint,
+  BlueprintEntry,
+  ExitSide,
+  blueprintIsCurrent,
+  planRoomBlueprint,
+  readBlueprint,
+} from "../planning/planner.blueprint";
 import { planDefensivePerimeter } from "../planning/planner.rampart";
 import { planTown } from "../planning/planner.town";
 import { isSourceSafe } from "../services/services.creep";
@@ -550,167 +548,192 @@ function processRoomStructures(room: Room) {
   if (Game.time - last < STRUCTURE_PLANNER.planInterval) return;
   ensureMemoryRoomStructures(room);
 
-  const meta = room.memory.plannedStructuresMeta ?? {};
-  const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
-  const pruneAge = STRUCTURE_PLANNER.plannedRoadPruneTicks;
-  if (pruneAge > 0) {
-    const occupiedPos = new Set<string>();
-    for (const s of room.find(FIND_STRUCTURES) as Structure[]) occupiedPos.add(`${s.pos.x},${s.pos.y}`);
-    for (const s of room.find(FIND_CONSTRUCTION_SITES) as ConstructionSite[]) occupiedPos.add(`${s.pos.x},${s.pos.y}`);
-
-    for (const key of Object.keys(mem)) {
-      if (
-        !key.startsWith(PLANNER_KEYS.ROAD_PREFIX) &&
-        !key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX) &&
-        !key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX) &&
-        !key.startsWith("cardinal_connector_")
-      )
-        continue;
-      const info = meta[key];
-      if (!info?.createdAt) continue;
-      if (Game.time - info.createdAt < pruneAge) continue;
-      let anyLive = false;
-      for (const p of mem[key] ?? []) {
-        if (occupiedPos.has(p)) { anyLive = true; break; }
-      }
-      if (!anyLive) {
-        delete room.memory.plannedStructures![key];
-        if (room.memory.plannedStructuresMeta) delete room.memory.plannedStructuresMeta[key];
-      }
+  if (!blueprintIsCurrent(room)) {
+    if (planRoomBlueprint(room)) {
+      // The ring wraps the castle, so a new plan means a new ring.
+      delete room.memory.plannedStructuresMeta?.[PLANNER_KEYS.STAMP_RAMPART_KEY];
+    } else {
+      console.log(`[blueprint] ${room.name}: no layout fits this room`);
     }
   }
-
-  applyCastleStamp(room);
+  const bp = readBlueprint(room);
+  if (bp) {
+    room.memory.blueprint!.lanes = activeLanes(room);
+    materializeBlueprint(room, bp);
+    clearWayForBlueprint(room, bp);
+  }
 
   planDefensivePerimeter(room);
 
   planTown(room);
 
-  const sources = room.find(FIND_SOURCES);
-  for (const source of sources) {
-    if (!isSourceSafe(source)) continue;
-    const planned = plannedPositionsFromMemory(
-      room,
-      `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`
-    );
-    if (planned.length > 0) continue;
-    const pos = planSourceContainer(room, source);
-    if (pos)
-      addPlannedStructureToMemory(
-        room,
-        `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${source.id}`,
-        pos
-      );
-  }
-
-  if (room.controller) {
-    const planned = plannedPositionsFromMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER);
-    let hasControllerContainer = false;
-
-    if (room.memory.upgradeContainerId) {
-      const container = Game.getObjectById(
-        room.memory.upgradeContainerId
-      ) as StructureContainer | null;
-      if (
-        container &&
-        container.structureType === STRUCTURE_CONTAINER &&
-        container.pos.getRangeTo(room.controller.pos) <= 2
-      ) {
-        hasControllerContainer = true;
-      }
-    }
-    if (!hasControllerContainer) {
-      const containers = room.find(FIND_STRUCTURES, {
-        filter: (s) =>
-          s.structureType === STRUCTURE_CONTAINER &&
-          s.pos.getRangeTo(room.controller!.pos) <= 2,
-      }) as StructureContainer[];
-      if (containers.length > 0) hasControllerContainer = true;
-    }
-
-    if (hasControllerContainer && planned.length > 0) {
-      delete mem[PLANNER_KEYS.CONTAINER_CONTROLLER];
-      if (room.memory.plannedStructuresMeta) delete room.memory.plannedStructuresMeta[PLANNER_KEYS.CONTAINER_CONTROLLER];
-    } else if (planned.length > 1) {
-      mem[PLANNER_KEYS.CONTAINER_CONTROLLER] = [mem[PLANNER_KEYS.CONTAINER_CONTROLLER][0]];
-    } else if (planned.length === 0 && !hasControllerContainer) {
-      const pos = planControllerContainer(room, room.controller);
-      if (pos) addPlannedStructureToMemory(room, PLANNER_KEYS.CONTAINER_CONTROLLER, pos);
-    }
-  }
-
-  if (room.controller) {
-    const rcl = room.controller.level;
-
-    if (rcl >= 6) {
-      const plannedLink = plannedPositionsFromMemory(room, PLANNER_KEYS.LINK_CONTROLLER);
-      const builtNearController =
-        room.controller.pos.findInRange(FIND_MY_STRUCTURES, 3, {
-          filter: (s) => s.structureType === STRUCTURE_LINK,
-        }).length > 0;
-      if (plannedLink.length === 0 && !builtNearController) {
-        const pos = planControllerLink(room, room.controller);
-        if (pos) addPlannedStructureToMemory(room, PLANNER_KEYS.LINK_CONTROLLER, pos);
-      }
-    }
-
-    const ref = room.storage?.pos ?? room.find(FIND_MY_SPAWNS)[0]?.pos;
-    if (ref) {
-      const ranked = room
-        .find(FIND_SOURCES)
-        .filter((s) => isSourceSafe(s))
-        .sort((a, b) => b.pos.getRangeTo(ref) - a.pos.getRangeTo(ref));
-      ranked.forEach((source, i) => {
-        // The farthest source gets a link as soon as links unlock at RCL 5,
-        // paired with the storage link; the second waits for RCL 8.
-        if (rcl < (i === 0 ? 5 : 8)) return;
-        const key = `${PLANNER_KEYS.LINK_SOURCE_PREFIX}${source.id}`;
-        if (plannedPositionsFromMemory(room, key).length > 0) return;
-        const builtNearSource =
-          source.pos.findInRange(FIND_MY_STRUCTURES, 2, {
-            filter: (s) => s.structureType === STRUCTURE_LINK,
-          }).length > 0;
-        if (builtNearSource) return;
-        const pos = planSourceLink(room, source);
-        if (pos) addPlannedStructureToMemory(room, key, pos);
-      });
-    }
-  }
-
-  planMineralStructures(room);
-
-  planCardinalArteries(room, getActiveRemoteRooms(room));
-
-  removeRoadsAroundStructures(room);
-  pruneRoadsUnderStructures(room);
-  removeConnectorRoads(room);
-
   room.memory.lastStructurePlanTick = Game.time;
 }
 
-// The mineral container is only the mineral miner's standing tile, and that
-// miner needs an extractor, which unlocks at RCL 6. Before then the container
-// would just decay, so drop any plan made for it earlier.
-export function planMineralStructures(room: Room) {
-  const mineral = room.find(FIND_MINERALS)[0] as Mineral | undefined;
-  if (!mineral) return;
+function sideOfExit(exit: ExitConstant): ExitSide {
+  if (exit === FIND_EXIT_TOP) return "top";
+  if (exit === FIND_EXIT_RIGHT) return "right";
+  if (exit === FIND_EXIT_BOTTOM) return "bottom";
+  return "left";
+}
 
-  const containerKey = `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${mineral.id}`;
-  if ((room.controller?.level ?? 0) < 6) {
-    delete room.memory.plannedStructures?.[containerKey];
-    delete room.memory.plannedStructuresMeta?.[containerKey];
-    return;
+const LANE_KEYS: Record<ExitSide, string> = {
+  top: `${PLANNER_KEYS.CARDINAL_ROAD_PREFIX}north`,
+  right: `${PLANNER_KEYS.CARDINAL_ROAD_PREFIX}east`,
+  bottom: `${PLANNER_KEYS.CARDINAL_ROAD_PREFIX}south`,
+  left: `${PLANNER_KEYS.CARDINAL_ROAD_PREFIX}west`,
+};
+
+// Sides of the room the worked remotes are reached through; only those get
+// (and keep up) their exit road.
+function activeLanes(room: Room): ExitSide[] {
+  const out = new Set<ExitSide>();
+  for (const r of getActiveRemoteRooms(room)) {
+    const exit = room.findExitTo(r.roomName);
+    if (exit === ERR_NO_PATH || exit === ERR_INVALID_ARGS) continue;
+    out.add(sideOfExit(exit));
+  }
+  return [...out];
+}
+
+// The planned-structure key a blueprint entry is built under.
+function keyForEntry(e: BlueprintEntry, n: Map<string, number>): string {
+  const next = (type: string): number => {
+    const i = (n.get(type) ?? 0) + 1;
+    n.set(type, i);
+    return i;
+  };
+  const id = e.tag ? e.tag.slice(e.tag.indexOf(":") + 1) : "";
+  switch (e.type) {
+    case STRUCTURE_SPAWN: return `${PLANNER_KEYS.STAMP_SPAWN_PREFIX}${next(e.type)}`;
+    case STRUCTURE_TOWER: return `${PLANNER_KEYS.STAMP_TOWER_PREFIX}${next(e.type)}`;
+    case STRUCTURE_EXTENSION: return PLANNER_KEYS.STAMP_EXTENSION_KEY;
+    case STRUCTURE_LAB: return PLANNER_KEYS.STAMP_LAB_KEY;
+    case STRUCTURE_STORAGE: return PLANNER_KEYS.STAMP_STORAGE_KEY;
+    case STRUCTURE_TERMINAL: return PLANNER_KEYS.STAMP_TERMINAL_KEY;
+    case STRUCTURE_FACTORY: return PLANNER_KEYS.STAMP_FACTORY_KEY;
+    case STRUCTURE_NUKER: return PLANNER_KEYS.STAMP_NUKER_KEY;
+    case STRUCTURE_POWER_SPAWN: return PLANNER_KEYS.STAMP_POWER_SPAWN_KEY;
+    case STRUCTURE_OBSERVER: return PLANNER_KEYS.STAMP_OBSERVER_KEY;
+    case STRUCTURE_EXTRACTOR: return `${PLANNER_KEYS.EXTRACTOR_PREFIX}${id}`;
+    case STRUCTURE_ROAD: return `${PLANNER_KEYS.ROAD_PREFIX}blueprint`;
+    case STRUCTURE_LINK:
+      if (e.tag?.startsWith("source:")) return `${PLANNER_KEYS.LINK_SOURCE_PREFIX}${id}`;
+      if (e.tag === "controller") return PLANNER_KEYS.LINK_CONTROLLER;
+      return PLANNER_KEYS.STAMP_LINK_KEY;
+    case STRUCTURE_CONTAINER:
+      if (e.tag?.startsWith("source:")) return `${PLANNER_KEYS.CONTAINER_SOURCE_PREFIX}${id}`;
+      if (e.tag?.startsWith("mineral:")) return `${PLANNER_KEYS.CONTAINER_MINERAL_PREFIX}${id}`;
+      return PLANNER_KEYS.CONTAINER_CONTROLLER;
+    default: return PLANNER_KEYS.CASTLE_STAMP_KEY;
+  }
+}
+
+// Keys the blueprint does not own: the defensive ring, the ramparts over
+// buildings, and the town.
+const KEPT_KEYS = new Set<string>([
+  PLANNER_KEYS.STAMP_RAMPART_KEY,
+  PLANNER_KEYS.RAMPARTS_KEY,
+  PLANNER_KEYS.TOWN_WALL_KEY,
+  PLANNER_KEYS.TOWN_RAMPART_KEY,
+]);
+
+// A source is skipped while it is unsafe (a keeper lair, an invader core): its
+// container and link wait until it is safe to build there.
+function unsafeTags(room: Room): Set<string> {
+  const out = new Set<string>();
+  for (const s of room.find(FIND_SOURCES)) if (!isSourceSafe(s)) out.add(`source:${s.id}`);
+  return out;
+}
+
+/**
+ * Writes every blueprint entry the room's age has unlocked into the planned
+ * structures, replacing whatever older planners put there. Construction
+ * (applyPlannedConstruction) then builds what is missing.
+ */
+export function materializeBlueprint(room: Room, bp: Blueprint): void {
+  const rcl = room.controller?.level ?? 0;
+  const old = room.memory.plannedStructures ?? {};
+  const meta = room.memory.plannedStructuresMeta ?? (room.memory.plannedStructuresMeta = {});
+  const mem: Record<string, string[]> = {};
+  for (const key of Object.keys(old)) if (KEPT_KEYS.has(key)) mem[key] = old[key];
+
+  const unsafe = unsafeTags(room);
+  const counters = new Map<string, number>();
+  for (const e of bp.entries) {
+    if (e.rcl > rcl) continue;
+    if (e.tag && unsafe.has(e.tag)) continue;
+    const key = keyForEntry(e, counters);
+    (mem[key] ??= []).push(`${e.x},${e.y}`);
+  }
+  for (const side of room.memory.blueprint?.lanes ?? []) {
+    const path = bp.exits[side];
+    if (path && path.length > 0) mem[LANE_KEYS[side]] = path.map((p) => `${p.x},${p.y}`);
   }
 
-  if (plannedPositionsFromMemory(room, containerKey).length === 0) {
-    const mpos = planMineralContainer(room, mineral);
-    if (mpos) addPlannedStructureToMemory(room, containerKey, mpos);
+  for (const key of Object.keys(meta)) if (!mem[key]) delete meta[key];
+  for (const key of Object.keys(mem)) meta[key] ??= { createdAt: Game.time };
+  room.memory.plannedStructures = mem;
+}
+
+// Types that may share a tile with the building planned there.
+const COEXISTS = new Set<string>([STRUCTURE_ROAD, STRUCTURE_RAMPART]);
+// Types a stray of which is torn down to make room for its planned place.
+const MOVABLE = new Set<string>([STRUCTURE_EXTENSION, STRUCTURE_LAB, STRUCTURE_LINK, STRUCTURE_CONTAINER]);
+
+/**
+ * Tears down one structure that stands between the room and its next planned
+ * building: one sitting on a planned tile, or one built off the plan that
+ * holds the type's last slot. One per run, so the room is never stripped
+ * at once, and none while enemies are in the room.
+ */
+export function clearWayForBlueprint(room: Room, bp: Blueprint): void {
+  const rcl = room.controller?.level ?? 0;
+  if (room.find(FIND_HOSTILE_CREEPS).length > 0) return;
+
+  const unlocked = new Map<string, BlueprintEntry>();
+  for (const e of bp.entries) if (e.rcl <= rcl && e.type !== STRUCTURE_ROAD) unlocked.set(`${e.x},${e.y}`, e);
+  const planned = new Set<string>();
+  for (const e of bp.entries) if (e.type !== STRUCTURE_ROAD) planned.add(`${e.x},${e.y}:${e.type}`);
+
+  const structures = room.find(FIND_STRUCTURES);
+  const builtAt = new Set<string>();
+  for (const s of structures) builtAt.add(`${s.pos.x},${s.pos.y}:${s.structureType}`);
+  for (const s of room.find(FIND_MY_CONSTRUCTION_SITES)) builtAt.add(`${s.pos.x},${s.pos.y}:${s.structureType}`);
+
+  // Something on a planned tile the planned building cannot share.
+  for (const s of structures) {
+    if (s.structureType === STRUCTURE_CONTROLLER || COEXISTS.has(s.structureType)) continue;
+    const k = `${s.pos.x},${s.pos.y}`;
+    const e = unlocked.get(k);
+    if (!e || e.type === s.structureType || builtAt.has(`${k}:${e.type}`)) continue;
+    if (s.structureType === STRUCTURE_SPAWN) continue;
+    if (s.destroy() === OK) {
+      console.log(`[blueprint] ${room.name}: removed ${s.structureType} at ${k} for a planned ${e.type}`);
+      return;
+    }
   }
 
-  if (!room.memory.extractorId) {
-    const extractorKey = `${PLANNER_KEYS.EXTRACTOR_PREFIX}${mineral.id}`;
-    if (plannedPositionsFromMemory(room, extractorKey).length === 0) {
-      addPlannedStructureToMemory(room, extractorKey, mineral.pos);
+  // A building off the plan holding a slot a planned one is waiting for.
+  const waiting = new Set<string>();
+  for (const e of unlocked.values()) {
+    if (MOVABLE.has(e.type) && !builtAt.has(`${e.x},${e.y}:${e.type}`)) waiting.add(e.type);
+  }
+  for (const type of waiting) {
+    const own = structures.filter((s) => s.structureType === type && (s as OwnedStructure).my !== false);
+    const cap = CONTROLLER_STRUCTURES[type as BuildableStructureConstant]?.[rcl] ?? 0;
+    if (own.length < cap) continue;
+    const strays = own.filter((s) => !planned.has(`${s.pos.x},${s.pos.y}:${type}`));
+    if (strays.length === 0) continue;
+    const farthest = strays.reduce((a, b) =>
+      Math.max(Math.abs(a.pos.x - bp.hub.x), Math.abs(a.pos.y - bp.hub.y)) >=
+      Math.max(Math.abs(b.pos.x - bp.hub.x), Math.abs(b.pos.y - bp.hub.y))
+        ? a
+        : b
+    );
+    if (farthest.destroy() === OK) {
+      console.log(`[blueprint] ${room.name}: removed a stray ${type} at ${farthest.pos.x},${farthest.pos.y}`);
+      return;
     }
   }
 }

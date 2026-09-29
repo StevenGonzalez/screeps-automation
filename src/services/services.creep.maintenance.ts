@@ -1,5 +1,6 @@
 import { TOWN } from "../config/config.town";
 import { townBarrierTiles } from "./services.town";
+import { keptRoadTiles } from "../planning/planner.blueprint";
 import {
   closestByPath,
   getRoomStructures,
@@ -198,6 +199,14 @@ function isDamaged(s: AnyStructure): boolean {
   return s.hits < s.hitsMax;
 }
 
+// A room with a blueprint keeps up only the roads the plan wants; the rest
+// are left to decay. Rooms without one (remotes) keep every road.
+function keptUp(room: Room): (s: AnyStructure) => boolean {
+  const roads = keptRoadTiles(room);
+  if (!roads) return () => true;
+  return (s) => s.structureType !== STRUCTURE_ROAD || roads.has(`${s.pos.x},${s.pos.y}`);
+}
+
 function decayRescueFloor(s: AnyStructure): number {
   switch (s.structureType) {
     case STRUCTURE_RAMPART:
@@ -212,11 +221,13 @@ function decayRescueFloor(s: AnyStructure): number {
 }
 
 export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
+  const kept = keptUp(creep.room);
   const repairTargets = getRoomStructures(creep.room).filter(
     (s): s is AnyStructure =>
       s.structureType !== STRUCTURE_WALL &&
       s.structureType !== STRUCTURE_RAMPART &&
-      isDamaged(s)
+      isDamaged(s) &&
+      kept(s)
   );
   if (repairTargets.length === 0) return null;
   return closestByPath(creep.pos, repairTargets) || null;
@@ -304,9 +315,10 @@ export function findMostCriticalRepairTarget(
   const isBarrier = (st: AnyStructure) =>
     st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART;
 
-  // Unplanned ramparts get no repair at all, not even decay rescue.
+  // Unplanned ramparts and roads get no repair at all, not even decay rescue.
+  const kept = keptUp(creep.room);
   const structures = getRoomStructures(creep.room).filter(
-    (st) => !isBarrier(st) || targetOf(st) > 0
+    (st) => (!isBarrier(st) || targetOf(st) > 0) && kept(st)
   );
 
   const dying = structures.filter(
@@ -373,7 +385,9 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
   const towerWallThreshold = Math.min(50_000, Math.max(5_000, getRampartTargetHP(rcl) * 0.05));
 
   const targetOf = barrierTargetFn(room);
+  const kept = keptUp(room);
   const candidates = getRoomStructures(room).filter((st): st is AnyStructure => {
+    if (!kept(st)) return false;
     if (st.structureType === STRUCTURE_RAMPART || st.structureType === STRUCTURE_WALL) {
       return st.hits < Math.min(towerWallThreshold, targetOf(st));
     }
