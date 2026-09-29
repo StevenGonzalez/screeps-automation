@@ -3171,6 +3171,17 @@ function runHarvester(creep) {
 }
 
 const UPGRADER_STORAGE_FLOOR = 10000;
+const UPGRADER_DOWNGRADE_GUARD = 5000;
+function nearDowngrade(room) {
+    const ctrl = room.controller;
+    return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
+}
+function upgradingFunded(room) {
+    const storage = room.storage;
+    if (!storage)
+        return true;
+    return storage.store[RESOURCE_ENERGY] > UPGRADER_STORAGE_FLOOR || nearDowngrade(room);
+}
 function runUpgrader(creep) {
     var _a;
     if (creep.memory.working === undefined)
@@ -3204,18 +3215,16 @@ function runUpgrader(creep) {
                 return;
         }
     }
-    const ctrl = creep.room.controller;
-    const nearDowngrade = !!ctrl && ctrl.my && ctrl.ticksToDowngrade < 5000;
     const storage = creep.room.storage;
-    if (storage &&
-        (storage.store[RESOURCE_ENERGY] > UPGRADER_STORAGE_FLOOR || nearDowngrade) &&
-        storage.store[RESOURCE_ENERGY] > 0) {
+    if (storage && upgradingFunded(creep.room) && storage.store[RESOURCE_ENERGY] > 0) {
         if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
             creep.moveTo(storage, { reusePath: 50 });
         }
         return;
     }
-    acquireEnergy(creep, { bufferOnly: !!creep.room.storage && !nearDowngrade });
+    if (storage && !nearDowngrade(creep.room))
+        return;
+    acquireEnergy(creep);
 }
 const CONTROLLER_LINK_SCAN_TTL = 200;
 function findControllerLink(creep) {
@@ -3340,6 +3349,162 @@ function runRepairer(creep) {
     putSurplusEnergyToWork(creep);
 }
 
+const LINK_TRANSFER_THRESHOLD = 400;
+const LINK_MIN_TRANSFER = 150;
+const LINK_SINK_HEADROOM = 100;
+const CONTROLLER_LINK_LOW = 400;
+function loop$k() {
+    var _a;
+    for (const roomName in Game.rooms) {
+        const room = Game.rooms[roomName];
+        if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
+            continue;
+        processRoomLinks(room);
+    }
+}
+function processRoomLinks(room) {
+    const links = getRoomLinks(room);
+    if (links.length < 2)
+        return;
+    const funded = upgradingFunded(room);
+    const roles = getLinkRoles(room, links);
+    const { sources, sinks: allSinks } = classifyLinks(room, links);
+    const sinks = funded ? allSinks : allSinks.filter((l) => roles[l.id] !== "controller");
+    let hungry = funded ? findHungryControllerLink(room, links) : null;
+    for (const src of sources) {
+        if (src.cooldown > 0)
+            continue;
+        const available = src.store[RESOURCE_ENERGY];
+        if (available < LINK_MIN_TRANSFER)
+            continue;
+        const sink = hungry !== null && hungry !== void 0 ? hungry : pickSink(sinks, src);
+        if (!sink)
+            continue;
+        const deficit = sink.store.getFreeCapacity(RESOURCE_ENERGY);
+        if (Math.min(available, deficit) < LINK_MIN_TRANSFER)
+            continue;
+        if (src.transferEnergy(sink) === OK && sink === hungry)
+            hungry = null;
+    }
+    if (!hungry)
+        return;
+    const relay = findRelayLink(room);
+    if (relay &&
+        relay.cooldown === 0 &&
+        relay.store[RESOURCE_ENERGY] >= LINK_MIN_TRANSFER) {
+        relay.transferEnergy(hungry);
+    }
+}
+function getRoomLinks(room) {
+    var _a;
+    return ((_a = room.memory.linkIds) !== null && _a !== void 0 ? _a : [])
+        .map((id) => Game.getObjectById(id))
+        .filter(Boolean);
+}
+function findHungryControllerLink(room, links) {
+    const roles = getLinkRoles(room, links);
+    let best = null;
+    for (const link of links) {
+        if (roles[link.id] !== "controller")
+            continue;
+        if (link.store[RESOURCE_ENERGY] >= CONTROLLER_LINK_LOW)
+            continue;
+        if (!best || link.store[RESOURCE_ENERGY] < best.store[RESOURCE_ENERGY]) {
+            best = link;
+        }
+    }
+    return best;
+}
+function findRelayLink(room) {
+    var _a;
+    if (!room.storage || !upgradingFunded(room))
+        return null;
+    const links = getRoomLinks(room);
+    if (links.length < 2)
+        return null;
+    if (!findHungryControllerLink(room, links))
+        return null;
+    const roles = getLinkRoles(room, links);
+    return (_a = links.find((l) => roles[l.id] === "storage")) !== null && _a !== void 0 ? _a : null;
+}
+function sourceLinksHaveOutlet(room) {
+    if (upgradingFunded(room))
+        return true;
+    const links = getRoomLinks(room);
+    const roles = getLinkRoles(room, links);
+    return links.some((l) => roles[l.id] === "storage");
+}
+const linkRoleCache = {};
+function getLinkRoles(room, links) {
+    var _a, _b;
+    const storage = room.storage;
+    const signature = `${links.map((l) => l.id).join(",")}|${(_a = storage === null || storage === void 0 ? void 0 : storage.id) !== null && _a !== void 0 ? _a : ""}`;
+    const cached = linkRoleCache[room.name];
+    if (cached && cached.signature === signature)
+        return cached.roles;
+    const minerContainers = ((_b = room.memory.minerContainerIds) !== null && _b !== void 0 ? _b : [])
+        .map((id) => Game.getObjectById(id))
+        .filter(Boolean);
+    const controller = room.controller;
+    const roles = {};
+    for (const link of links) {
+        const nearMiner = minerContainers.some((c) => link.pos.getRangeTo(c.pos) <= 2);
+        const nearController = controller && link.pos.getRangeTo(controller.pos) <= 3;
+        const nearStorage = storage && link.pos.getRangeTo(storage.pos) <= 2;
+        if (nearMiner && !nearController && !nearStorage) {
+            roles[link.id] = "source";
+        }
+        else if (nearController) {
+            roles[link.id] = "controller";
+        }
+        else if (nearStorage) {
+            roles[link.id] = "storage";
+        }
+        else {
+            roles[link.id] = "neutral";
+        }
+    }
+    linkRoleCache[room.name] = { signature, roles };
+    return roles;
+}
+function classifyLinks(room, links) {
+    const roles = getLinkRoles(room, links);
+    const sources = [];
+    const sinks = [];
+    for (const link of links) {
+        const role = roles[link.id];
+        if (role === "source") {
+            sources.push(link);
+        }
+        else if (role === "controller" || role === "storage") {
+            sinks.push(link);
+        }
+        else {
+            if (link.store[RESOURCE_ENERGY] > LINK_TRANSFER_THRESHOLD) {
+                sources.push(link);
+            }
+            else {
+                sinks.push(link);
+            }
+        }
+    }
+    return { sources, sinks };
+}
+function pickSink(sinks, src) {
+    let best = null;
+    let bestFree = LINK_SINK_HEADROOM - 1;
+    for (const sink of sinks) {
+        if (sink.id === src.id)
+            continue;
+        const free = sink.store.getFreeCapacity(RESOURCE_ENERGY);
+        if (free > bestFree) {
+            best = sink;
+            bestFree = free;
+        }
+    }
+    return best;
+}
+
 const CONTAINER_REPAIR_THRESHOLD = 0.9;
 function runMiner(creep) {
     var _a;
@@ -3375,7 +3540,7 @@ function runMiner(creep) {
                 creep.repair(container);
                 return;
             }
-            if (creep.store.getFreeCapacity() === 0) {
+            if (creep.store.getFreeCapacity() === 0 && sourceLinksHaveOutlet(creep.room)) {
                 const link = findAdjacentLink(creep);
                 if (link && link.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
                     creep.transfer(link, RESOURCE_ENERGY);
@@ -3631,154 +3796,6 @@ function collectEnergy$1(creep, storageModel) {
         }
     }
     return false;
-}
-
-const LINK_TRANSFER_THRESHOLD = 400;
-const LINK_MIN_TRANSFER = 150;
-const LINK_SINK_HEADROOM = 100;
-const CONTROLLER_LINK_LOW = 400;
-function loop$k() {
-    var _a;
-    for (const roomName in Game.rooms) {
-        const room = Game.rooms[roomName];
-        if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
-            continue;
-        processRoomLinks(room);
-    }
-}
-function processRoomLinks(room) {
-    const links = getRoomLinks(room);
-    if (links.length < 2)
-        return;
-    const { sources, sinks } = classifyLinks(room, links);
-    let hungry = findHungryControllerLink(room, links);
-    for (const src of sources) {
-        if (src.cooldown > 0)
-            continue;
-        const available = src.store[RESOURCE_ENERGY];
-        if (available < LINK_MIN_TRANSFER)
-            continue;
-        const sink = hungry !== null && hungry !== void 0 ? hungry : pickSink(sinks, src);
-        if (!sink)
-            continue;
-        const deficit = sink.store.getFreeCapacity(RESOURCE_ENERGY);
-        if (Math.min(available, deficit) < LINK_MIN_TRANSFER)
-            continue;
-        if (src.transferEnergy(sink) === OK && sink === hungry)
-            hungry = null;
-    }
-    if (!hungry)
-        return;
-    const relay = findRelayLink(room);
-    if (relay &&
-        relay.cooldown === 0 &&
-        relay.store[RESOURCE_ENERGY] >= LINK_MIN_TRANSFER) {
-        relay.transferEnergy(hungry);
-    }
-}
-function getRoomLinks(room) {
-    var _a;
-    return ((_a = room.memory.linkIds) !== null && _a !== void 0 ? _a : [])
-        .map((id) => Game.getObjectById(id))
-        .filter(Boolean);
-}
-function findHungryControllerLink(room, links) {
-    const roles = getLinkRoles(room, links);
-    let best = null;
-    for (const link of links) {
-        if (roles[link.id] !== "controller")
-            continue;
-        if (link.store[RESOURCE_ENERGY] >= CONTROLLER_LINK_LOW)
-            continue;
-        if (!best || link.store[RESOURCE_ENERGY] < best.store[RESOURCE_ENERGY]) {
-            best = link;
-        }
-    }
-    return best;
-}
-function findRelayLink(room) {
-    var _a;
-    const storage = room.storage;
-    if (!storage || storage.store[RESOURCE_ENERGY] <= UPGRADER_STORAGE_FLOOR) {
-        return null;
-    }
-    const links = getRoomLinks(room);
-    if (links.length < 2)
-        return null;
-    if (!findHungryControllerLink(room, links))
-        return null;
-    const roles = getLinkRoles(room, links);
-    return (_a = links.find((l) => roles[l.id] === "storage")) !== null && _a !== void 0 ? _a : null;
-}
-const linkRoleCache = {};
-function getLinkRoles(room, links) {
-    var _a, _b;
-    const storage = room.storage;
-    const signature = `${links.map((l) => l.id).join(",")}|${(_a = storage === null || storage === void 0 ? void 0 : storage.id) !== null && _a !== void 0 ? _a : ""}`;
-    const cached = linkRoleCache[room.name];
-    if (cached && cached.signature === signature)
-        return cached.roles;
-    const minerContainers = ((_b = room.memory.minerContainerIds) !== null && _b !== void 0 ? _b : [])
-        .map((id) => Game.getObjectById(id))
-        .filter(Boolean);
-    const controller = room.controller;
-    const roles = {};
-    for (const link of links) {
-        const nearMiner = minerContainers.some((c) => link.pos.getRangeTo(c.pos) <= 2);
-        const nearController = controller && link.pos.getRangeTo(controller.pos) <= 3;
-        const nearStorage = storage && link.pos.getRangeTo(storage.pos) <= 2;
-        if (nearMiner && !nearController && !nearStorage) {
-            roles[link.id] = "source";
-        }
-        else if (nearController) {
-            roles[link.id] = "controller";
-        }
-        else if (nearStorage) {
-            roles[link.id] = "storage";
-        }
-        else {
-            roles[link.id] = "neutral";
-        }
-    }
-    linkRoleCache[room.name] = { signature, roles };
-    return roles;
-}
-function classifyLinks(room, links) {
-    const roles = getLinkRoles(room, links);
-    const sources = [];
-    const sinks = [];
-    for (const link of links) {
-        const role = roles[link.id];
-        if (role === "source") {
-            sources.push(link);
-        }
-        else if (role === "controller" || role === "storage") {
-            sinks.push(link);
-        }
-        else {
-            if (link.store[RESOURCE_ENERGY] > LINK_TRANSFER_THRESHOLD) {
-                sources.push(link);
-            }
-            else {
-                sinks.push(link);
-            }
-        }
-    }
-    return { sources, sinks };
-}
-function pickSink(sinks, src) {
-    let best = null;
-    let bestFree = LINK_SINK_HEADROOM - 1;
-    for (const sink of sinks) {
-        if (sink.id === src.id)
-            continue;
-        const free = sink.store.getFreeCapacity(RESOURCE_ENERGY);
-        if (free > bestFree) {
-            best = sink;
-            bestFree = free;
-        }
-    }
-    return best;
 }
 
 const POWER_SPAWN_POWER_LOW = 50;
@@ -12801,12 +12818,13 @@ function getRepairerPopulationTarget(room) {
     const cached = repairerTargetCache[room.name];
     if (cached && Game.time - cached.tick < 50)
         return cached.value;
+    const kept = keptUp(room);
     const worn = room.find(FIND_STRUCTURES, {
         filter: (s) => {
             if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
                 return false;
             const st = s;
-            return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.8;
+            return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.8 && kept(st);
         },
     });
     const critical = worn.filter((s) => s.hits < s.hitsMax * 0.5);
