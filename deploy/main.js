@@ -1031,6 +1031,7 @@ const PLANNER_KEYS = {
     STAMP_LINK_KEY: "stamp_link",
     STAMP_ROAD_KEY: "stamp_roads",
     STAMP_RAMPART_KEY: "stamp_ramparts",
+    STAMP_WALL_KEY: "stamp_walls",
     CARDINAL_ROAD_PREFIX: "cardinal_road_",
     TOWN_WALL_KEY: "town_walls",
     TOWN_RAMPART_KEY: "town_ramparts",
@@ -9838,6 +9839,623 @@ function runUnclaimer(creep) {
     }
 }
 
+const SIZE = 50;
+const idx = (x, y) => y * SIZE + x;
+const tileKey = (x, y) => `${x},${y}`;
+const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
+const NEIGHBOURS$1 = [
+    [-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1],
+];
+const TOWN_KEYS = new Set([PLANNER_KEYS.TOWN_WALL_KEY, PLANNER_KEYS.TOWN_RAMPART_KEY]);
+const PASSABLE_TYPES = new Set([STRUCTURE_ROAD, STRUCTURE_RAMPART, STRUCTURE_CONTAINER]);
+function isRoadKey(key) {
+    return (key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
+        key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX) ||
+        key === PLANNER_KEYS.STAMP_ROAD_KEY ||
+        key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX) ||
+        key.startsWith("cardinal_connector_"));
+}
+function buildTownSite(room) {
+    var _a, _b, _c, _d;
+    const anchor = room.memory.castleAnchor;
+    const ringTiles = room.memory.perimeterTiles;
+    if (!anchor || !ringTiles || ringTiles.length === 0)
+        return null;
+    const terrain = room.getTerrain();
+    const ownTiles = townFootprint(room.memory.town);
+    const ring = new Set(ringTiles);
+    const occupied = new Set(ring);
+    const structures = new Set();
+    const blocked = new Set();
+    const mem = ((_a = room.memory.plannedStructures) !== null && _a !== void 0 ? _a : {});
+    for (const key of Object.keys(mem)) {
+        if (TOWN_KEYS.has(key))
+            continue;
+        const road = isRoadKey(key);
+        const passable = road || key === PLANNER_KEYS.RAMPARTS_KEY || key === PLANNER_KEYS.STAMP_RAMPART_KEY ||
+            key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX);
+        for (const p of mem[key]) {
+            occupied.add(p);
+            if (!road)
+                structures.add(p);
+            if (!passable)
+                blocked.add(p);
+        }
+    }
+    const bp = readBlueprint(room);
+    for (const e of (_b = bp === null || bp === void 0 ? void 0 : bp.entries) !== null && _b !== void 0 ? _b : []) {
+        const k = tileKey(e.x, e.y);
+        occupied.add(k);
+        if (e.type !== STRUCTURE_ROAD)
+            structures.add(k);
+        if (!PASSABLE_TYPES.has(e.type))
+            blocked.add(k);
+    }
+    for (const s of room.find(FIND_STRUCTURES)) {
+        const k = tileKey(s.pos.x, s.pos.y);
+        if (ownTiles.has(k))
+            continue;
+        if (s.structureType === STRUCTURE_CONTROLLER) {
+            occupied.add(k);
+            blocked.add(k);
+            continue;
+        }
+        if (s.structureType === STRUCTURE_RAMPART)
+            continue;
+        occupied.add(k);
+        if (s.structureType !== STRUCTURE_ROAD)
+            structures.add(k);
+        if (!PASSABLE_TYPES.has(s.structureType))
+            blocked.add(k);
+    }
+    for (const s of room.find(FIND_CONSTRUCTION_SITES)) {
+        const k = tileKey(s.pos.x, s.pos.y);
+        if (ownTiles.has(k))
+            continue;
+        occupied.add(k);
+        if (s.structureType !== STRUCTURE_ROAD)
+            structures.add(k);
+        if (!PASSABLE_TYPES.has(s.structureType))
+            blocked.add(k);
+    }
+    const clearOf = [];
+    for (const s of room.find(FIND_SOURCES)) {
+        clearOf.push({ x: s.pos.x, y: s.pos.y, range: TOWN.cottageResourceClearance });
+        blocked.add(tileKey(s.pos.x, s.pos.y));
+    }
+    for (const m of room.find(FIND_MINERALS)) {
+        clearOf.push({ x: m.pos.x, y: m.pos.y, range: TOWN.cottageResourceClearance });
+        blocked.add(tileKey(m.pos.x, m.pos.y));
+    }
+    if (room.controller) {
+        const c = room.controller.pos;
+        clearOf.push({ x: c.x, y: c.y, range: TOWN.cottageControllerClearance });
+    }
+    const walkable = new Uint8Array(SIZE * SIZE);
+    for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL)
+                continue;
+            if (blocked.has(tileKey(x, y)))
+                continue;
+            walkable[idx(x, y)] = 1;
+        }
+    }
+    const reserved = new Set();
+    for (const o of [...CASTLE_STAMP, ...MERCHANT_RING_EXTENSION_OFFSETS]) {
+        reserved.add(tileKey(anchor.x + o.dx, anchor.y + o.dy));
+    }
+    for (let dy = -STAMP_PLANNER.halfSize; dy <= STAMP_PLANNER.halfSize; dy++) {
+        for (let dx = -STAMP_PLANNER.halfSize; dx <= STAMP_PLANNER.halfSize; dx++) {
+            reserved.add(tileKey(anchor.x + dx, anchor.y + dy));
+        }
+    }
+    const interior = floodInterior(terrain, ring, anchor);
+    if (!interior)
+        return null;
+    const storagePos = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.pos;
+    const plannedStorage = (_d = mem[PLANNER_KEYS.STAMP_STORAGE_KEY]) === null || _d === void 0 ? void 0 : _d[0];
+    const storage = storagePos
+        ? { x: storagePos.x, y: storagePos.y }
+        : bp
+            ? bp.hub
+            : plannedStorage
+                ? parseTile(plannedStorage)
+                : { x: anchor.x, y: anchor.y + 2 };
+    return { anchor, occupied, structures, walkable, interior, reserved, clearOf, ring, storage };
+}
+function floodInterior(terrain, ring, anchor) {
+    const inside = new Uint8Array(SIZE * SIZE);
+    const queue = [idx(anchor.x, anchor.y)];
+    inside[queue[0]] = 1;
+    for (let head = 0; head < queue.length; head++) {
+        const t = queue[head];
+        const x = t % SIZE;
+        const y = (t - x) / SIZE;
+        if (x === 0 || y === 0 || x === SIZE - 1 || y === SIZE - 1)
+            return null;
+        for (const [dx, dy] of NEIGHBOURS$1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE)
+                continue;
+            const n = idx(nx, ny);
+            if (inside[n])
+                continue;
+            if (terrain.get(nx, ny) === TERRAIN_MASK_WALL)
+                continue;
+            if (ring.has(tileKey(nx, ny)))
+                continue;
+            inside[n] = 1;
+            queue.push(n);
+        }
+    }
+    return inside;
+}
+function reachable(site, extraBlocked = new Set()) {
+    const seen = new Uint8Array(SIZE * SIZE);
+    const start = idx(site.anchor.x, site.anchor.y);
+    const queue = [start];
+    seen[start] = 1;
+    for (let head = 0; head < queue.length; head++) {
+        const t = queue[head];
+        const x = t % SIZE;
+        const y = (t - x) / SIZE;
+        for (const [dx, dy] of NEIGHBOURS$1) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE)
+                continue;
+            const n = idx(nx, ny);
+            if (seen[n] || !site.walkable[n] || extraBlocked.has(n))
+                continue;
+            seen[n] = 1;
+            queue.push(n);
+        }
+    }
+    return seen;
+}
+function exitCentroids(terrain) {
+    const out = [];
+    const sides = [
+        { side: "top", at: (i) => [i, 0] },
+        { side: "right", at: (i) => [SIZE - 1, i] },
+        { side: "bottom", at: (i) => [i, SIZE - 1] },
+        { side: "left", at: (i) => [0, i] },
+    ];
+    for (const { side, at } of sides) {
+        let sx = 0;
+        let sy = 0;
+        let n = 0;
+        for (let i = 1; i < SIZE - 1; i++) {
+            const [x, y] = at(i);
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL)
+                continue;
+            sx += x;
+            sy += y;
+            n++;
+        }
+        if (n > 0)
+            out.push({ side, x: sx / n, y: sy / n });
+    }
+    return out;
+}
+function planWatchPosts(room, site, avoid) {
+    const posts = [];
+    const taken = new Set();
+    const ringTiles = [...site.ring].map(parseTile);
+    for (const exit of exitCentroids(room.getTerrain())) {
+        let gate = null;
+        let best = Infinity;
+        for (const t of ringTiles) {
+            const d = Math.hypot(t.x - exit.x, t.y - exit.y);
+            if (d < best) {
+                best = d;
+                gate = t;
+            }
+        }
+        if (!gate)
+            continue;
+        const candidates = [];
+        for (let dy = -3; dy <= 3; dy++) {
+            for (let dx = -3; dx <= 3; dx++) {
+                const x = gate.x + dx;
+                const y = gate.y + dy;
+                if (x < 1 || y < 1 || x > SIZE - 2 || y > SIZE - 2)
+                    continue;
+                const k = tileKey(x, y);
+                if (taken.has(k) || avoid.has(k) || site.occupied.has(k))
+                    continue;
+                if (!site.interior[idx(x, y)] || !site.walkable[idx(x, y)])
+                    continue;
+                if (!NEIGHBOURS$1.some(([ax, ay]) => site.ring.has(tileKey(x + ax, y + ay))))
+                    continue;
+                candidates.push({ k, d: Math.hypot(dx, dy) });
+            }
+        }
+        candidates.sort((a, b) => a.d - b.d || (a.k < b.k ? -1 : 1));
+        for (const c of candidates.slice(0, TOWN.postsPerSide)) {
+            posts.push(c.k);
+            taken.add(c.k);
+        }
+    }
+    return posts;
+}
+function parkable(site, x, y, avoid) {
+    if (x < 2 || y < 2 || x > SIZE - 3 || y > SIZE - 3)
+        return false;
+    const k = tileKey(x, y);
+    if (avoid.has(k) || site.occupied.has(k) || site.reserved.has(k))
+        return false;
+    if (!site.interior[idx(x, y)] || !site.walkable[idx(x, y)])
+        return false;
+    for (const [dx, dy] of NEIGHBOURS$1) {
+        if (site.structures.has(tileKey(x + dx, y + dy)))
+            return false;
+    }
+    return true;
+}
+function planSquare(site, avoid) {
+    const { storage } = site;
+    const centres = [];
+    for (let y = 3; y < SIZE - 3; y++) {
+        for (let x = 3; x < SIZE - 3; x++) {
+            const d = cheb(x, y, storage.x, storage.y);
+            if (d < TOWN.squareMinRange + 1 || d > TOWN.squareMaxRange)
+                continue;
+            centres.push({ x, y, d });
+        }
+    }
+    centres.sort((a, b) => a.d - b.d || a.y - b.y || a.x - b.x);
+    for (const c of centres) {
+        let ok = true;
+        for (let dy = -1; dy <= 1 && ok; dy++) {
+            for (let dx = -1; dx <= 1 && ok; dx++) {
+                if (!parkable(site, c.x + dx, c.y + dy, avoid))
+                    ok = false;
+            }
+        }
+        if (!ok)
+            continue;
+        const square = [];
+        for (const [dx, dy] of NEIGHBOURS$1)
+            square.push(tileKey(c.x + dx, c.y + dy));
+        return { square, fountain: tileKey(c.x, c.y) };
+    }
+    const loose = [];
+    for (let y = 2; y < SIZE - 2; y++) {
+        for (let x = 2; x < SIZE - 2; x++) {
+            const d = cheb(x, y, storage.x, storage.y);
+            if (d < TOWN.squareMinRange || d > TOWN.squareMaxRange)
+                continue;
+            if (parkable(site, x, y, avoid))
+                loose.push({ k: tileKey(x, y), d });
+        }
+    }
+    loose.sort((a, b) => a.d - b.d || (a.k < b.k ? -1 : 1));
+    return { square: loose.slice(0, TOWN.squareFallbackTiles).map((l) => l.k) };
+}
+function doorFor(x, y, anchor) {
+    const dx = anchor.x - (x + 2);
+    const dy = anchor.y - (y + 2);
+    if (Math.abs(dx) >= Math.abs(dy)) {
+        return dx > 0
+            ? { door: tileKey(x + 4, y + 2), outside: [x + 5, y + 2] }
+            : { door: tileKey(x, y + 2), outside: [x - 1, y + 2] };
+    }
+    return dy > 0
+        ? { door: tileKey(x + 2, y + 4), outside: [x + 2, y + 5] }
+        : { door: tileKey(x + 2, y), outside: [x + 2, y - 1] };
+}
+function findCottage(site, avoid, name) {
+    const { anchor } = site;
+    const minRange = STAMP_PLANNER.halfSize + 3;
+    const candidates = [];
+    for (let y = 2; y <= SIZE - 7; y++) {
+        for (let x = 2; x <= SIZE - 7; x++) {
+            const d = cheb(x + 2, y + 2, anchor.x, anchor.y);
+            if (d < minRange)
+                continue;
+            let ok = true;
+            let inside = true;
+            for (let dy = -1; dy <= 5 && ok; dy++) {
+                for (let dx = -1; dx <= 5 && ok; dx++) {
+                    const tx = x + dx;
+                    const ty = y + dy;
+                    const k = tileKey(tx, ty);
+                    const inFootprint = dx >= 0 && dy >= 0 && dx <= 4 && dy <= 4;
+                    if (avoid.has(k))
+                        ok = false;
+                    else if (site.structures.has(k))
+                        ok = false;
+                    else if (inFootprint) {
+                        if (!site.walkable[idx(tx, ty)] || site.occupied.has(k) || site.reserved.has(k))
+                            ok = false;
+                        else if (!site.interior[idx(tx, ty)])
+                            inside = false;
+                    }
+                }
+            }
+            if (!ok)
+                continue;
+            if (site.clearOf.some((c) => cheb(c.x, c.y, x + 2, y + 2) <= c.range + 2))
+                continue;
+            if (!inside && (x < 4 || y < 4 || x + 4 > SIZE - 5 || y + 4 > SIZE - 5))
+                continue;
+            if (!inside && d > TOWN.cottageMaxRange)
+                continue;
+            candidates.push({ x, y, d, inside });
+        }
+    }
+    candidates.sort((a, b) => Number(b.inside) - Number(a.inside) || a.d - b.d || a.y - b.y || a.x - b.x);
+    const before = reachable(site);
+    let tries = 0;
+    for (const c of candidates) {
+        if (tries++ >= 40)
+            break;
+        const { door, outside } = doorFor(c.x, c.y, anchor);
+        if (!before[idx(outside[0], outside[1])])
+            continue;
+        const cottage = { x: c.x, y: c.y, door, name, ...(c.inside ? {} : { outside: true }) };
+        const walls = new Set();
+        for (const w of cottageLayout(cottage).walls) {
+            const t = parseTile(w);
+            walls.add(idx(t.x, t.y));
+        }
+        const after = reachable(site, walls);
+        let cuts = false;
+        for (let t = 0; t < SIZE * SIZE && !cuts; t++) {
+            if (before[t] && !after[t] && !walls.has(t))
+                cuts = true;
+        }
+        if (cuts)
+            continue;
+        return cottage;
+    }
+    return null;
+}
+function perimeterMostlyBuilt(room, ring) {
+    const built = new Set();
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) {
+            built.add(tileKey(s.pos.x, s.pos.y));
+        }
+    }
+    let n = 0;
+    for (const k of ring)
+        if (built.has(k))
+            n++;
+    return n >= ring.length * TOWN.perimeterBuiltRatio;
+}
+function wantedCottages(room) {
+    var _a, _b, _c, _d, _e;
+    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
+    const gate = TOWN.storageGateByRcl[rcl];
+    if (gate === undefined)
+        return 0;
+    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < gate)
+        return 0;
+    return (_e = TOWN.cottagesByRcl[rcl]) !== null && _e !== void 0 ? _e : 0;
+}
+function squareStillClear(room, town) {
+    var _a, _b, _c;
+    if (town.square.length === 0)
+        return true;
+    const busy = new Set();
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_RAMPART)
+            continue;
+        busy.add(tileKey(s.pos.x, s.pos.y));
+    }
+    for (const s of room.find(FIND_CONSTRUCTION_SITES))
+        busy.add(tileKey(s.pos.x, s.pos.y));
+    const mem = ((_a = room.memory.plannedStructures) !== null && _a !== void 0 ? _a : {});
+    for (const key of Object.keys(mem)) {
+        if (TOWN_KEYS.has(key) || isRoadKey(key))
+            continue;
+        for (const p of mem[key])
+            busy.add(p);
+    }
+    for (const e of (_c = (_b = readBlueprint(room)) === null || _b === void 0 ? void 0 : _b.entries) !== null && _c !== void 0 ? _c : []) {
+        if (e.type !== STRUCTURE_ROAD)
+            busy.add(tileKey(e.x, e.y));
+    }
+    return town.square.every((k) => !busy.has(k));
+}
+function planTown(room) {
+    var _a, _b, _c, _d;
+    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
+    if (rcl < TOWN.watchRcl)
+        return;
+    const ring = room.memory.perimeterTiles;
+    if (!room.memory.castleAnchor || !ring || ring.length === 0)
+        return;
+    let town = room.memory.town;
+    if (!town) {
+        if (!perimeterMostlyBuilt(room, ring))
+            return;
+        town = { posts: [], square: [], cottages: [] };
+    }
+    const perimeterAt = (_d = (_c = room.memory.plannedStructuresMeta) === null || _c === void 0 ? void 0 : _c[PLANNER_KEYS.STAMP_RAMPART_KEY]) === null || _d === void 0 ? void 0 : _d.createdAt;
+    const replanWatch = town.perimeterAt !== perimeterAt || !squareStillClear(room, town);
+    const wantMore = town.cottages.length < wantedCottages(room) &&
+        (town.failedAt === undefined || Game.time - town.failedAt >= TOWN.retryInterval);
+    if (replanWatch || wantMore) {
+        const site = buildTownSite(room);
+        if (!site)
+            return;
+        room.memory.town = town;
+        if (wantMore) {
+            const avoid = new Set([...town.posts, ...town.square]);
+            if (town.fountain)
+                avoid.add(town.fountain);
+            for (const c of town.cottages) {
+                for (let dy = -1; dy <= 5; dy++) {
+                    for (let dx = -1; dx <= 5; dx++)
+                        avoid.add(tileKey(c.x + dx, c.y + dy));
+                }
+            }
+            const name = COTTAGE_FAMILIES[town.cottages.length % COTTAGE_FAMILIES.length];
+            const cottage = findCottage(site, avoid, name);
+            if (cottage) {
+                town.cottages.push(cottage);
+                delete town.failedAt;
+                console.log(`[Town] ${room.name}: the House of ${cottage.name} is raised at ${cottage.x},${cottage.y}` +
+                    (cottage.outside ? " (beyond the walls; the ring will be redrawn)" : ""));
+                if (cottage.outside && room.memory.plannedStructuresMeta) {
+                    delete room.memory.plannedStructuresMeta[PLANNER_KEYS.STAMP_RAMPART_KEY];
+                }
+            }
+            else {
+                town.failedAt = Game.time;
+            }
+        }
+        if (replanWatch) {
+            const avoid = new Set();
+            for (const c of town.cottages) {
+                for (let dy = -1; dy <= 5; dy++) {
+                    for (let dx = -1; dx <= 5; dx++)
+                        avoid.add(tileKey(c.x + dx, c.y + dy));
+                }
+            }
+            town.posts = planWatchPosts(room, site, avoid);
+            for (const p of town.posts)
+                avoid.add(p);
+            const { square, fountain } = planSquare(site, avoid);
+            town.square = square;
+            if (fountain)
+                town.fountain = fountain;
+            else
+                delete town.fountain;
+            town.perimeterAt = perimeterAt;
+        }
+    }
+    room.memory.town = town;
+    syncTownPlan(room, town);
+}
+function syncTownPlan(room, town) {
+    const walls = new Set();
+    const ramparts = new Set();
+    for (const c of town.cottages) {
+        const l = cottageLayout(c);
+        for (const w of l.walls)
+            walls.add(w);
+        ramparts.add(l.door);
+        for (const b of l.beds)
+            ramparts.add(b);
+    }
+    if (town.fountain)
+        walls.add(town.fountain);
+    for (const p of town.posts)
+        ramparts.add(p);
+    const built = new Set();
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
+            built.add(`${s.structureType}:${s.pos.x},${s.pos.y}`);
+        }
+    }
+    if (!room.memory.plannedStructures)
+        room.memory.plannedStructures = {};
+    if (!room.memory.plannedStructuresMeta)
+        room.memory.plannedStructuresMeta = {};
+    const mem = room.memory.plannedStructures;
+    const meta = room.memory.plannedStructuresMeta;
+    const put = (key, type, tiles) => {
+        const todo = [...tiles].filter((k) => !built.has(`${type}:${k}`));
+        if (todo.length === 0) {
+            delete mem[key];
+            delete meta[key];
+            return;
+        }
+        mem[key] = todo;
+        if (!meta[key])
+            meta[key] = { createdAt: Game.time };
+    };
+    put(PLANNER_KEYS.TOWN_WALL_KEY, STRUCTURE_WALL, walls);
+    put(PLANNER_KEYS.TOWN_RAMPART_KEY, STRUCTURE_RAMPART, ramparts);
+}
+function townProtectedRects(room) {
+    const town = room.memory.town;
+    if (!town)
+        return [];
+    return town.cottages
+        .filter((c) => c.outside)
+        .map((c) => ({
+        x1: Math.max(1, c.x - 1),
+        y1: Math.max(1, c.y - 1),
+        x2: Math.min(48, c.x + 5),
+        y2: Math.min(48, c.y + 5),
+    }));
+}
+function describeTown(room) {
+    var _a, _b, _c;
+    const town = room.memory.town;
+    const name = (_a = room.memory.townName) !== null && _a !== void 0 ? _a : room.name;
+    if (!town) {
+        const rcl = (_c = (_b = room.controller) === null || _b === void 0 ? void 0 : _b.level) !== null && _c !== void 0 ? _c : 0;
+        return [
+            rcl < TOWN.watchRcl
+                ? `[Town] ${name}: no quarter yet - the watch is raised at RCL ${TOWN.watchRcl}`
+                : `[Town] ${name}: no quarter yet - waiting on the perimeter (${Math.round(TOWN.perimeterBuiltRatio * 100)}% built)`,
+        ];
+    }
+    const builtAt = new Set();
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
+            builtAt.add(`${s.structureType}:${s.pos.x},${s.pos.y}`);
+        }
+    }
+    const lines = [`[Town] ${name} (${room.name})`];
+    const postsUp = town.posts.filter((p) => builtAt.has(`${STRUCTURE_RAMPART}:${p}`)).length;
+    lines.push(`  Watch posts: ${postsUp}/${town.posts.length} built`);
+    lines.push(town.fountain
+        ? `  Square: plaza of ${town.square.length} round the fountain at ${town.fountain}` +
+            (builtAt.has(`${STRUCTURE_WALL}:${town.fountain}`) ? "" : " (fountain not yet built)")
+        : `  Square: ${town.square.length} loose tiles`);
+    for (const c of town.cottages) {
+        const l = cottageLayout(c);
+        const walls = l.walls.filter((w) => builtAt.has(`${STRUCTURE_WALL}:${w}`)).length;
+        const beds = l.beds.filter((b) => builtAt.has(`${STRUCTURE_RAMPART}:${b}`)).length;
+        lines.push(`  House of ${c.name} at ${c.x},${c.y}: walls ${walls}/${l.walls.length}, beds ${beds}/${l.beds.length}` +
+            (c.outside ? " (beyond the old ring)" : ""));
+    }
+    const want = wantedCottages(room);
+    if (town.cottages.length < want) {
+        lines.push(town.failedAt !== undefined
+            ? `  No room found for cottage ${town.cottages.length + 1}; looking again in ${TOWN.retryInterval - (Game.time - town.failedAt)} ticks`
+            : `  Cottage ${town.cottages.length + 1} is planned next`);
+    }
+    return lines;
+}
+function razeTown(room) {
+    const tiles = townBarrierTiles(room.memory.town);
+    let razed = 0;
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART)
+            continue;
+        if (!tiles.has(tileKey(s.pos.x, s.pos.y)))
+            continue;
+        if (s.destroy() === OK)
+            razed++;
+    }
+    for (const s of room.find(FIND_MY_CONSTRUCTION_SITES)) {
+        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART)
+            continue;
+        if (tiles.has(tileKey(s.pos.x, s.pos.y)))
+            s.remove();
+    }
+    const mem = room.memory.plannedStructures;
+    const meta = room.memory.plannedStructuresMeta;
+    for (const key of TOWN_KEYS) {
+        if (mem)
+            delete mem[key];
+        if (meta)
+            delete meta[key];
+    }
+    delete room.memory.town;
+    return razed;
+}
+
 const BOW_RANGE = 3;
 const LOOKOUT_DANGER_RANGE = 6;
 const LOOKOUT_RETREAT_TICKS = 300;
@@ -9878,8 +10496,19 @@ function runMilitia(creep) {
             creep.say("To arms!", true);
         }
         const nearest = creep.pos.findClosestByRange(hostiles);
-        if (nearest && parkOn(creep, wallStations(room, creep), nearest.pos))
-            return;
+        if (nearest) {
+            const stations = wallStations(room, creep);
+            const inBowRange = stations.filter((k) => {
+                const { x, y } = parseTile(k);
+                return Math.max(Math.abs(x - nearest.pos.x), Math.abs(y - nearest.pos.y)) <= BOW_RANGE;
+            });
+            if (parkOn(creep, inBowRange, nearest.pos))
+                return;
+            if (parkOn(creep, firingSteps(room, creep), nearest.pos))
+                return;
+            if (parkOn(creep, stations, nearest.pos))
+                return;
+        }
         parkOn(creep, bedTiles(room.memory.town));
         return;
     }
@@ -9926,6 +10555,48 @@ function wallStations(room, self) {
             out.push(k);
     }
     return out;
+}
+const stepsByRoom = {};
+function firingSteps(room, self) {
+    const ringTiles = room.memory.perimeterTiles;
+    const anchor = room.memory.castleAnchor;
+    if (!ringTiles || ringTiles.length === 0 || !anchor)
+        return [];
+    const ringKey = ringTiles.join(";");
+    let cached = stepsByRoom[room.name];
+    if (!cached || cached.ring !== ringKey) {
+        const ring = new Set(ringTiles);
+        const interior = floodInterior(room.getTerrain(), ring, anchor);
+        const steps = new Set();
+        if (interior) {
+            for (const k of ringTiles) {
+                const { x, y } = parseTile(k);
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const nx = x + dx;
+                        const ny = y + dy;
+                        if (nx < 0 || ny < 0 || nx > 49 || ny > 49)
+                            continue;
+                        if (interior[ny * 50 + nx])
+                            steps.add(`${nx},${ny}`);
+                    }
+                }
+            }
+        }
+        cached = stepsByRoom[room.name] = { ring: ringKey, steps: [...steps] };
+    }
+    const taken = new Set();
+    for (const s of room.find(FIND_STRUCTURES)) {
+        const t = s.structureType;
+        if (t === STRUCTURE_ROAD || t === STRUCTURE_CONTAINER || t === STRUCTURE_RAMPART)
+            continue;
+        taken.add(`${s.pos.x},${s.pos.y}`);
+    }
+    for (const c of room.find(FIND_MY_CREEPS)) {
+        if (c.name !== self.name)
+            taken.add(`${c.pos.x},${c.pos.y}`);
+    }
+    return cached.steps.filter((k) => !taken.has(k));
 }
 function runLookout(creep) {
     var _a, _b, _c, _d;
@@ -14028,6 +14699,8 @@ function structureTypeForKey(key) {
         return STRUCTURE_ROAD;
     if (key === PLANNER_KEYS.STAMP_RAMPART_KEY)
         return STRUCTURE_RAMPART;
+    if (key === PLANNER_KEYS.STAMP_WALL_KEY)
+        return STRUCTURE_WALL;
     if (key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX))
         return STRUCTURE_ROAD;
     if (key.startsWith("cardinal_connector_"))
@@ -14181,7 +14854,7 @@ function buildGrid(roomName, protect, bounds) {
             const idx = y * ROOM_SIZE + x;
             if (grid[idx] !== PROTECTED)
                 continue;
-            for (const [dx, dy] of NEIGHBOURS$1) {
+            for (const [dx, dy] of NEIGHBOURS) {
                 if (grid[(y + dy) * ROOM_SIZE + x + dx] === EXIT) {
                     grid[idx] = NORMAL;
                     break;
@@ -14191,7 +14864,7 @@ function buildGrid(roomName, protect, bounds) {
     }
     return grid;
 }
-const NEIGHBOURS$1 = [
+const NEIGHBOURS = [
     [-1, -1],
     [0, -1],
     [1, -1],
@@ -14234,7 +14907,7 @@ function getCutTiles(roomName, protect, options = {}) {
                 hasNormal = true;
                 flow.addEdge(inV(t), outV(t), 1);
             }
-            for (const [dx, dy] of NEIGHBOURS$1) {
+            for (const [dx, dy] of NEIGHBOURS) {
                 const nx = x + dx;
                 const ny = y + dy;
                 if (nx < 0 || ny < 0 || nx >= ROOM_SIZE || ny >= ROOM_SIZE)
@@ -14288,622 +14961,6 @@ function cutNearestSource(flow, grid, sink, tileCount, roomName, inV, outV) {
     return cut;
 }
 
-const SIZE = 50;
-const idx = (x, y) => y * SIZE + x;
-const tileKey = (x, y) => `${x},${y}`;
-const cheb = (ax, ay, bx, by) => Math.max(Math.abs(ax - bx), Math.abs(ay - by));
-const NEIGHBOURS = [
-    [-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1],
-];
-const TOWN_KEYS = new Set([PLANNER_KEYS.TOWN_WALL_KEY, PLANNER_KEYS.TOWN_RAMPART_KEY]);
-const PASSABLE_TYPES = new Set([STRUCTURE_ROAD, STRUCTURE_RAMPART, STRUCTURE_CONTAINER]);
-function isRoadKey(key) {
-    return (key.startsWith(PLANNER_KEYS.ROAD_PREFIX) ||
-        key.startsWith(PLANNER_KEYS.CONNECTOR_PREFIX) ||
-        key === PLANNER_KEYS.STAMP_ROAD_KEY ||
-        key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX) ||
-        key.startsWith("cardinal_connector_"));
-}
-function buildTownSite(room) {
-    var _a, _b, _c, _d;
-    const anchor = room.memory.castleAnchor;
-    const ringTiles = room.memory.perimeterTiles;
-    if (!anchor || !ringTiles || ringTiles.length === 0)
-        return null;
-    const terrain = room.getTerrain();
-    const ownTiles = townFootprint(room.memory.town);
-    const ring = new Set(ringTiles);
-    const occupied = new Set(ring);
-    const structures = new Set();
-    const blocked = new Set();
-    const mem = ((_a = room.memory.plannedStructures) !== null && _a !== void 0 ? _a : {});
-    for (const key of Object.keys(mem)) {
-        if (TOWN_KEYS.has(key))
-            continue;
-        const road = isRoadKey(key);
-        const passable = road || key === PLANNER_KEYS.RAMPARTS_KEY || key === PLANNER_KEYS.STAMP_RAMPART_KEY ||
-            key.startsWith(PLANNER_KEYS.CONTAINER_PREFIX);
-        for (const p of mem[key]) {
-            occupied.add(p);
-            if (!road)
-                structures.add(p);
-            if (!passable)
-                blocked.add(p);
-        }
-    }
-    const bp = readBlueprint(room);
-    for (const e of (_b = bp === null || bp === void 0 ? void 0 : bp.entries) !== null && _b !== void 0 ? _b : []) {
-        const k = tileKey(e.x, e.y);
-        occupied.add(k);
-        if (e.type !== STRUCTURE_ROAD)
-            structures.add(k);
-        if (!PASSABLE_TYPES.has(e.type))
-            blocked.add(k);
-    }
-    for (const s of room.find(FIND_STRUCTURES)) {
-        const k = tileKey(s.pos.x, s.pos.y);
-        if (ownTiles.has(k))
-            continue;
-        if (s.structureType === STRUCTURE_CONTROLLER) {
-            occupied.add(k);
-            blocked.add(k);
-            continue;
-        }
-        if (s.structureType === STRUCTURE_RAMPART)
-            continue;
-        occupied.add(k);
-        if (s.structureType !== STRUCTURE_ROAD)
-            structures.add(k);
-        if (!PASSABLE_TYPES.has(s.structureType))
-            blocked.add(k);
-    }
-    for (const s of room.find(FIND_CONSTRUCTION_SITES)) {
-        const k = tileKey(s.pos.x, s.pos.y);
-        if (ownTiles.has(k))
-            continue;
-        occupied.add(k);
-        if (s.structureType !== STRUCTURE_ROAD)
-            structures.add(k);
-        if (!PASSABLE_TYPES.has(s.structureType))
-            blocked.add(k);
-    }
-    const clearOf = [];
-    for (const s of room.find(FIND_SOURCES)) {
-        clearOf.push({ x: s.pos.x, y: s.pos.y, range: TOWN.cottageResourceClearance });
-        blocked.add(tileKey(s.pos.x, s.pos.y));
-    }
-    for (const m of room.find(FIND_MINERALS)) {
-        clearOf.push({ x: m.pos.x, y: m.pos.y, range: TOWN.cottageResourceClearance });
-        blocked.add(tileKey(m.pos.x, m.pos.y));
-    }
-    if (room.controller) {
-        const c = room.controller.pos;
-        clearOf.push({ x: c.x, y: c.y, range: TOWN.cottageControllerClearance });
-    }
-    const walkable = new Uint8Array(SIZE * SIZE);
-    for (let y = 0; y < SIZE; y++) {
-        for (let x = 0; x < SIZE; x++) {
-            if (terrain.get(x, y) === TERRAIN_MASK_WALL)
-                continue;
-            if (blocked.has(tileKey(x, y)))
-                continue;
-            walkable[idx(x, y)] = 1;
-        }
-    }
-    const reserved = new Set();
-    for (const o of [...CASTLE_STAMP, ...MERCHANT_RING_EXTENSION_OFFSETS]) {
-        reserved.add(tileKey(anchor.x + o.dx, anchor.y + o.dy));
-    }
-    for (let dy = -STAMP_PLANNER.halfSize; dy <= STAMP_PLANNER.halfSize; dy++) {
-        for (let dx = -STAMP_PLANNER.halfSize; dx <= STAMP_PLANNER.halfSize; dx++) {
-            reserved.add(tileKey(anchor.x + dx, anchor.y + dy));
-        }
-    }
-    const interior = floodInterior(terrain, ring, anchor);
-    if (!interior)
-        return null;
-    const storagePos = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.pos;
-    const plannedStorage = (_d = mem[PLANNER_KEYS.STAMP_STORAGE_KEY]) === null || _d === void 0 ? void 0 : _d[0];
-    const storage = storagePos
-        ? { x: storagePos.x, y: storagePos.y }
-        : bp
-            ? bp.hub
-            : plannedStorage
-                ? parseTile(plannedStorage)
-                : { x: anchor.x, y: anchor.y + 2 };
-    return { anchor, occupied, structures, walkable, interior, reserved, clearOf, ring, storage };
-}
-function floodInterior(terrain, ring, anchor) {
-    const inside = new Uint8Array(SIZE * SIZE);
-    const queue = [idx(anchor.x, anchor.y)];
-    inside[queue[0]] = 1;
-    for (let head = 0; head < queue.length; head++) {
-        const t = queue[head];
-        const x = t % SIZE;
-        const y = (t - x) / SIZE;
-        if (x === 0 || y === 0 || x === SIZE - 1 || y === SIZE - 1)
-            return null;
-        for (const [dx, dy] of NEIGHBOURS) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE)
-                continue;
-            const n = idx(nx, ny);
-            if (inside[n])
-                continue;
-            if (terrain.get(nx, ny) === TERRAIN_MASK_WALL)
-                continue;
-            if (ring.has(tileKey(nx, ny)))
-                continue;
-            inside[n] = 1;
-            queue.push(n);
-        }
-    }
-    return inside;
-}
-function reachable(site, extraBlocked = new Set()) {
-    const seen = new Uint8Array(SIZE * SIZE);
-    const start = idx(site.anchor.x, site.anchor.y);
-    const queue = [start];
-    seen[start] = 1;
-    for (let head = 0; head < queue.length; head++) {
-        const t = queue[head];
-        const x = t % SIZE;
-        const y = (t - x) / SIZE;
-        for (const [dx, dy] of NEIGHBOURS) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= SIZE || ny >= SIZE)
-                continue;
-            const n = idx(nx, ny);
-            if (seen[n] || !site.walkable[n] || extraBlocked.has(n))
-                continue;
-            seen[n] = 1;
-            queue.push(n);
-        }
-    }
-    return seen;
-}
-function exitCentroids(terrain) {
-    const out = [];
-    const sides = [
-        { side: "top", at: (i) => [i, 0] },
-        { side: "right", at: (i) => [SIZE - 1, i] },
-        { side: "bottom", at: (i) => [i, SIZE - 1] },
-        { side: "left", at: (i) => [0, i] },
-    ];
-    for (const { side, at } of sides) {
-        let sx = 0;
-        let sy = 0;
-        let n = 0;
-        for (let i = 1; i < SIZE - 1; i++) {
-            const [x, y] = at(i);
-            if (terrain.get(x, y) === TERRAIN_MASK_WALL)
-                continue;
-            sx += x;
-            sy += y;
-            n++;
-        }
-        if (n > 0)
-            out.push({ side, x: sx / n, y: sy / n });
-    }
-    return out;
-}
-function planWatchPosts(room, site, avoid) {
-    const posts = [];
-    const taken = new Set();
-    const ringTiles = [...site.ring].map(parseTile);
-    for (const exit of exitCentroids(room.getTerrain())) {
-        let gate = null;
-        let best = Infinity;
-        for (const t of ringTiles) {
-            const d = Math.hypot(t.x - exit.x, t.y - exit.y);
-            if (d < best) {
-                best = d;
-                gate = t;
-            }
-        }
-        if (!gate)
-            continue;
-        const candidates = [];
-        for (let dy = -3; dy <= 3; dy++) {
-            for (let dx = -3; dx <= 3; dx++) {
-                const x = gate.x + dx;
-                const y = gate.y + dy;
-                if (x < 1 || y < 1 || x > SIZE - 2 || y > SIZE - 2)
-                    continue;
-                const k = tileKey(x, y);
-                if (taken.has(k) || avoid.has(k) || site.occupied.has(k))
-                    continue;
-                if (!site.interior[idx(x, y)] || !site.walkable[idx(x, y)])
-                    continue;
-                if (!NEIGHBOURS.some(([ax, ay]) => site.ring.has(tileKey(x + ax, y + ay))))
-                    continue;
-                candidates.push({ k, d: Math.hypot(dx, dy) });
-            }
-        }
-        candidates.sort((a, b) => a.d - b.d || (a.k < b.k ? -1 : 1));
-        for (const c of candidates.slice(0, TOWN.postsPerSide)) {
-            posts.push(c.k);
-            taken.add(c.k);
-        }
-    }
-    return posts;
-}
-function parkable(site, x, y, avoid) {
-    if (x < 2 || y < 2 || x > SIZE - 3 || y > SIZE - 3)
-        return false;
-    const k = tileKey(x, y);
-    if (avoid.has(k) || site.occupied.has(k) || site.reserved.has(k))
-        return false;
-    if (!site.interior[idx(x, y)] || !site.walkable[idx(x, y)])
-        return false;
-    for (const [dx, dy] of NEIGHBOURS) {
-        if (site.structures.has(tileKey(x + dx, y + dy)))
-            return false;
-    }
-    return true;
-}
-function planSquare(site, avoid) {
-    const { storage } = site;
-    const centres = [];
-    for (let y = 3; y < SIZE - 3; y++) {
-        for (let x = 3; x < SIZE - 3; x++) {
-            const d = cheb(x, y, storage.x, storage.y);
-            if (d < TOWN.squareMinRange + 1 || d > TOWN.squareMaxRange)
-                continue;
-            centres.push({ x, y, d });
-        }
-    }
-    centres.sort((a, b) => a.d - b.d || a.y - b.y || a.x - b.x);
-    for (const c of centres) {
-        let ok = true;
-        for (let dy = -1; dy <= 1 && ok; dy++) {
-            for (let dx = -1; dx <= 1 && ok; dx++) {
-                if (!parkable(site, c.x + dx, c.y + dy, avoid))
-                    ok = false;
-            }
-        }
-        if (!ok)
-            continue;
-        const square = [];
-        for (const [dx, dy] of NEIGHBOURS)
-            square.push(tileKey(c.x + dx, c.y + dy));
-        return { square, fountain: tileKey(c.x, c.y) };
-    }
-    const loose = [];
-    for (let y = 2; y < SIZE - 2; y++) {
-        for (let x = 2; x < SIZE - 2; x++) {
-            const d = cheb(x, y, storage.x, storage.y);
-            if (d < TOWN.squareMinRange || d > TOWN.squareMaxRange)
-                continue;
-            if (parkable(site, x, y, avoid))
-                loose.push({ k: tileKey(x, y), d });
-        }
-    }
-    loose.sort((a, b) => a.d - b.d || (a.k < b.k ? -1 : 1));
-    return { square: loose.slice(0, TOWN.squareFallbackTiles).map((l) => l.k) };
-}
-function doorFor(x, y, anchor) {
-    const dx = anchor.x - (x + 2);
-    const dy = anchor.y - (y + 2);
-    if (Math.abs(dx) >= Math.abs(dy)) {
-        return dx > 0
-            ? { door: tileKey(x + 4, y + 2), outside: [x + 5, y + 2] }
-            : { door: tileKey(x, y + 2), outside: [x - 1, y + 2] };
-    }
-    return dy > 0
-        ? { door: tileKey(x + 2, y + 4), outside: [x + 2, y + 5] }
-        : { door: tileKey(x + 2, y), outside: [x + 2, y - 1] };
-}
-function findCottage(site, avoid, name) {
-    const { anchor } = site;
-    const minRange = STAMP_PLANNER.halfSize + 3;
-    const candidates = [];
-    for (let y = 2; y <= SIZE - 7; y++) {
-        for (let x = 2; x <= SIZE - 7; x++) {
-            const d = cheb(x + 2, y + 2, anchor.x, anchor.y);
-            if (d < minRange)
-                continue;
-            let ok = true;
-            let inside = true;
-            for (let dy = -1; dy <= 5 && ok; dy++) {
-                for (let dx = -1; dx <= 5 && ok; dx++) {
-                    const tx = x + dx;
-                    const ty = y + dy;
-                    const k = tileKey(tx, ty);
-                    const inFootprint = dx >= 0 && dy >= 0 && dx <= 4 && dy <= 4;
-                    if (avoid.has(k))
-                        ok = false;
-                    else if (site.structures.has(k))
-                        ok = false;
-                    else if (inFootprint) {
-                        if (!site.walkable[idx(tx, ty)] || site.occupied.has(k) || site.reserved.has(k))
-                            ok = false;
-                        else if (!site.interior[idx(tx, ty)])
-                            inside = false;
-                    }
-                }
-            }
-            if (!ok)
-                continue;
-            if (site.clearOf.some((c) => cheb(c.x, c.y, x + 2, y + 2) <= c.range + 2))
-                continue;
-            if (!inside && (x < 4 || y < 4 || x + 4 > SIZE - 5 || y + 4 > SIZE - 5))
-                continue;
-            if (!inside && d > TOWN.cottageMaxRange)
-                continue;
-            candidates.push({ x, y, d, inside });
-        }
-    }
-    candidates.sort((a, b) => Number(b.inside) - Number(a.inside) || a.d - b.d || a.y - b.y || a.x - b.x);
-    const before = reachable(site);
-    let tries = 0;
-    for (const c of candidates) {
-        if (tries++ >= 40)
-            break;
-        const { door, outside } = doorFor(c.x, c.y, anchor);
-        if (!before[idx(outside[0], outside[1])])
-            continue;
-        const cottage = { x: c.x, y: c.y, door, name, ...(c.inside ? {} : { outside: true }) };
-        const walls = new Set();
-        for (const w of cottageLayout(cottage).walls) {
-            const t = parseTile(w);
-            walls.add(idx(t.x, t.y));
-        }
-        const after = reachable(site, walls);
-        let cuts = false;
-        for (let t = 0; t < SIZE * SIZE && !cuts; t++) {
-            if (before[t] && !after[t] && !walls.has(t))
-                cuts = true;
-        }
-        if (cuts)
-            continue;
-        return cottage;
-    }
-    return null;
-}
-function perimeterMostlyBuilt(room, ring) {
-    const built = new Set();
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType === STRUCTURE_RAMPART)
-            built.add(tileKey(s.pos.x, s.pos.y));
-    }
-    let n = 0;
-    for (const k of ring)
-        if (built.has(k))
-            n++;
-    return n >= ring.length * TOWN.perimeterBuiltRatio;
-}
-function wantedCottages(room) {
-    var _a, _b, _c, _d, _e;
-    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
-    const gate = TOWN.storageGateByRcl[rcl];
-    if (gate === undefined)
-        return 0;
-    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < gate)
-        return 0;
-    return (_e = TOWN.cottagesByRcl[rcl]) !== null && _e !== void 0 ? _e : 0;
-}
-function squareStillClear(room, town) {
-    var _a, _b, _c;
-    if (town.square.length === 0)
-        return true;
-    const busy = new Set();
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType === STRUCTURE_ROAD || s.structureType === STRUCTURE_RAMPART)
-            continue;
-        busy.add(tileKey(s.pos.x, s.pos.y));
-    }
-    for (const s of room.find(FIND_CONSTRUCTION_SITES))
-        busy.add(tileKey(s.pos.x, s.pos.y));
-    const mem = ((_a = room.memory.plannedStructures) !== null && _a !== void 0 ? _a : {});
-    for (const key of Object.keys(mem)) {
-        if (TOWN_KEYS.has(key) || isRoadKey(key))
-            continue;
-        for (const p of mem[key])
-            busy.add(p);
-    }
-    for (const e of (_c = (_b = readBlueprint(room)) === null || _b === void 0 ? void 0 : _b.entries) !== null && _c !== void 0 ? _c : []) {
-        if (e.type !== STRUCTURE_ROAD)
-            busy.add(tileKey(e.x, e.y));
-    }
-    return town.square.every((k) => !busy.has(k));
-}
-function planTown(room) {
-    var _a, _b, _c, _d;
-    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
-    if (rcl < TOWN.watchRcl)
-        return;
-    const ring = room.memory.perimeterTiles;
-    if (!room.memory.castleAnchor || !ring || ring.length === 0)
-        return;
-    let town = room.memory.town;
-    if (!town) {
-        if (!perimeterMostlyBuilt(room, ring))
-            return;
-        town = { posts: [], square: [], cottages: [] };
-    }
-    const perimeterAt = (_d = (_c = room.memory.plannedStructuresMeta) === null || _c === void 0 ? void 0 : _c[PLANNER_KEYS.STAMP_RAMPART_KEY]) === null || _d === void 0 ? void 0 : _d.createdAt;
-    const replanWatch = town.perimeterAt !== perimeterAt || !squareStillClear(room, town);
-    const wantMore = town.cottages.length < wantedCottages(room) &&
-        (town.failedAt === undefined || Game.time - town.failedAt >= TOWN.retryInterval);
-    if (replanWatch || wantMore) {
-        const site = buildTownSite(room);
-        if (!site)
-            return;
-        room.memory.town = town;
-        if (wantMore) {
-            const avoid = new Set([...town.posts, ...town.square]);
-            if (town.fountain)
-                avoid.add(town.fountain);
-            for (const c of town.cottages) {
-                for (let dy = -1; dy <= 5; dy++) {
-                    for (let dx = -1; dx <= 5; dx++)
-                        avoid.add(tileKey(c.x + dx, c.y + dy));
-                }
-            }
-            const name = COTTAGE_FAMILIES[town.cottages.length % COTTAGE_FAMILIES.length];
-            const cottage = findCottage(site, avoid, name);
-            if (cottage) {
-                town.cottages.push(cottage);
-                delete town.failedAt;
-                console.log(`[Town] ${room.name}: the House of ${cottage.name} is raised at ${cottage.x},${cottage.y}` +
-                    (cottage.outside ? " (beyond the walls; the ring will be redrawn)" : ""));
-                if (cottage.outside && room.memory.plannedStructuresMeta) {
-                    delete room.memory.plannedStructuresMeta[PLANNER_KEYS.STAMP_RAMPART_KEY];
-                }
-            }
-            else {
-                town.failedAt = Game.time;
-            }
-        }
-        if (replanWatch) {
-            const avoid = new Set();
-            for (const c of town.cottages) {
-                for (let dy = -1; dy <= 5; dy++) {
-                    for (let dx = -1; dx <= 5; dx++)
-                        avoid.add(tileKey(c.x + dx, c.y + dy));
-                }
-            }
-            town.posts = planWatchPosts(room, site, avoid);
-            for (const p of town.posts)
-                avoid.add(p);
-            const { square, fountain } = planSquare(site, avoid);
-            town.square = square;
-            if (fountain)
-                town.fountain = fountain;
-            else
-                delete town.fountain;
-            town.perimeterAt = perimeterAt;
-        }
-    }
-    room.memory.town = town;
-    syncTownPlan(room, town);
-}
-function syncTownPlan(room, town) {
-    const walls = new Set();
-    const ramparts = new Set();
-    for (const c of town.cottages) {
-        const l = cottageLayout(c);
-        for (const w of l.walls)
-            walls.add(w);
-        ramparts.add(l.door);
-        for (const b of l.beds)
-            ramparts.add(b);
-    }
-    if (town.fountain)
-        walls.add(town.fountain);
-    for (const p of town.posts)
-        ramparts.add(p);
-    const built = new Set();
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
-            built.add(`${s.structureType}:${s.pos.x},${s.pos.y}`);
-        }
-    }
-    if (!room.memory.plannedStructures)
-        room.memory.plannedStructures = {};
-    if (!room.memory.plannedStructuresMeta)
-        room.memory.plannedStructuresMeta = {};
-    const mem = room.memory.plannedStructures;
-    const meta = room.memory.plannedStructuresMeta;
-    const put = (key, type, tiles) => {
-        const todo = [...tiles].filter((k) => !built.has(`${type}:${k}`));
-        if (todo.length === 0) {
-            delete mem[key];
-            delete meta[key];
-            return;
-        }
-        mem[key] = todo;
-        if (!meta[key])
-            meta[key] = { createdAt: Game.time };
-    };
-    put(PLANNER_KEYS.TOWN_WALL_KEY, STRUCTURE_WALL, walls);
-    put(PLANNER_KEYS.TOWN_RAMPART_KEY, STRUCTURE_RAMPART, ramparts);
-}
-function townProtectedRects(room) {
-    const town = room.memory.town;
-    if (!town)
-        return [];
-    return town.cottages
-        .filter((c) => c.outside)
-        .map((c) => ({
-        x1: Math.max(1, c.x - 1),
-        y1: Math.max(1, c.y - 1),
-        x2: Math.min(48, c.x + 5),
-        y2: Math.min(48, c.y + 5),
-    }));
-}
-function describeTown(room) {
-    var _a, _b, _c;
-    const town = room.memory.town;
-    const name = (_a = room.memory.townName) !== null && _a !== void 0 ? _a : room.name;
-    if (!town) {
-        const rcl = (_c = (_b = room.controller) === null || _b === void 0 ? void 0 : _b.level) !== null && _c !== void 0 ? _c : 0;
-        return [
-            rcl < TOWN.watchRcl
-                ? `[Town] ${name}: no quarter yet - the watch is raised at RCL ${TOWN.watchRcl}`
-                : `[Town] ${name}: no quarter yet - waiting on the perimeter (${Math.round(TOWN.perimeterBuiltRatio * 100)}% built)`,
-        ];
-    }
-    const builtAt = new Set();
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) {
-            builtAt.add(`${s.structureType}:${s.pos.x},${s.pos.y}`);
-        }
-    }
-    const lines = [`[Town] ${name} (${room.name})`];
-    const postsUp = town.posts.filter((p) => builtAt.has(`${STRUCTURE_RAMPART}:${p}`)).length;
-    lines.push(`  Watch posts: ${postsUp}/${town.posts.length} built`);
-    lines.push(town.fountain
-        ? `  Square: plaza of ${town.square.length} round the fountain at ${town.fountain}` +
-            (builtAt.has(`${STRUCTURE_WALL}:${town.fountain}`) ? "" : " (fountain not yet built)")
-        : `  Square: ${town.square.length} loose tiles`);
-    for (const c of town.cottages) {
-        const l = cottageLayout(c);
-        const walls = l.walls.filter((w) => builtAt.has(`${STRUCTURE_WALL}:${w}`)).length;
-        const beds = l.beds.filter((b) => builtAt.has(`${STRUCTURE_RAMPART}:${b}`)).length;
-        lines.push(`  House of ${c.name} at ${c.x},${c.y}: walls ${walls}/${l.walls.length}, beds ${beds}/${l.beds.length}` +
-            (c.outside ? " (beyond the old ring)" : ""));
-    }
-    const want = wantedCottages(room);
-    if (town.cottages.length < want) {
-        lines.push(town.failedAt !== undefined
-            ? `  No room found for cottage ${town.cottages.length + 1}; looking again in ${TOWN.retryInterval - (Game.time - town.failedAt)} ticks`
-            : `  Cottage ${town.cottages.length + 1} is planned next`);
-    }
-    return lines;
-}
-function razeTown(room) {
-    const tiles = townBarrierTiles(room.memory.town);
-    let razed = 0;
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART)
-            continue;
-        if (!tiles.has(tileKey(s.pos.x, s.pos.y)))
-            continue;
-        if (s.destroy() === OK)
-            razed++;
-    }
-    for (const s of room.find(FIND_MY_CONSTRUCTION_SITES)) {
-        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART)
-            continue;
-        if (tiles.has(tileKey(s.pos.x, s.pos.y)))
-            s.remove();
-    }
-    const mem = room.memory.plannedStructures;
-    const meta = room.memory.plannedStructuresMeta;
-    for (const key of TOWN_KEYS) {
-        if (mem)
-            delete mem[key];
-        if (meta)
-            delete meta[key];
-    }
-    delete room.memory.town;
-    return razed;
-}
-
 function coreBoundingBox(room) {
     const bp = readBlueprint(room);
     if (!bp)
@@ -14955,15 +15012,32 @@ function protectedRects(room, box) {
     rects.push(...townProtectedRects(room));
     return rects;
 }
+function perimeterDoorTiles(room) {
+    const bp = readBlueprint(room);
+    if (!bp)
+        return null;
+    const doors = new Set();
+    for (const e of bp.entries)
+        if (e.type === STRUCTURE_ROAD)
+            doors.add(`${e.x},${e.y}`);
+    for (const path of Object.values(bp.exits)) {
+        for (const p of path !== null && path !== void 0 ? path : [])
+            doors.add(`${p.x},${p.y}`);
+    }
+    return doors;
+}
 function storePerimeter(room, tiles) {
     var _a;
     const mem = ((_a = room.memory.plannedStructures) !== null && _a !== void 0 ? _a : {});
     mem[PLANNER_KEYS.STAMP_RAMPART_KEY] = [];
+    mem[PLANNER_KEYS.STAMP_WALL_KEY] = [];
     if (room.memory.plannedStructuresMeta) {
         delete room.memory.plannedStructuresMeta[PLANNER_KEYS.STAMP_RAMPART_KEY];
     }
+    const doors = perimeterDoorTiles(room);
     for (const t of tiles) {
-        addPlannedStructureToMemory(room, PLANNER_KEYS.STAMP_RAMPART_KEY, new RoomPosition(t.x, t.y, room.name));
+        const door = !doors || doors.has(`${t.x},${t.y}`);
+        addPlannedStructureToMemory(room, door ? PLANNER_KEYS.STAMP_RAMPART_KEY : PLANNER_KEYS.STAMP_WALL_KEY, new RoomPosition(t.x, t.y, room.name));
     }
     room.memory.perimeterTiles = tiles.map((t) => `${t.x},${t.y}`);
     if (!room.memory.plannedStructuresMeta)
@@ -15010,10 +15084,11 @@ function planDefensivePerimeter(room) {
     const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
     if (!shouldPlanDefensivePerimeter(rcl))
         return;
-    ((_c = room.memory.plannedStructures) !== null && _c !== void 0 ? _c : {});
+    const mem = ((_c = room.memory.plannedStructures) !== null && _c !== void 0 ? _c : {});
     const meta = ((_d = room.memory.plannedStructuresMeta) !== null && _d !== void 0 ? _d : {});
     const lastPlanned = (_e = meta[PLANNER_KEYS.STAMP_RAMPART_KEY]) === null || _e === void 0 ? void 0 : _e.createdAt;
     if (room.memory.perimeterTiles &&
+        mem[PLANNER_KEYS.STAMP_WALL_KEY] !== undefined &&
         lastPlanned !== undefined &&
         Game.time - lastPlanned < PERIMETER_PLANNER.replanInterval) {
         return;
@@ -15052,7 +15127,7 @@ const MAX_REMOTE_CONTAINER_SITES = 2;
 const MAX_REMOTE_ROAD_SITES = 10;
 function buildPriority(key) {
     var _a;
-    if (key === PLANNER_KEYS.STAMP_RAMPART_KEY)
+    if (key === PLANNER_KEYS.STAMP_RAMPART_KEY || key === PLANNER_KEYS.STAMP_WALL_KEY)
         return PERIMETER_PRIORITY;
     if (key === PLANNER_KEYS.TOWN_WALL_KEY || key === PLANNER_KEYS.TOWN_RAMPART_KEY)
         return TOWN_PRIORITY;
@@ -15231,14 +15306,19 @@ function applyPlannedConstruction(room) {
         const count = ((_b = ownBuiltCount.get(t)) !== null && _b !== void 0 ? _b : 0) + ((_d = (_c = sitesByType.get(t)) === null || _c === void 0 ? void 0 : _c.size) !== null && _d !== void 0 ? _d : 0) + ((_e = placedByType.get(t)) !== null && _e !== void 0 ? _e : 0);
         return count >= limit;
     };
-    const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
+    const perimeterKeys = {
+        [PLANNER_KEYS.STAMP_RAMPART_KEY]: STRUCTURE_RAMPART,
+        [PLANNER_KEYS.STAMP_WALL_KEY]: STRUCTURE_WALL,
+    };
     const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
-    const rampartSites = sitesByType.get(STRUCTURE_RAMPART);
     let perimeterSiteCount = 0;
-    if (rampartSites && mem[perimeterKey]) {
-        for (const p of mem[perimeterKey])
-            if (rampartSites.has(p))
-                perimeterSiteCount++;
+    for (const [key, type] of Object.entries(perimeterKeys)) {
+        const typeSites = sitesByType.get(type);
+        if (typeSites && mem[key]) {
+            for (const p of mem[key])
+                if (typeSites.has(p))
+                    perimeterSiteCount++;
+        }
     }
     for (const key of keys) {
         const type = structureTypeForKey(key);
@@ -15283,7 +15363,7 @@ function applyPlannedConstruction(room) {
             }
             if (isRoad && roadSiteCount >= roadCap)
                 continue;
-            if (key === perimeterKey && perimeterSiteCount >= perimeterCap)
+            if (key in perimeterKeys && perimeterSiteCount >= perimeterCap)
                 continue;
             let result;
             if (type === STRUCTURE_SPAWN) {
@@ -15300,7 +15380,7 @@ function applyPlannedConstruction(room) {
                 placedByType.set(type, ((_f = placedByType.get(type)) !== null && _f !== void 0 ? _f : 0) + 1);
                 if (isRoad)
                     roadSiteCount++;
-                if (key === perimeterKey)
+                if (key in perimeterKeys)
                     perimeterSiteCount++;
             }
         }
@@ -15550,12 +15630,15 @@ function processRoomStructures(room) {
         }
     }
     const bp = readBlueprint(room);
+    let cleared = false;
     if (bp) {
         room.memory.blueprint.lanes = activeLanes(room);
         materializeBlueprint(room, bp);
-        clearWayForBlueprint(room, bp);
+        cleared = clearWayForBlueprint(room, bp);
     }
     planDefensivePerimeter(room);
+    if (!cleared)
+        clearWayForRing(room);
     planTown(room);
     room.memory.lastStructurePlanTick = Game.time;
 }
@@ -15623,6 +15706,7 @@ function keyForEntry(e, n) {
 }
 const KEPT_KEYS = new Set([
     PLANNER_KEYS.STAMP_RAMPART_KEY,
+    PLANNER_KEYS.STAMP_WALL_KEY,
     PLANNER_KEYS.RAMPARTS_KEY,
     PLANNER_KEYS.TOWN_WALL_KEY,
     PLANNER_KEYS.TOWN_RAMPART_KEY,
@@ -15671,7 +15755,7 @@ function clearWayForBlueprint(room, bp) {
     var _a, _b, _c, _d;
     const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
     if (room.find(FIND_HOSTILE_CREEPS).length > 0)
-        return;
+        return false;
     const unlocked = new Map();
     for (const e of bp.entries)
         if (e.rcl <= rcl && e.type !== STRUCTURE_ROAD)
@@ -15697,7 +15781,7 @@ function clearWayForBlueprint(room, bp) {
             continue;
         if (s.destroy() === OK) {
             console.log(`[blueprint] ${room.name}: removed ${s.structureType} at ${k} for a planned ${e.type}`);
-            return;
+            return true;
         }
     }
     const waiting = new Set();
@@ -15719,9 +15803,38 @@ function clearWayForBlueprint(room, bp) {
             : b);
         if (farthest.destroy() === OK) {
             console.log(`[blueprint] ${room.name}: removed a stray ${type} at ${farthest.pos.x},${farthest.pos.y}`);
-            return;
+            return true;
         }
     }
+    return false;
+}
+const RAMPART_TO_WALL_MAX_HITS = 100000;
+function clearWayForRing(room) {
+    const ring = room.memory.perimeterTiles;
+    const doors = perimeterDoorTiles(room);
+    if (!ring || !doors)
+        return false;
+    if (room.find(FIND_HOSTILE_CREEPS).length > 0)
+        return false;
+    const tiles = new Set(ring);
+    for (const s of room.find(FIND_STRUCTURES)) {
+        const k = `${s.pos.x},${s.pos.y}`;
+        if (!tiles.has(k))
+            continue;
+        const door = doors.has(k);
+        const swap = (door && s.structureType === STRUCTURE_WALL) ||
+            (!door &&
+                s.structureType === STRUCTURE_RAMPART &&
+                s.my &&
+                s.hits <= RAMPART_TO_WALL_MAX_HITS);
+        if (!swap)
+            continue;
+        if (s.destroy() === OK) {
+            console.log(`[perimeter] ${room.name}: removed the ${s.structureType} at ${k} for a ${door ? "door" : "wall"}`);
+            return true;
+        }
+    }
+    return false;
 }
 
 const THREAT_NOTIFY_COOLDOWN = 200;
