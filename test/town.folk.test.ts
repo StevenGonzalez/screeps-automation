@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_CREEPS = 102;
 g.FIND_MY_STRUCTURES = 108;
+g.FIND_STRUCTURES = 107;
 g.FIND_HOSTILE_CREEPS = 103;
 g.STRUCTURE_RAMPART = "rampart";
 g.OK = 0;
@@ -155,6 +156,38 @@ describe("militia", () => {
     expect(m.rangedAttack).toHaveBeenCalledWith(raider);
     expect(movedTo(m)).toBe("22,11");
     expect(m.say).toHaveBeenCalledWith("To arms!", true);
+  });
+
+  // A walled ring around 10..30 x 10..30, with the castle at 20,20.
+  function walledRoom() {
+    const ring: string[] = [];
+    for (let i = 10; i <= 30; i++) ring.push(`${i},10`, `${i},30`);
+    for (let i = 11; i < 30; i++) ring.push(`10,${i}`, `30,${i}`);
+    Object.assign(room.memory as object, { perimeterTiles: ring, castleAnchor: { x: 20, y: 20 } });
+    room.getTerrain = () => ({ get: () => 0 });
+  }
+
+  it("shoots over the wall from inside it when no rampart is in bow range", () => {
+    walledRoom();
+    ramparts = [{ structureType: "rampart", pos: { x: 30, y: 20 } }];
+    const raider = { pos: { x: 20, y: 9 }, hits: 500 };
+    hostiles = [raider];
+    const m = folk("m", 20, 15);
+    runTownsfolk(m as unknown as Creep);
+
+    const [x, y] = movedTo(m)!.split(",").map(Number);
+    expect(y).toBe(11);
+    expect(Math.max(Math.abs(x - 20), Math.abs(y - 9))).toBeLessThanOrEqual(3);
+  });
+
+  it("still takes a door in bow range over open ground", () => {
+    walledRoom();
+    ramparts = [{ structureType: "rampart", pos: { x: 22, y: 10 } }];
+    hostiles = [{ pos: { x: 20, y: 9 }, hits: 500 }];
+    const m = folk("m", 20, 15);
+    runTownsfolk(m as unknown as Creep);
+
+    expect(movedTo(m)).toBe("22,10");
   });
 
   it("bars itself in a bed when every rampart is taken", () => {

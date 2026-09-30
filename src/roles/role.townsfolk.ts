@@ -9,6 +9,7 @@ import {
   parseTile,
   townClock,
 } from "../services/services.town";
+import { floodInterior } from "../planning/planner.town";
 
 // The townsfolk of the castle's quarter. They carry one bow and one pair of
 // boots each, so no single one of them matters much, but together they are
@@ -16,8 +17,9 @@ import {
 //
 //   militia  sleep in the cottages at night and stand the watch posts by day.
 //            When raiders come, every militiaman runs for the rampart nearest
-//            the fight and looses arrows from under it; with no rampart free
-//            they bar themselves in their beds.
+//            the fight and looses arrows from under it. With none in bow range
+//            of the raiders, it shoots over the wall from the ground just
+//            inside it; with nowhere free at all it bars itself in its bed.
 //   lookout  stands a few tiles inside a neighbouring room so the castle sees
 //            its approaches, and runs home when anything armed comes near.
 
@@ -71,7 +73,16 @@ function runMilitia(creep: Creep): void {
       creep.say("To arms!", true);
     }
     const nearest = creep.pos.findClosestByRange(hostiles);
-    if (nearest && parkOn(creep, wallStations(room, creep), nearest.pos)) return;
+    if (nearest) {
+      const stations = wallStations(room, creep);
+      const inBowRange = stations.filter((k) => {
+        const { x, y } = parseTile(k);
+        return Math.max(Math.abs(x - nearest.pos.x), Math.abs(y - nearest.pos.y)) <= BOW_RANGE;
+      });
+      if (parkOn(creep, inBowRange, nearest.pos)) return;
+      if (parkOn(creep, firingSteps(room, creep), nearest.pos)) return;
+      if (parkOn(creep, stations, nearest.pos)) return;
+    }
     parkOn(creep, bedTiles(room.memory.town));
     return;
   }
@@ -117,6 +128,54 @@ function wallStations(room: Room, self: Creep): string[] {
     if (ring.has(k) && !standing.has(k)) out.push(k);
   }
   return out;
+}
+
+// Open ground just inside the ring, by room, for the ring it was worked out for.
+const stepsByRoom: Record<string, { ring: string; steps: string[] }> = {};
+
+/**
+ * Tiles just inside the ring a militiaman can shoot over the wall from, when
+ * no rampart is in bow range of the raiders. Two tiles from anyone hitting
+ * the wall, and out of reach of melee on the far side. Tiles something is
+ * built on or another creep stands on are left out.
+ */
+function firingSteps(room: Room, self: Creep): string[] {
+  const ringTiles = room.memory.perimeterTiles;
+  const anchor = room.memory.castleAnchor;
+  if (!ringTiles || ringTiles.length === 0 || !anchor) return [];
+
+  const ringKey = ringTiles.join(";");
+  let cached = stepsByRoom[room.name];
+  if (!cached || cached.ring !== ringKey) {
+    const ring = new Set(ringTiles);
+    const interior = floodInterior(room.getTerrain(), ring, anchor);
+    const steps = new Set<string>();
+    if (interior) {
+      for (const k of ringTiles) {
+        const { x, y } = parseTile(k);
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || ny < 0 || nx > 49 || ny > 49) continue;
+            if (interior[ny * 50 + nx]) steps.add(`${nx},${ny}`);
+          }
+        }
+      }
+    }
+    cached = stepsByRoom[room.name] = { ring: ringKey, steps: [...steps] };
+  }
+
+  const taken = new Set<string>();
+  for (const s of room.find(FIND_STRUCTURES)) {
+    const t = s.structureType;
+    if (t === STRUCTURE_ROAD || t === STRUCTURE_CONTAINER || t === STRUCTURE_RAMPART) continue;
+    taken.add(`${s.pos.x},${s.pos.y}`);
+  }
+  for (const c of room.find(FIND_MY_CREEPS)) {
+    if (c.name !== self.name) taken.add(`${c.pos.x},${c.pos.y}`);
+  }
+  return cached.steps.filter((k) => !taken.has(k));
 }
 
 function runLookout(creep: Creep): void {

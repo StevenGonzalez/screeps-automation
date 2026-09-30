@@ -169,7 +169,7 @@ export function buildTownSite(room: Room): TownSite | null {
 
 // Tiles reachable from the anchor without crossing the ring. Null when the
 // ring leaks to an exit, since then "inside" means nothing.
-function floodInterior(
+export function floodInterior(
   terrain: RoomTerrain,
   ring: Set<string>,
   anchor: { x: number; y: number }
