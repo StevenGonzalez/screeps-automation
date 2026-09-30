@@ -112,8 +112,8 @@ In peace it follows the town clock:
 When raiders are in the room and safe mode is off:
 
 1. The militiaman shouts "To arms!" and drops the post or bed it held.
-2. It runs for the free built rampart, on the perimeter or at a post, nearest
-   the closest raider, and fights from under it.
+2. It runs for the free built rampart, a door in the perimeter or a post,
+   nearest the closest raider, and fights from under it.
 3. With no rampart free, it bars itself into a bed.
 
 Each tile is claimed by one creep at a time. A claim lapses after one tick

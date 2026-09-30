@@ -11,8 +11,9 @@ vi.mock("../src/services/services.creep", async (actual) => ({
 import {
   materializeBlueprint,
   clearWayForBlueprint,
+  clearWayForRing,
 } from "../src/orchestrators/orchestrator.structures";
-import type { Blueprint } from "../src/planning/planner.blueprint";
+import { encodeBlueprint, type Blueprint } from "../src/planning/planner.blueprint";
 
 g.FIND_STRUCTURES = 107;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
@@ -109,11 +110,12 @@ interface FakeStructure {
   destroy(): number;
 }
 
-function built(structureType: string, x: number, y: number, my?: boolean): FakeStructure {
+function built(structureType: string, x: number, y: number, my?: boolean, hits = 1000): FakeStructure {
   return {
     structureType,
     pos: { x, y },
     my,
+    hits,
     destroyed: false,
     destroy() {
       this.destroyed = true;
@@ -173,5 +175,54 @@ describe("clearWayForBlueprint", () => {
     const blocker = built("container", 24, 24);
     clearWayForBlueprint(builtRoom(2, [blocker], [{}]), bp);
     expect(blocker.destroyed).toBe(false);
+  });
+});
+
+describe("clearWayForRing", () => {
+  let planTick = 100;
+  beforeEach(() => {
+    g.Game = { time: 7 };
+  });
+
+  // The ring crosses the blueprint road at 25,26 and the top exit road at
+  // 25,2; 20,20 and 21,20 are wall tiles.
+  function ringRoom(structures: FakeStructure[], hostiles: unknown[] = []): Room {
+    const r = builtRoom(6, structures, hostiles);
+    r.memory.perimeterTiles = ["25,26", "25,2", "20,20", "21,20"];
+    // A plan tick per room, so the decoded-plan cache never hands back a stale one.
+    r.memory.blueprint = encodeBlueprint(bp, ++planTick);
+    return r;
+  }
+
+  it("takes down a weak rampart where the ring wants a wall", () => {
+    const rampart = built("rampart", 20, 20, true, 3000);
+    expect(clearWayForRing(ringRoom([rampart]))).toBe(true);
+    expect(rampart.destroyed).toBe(true);
+  });
+
+  it("keeps a rampart that is too strong to throw away", () => {
+    const rampart = built("rampart", 20, 20, true, 5_000_000);
+    expect(clearWayForRing(ringRoom([rampart]))).toBe(false);
+    expect(rampart.destroyed).toBe(false);
+  });
+
+  it("keeps the rampart doors where roads cross", () => {
+    const doors = [built("rampart", 25, 26, true, 3000), built("rampart", 25, 2, true, 3000)];
+    clearWayForRing(ringRoom(doors));
+    expect(doors.some((d) => d.destroyed)).toBe(false);
+  });
+
+  it("opens a wall that stands where a door is needed", () => {
+    const wall = built("constructedWall", 25, 26);
+    clearWayForRing(ringRoom([wall]));
+    expect(wall.destroyed).toBe(true);
+  });
+
+  it("takes down one at a time, and nothing with enemies in the room", () => {
+    const ramparts = [built("rampart", 20, 20, true, 3000), built("rampart", 21, 20, true, 3000)];
+    clearWayForRing(ringRoom(ramparts, [{}]));
+    expect(ramparts.filter((r) => r.destroyed)).toHaveLength(0);
+    clearWayForRing(ringRoom(ramparts));
+    expect(ramparts.filter((r) => r.destroyed)).toHaveLength(1);
   });
 });

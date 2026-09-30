@@ -110,9 +110,11 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
   *fewest* tiles - concentrating HP on far fewer ramparts than a bounding box. It
   hugs natural walls automatically and re-plans only every ~1500 ticks. If the
   min-cut is degenerate (already sealed by terrain), it falls back to the old
-  padded bounding-box ring so a room is never left wall-less. Stored under the
-  stamp-rampart memory key, inheriting the existing build priority (raised site cap)
-  and the normal rampart repair/tower upkeep.
+  padded bounding-box ring so a room is never left wall-less. The ring is
+  constructed walls, which do not decay, with a rampart door wherever a
+  blueprint road or exit road crosses it. Walls are stored under `stamp_walls`
+  and doors under `stamp_ramparts`; both share the perimeter build priority and
+  site cap, and the normal barrier repair and tower upkeep.
 - **Nuke defense** (`orchestrators/orchestrator.nukes.ts`). Reinforces ramparts
   on impact tiles when an incoming nuke is detected. Distinct from the *offensive*
   nuker (see [NUKER_SYSTEM.md](NUKER_SYSTEM.md)).

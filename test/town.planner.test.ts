@@ -34,7 +34,7 @@ function ringTiles(): string[] {
 // A plain room with exits on the top and bottom edges, a ring of built
 // ramparts 13 tiles out from the anchor, and road spokes running north and
 // south from the spawn.
-function makeRoom(opts: { rcl: number; storage: number; ramparts?: boolean }) {
+function makeRoom(opts: { rcl: number; storage: number; ramparts?: boolean; barrier?: string }) {
   const ring = ringTiles();
   const structures: Struct[] = [
     { structureType: "spawn", pos: { x: 25, y: 25 } },
@@ -43,7 +43,7 @@ function makeRoom(opts: { rcl: number; storage: number; ramparts?: boolean }) {
   if (opts.ramparts !== false) {
     for (const k of ring) {
       const [x, y] = k.split(",").map(Number);
-      structures.push({ structureType: "rampart", pos: { x, y } });
+      structures.push({ structureType: opts.barrier ?? "rampart", pos: { x, y } });
     }
   }
   const roads: string[] = [];
@@ -87,6 +87,12 @@ describe("planTown", () => {
     const room = makeRoom({ rcl: 7, storage: 500_000, ramparts: false });
     planTown(room as unknown as Room);
     expect(room.memory.town).toBeUndefined();
+  });
+
+  it("counts a ring of walls as standing", () => {
+    const room = makeRoom({ rcl: 6, storage: 500_000, barrier: "constructedWall" });
+    planTown(room as unknown as Room);
+    expect(room.memory.town).toBeDefined();
   });
 
   it("raises watch posts and a square at RCL 6, but no cottage", () => {

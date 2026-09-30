@@ -72,8 +72,8 @@ The structure pass runs every 50 ticks, in `processRoomStructures`:
 2. **Materialize.** Every entry the room's age has unlocked goes into
    `plannedStructures`, under the usual keys (`stamp_extensions`,
    `link_source_<id>`, `road_blueprint` and so on). This replaces whatever
-   older planners put there. The ring (`stamp_ramparts`), the ramparts over
-   buildings and the town's keys are kept. A source that is not safe
+   older planners put there. The ring (`stamp_walls` and `stamp_ramparts`),
+   the ramparts over buildings and the town's keys are kept. A source that is not safe
    (a keeper or an invader core) gets no container or link until it is.
 3. **Clear the way.** At most one structure per pass is torn down, and none
    while enemies are in the room:
@@ -84,6 +84,12 @@ The structure pass runs every 50 ticks, in `processRoomStructures`:
 4. **Perimeter and town.** The min-cut ring wraps the blueprint's buildings at
    RCL 8, so it does not creep outward as the castle grows. The town keeps off
    the blueprint's tiles, and the blueprint keeps off the town's tiles.
+5. **Walls and doors.** The ring is built of walls, which do not decay. Where
+   a blueprint road of any age or an exit road crosses the ring, it gets a
+   rampart instead, so our creeps can pass. When nothing else was torn down
+   this pass, one ring tile is swapped to what the plan wants: a rampart
+   under 100,000 hits where a wall is planned, or a wall where a door is now
+   needed. Stronger ramparts are kept.
 
 Construction (`applyPlannedConstruction`) then builds what is missing, in
 the usual priority order.

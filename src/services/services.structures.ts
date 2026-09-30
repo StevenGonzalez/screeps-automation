@@ -262,6 +262,7 @@ export function structureTypeForKey(key: string): StructureConstant | null {
   if (key === PLANNER_KEYS.STAMP_LINK_KEY)              return STRUCTURE_LINK;
   if (key === PLANNER_KEYS.STAMP_ROAD_KEY)              return STRUCTURE_ROAD;
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY)           return STRUCTURE_RAMPART;
+  if (key === PLANNER_KEYS.STAMP_WALL_KEY)              return STRUCTURE_WALL;
   if (key.startsWith(PLANNER_KEYS.CARDINAL_ROAD_PREFIX)) return STRUCTURE_ROAD;
   if (key.startsWith("cardinal_connector_"))              return STRUCTURE_ROAD;
   if (key === PLANNER_KEYS.TOWN_WALL_KEY)                return STRUCTURE_WALL;

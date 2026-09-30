@@ -14,6 +14,7 @@ const STRUCTURE_CONSTANTS: Record<string, string> = {
   STRUCTURE_RAMPART: "rampart",
   STRUCTURE_NUKER: "nuker",
   STRUCTURE_FACTORY: "factory",
+  STRUCTURE_WALL: "constructedWall",
 };
 
 for (const [name, value] of Object.entries(STRUCTURE_CONSTANTS)) {

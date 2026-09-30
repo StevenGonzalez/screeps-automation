@@ -6,10 +6,11 @@ g.RoomPosition = class {
 };
 
 const captured: Array<Array<{ x1: number; y1: number; x2: number; y2: number }>> = [];
+let cut = [{ x: 1, y: 1 }];
 vi.mock("../src/services/services.mincut", () => ({
   getCutTiles: (_room: string, rects: Array<{ x1: number; y1: number; x2: number; y2: number }>) => {
     captured.push(rects);
-    return [{ x: 1, y: 1 }];
+    return cut;
   },
 }));
 
@@ -17,8 +18,12 @@ import { planDefensivePerimeter } from "../src/planning/planner.rampart";
 import { encodeBlueprint, BlueprintEntry } from "../src/planning/planner.blueprint";
 
 let planTick = 0;
-function makeRoom(level: number, entries: BlueprintEntry[]): Room {
-  const bp = { anchor: { x: 25, y: 25 }, hub: { x: 25, y: 27 }, entries, exits: {} };
+function makeRoom(
+  level: number,
+  entries: BlueprintEntry[],
+  exits: Record<string, Array<{ x: number; y: number }>> = {}
+): Room {
+  const bp = { anchor: { x: 25, y: 25 }, hub: { x: 25, y: 27 }, entries, exits };
   return {
     name: "W1N1",
     controller: { level, pos: { x: 45, y: 45 } },
@@ -69,5 +74,30 @@ describe("planDefensivePerimeter protected box", () => {
     delete room.memory.blueprint;
     planDefensivePerimeter(room);
     expect(captured).toHaveLength(0);
+  });
+});
+
+describe("planDefensivePerimeter walls and doors", () => {
+  beforeEach(() => {
+    g.Game = { time: 1 };
+    cut = [{ x: 1, y: 1 }];
+  });
+
+  it("walls the ring and leaves rampart doors where roads cross it", () => {
+    // 30,20 is a planned road of a later age, 25,2 the top exit road, and
+    // 31,20 plain ground.
+    cut = [{ x: 30, y: 20 }, { x: 25, y: 2 }, { x: 31, y: 20 }];
+    const room = makeRoom(
+      6,
+      [...castle, { type: "road", x: 30, y: 20, rcl: 8 }],
+      { top: [{ x: 25, y: 3 }, { x: 25, y: 2 }] }
+    );
+
+    planDefensivePerimeter(room);
+
+    const mem = room.memory.plannedStructures!;
+    expect(mem.stamp_ramparts).toEqual(["30,20", "25,2"]);
+    expect(mem.stamp_walls).toEqual(["31,20"]);
+    expect(room.memory.perimeterTiles).toEqual(["30,20", "25,2", "31,20"]);
   });
 });

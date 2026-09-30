@@ -425,7 +425,9 @@ export function findCottage(site: TownSite, avoid: Set<string>, name: string): T
 function perimeterMostlyBuilt(room: Room, ring: string[]): boolean {
   const built = new Set<string>();
   for (const s of room.find(FIND_STRUCTURES)) {
-    if (s.structureType === STRUCTURE_RAMPART) built.add(tileKey(s.pos.x, s.pos.y));
+    if (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) {
+      built.add(tileKey(s.pos.x, s.pos.y));
+    }
   }
   let n = 0;
   for (const k of ring) if (built.has(k)) n++;

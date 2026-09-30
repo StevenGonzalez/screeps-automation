@@ -62,21 +62,41 @@ function protectedRects(
   return rects;
 }
 
+/**
+ * Ring tiles that must stay passable to our creeps: wherever a blueprint road
+ * (of any age) or an exit road crosses the ring. They get rampart doors; the
+ * rest of the ring is constructed wall, which does not decay. Null without a
+ * blueprint, and then the whole ring is ramparts.
+ */
+export function perimeterDoorTiles(room: Room): Set<string> | null {
+  const bp = readBlueprint(room);
+  if (!bp) return null;
+  const doors = new Set<string>();
+  for (const e of bp.entries) if (e.type === STRUCTURE_ROAD) doors.add(`${e.x},${e.y}`);
+  for (const path of Object.values(bp.exits)) {
+    for (const p of path ?? []) doors.add(`${p.x},${p.y}`);
+  }
+  return doors;
+}
+
 function storePerimeter(room: Room, tiles: Array<{ x: number; y: number }>): void {
   const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
   mem[PLANNER_KEYS.STAMP_RAMPART_KEY] = [];
+  mem[PLANNER_KEYS.STAMP_WALL_KEY] = [];
   if (room.memory.plannedStructuresMeta) {
     delete room.memory.plannedStructuresMeta[PLANNER_KEYS.STAMP_RAMPART_KEY];
   }
+  const doors = perimeterDoorTiles(room);
   for (const t of tiles) {
+    const door = !doors || doors.has(`${t.x},${t.y}`);
     addPlannedStructureToMemory(
       room,
-      PLANNER_KEYS.STAMP_RAMPART_KEY,
+      door ? PLANNER_KEYS.STAMP_RAMPART_KEY : PLANNER_KEYS.STAMP_WALL_KEY,
       new RoomPosition(t.x, t.y, room.name)
     );
   }
-  // The planned list drops each tile once its rampart is built; this copy keeps
-  // the whole ring so repair logic can tell a perimeter rampart from a stale one.
+  // The planned lists drop each tile once it is built; this copy keeps the
+  // whole ring so repair logic can tell a perimeter rampart from a stale one.
   room.memory.perimeterTiles = tiles.map((t) => `${t.x},${t.y}`);
   if (!room.memory.plannedStructuresMeta) room.memory.plannedStructuresMeta = {} as any;
   room.memory.plannedStructuresMeta![PLANNER_KEYS.STAMP_RAMPART_KEY] = {
@@ -130,8 +150,10 @@ export function planDefensivePerimeter(room: Room): void {
   // The planned list empties as the ring gets built, so its length says nothing
   // about when we last planned; only the timestamp does.
   const lastPlanned = meta[PLANNER_KEYS.STAMP_RAMPART_KEY]?.createdAt;
+  // A ring stored before the ring had walls is planned again at once.
   if (
     room.memory.perimeterTiles &&
+    mem[PLANNER_KEYS.STAMP_WALL_KEY] !== undefined &&
     lastPlanned !== undefined &&
     Game.time - lastPlanned < PERIMETER_PLANNER.replanInterval
   ) {

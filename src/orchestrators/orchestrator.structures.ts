@@ -13,7 +13,7 @@ import {
   planRoomBlueprint,
   readBlueprint,
 } from "../planning/planner.blueprint";
-import { planDefensivePerimeter } from "../planning/planner.rampart";
+import { planDefensivePerimeter, perimeterDoorTiles } from "../planning/planner.rampart";
 import { planTown } from "../planning/planner.town";
 import { isSourceSafe } from "../services/services.creep";
 import { remoteRoadsEnabled } from "../services/services.remote";
@@ -50,7 +50,7 @@ const MAX_REMOTE_CONTAINER_SITES = 2;
 const MAX_REMOTE_ROAD_SITES = 10;
 
 function buildPriority(key: string): number {
-  if (key === PLANNER_KEYS.STAMP_RAMPART_KEY) return PERIMETER_PRIORITY;
+  if (key === PLANNER_KEYS.STAMP_RAMPART_KEY || key === PLANNER_KEYS.STAMP_WALL_KEY) return PERIMETER_PRIORITY;
   if (key === PLANNER_KEYS.TOWN_WALL_KEY || key === PLANNER_KEYS.TOWN_RAMPART_KEY) return TOWN_PRIORITY;
   const type = structureTypeForKey(key);
   return type ? BUILD_PRIORITY[type] ?? 11 : 11;
@@ -230,12 +230,17 @@ export function applyPlannedConstruction(room: Room) {
     return count >= limit;
   };
 
-  const perimeterKey = PLANNER_KEYS.STAMP_RAMPART_KEY;
+  const perimeterKeys: Record<string, StructureConstant> = {
+    [PLANNER_KEYS.STAMP_RAMPART_KEY]: STRUCTURE_RAMPART,
+    [PLANNER_KEYS.STAMP_WALL_KEY]: STRUCTURE_WALL,
+  };
   const perimeterCap = STRUCTURE_PLANNER.maxPerimeterConstructionSites;
-  const rampartSites = sitesByType.get(STRUCTURE_RAMPART);
   let perimeterSiteCount = 0;
-  if (rampartSites && mem[perimeterKey]) {
-    for (const p of mem[perimeterKey]) if (rampartSites.has(p)) perimeterSiteCount++;
+  for (const [key, type] of Object.entries(perimeterKeys)) {
+    const typeSites = sitesByType.get(type);
+    if (typeSites && mem[key]) {
+      for (const p of mem[key]) if (typeSites.has(p)) perimeterSiteCount++;
+    }
   }
 
   for (const key of keys) {
@@ -282,7 +287,7 @@ export function applyPlannedConstruction(room: Room) {
         budget++;
       }
       if (isRoad && roadSiteCount >= roadCap) continue;
-      if (key === perimeterKey && perimeterSiteCount >= perimeterCap) continue;
+      if (key in perimeterKeys && perimeterSiteCount >= perimeterCap) continue;
       let result: ScreepsReturnCode;
       if (type === STRUCTURE_SPAWN) {
         const name = nextSpawnName(room);
@@ -296,7 +301,7 @@ export function applyPlannedConstruction(room: Room) {
         budget--;
         placedByType.set(type as StructureConstant, (placedByType.get(type as StructureConstant) ?? 0) + 1);
         if (isRoad) roadSiteCount++;
-        if (key === perimeterKey) perimeterSiteCount++;
+        if (key in perimeterKeys) perimeterSiteCount++;
       }
     }
     mem[key] = keep;
@@ -557,13 +562,15 @@ function processRoomStructures(room: Room) {
     }
   }
   const bp = readBlueprint(room);
+  let cleared = false;
   if (bp) {
     room.memory.blueprint!.lanes = activeLanes(room);
     materializeBlueprint(room, bp);
-    clearWayForBlueprint(room, bp);
+    cleared = clearWayForBlueprint(room, bp);
   }
 
   planDefensivePerimeter(room);
+  if (!cleared) clearWayForRing(room);
 
   planTown(room);
 
@@ -633,6 +640,7 @@ function keyForEntry(e: BlueprintEntry, n: Map<string, number>): string {
 // buildings, and the town.
 const KEPT_KEYS = new Set<string>([
   PLANNER_KEYS.STAMP_RAMPART_KEY,
+  PLANNER_KEYS.STAMP_WALL_KEY,
   PLANNER_KEYS.RAMPARTS_KEY,
   PLANNER_KEYS.TOWN_WALL_KEY,
   PLANNER_KEYS.TOWN_RAMPART_KEY,
@@ -687,9 +695,9 @@ const MOVABLE = new Set<string>([STRUCTURE_EXTENSION, STRUCTURE_LAB, STRUCTURE_L
  * holds the type's last slot. One per run, so the room is never stripped
  * at once, and none while enemies are in the room.
  */
-export function clearWayForBlueprint(room: Room, bp: Blueprint): void {
+export function clearWayForBlueprint(room: Room, bp: Blueprint): boolean {
   const rcl = room.controller?.level ?? 0;
-  if (room.find(FIND_HOSTILE_CREEPS).length > 0) return;
+  if (room.find(FIND_HOSTILE_CREEPS).length > 0) return false;
 
   const unlocked = new Map<string, BlueprintEntry>();
   for (const e of bp.entries) if (e.rcl <= rcl && e.type !== STRUCTURE_ROAD) unlocked.set(`${e.x},${e.y}`, e);
@@ -710,7 +718,7 @@ export function clearWayForBlueprint(room: Room, bp: Blueprint): void {
     if (s.structureType === STRUCTURE_SPAWN) continue;
     if (s.destroy() === OK) {
       console.log(`[blueprint] ${room.name}: removed ${s.structureType} at ${k} for a planned ${e.type}`);
-      return;
+      return true;
     }
   }
 
@@ -733,7 +741,43 @@ export function clearWayForBlueprint(room: Room, bp: Blueprint): void {
     );
     if (farthest.destroy() === OK) {
       console.log(`[blueprint] ${room.name}: removed a stray ${type} at ${farthest.pos.x},${farthest.pos.y}`);
-      return;
+      return true;
     }
   }
+  return false;
+}
+
+// A rampart stronger than this is kept where the ring now wants a wall:
+// tearing it down would throw away more than its decay costs to keep.
+const RAMPART_TO_WALL_MAX_HITS = 100_000;
+
+/**
+ * Swaps one ring tile to what the plan wants: a rampart where a wall is
+ * planned, or a wall where a road now needs a door. One per run, and none
+ * while enemies are in the room, the same as clearWayForBlueprint.
+ */
+export function clearWayForRing(room: Room): boolean {
+  const ring = room.memory.perimeterTiles;
+  const doors = perimeterDoorTiles(room);
+  if (!ring || !doors) return false;
+  if (room.find(FIND_HOSTILE_CREEPS).length > 0) return false;
+
+  const tiles = new Set(ring);
+  for (const s of room.find(FIND_STRUCTURES)) {
+    const k = `${s.pos.x},${s.pos.y}`;
+    if (!tiles.has(k)) continue;
+    const door = doors.has(k);
+    const swap =
+      (door && s.structureType === STRUCTURE_WALL) ||
+      (!door &&
+        s.structureType === STRUCTURE_RAMPART &&
+        (s as StructureRampart).my &&
+        s.hits <= RAMPART_TO_WALL_MAX_HITS);
+    if (!swap) continue;
+    if (s.destroy() === OK) {
+      console.log(`[perimeter] ${room.name}: removed the ${s.structureType} at ${k} for a ${door ? "door" : "wall"}`);
+      return true;
+    }
+  }
+  return false;
 }
