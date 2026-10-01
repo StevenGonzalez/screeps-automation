@@ -55,6 +55,7 @@ function runFullUpgraderIn(room: Room): string[] {
       getFreeCapacity: () => 0,
       [g.RESOURCE_ENERGY as string]: 50,
     },
+    owner: { username: "Me" },
     moveTo: () => g.OK as number,
     upgradeController: () => {
       calls.push("upgradeController");
@@ -94,6 +95,7 @@ function runEmptyUpgraderIn(room: Room): string[] {
       getUsedCapacity: () => 0,
       [g.RESOURCE_ENERGY as string]: 0,
     },
+    owner: { username: "Me" },
     moveTo: () => g.OK as number,
     upgradeController: () => g.OK as number,
     withdraw: (target: { id: string }) => {

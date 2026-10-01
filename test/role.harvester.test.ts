@@ -72,6 +72,7 @@ function setup(opts: { full: boolean }) {
       findInRange: () => [],
       findClosestByPath: <T>(targets: T[]) => targets[0] ?? null,
     },
+    owner: { username: "Me" },
     getActiveBodyparts: () => 1,
     suicide: () => calls.push("suicide"),
     harvest: () => (calls.push("harvest"), g.OK),

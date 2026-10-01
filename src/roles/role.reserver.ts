@@ -1,3 +1,5 @@
+import { signControllerIfNeeded } from "../services/services.creep";
+
 export function runReserver(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
 
@@ -27,7 +29,10 @@ export function runReserver(creep: Creep) {
       : creep.reserveController(controller);
   if (result === ERR_NOT_IN_RANGE) {
     creep.moveTo(controller, { reusePath: 30 });
+    return;
   }
+  // Already beside the controller, so the proclamation costs nothing extra.
+  signControllerIfNeeded(creep, controller);
 }
 
 function moveToRoom(creep: Creep, targetRoom: string) {

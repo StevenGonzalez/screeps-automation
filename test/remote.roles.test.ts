@@ -34,9 +34,11 @@ describe("reserver", () => {
   function reserverIn(controller: unknown) {
     return {
       owner: { username: ME },
-      room: { name: REMOTE, controller },
+      room: { name: REMOTE, controller, memory: {} as RoomMemory },
+      pos: { getRangeTo: () => 1 },
       memory: { role: "reserver", homeRoom: HOME, targetRoom: REMOTE },
       reserveController: vi.fn(() => 0),
+      signController: vi.fn(() => 0),
       attackController: vi.fn(() => 0),
       suicide: vi.fn(),
       moveTo: vi.fn(),
@@ -54,6 +56,22 @@ describe("reserver", () => {
     const c = reserverIn({ reservation: { username: ME } });
     runReserver(c as unknown as Creep);
     expect(c.reserveController).toHaveBeenCalled();
+  });
+
+  it("signs the remote's controller with a proclamation", () => {
+    const c = reserverIn({ reservation: { username: ME }, pos: {} });
+    runReserver(c as unknown as Creep);
+    expect(c.signController).toHaveBeenCalledWith(c.room.controller, expect.any(String));
+  });
+
+  it("leaves a sign alone once it is ours and current", () => {
+    const first = reserverIn({ reservation: { username: ME }, pos: {} });
+    runReserver(first as unknown as Creep);
+    const text = first.signController.mock.calls[0][1];
+    (g.Game as any).time += 10000;
+    const c = reserverIn({ reservation: { username: ME }, pos: {}, sign: { username: ME, text } });
+    runReserver(c as unknown as Creep);
+    expect(c.signController).not.toHaveBeenCalled();
   });
 
   it("gives up on a room another player owns", () => {

@@ -77,7 +77,8 @@ export function signControllerIfNeeded(
 
   if (currentSign?.username === "Screeps") return false;
 
-  const myUsername = controller.owner?.username;
+  // A reserved remote has no owner, so compare against the signing creep.
+  const myUsername = creep.owner.username;
   const needsSign =
     !currentSign ||
     currentSign.username !== myUsername ||
