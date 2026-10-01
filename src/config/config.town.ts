@@ -1,16 +1,19 @@
 // The castle's town quarter: watch posts behind the walls, a market square with
-// a fountain, cottages for the townsfolk, and the townsfolk themselves. It only
-// grows once a room can pay for it, so every stage is gated on RCL and storage.
+// a fountain, cottages for the townsfolk, and the townsfolk themselves. It grows
+// a step with every RCL, so the kingdom visibly fills out as the castle rises.
 export const TOWN = {
-  // RCL 6: watch posts and the market square. Both cost almost nothing (a few
+  // RCL 4: watch posts and the market square. Both cost almost nothing (a few
   // ramparts and one wall), so they only wait for the perimeter.
-  watchRcl: 6,
-  // RCL 7 and 8: cottages and the militia who sleep in them.
-  cottagesByRcl: { 7: 1, 8: 2 } as Record<number, number>,
-  militiaByRcl: { 7: 4, 8: 8 } as Record<number, number>,
-  // Stored energy a room needs before it builds a cottage or spawns townsfolk,
-  // by RCL. Below it the town keeps what it has and waits.
-  storageGateByRcl: { 7: 150_000, 8: 250_000 } as Record<number, number>,
+  watchRcl: 4,
+  // From RCL 5: cottages, and the militia who sleep in them (nine beds a cottage).
+  cottagesByRcl: { 5: 1, 6: 1, 7: 2, 8: 3 } as Record<number, number>,
+  militiaByRcl: { 5: 2, 6: 4, 7: 8, 8: 12 } as Record<number, number>,
+  // Stored energy a room needs before it adds a cottage or a townsperson; below
+  // it the town keeps what it has and waits. Upgraders spend everything above
+  // their 10k floor, so storage settles near it and a higher gate would never
+  // open. The town is cheap: a militiaman is 200 energy a lifetime, a cottage
+  // about 5k to raise and a few energy per hundred ticks to keep.
+  storageGate: 10_000,
   // Lookouts stand in neighbouring rooms so the castle can see its approaches.
   lookoutRcl: 8,
   maxLookouts: 4,

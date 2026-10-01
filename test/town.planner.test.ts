@@ -95,8 +95,8 @@ describe("planTown", () => {
     expect(room.memory.town).toBeDefined();
   });
 
-  it("raises watch posts and a square at RCL 6, but no cottage", () => {
-    const room = makeRoom({ rcl: 6, storage: 500_000 });
+  it("raises watch posts and a square at RCL 4, but no cottage", () => {
+    const room = makeRoom({ rcl: 4, storage: 500_000 });
     planTown(room as unknown as Room);
     const town = room.memory.town!;
     const ring = new Set(room.memory.perimeterTiles);
@@ -163,13 +163,14 @@ describe("planTown", () => {
   });
 
   it("holds off the cottage while storage is short of the gate", () => {
-    const room = makeRoom({ rcl: 7, storage: TOWN.storageGateByRcl[7] - 1 });
+    const room = makeRoom({ rcl: 7, storage: TOWN.storageGate - 1 });
     planTown(room as unknown as Room);
     expect(room.memory.town!.cottages).toHaveLength(0);
   });
 
   it("keeps its layout on later passes and drops what is built from the plan", () => {
-    const room = makeRoom({ rcl: 7, storage: 200_000 });
+    // RCL 6 wants one cottage, so the second pass has nothing more to add.
+    const room = makeRoom({ rcl: 6, storage: 200_000 });
     planTown(room as unknown as Room);
     const first = JSON.parse(JSON.stringify(room.memory.town));
     const fountain = first.fountain as string;
@@ -256,5 +257,21 @@ describe("barrierTargetFn", () => {
     expect(at("rampart", town.posts[0])).toBe(TOWN.barrierHits);
     expect(at("constructedWall", "3,3")).toBeGreaterThan(TOWN.barrierHits);
     expect(at("rampart", room.memory.perimeterTiles![0])).toBeGreaterThan(TOWN.barrierHits);
+  });
+});
+
+describe("town growth by RCL", () => {
+  it("adds a cottage a level at a time as the castle rises", () => {
+    const room = makeRoom({ rcl: 4, storage: 200_000 });
+    planTown(room as unknown as Room);
+    expect(room.memory.town!.cottages).toHaveLength(0);
+
+    room.controller.level = 5;
+    planTown(room as unknown as Room);
+    expect(room.memory.town!.cottages).toHaveLength(1);
+
+    room.controller.level = 7;
+    planTown(room as unknown as Room);
+    expect(room.memory.town!.cottages).toHaveLength(2);
   });
 });

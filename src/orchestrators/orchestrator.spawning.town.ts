@@ -36,9 +36,8 @@ function builtBeds(room: Room): number {
 /** The next townsperson the room should raise, or null. */
 export function nextTownJob(room: Room): TownJob | null {
   const rcl = room.controller?.level ?? 0;
-  const gate = TOWN.storageGateByRcl[rcl];
-  if (gate === undefined || !room.memory.town) return null;
-  if ((room.storage?.store[RESOURCE_ENERGY] ?? 0) < gate) return null;
+  if (!room.memory.town) return null;
+  if ((room.storage?.store[RESOURCE_ENERGY] ?? 0) < TOWN.storageGate) return null;
   if (Memory.empire?.posture === "RECOVER" || isEnergyEmergency(room)) return null;
 
   const folk = townsfolkOf(room);

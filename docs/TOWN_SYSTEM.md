@@ -1,6 +1,6 @@
 # The Town Quarter
 
-Once a castle is rich and well walled, a town grows up inside its perimeter:
+As a castle rises, a town grows up inside its perimeter, a step at each level:
 watch posts behind the ramparts, a market square around a fountain, stone
 cottages for the townsfolk, and the townsfolk themselves, a militia of archers
 who keep the watch by day and sleep in their beds by night.
@@ -11,7 +11,7 @@ whoever stands on them. The town is therefore also a set of places to stand:
 posts to guard from, a square to idle in, and beds to hide in.
 
 It is not a fortification. The perimeter is. Town barriers are kept at a modest
-20k hits, and the whole quarter costs about 2 energy a tick at RCL 8.
+20k hits, and the whole quarter costs about 3 energy a tick at RCL 8.
 
 ---
 
@@ -21,11 +21,16 @@ Each stage waits for the room to afford it.
 
 | Stage | Needs | Adds |
 |---|---|---|
-| Watch posts + square | RCL 6, anchor and perimeter planned, 90% of the perimeter built | Up to 3 rampart posts behind the ring for each side with exits; a 3x3 square around a fountain wall |
-| First cottage | RCL 7, 150k energy in storage | The House of Aldermere: 15 walls, a rampart door, 9 rampart beds |
-| Militia | A built bed each, the storage gate, posture not `RECOVER`, no energy emergency | Up to 4 militia at RCL 7, 8 at RCL 8 |
-| Second cottage | RCL 8, 250k energy in storage | The House of Blackwood |
+| Watch posts + square | RCL 4, anchor and perimeter planned, 90% of the perimeter built | Up to 3 rampart posts behind the ring for each side with exits; a 3x3 square around a fountain wall |
+| First cottage | RCL 5 | The House of Aldermere: 15 walls, a rampart door, 9 rampart beds |
+| Militia | A built bed each, posture not `RECOVER`, no energy emergency | Up to 2 militia at RCL 5, 4 at RCL 6, 8 at RCL 7, 12 at RCL 8 |
+| Second cottage | RCL 7 | The House of Blackwood |
+| Third cottage | RCL 8 | The House of Cotter |
 | Lookouts | RCL 8, militia at strength | Up to 4, one per neighbouring room nobody else owns or reserves and we do not already mine |
+
+Cottages and townsfolk also need 10k energy in storage. That is the upgraders'
+floor: they spend everything above it, so storage settles near 10k and a higher
+gate would never open.
 
 Townsfolk spawn last, after every economic and military role, and never while
 the room is blockaded or its economy is critical. Below the storage gate the
@@ -178,14 +183,14 @@ When room visuals are on, the town draws itself:
 
 | Item | Energy |
 |---|---|
-| Militia, 8 at RCL 8 | 8 x 200 per 1500 ticks = about 1.1 a tick |
+| Militia, 12 at RCL 8 | 12 x 200 per 1500 ticks = about 1.6 a tick |
 | Lookouts, up to 4 | 4 x 50 per 1500 ticks = about 0.13 a tick |
-| Rampart decay, about 30 town ramparts | 3 hits a tick each, at 0.01 energy per hit = about 0.9 a tick |
+| Rampart decay, about 40 town ramparts | 3 hits a tick each, at 0.01 energy per hit = about 1.2 a tick |
 | Walls | Never decay; repaired only when shot |
-| One-off build and reinforcement to 20k | About 200 energy a barrier, roughly 12k in all |
+| One-off build and reinforcement to 20k | About 200 energy a barrier, about 5k a cottage, roughly 17k in all |
 
-About 2 energy a tick at RCL 8, a few percent of a mature room's income. The
-storage gate keeps it from ever competing with the economy.
+About 3 energy a tick at RCL 8, a few percent of a mature room's income. At RCL 5
+the town is one cottage and two militia, well under 1 energy a tick.
 
 ---
 

@@ -436,9 +436,7 @@ function perimeterMostlyBuilt(room: Room, ring: string[]): boolean {
 
 export function wantedCottages(room: Room): number {
   const rcl = room.controller?.level ?? 0;
-  const gate = TOWN.storageGateByRcl[rcl];
-  if (gate === undefined) return 0;
-  if ((room.storage?.store[RESOURCE_ENERGY] ?? 0) < gate) return 0;
+  if ((room.storage?.store[RESOURCE_ENERGY] ?? 0) < TOWN.storageGate) return 0;
   return TOWN.cottagesByRcl[rcl] ?? 0;
 }
 

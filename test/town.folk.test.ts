@@ -217,14 +217,14 @@ describe("nextTownJob", () => {
     expect(nextTownJob(room as unknown as Room)).toBeNull();
 
     buildBeds(9);
-    for (const n of ["c", "d"]) folk(n, 31, 32);
-    expect(TOWN.militiaByRcl[7]).toBe(4);
+    for (const n of ["c", "d", "e", "f", "g", "h"]) folk(n, 31, 32);
+    expect(TOWN.militiaByRcl[7]).toBe(8);
     expect(nextTownJob(room as unknown as Room)).toBeNull();
   });
 
   it("raises nobody while storage is under the gate or the empire is recovering", () => {
     buildBeds(9);
-    (room.storage as { store: { energy: number } }).store.energy = TOWN.storageGateByRcl[7] - 1;
+    (room.storage as { store: { energy: number } }).store.energy = TOWN.storageGate - 1;
     expect(nextTownJob(room as unknown as Room)).toBeNull();
 
     (room.storage as { store: { energy: number } }).store.energy = 500_000;
