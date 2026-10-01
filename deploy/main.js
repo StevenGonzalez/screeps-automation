@@ -815,10 +815,10 @@ function evaluateRoomThreatLevel(room) {
 }
 
 const TOWN = {
-    watchRcl: 6,
-    cottagesByRcl: { 7: 1, 8: 2 },
-    militiaByRcl: { 7: 4, 8: 8 },
-    storageGateByRcl: { 7: 150000, 8: 250000 },
+    watchRcl: 4,
+    cottagesByRcl: { 5: 1, 6: 1, 7: 2, 8: 3 },
+    militiaByRcl: { 5: 2, 6: 4, 7: 8, 8: 12 },
+    storageGate: 10000,
     lookoutRcl: 8,
     maxLookouts: 4,
     perimeterBuiltRatio: 0.9,
@@ -10349,10 +10349,7 @@ function perimeterMostlyBuilt(room, ring) {
 function wantedCottages(room) {
     var _a, _b, _c, _d, _e;
     const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
-    const gate = TOWN.storageGateByRcl[rcl];
-    if (gate === undefined)
-        return 0;
-    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < gate)
+    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < TOWN.storageGate)
         return 0;
     return (_e = TOWN.cottagesByRcl[rcl]) !== null && _e !== void 0 ? _e : 0;
 }
@@ -13315,10 +13312,9 @@ function builtBeds(room) {
 function nextTownJob(room) {
     var _a, _b, _c, _d, _e, _f;
     const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
-    const gate = TOWN.storageGateByRcl[rcl];
-    if (gate === undefined || !room.memory.town)
+    if (!room.memory.town)
         return null;
-    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < gate)
+    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < TOWN.storageGate)
         return null;
     if (((_e = Memory.empire) === null || _e === void 0 ? void 0 : _e.posture) === "RECOVER" || isEnergyEmergency(room))
         return null;
