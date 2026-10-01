@@ -3082,6 +3082,13 @@ function markRemoteInvader(entry, room) {
     entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
     entry.invaderStrength = invaderStrength(room);
 }
+function flagRemoteDamage(creep) {
+    const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+    if (hostiles.some(isPlayerCreep))
+        flagRemotePlayer(creep);
+    else
+        flagRemoteInvader(creep);
+}
 function flagRemotePlayer(creep) {
     const entry = assignedRemoteEntry(creep);
     if (entry)
@@ -7592,9 +7599,12 @@ function refreshVisibleRemoteRooms(room) {
             markRemotePlayerHostile(remote);
             continue;
         }
+        if (hostiles.some(isInvaderCreep)) {
+            clearRemotePlayerHostile(remote);
+            markRemoteInvader(remote, visible);
+            continue;
+        }
         if (hostiles.length > 0) {
-            if (hostiles.some(isInvaderCreep))
-                markRemoteInvader(remote, visible);
             remote.hostile = true;
             remote.hostileUntil = Game.time + REMOTE_HOSTILE_EXPIRY;
             continue;
@@ -7849,7 +7859,7 @@ function runRemoteMiner(creep) {
     if (tookDamage && creep.room.name !== homeRoom) {
         creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF$1;
         if (creep.room.name === targetRoom)
-            flagRemotePlayer(creep);
+            flagRemoteDamage(creep);
     }
     if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
         if (creep.room.name !== homeRoom)
@@ -7969,7 +7979,7 @@ function runRemoteHauler(creep) {
     if (tookDamage && creep.room.name !== homeRoom) {
         creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF;
         if (creep.room.name === targetRoom)
-            flagRemotePlayer(creep);
+            flagRemoteDamage(creep);
     }
     if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
         if (creep.store[RESOURCE_ENERGY] > 0)
