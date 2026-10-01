@@ -3,6 +3,7 @@ import {
   isAssignedRemoteContested,
   flagRemoteInvader,
   flagRemotePlayer,
+  flagRemoteDamage,
   clearRemoteInvader,
 } from "../services/services.creep";
 
@@ -21,7 +22,7 @@ export function runRemoteMiner(creep: Creep) {
   if (tookDamage && creep.room.name !== homeRoom) {
     creep.memory.remoteBackoffUntil = Game.time + REMOTE_DAMAGE_BACKOFF;
     // Damage taken passing through another room says nothing about the remote.
-    if (creep.room.name === targetRoom) flagRemotePlayer(creep);
+    if (creep.room.name === targetRoom) flagRemoteDamage(creep);
   }
   if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
     if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);

@@ -362,9 +362,15 @@ export function refreshVisibleRemoteRooms(room: Room) {
       markRemotePlayerHostile(remote);
       continue;
     }
+    // Invader creeps get a knight sized to them, as a core does. Marking the
+    // room hostile as well would drop it from the remotes this home works, and
+    // knights are only sent to those, so no knight would ever come.
+    if (hostiles.some(isInvaderCreep)) {
+      clearRemotePlayerHostile(remote);
+      markRemoteInvader(remote, visible);
+      continue;
+    }
     if (hostiles.length > 0) {
-      // Invader creeps get a defender sized to them, as a core does.
-      if (hostiles.some(isInvaderCreep)) markRemoteInvader(remote, visible);
       remote.hostile = true;
       remote.hostileUntil = Game.time + REMOTE_HOSTILE_EXPIRY;
       continue;

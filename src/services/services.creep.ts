@@ -1,5 +1,5 @@
 import { pickSignature } from "../config/signatures";
-import { invaderStrength } from "./services.combat";
+import { invaderStrength, isPlayerCreep } from "./services.combat";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -183,6 +183,15 @@ export function flagRemoteInvader(creep: Creep): void {
 export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
   entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
   entry.invaderStrength = invaderStrength(room);
+}
+
+// Damage taken in the assigned remote. Only a player there earns a strike;
+// Invaders get a knight instead, and a strike for them would escalate the
+// player backoff every time one visits.
+export function flagRemoteDamage(creep: Creep): void {
+  const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
+  if (hostiles.some(isPlayerCreep)) flagRemotePlayer(creep);
+  else flagRemoteInvader(creep);
 }
 
 export function flagRemotePlayer(creep: Creep): void {

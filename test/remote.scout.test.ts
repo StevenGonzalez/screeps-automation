@@ -149,6 +149,30 @@ describe("refreshVisibleRemoteRooms", () => {
     expect(entry.invaderUntil).toBeGreaterThan(5000);
     expect(entry.hostile).toBe(false);
   });
+
+  // A hostile remote drops out of the ones this home works, and knights only
+  // go to those, so an Invader creep must not make the room hostile.
+  it("calls a knight for Invader creeps without marking the remote hostile", () => {
+    const entry = {
+      roomName: "W1N2",
+      sources: [],
+      lastSeen: 0,
+      hostile: true,
+      hostileUntil: 6000,
+      hostileStrikes: 1,
+    } as RemoteRoomData;
+    const invader = { owner: { username: "Invader" }, body: body("work", "move") };
+    (g.Game as any).rooms = {
+      W1N2: {
+        controller: { reservation: { username: ME } },
+        find: (type: number) => (type === g.FIND_HOSTILE_CREEPS ? [invader] : []),
+      },
+    };
+    const room = { name: HOME, controller: { owner: { username: ME } }, memory: { remoteRooms: [entry] } };
+    refreshVisibleRemoteRooms(room as unknown as Room);
+    expect(entry.invaderUntil).toBeGreaterThan(5000);
+    expect(entry.hostile).toBe(false);
+  });
 });
 
 describe("discoverAdjacentRooms", () => {

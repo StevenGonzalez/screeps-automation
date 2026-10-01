@@ -85,9 +85,23 @@ describe("remote miner", () => {
     expect(remote.hostile).toBe(false);
   });
 
-  it("flags the remote over damage taken inside it", () => {
-    runRemoteMiner(minerIn(REMOTE) as unknown as Creep);
+  it("flags the remote hostile over damage from a player inside it", () => {
+    const player = { owner: { username: "Stranger" }, body: [{ type: "attack", hits: 100 }] };
+    const creep = minerIn(REMOTE);
+    creep.room.find = ((type: number) => (type === g.FIND_HOSTILE_CREEPS ? [player] : [])) as any;
+    runRemoteMiner(creep as unknown as Creep);
     expect(remote.hostile).toBe(true);
+    expect(remote.hostileStrikes).toBe(1);
+  });
+
+  it("calls a knight, not a player strike, over damage from Invaders inside it", () => {
+    const creep = minerIn(REMOTE);
+    const invader = { owner: { username: "Invader" }, body: [{ type: "work", hits: 100 }] };
+    creep.room.find = ((type: number) => (type === g.FIND_HOSTILE_CREEPS ? [invader] : [])) as any;
+    runRemoteMiner(creep as unknown as Creep);
+    expect(remote.hostile).toBe(false);
+    expect(remote.hostileStrikes).toBeUndefined();
+    expect(remote.invaderUntil).toBeGreaterThan(1000);
   });
 
   it("marks the remote hostile when a player's reservation blocks harvesting", () => {

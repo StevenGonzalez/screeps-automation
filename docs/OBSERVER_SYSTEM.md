@@ -76,7 +76,10 @@ dragon knight engages hostile creeps first and then **attacks the core itself**;
 the flag once the room holds neither creeps nor a core. Without this the dragon knight would
 kill the spawned creeps, declare the room clear, and leave the core to re-reserve and
 re-spawn indefinitely - the remote stays bricked. A **player** creep instead marks the
-room hostile and we abandon it rather than send a lone dragon knight.
+room hostile and we abandon it rather than send a lone dragon knight. Damage a
+wanderer or merchant takes inside its remote is judged the same way: it counts as a
+player strike only when a player creep is in the room, and otherwise raises the
+Invader flag.
 
 ---
 
