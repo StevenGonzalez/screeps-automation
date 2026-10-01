@@ -2982,7 +2982,6 @@ function upgradeController(creep) {
 }
 const SIGN_RECHECK_INTERVAL = 5000;
 function signControllerIfNeeded(creep, controller) {
-    var _a;
     const lastSigned = creep.room.memory.lastSigned;
     if (lastSigned !== undefined && Game.time - lastSigned < SIGN_RECHECK_INTERVAL)
         return false;
@@ -2990,7 +2989,7 @@ function signControllerIfNeeded(creep, controller) {
     const currentSign = controller.sign;
     if ((currentSign === null || currentSign === void 0 ? void 0 : currentSign.username) === "Screeps")
         return false;
-    const myUsername = (_a = controller.owner) === null || _a === void 0 ? void 0 : _a.username;
+    const myUsername = creep.owner.username;
     const needsSign = !currentSign ||
         currentSign.username !== myUsername ||
         currentSign.text !== desiredSignature;
@@ -8164,7 +8163,9 @@ function runReserver(creep) {
         : creep.reserveController(controller);
     if (result === ERR_NOT_IN_RANGE) {
         creep.moveTo(controller, { reusePath: 30 });
+        return;
     }
+    signControllerIfNeeded(creep, controller);
 }
 function moveToRoom$4(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
