@@ -1211,7 +1211,7 @@ function computeMerchantRingExtensionOffsets() {
 }
 const MERCHANT_RING_EXTENSION_OFFSETS = computeMerchantRingExtensionOffsets();
 
-const BLUEPRINT_VERSION = 1;
+const BLUEPRINT_VERSION = 2;
 const SIZE$1 = 50;
 const idx$1 = (x, y) => y * SIZE$1 + x;
 const tx = (i) => i % SIZE$1;
@@ -1225,6 +1225,11 @@ const SOLID = 1;
 const ROAD = 2;
 const OPEN = 3;
 const UNREACHED = 0x3fffffff;
+const HEADINGS = [
+    [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
+];
+const BEND_COST = [0, 1, 4, 12, 40];
+const STEP_SCALE = 4;
 function pinnedTypes() {
     return new Set([
         STRUCTURE_SPAWN, STRUCTURE_STORAGE, STRUCTURE_TERMINAL, STRUCTURE_TOWER,
@@ -1397,7 +1402,6 @@ class Planner {
     }
     dijkstra() {
         const dist = new Int32Array(SIZE$1 * SIZE$1).fill(UNREACHED);
-        const parent = new Int32Array(SIZE$1 * SIZE$1).fill(-1);
         const heap = new MinHeap();
         for (const s of this.hubStarts()) {
             dist[s] = 0;
@@ -1413,18 +1417,62 @@ class Planner {
                 const nd = d + this.moveCost(n);
                 if (nd < dist[n]) {
                     dist[n] = nd;
-                    parent[n] = i;
                     heap.push(nd, n);
                 }
             }
         }
-        return { dist, parent };
+        return { dist };
     }
-    walkBack(parent, from) {
-        const out = [];
-        for (let i = from; i >= 0; i = parent[i])
-            out.push(i);
-        return out;
+    roadDijkstra() {
+        const states = SIZE$1 * SIZE$1 * 8;
+        const cost = new Int32Array(states).fill(UNREACHED);
+        const parent = new Int32Array(states).fill(-1);
+        const heap = new MinHeap();
+        const hx = tx(this.hub);
+        const hy = ty(this.hub);
+        for (const s of this.hubStarts()) {
+            const h = HEADINGS.findIndex(([dx, dy]) => dx === tx(s) - hx && dy === ty(s) - hy);
+            cost[s * 8 + h] = 0;
+            heap.push(0, s * 8 + h);
+        }
+        while (heap.size > 0) {
+            const [d, st] = heap.pop();
+            if (d > cost[st])
+                continue;
+            const i = st >> 3;
+            const h = st & 7;
+            const x = tx(i);
+            const y = ty(i);
+            for (let nh = 0; nh < 8; nh++) {
+                const n = this.at(x + HEADINGS[nh][0], y + HEADINGS[nh][1]);
+                if (n < 0 || !this.passable(n))
+                    continue;
+                const turn = Math.abs(nh - h);
+                const nd = d + this.moveCost(n) * STEP_SCALE + BEND_COST[Math.min(turn, 8 - turn)];
+                const ns = n * 8 + nh;
+                if (nd < cost[ns]) {
+                    cost[ns] = nd;
+                    parent[ns] = st;
+                    heap.push(nd, ns);
+                }
+            }
+        }
+        const dist = new Int32Array(SIZE$1 * SIZE$1).fill(UNREACHED);
+        const best = new Int32Array(SIZE$1 * SIZE$1).fill(-1);
+        for (let st = 0; st < states; st++) {
+            const i = st >> 3;
+            if (cost[st] < dist[i]) {
+                dist[i] = cost[st];
+                best[i] = st;
+            }
+        }
+        const road = (to) => {
+            const out = [];
+            for (let st = best[to]; st >= 0; st = parent[st])
+                out.push(st >> 3);
+            return out;
+        };
+        return { dist, road };
     }
     flood() {
         const seen = new Uint8Array(SIZE$1 * SIZE$1);
@@ -1652,12 +1700,14 @@ class Planner {
     }
     trunkTo(target, range, tag, rcl) {
         var _a;
-        const { dist, parent } = this.dijkstra();
+        const { dist, road } = this.roadDijkstra();
         let end = (_a = this.oldContainers.find((i) => cheb$1(i, target) <= range && dist[i] < UNREACHED)) !== null && _a !== void 0 ? _a : -1;
-        if (end < 0) {
+        for (const onRoad of [false, true]) {
+            if (end >= 0)
+                break;
             let best = UNREACHED;
             for (let i = 0; i < SIZE$1 * SIZE$1; i++) {
-                if (cheb$1(i, target) > range || !this.passable(i) || this.occ[i] === ROAD)
+                if (cheb$1(i, target) > range || !this.passable(i) || (this.occ[i] === ROAD) !== onRoad)
                     continue;
                 if (this.byTile.has(i) || dist[i] >= best)
                     continue;
@@ -1667,7 +1717,7 @@ class Planner {
         }
         if (end < 0)
             return -1;
-        for (const i of this.walkBack(parent, parent[end]))
+        for (const i of road(end).slice(1))
             this.markRoad(i, rcl);
         this.add(STRUCTURE_CONTAINER, end, {
             tag,
@@ -1720,7 +1770,7 @@ class Planner {
         }
         if (edge.length === 0)
             return;
-        const { dist, parent } = this.dijkstra();
+        const { dist, road } = this.roadDijkstra();
         let end = -1;
         let best = UNREACHED;
         for (const e of edge) {
@@ -1733,7 +1783,7 @@ class Planner {
         }
         if (end < 0)
             return;
-        const path = this.walkBack(parent, end);
+        const path = road(end);
         this.exits[side] = path.map((i) => ({ x: tx(i), y: ty(i) }));
         for (const i of path)
             if (this.occ[i] === FREE)
@@ -1838,7 +1888,7 @@ class Planner {
             });
         }
         const roadRcl = new Map(this.trunkRcl);
-        const { dist, parent } = this.dijkstra();
+        const { dist, road } = this.roadDijkstra();
         for (const [d, rcl] of rclOf) {
             if (d.tag && d.tag !== "storage")
                 continue;
@@ -1851,7 +1901,7 @@ class Planner {
             }
             if (door < 0 || dist[door] >= UNREACHED)
                 continue;
-            for (const i of this.walkBack(parent, door)) {
+            for (const i of road(door)) {
                 roadRcl.set(i, Math.min((_a = roadRcl.get(i)) !== null && _a !== void 0 ? _a : 8, rcl));
             }
         }
