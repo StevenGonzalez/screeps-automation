@@ -11,19 +11,19 @@ const ROLE_HAULER = "porter";
 const ROLE_FILLER = "barmaid";
 const ROLE_MINERAL_MINER = "jeweler";
 const ROLE_SCOUT = "raven";
-const ROLE_REMOTE_MINER = "wanderer";
+const ROLE_REMOTE_MINER = "peddler";
 const ROLE_REMOTE_HAULER = "merchant";
 const ROLE_RESERVER = "envoy";
 const ROLE_KNIGHT = "dragonknight";
 const ROLE_WIZARD = "darkwizard";
-const ROLE_CLERIC = "fairyelf";
-const ROLE_SIEGER = "ragefighter";
+const ROLE_CLERIC = "cleric";
+const ROLE_SIEGER = "ravager";
 const ROLE_DRAINER = "gladiator";
 const ROLE_CONQUEROR = "darklord";
 const ROLE_SETTLER = "pilgrim";
 const ROLE_APOTHECARY = "goblin";
-const ROLE_POWER_ATTACKER = "blademaster";
-const ROLE_POWER_HEALER = "museelf";
+const ROLE_POWER_ATTACKER = "reaver";
+const ROLE_POWER_HEALER = "acolyte";
 const ROLE_POWER_CARRIER = "looter";
 const ROLE_DEPOSIT_MINER = "nomad";
 const ROLE_DEPOSIT_HAULER = "caravan";
@@ -33,6 +33,39 @@ const ROLE_SK_HAULER = "packmule";
 const ROLE_SCORE_HUNTER = "seeker";
 const ROLE_UNCLAIMER = "usurper";
 const ROLE_TOWNSFOLK = "townsfolk";
+const ROLE_TITLES = {
+    [ROLE_BUILDER]: "Mason",
+    [ROLE_HARVESTER]: "Villager",
+    [ROLE_UPGRADER]: "Enchanter",
+    [ROLE_REPAIRER]: "Blacksmith",
+    [ROLE_MINER]: "Miner",
+    [ROLE_HAULER]: "Porter",
+    [ROLE_FILLER]: "Barmaid",
+    [ROLE_MINERAL_MINER]: "Jeweler",
+    [ROLE_SCOUT]: "Raven",
+    [ROLE_REMOTE_MINER]: "Peddler",
+    [ROLE_REMOTE_HAULER]: "Merchant",
+    [ROLE_RESERVER]: "Envoy",
+    [ROLE_KNIGHT]: "Dragon Knight",
+    [ROLE_WIZARD]: "Dark Wizard",
+    [ROLE_CLERIC]: "Cleric",
+    [ROLE_SIEGER]: "Ravager",
+    [ROLE_DRAINER]: "Gladiator",
+    [ROLE_CONQUEROR]: "Dark Lord",
+    [ROLE_SETTLER]: "Pilgrim",
+    [ROLE_APOTHECARY]: "Goblin",
+    [ROLE_POWER_ATTACKER]: "Reaver",
+    [ROLE_POWER_HEALER]: "Acolyte",
+    [ROLE_POWER_CARRIER]: "Looter",
+    [ROLE_DEPOSIT_MINER]: "Nomad",
+    [ROLE_DEPOSIT_HAULER]: "Caravan",
+    [ROLE_SK_GUARDIAN]: "Lancer",
+    [ROLE_SK_MINER]: "Delver",
+    [ROLE_SK_HAULER]: "Packmule",
+    [ROLE_SCORE_HUNTER]: "Seeker",
+    [ROLE_UNCLAIMER]: "Usurper",
+    [ROLE_TOWNSFOLK]: "Yeoman",
+};
 const ENERGY_DEPOSIT_PRIORITY = {
     [ROLE_HARVESTER]: [
         STRUCTURE_SPAWN,
@@ -43,18 +76,18 @@ const ENERGY_DEPOSIT_PRIORITY = {
 };
 
 const SIGNATURES = [
-    "By order of the Dark Lord, this land now answers to the castle.",
-    "Traveling merchants welcome. Invaders are not.",
-    "The Castle Siege is over. We won. Please wipe your boots.",
-    "Taxes are due in Zen. Pay at the castle gate.",
-    "Blessed +15 by our enchanters. Do not touch.",
-    "Here be Budge Dragons. And us. Mostly us.",
-    "Our Dragon Knights patrol these walls. Mind your step.",
-    "Lorencia sends its regards. Now leave.",
-    "The Chaos Machine said fail. So did your claim.",
-    "Kundun stirs in the deep. This room is under our protection.",
+    "By order of the Crown, this land now answers to the castle.",
+    "Traveling merchants welcome. Raiders will be hanged at the gate.",
+    "The siege is over. We won. Please wipe your boots.",
+    "Taxes are due in gold. Pay at the castle gate.",
+    "Warded by our enchanters. Do not touch.",
+    "Here be dragons. And us. Mostly us.",
+    "Our knights patrol these walls. Mind your step.",
+    "The Crown sends its regards. Now leave.",
+    "The bones were cast. Your claim did not survive them.",
+    "Something stirs beneath the barrows. This land is under our protection.",
     "Trade, barter, pass through. Just don't stay.",
-    "A Dark Wizard lives here. Knock at your own risk.",
+    "A dark wizard lives here. Knock at your own risk.",
 ];
 function pickSignature(roomName) {
     var _a;
@@ -807,14 +840,14 @@ const TOWN_PHASES = [
     { name: "night", start: 700 },
 ];
 const COTTAGE_FAMILIES = [
-    "Hanzo",
-    "Pasi",
-    "Lumen",
-    "Martin",
-    "Liaman",
-    "Zienna",
-    "Thompson",
-    "Caren",
+    "Aldermere",
+    "Blackwood",
+    "Cotter",
+    "Fairweather",
+    "Holloway",
+    "Marsh",
+    "Thatcher",
+    "Wren",
 ];
 
 function townClock(time) {
@@ -972,10 +1005,10 @@ function parkIdle(creep, kind) {
     return parkOn(creep, town.square);
 }
 
-const MU_TOWN_NAMES = [
-    "Lorencia", "Devias", "Noria", "Atlans", "Tarkan", "Icarus",
-    "Aida", "Kanturu", "Crywolf", "Vulcanus", "Elbeland", "Karutan",
-    "LostTower", "Dungeon", "Kalima",
+const TOWN_NAMES = [
+    "Ravenhold", "Blackmoor", "Ashfall", "Grimward", "Thornkeep", "Duskmere",
+    "Ironvale", "Wolfsbane", "Hollowmere", "Cinderfell", "Stormwatch", "Gallowgate",
+    "Bleakharrow", "Mournspire", "Frosthaven",
 ];
 const STRUCTURE_PLANNER = {
     roadPadding: 0,
@@ -7846,6 +7879,77 @@ function markRoomUnreachable(homeRoomName, targetRoomName) {
     entry.hostileUntil = Game.time + UNREACHABLE_RETRY_TICKS;
 }
 
+const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
+let cryTick = -1;
+let creepCries = {};
+let roomCries = {};
+function freshCries() {
+    if (cryTick === Game.time)
+        return;
+    cryTick = Game.time;
+    creepCries = {};
+    roomCries = {};
+}
+function cryFor(creep) {
+    var _a;
+    if (cryTick !== Game.time)
+        return undefined;
+    return (_a = creepCries[creep.name]) !== null && _a !== void 0 ? _a : roomCries[creep.room.name];
+}
+function cryFlight(creep) {
+    if (creep.memory.fled)
+        return;
+    creep.memory.fled = true;
+    freshCries();
+    creepCries[creep.name] = "Bandits!";
+}
+function settleFlight(creep) {
+    if (creep.memory.fled)
+        delete creep.memory.fled;
+}
+function heraldRooms() {
+    var _a;
+    freshCries();
+    for (const roomName in Game.rooms) {
+        const room = Game.rooms[roomName];
+        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
+            heraldRise(room);
+        heraldKills(room);
+    }
+}
+function heraldRise(room) {
+    const level = room.controller.level;
+    const known = room.memory.heraldLevel;
+    room.memory.heraldLevel = level;
+    if (known === undefined || level <= known)
+        return;
+    roomCries[room.name] = "Long live!";
+    console.log(`[Herald] Hear ye! ${room.name} rises to level ${level}. Long live the Crown!`);
+}
+function heraldKills(room) {
+    const raw = room.getEventLog(true);
+    if (!raw.includes(`"event":${EVENT_OBJECT_DESTROYED},`))
+        return;
+    const events = JSON.parse(raw);
+    for (const e of events) {
+        if (e.event !== EVENT_OBJECT_DESTROYED || e.data.type !== "creep")
+            continue;
+        const ours = events
+            .filter((a) => a.event === EVENT_ATTACK && a.data.targetId === e.objectId)
+            .map((a) => Game.getObjectById(a.objectId))
+            .filter((o) => !!o && o.my);
+        if (ours.length === 0)
+            continue;
+        const creeps = ours.filter((o) => o instanceof Creep);
+        if (creeps.length === 0) {
+            roomCries[room.name] = "Huzzah!";
+            continue;
+        }
+        for (const c of creeps)
+            creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
+    }
+}
+
 const REMOTE_DAMAGE_BACKOFF$1 = 300;
 function runRemoteMiner(creep) {
     const { targetRoom, homeRoom, remoteSourceId } = creep.memory;
@@ -7877,10 +7981,12 @@ function runRemoteMiner(creep) {
             flagRemotePlayer(creep);
     }
     if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
+        cryFlight(creep);
         if (creep.room.name !== homeRoom)
             moveToRoom$6(creep, homeRoom);
         return;
     }
+    settleFlight(creep);
     if (inTarget && !core)
         clearRemoteInvader(creep);
     if (creep.room.name !== targetRoom) {
@@ -7999,6 +8105,7 @@ function runRemoteHauler(creep) {
             flagRemotePlayer(creep);
     }
     if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
+        cryFlight(creep);
         if (creep.store[RESOURCE_ENERGY] > 0) {
             depositEnergy(creep, homeRoom);
         }
@@ -8007,6 +8114,7 @@ function runRemoteHauler(creep) {
         }
         return;
     }
+    settleFlight(creep);
     if (inTarget && !core)
         clearRemoteInvader(creep);
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
@@ -11155,33 +11263,38 @@ const ROLE_HANDLERS = {
     [ROLE_UNCLAIMER]: runUnclaimer,
     [ROLE_TOWNSFOLK]: runTownsfolk,
 };
-const GENERAL_CHATTER = ["for Mu!", "zen?", "+13 plz", "Jewel!", "party?", "lvl up!", "Lorencia", "Kundun?!"];
+const GENERAL_CHATTER = ["for Crown!", "gold?", "huzzah!", "long live!", "ale later", "hark!", "onward!", "dragons?!"];
 const ROLE_CHATTER = {
-    [ROLE_MINER]: ["dig dig", "ore ho!", "rock+stone"],
-    [ROLE_HARVESTER]: ["lvl 1", "spiders!", "Budge?!"],
-    [ROLE_HAULER]: ["make way", "heavy!", "delivery"],
+    [ROLE_MINER]: ["dig dig", "gold vein!", "rock+stone"],
+    [ROLE_HARVESTER]: ["new here", "spiders!", "rats?!"],
+    [ROLE_HAULER]: ["make way", "heavy!", "gold run"],
     [ROLE_FILLER]: ["ale's up!", "refilled", "tavern!"],
-    [ROLE_UPGRADER]: ["Bless +1", "Soul +1", "it glows!"],
+    [ROLE_UPGRADER]: ["by runes", "it glows!", "Crown +1"],
     [ROLE_BUILDER]: ["stone up", "mortar!", "new wall"],
-    [ROLE_REPAIRER]: ["clang!", "mended", "repair?"],
-    [ROLE_MINERAL_MINER]: ["Chaos!", "gems!", "Jewel?"],
+    [ROLE_REPAIRER]: ["clang!", "mended", "anvil!"],
+    [ROLE_MINERAL_MINER]: ["gems!", "rare ore", "shiny!"],
     [ROLE_SCOUT]: ["caw!", "caw caw", "I see you"],
-    [ROLE_REMOTE_MINER]: ["passing by", "barter?", "fresh ore"],
-    [ROLE_REMOTE_HAULER]: ["zen only", "fair trade", "wares!"],
+    [ROLE_REMOTE_MINER]: ["fine ore!", "good rates", "for sale!"],
+    [ROLE_REMOTE_HAULER]: ["gold only", "fair trade", "wares!"],
     [ROLE_RESERVER]: ["by decree", "king's law", "claimed"],
-    [ROLE_KNIGHT]: ["Twisting!", "Death Stab", "for Mu!"],
-    [ROLE_WIZARD]: ["Meteorite!", "Hellfire!", "Ice Storm"],
-    [ROLE_CLERIC]: ["heal!", "buffed!", "stay close"],
-    [ROLE_SIEGER]: ["smash!", "Uppercut!", "wall down"],
+    [ROLE_KNIGHT]: ["for Crown!", "Have at ye", "no mercy"],
+    [ROLE_WIZARD]: ["Burn!", "Hexed!", "Doom!"],
+    [ROLE_CLERIC]: ["heal!", "blessed!", "stay close"],
+    [ROLE_SIEGER]: ["smash!", "ram it!", "wall down"],
     [ROLE_DRAINER]: ["hit me!", "over here!", "tanking"],
-    [ROLE_CONQUEROR]: ["kneel!", "my castle", "Earthshake"],
+    [ROLE_CONQUEROR]: ["kneel!", "my castle", "bow!"],
     [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
     [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
-    [ROLE_TOWNSFOLK]: ["fresh bread", "nice day", "hail Arca!", "Lorencia!", "tax again?"],
+    [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
 };
 const SAY_PERIOD = 30;
 function maybeChatter(creep) {
     var _a;
+    const cry = cryFor(creep);
+    if (cry) {
+        creep.say(cry, true);
+        return;
+    }
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
@@ -11193,6 +11306,7 @@ function maybeChatter(creep) {
 }
 function loop$d() {
     const profile = Memory.profileRoles === true;
+    heraldRooms();
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
         if (creep.spawning)
@@ -12534,16 +12648,19 @@ function getCreepsByRoleInRoom(role, room) {
 let spawningCacheTick = -1;
 const spawningCache = {};
 let issuedTick = -1;
-let issuedTotal = 0;
 const issuedThisTick = {};
+const issuedNames = new Set();
+function freshIssued() {
+    if (issuedTick === Game.time)
+        return;
+    issuedTick = Game.time;
+    issuedNames.clear();
+    for (const k of Object.keys(issuedThisTick))
+        delete issuedThisTick[k];
+}
 function getIssuedCount(room, role) {
     var _a, _b;
-    if (issuedTick !== Game.time) {
-        issuedTick = Game.time;
-        issuedTotal = 0;
-        for (const k of Object.keys(issuedThisTick))
-            delete issuedThisTick[k];
-    }
+    freshIssued();
     return (_b = (_a = issuedThisTick[room.name]) === null || _a === void 0 ? void 0 : _a[role]) !== null && _b !== void 0 ? _b : 0;
 }
 function getRoomSpawningCount(room, role) {
@@ -12569,15 +12686,34 @@ function getRoomSpawningCount(room, role) {
     }
     return ((_b = spawningCache[room.name][role]) !== null && _b !== void 0 ? _b : 0) + getIssuedCount(room, role);
 }
-function trackedSpawn(room, spawn, body, name, opts) {
+const GIVEN_NAMES = [
+    "Aldric", "Agnes", "Bertram", "Beatrix", "Brannoc", "Cedric", "Cecily", "Corvin",
+    "Dunstan", "Edith", "Edric", "Fulk", "Gareth", "Gisela", "Godric", "Hild",
+    "Isolde", "Ivo", "Jocelin", "Kenric", "Leofric", "Lucan", "Maud", "Merek",
+    "Mordred", "Morwen", "Osric", "Percival", "Roderick", "Rowena", "Sigmund", "Sybil",
+    "Thorne", "Tristan", "Ulric", "Wulfric", "Ysolde", "Varian",
+];
+function creepName(role) {
+    var _a;
+    freshIssued();
+    const title = (_a = ROLE_TITLES[role]) !== null && _a !== void 0 ? _a : role;
+    const start = Game.time % GIVEN_NAMES.length;
+    for (let i = 0; i < GIVEN_NAMES.length; i++) {
+        const name = `${title} ${GIVEN_NAMES[(start + i) % GIVEN_NAMES.length]}`;
+        if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name))
+            return name;
+    }
+    return `${title} ${Game.time}`;
+}
+function trackedSpawn(room, spawn, body, opts) {
     var _a, _b;
     const role = opts.memory.role;
     if (getIssuedCount(room, role) > 0)
         return ERR_BUSY;
-    const uniqueName = issuedTotal > 0 ? `${name}_${issuedTotal}` : name;
-    const res = spawn.spawnCreep(body, uniqueName, opts);
+    const name = creepName(role);
+    const res = spawn.spawnCreep(body, name, opts);
     if (res === OK) {
-        issuedTotal++;
+        issuedNames.add(name);
         const byRole = (_a = issuedThisTick[room.name]) !== null && _a !== void 0 ? _a : (issuedThisTick[room.name] = {});
         byRole[role] = ((_b = byRole[role]) !== null && _b !== void 0 ? _b : 0) + 1;
     }
@@ -12924,7 +13060,7 @@ function spawnScout(room, spawn) {
     const target = pending.find((r) => !assignedRooms.has(r));
     if (!target)
         return false;
-    const res = trackedSpawn(room, spawn, [MOVE], `${ROLE_SCOUT}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, [MOVE], {
         memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
     });
     return res === OK;
@@ -12956,7 +13092,7 @@ function shouldSpawnScoreHunter(room) {
     return owned.length + getRoomSpawningCount(room, ROLE_SCORE_HUNTER) < target;
 }
 function spawnScoreHunter(room, spawn) {
-    const res = trackedSpawn(room, spawn, [MOVE], `${ROLE_SCORE_HUNTER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, [MOVE], {
         memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
     });
     return res === OK;
@@ -12994,7 +13130,7 @@ function spawnRemoteMiner(room, spawn) {
     const body = buildRemoteMinerBody(allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_REMOTE_MINER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_REMOTE_MINER,
             homeRoom: room.name,
@@ -13063,7 +13199,7 @@ function spawnRemoteHauler(room, spawn) {
     const body = buildRemoteHaulerBody(allowedEnergy, remoteRoadsEnabled(room));
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_REMOTE_HAULER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_REMOTE_HAULER,
             homeRoom: room.name,
@@ -13144,7 +13280,7 @@ function spawnReserver(room, spawn) {
     const body = buildReserverBody(room.energyCapacityAvailable);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_RESERVER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_RESERVER,
             homeRoom: room.name,
@@ -13210,7 +13346,7 @@ function spawnTownsfolk(room, spawn) {
         homeRoom: room.name,
         ...(next.job === "lookout" ? { targetRoom: next.targetRoom } : {}),
     };
-    return trackedSpawn(room, spawn, body, `${ROLE_TOWNSFOLK}${Game.time}`, { memory }) === OK;
+    return trackedSpawn(room, spawn, body, { memory }) === OK;
 }
 
 const UNREACHABLE_DISTANCE = 999;
@@ -13440,7 +13576,6 @@ function shouldSpawnHauler(room) {
     return totalCurrentCarry < desired * carryPerIdealHaulerUnits * 0.5;
 }
 function spawnHauler(room, spawn) {
-    const newName = `${ROLE_HAULER}${Game.time}`;
     const existingHaulers = getCreepsByRole(ROLE_HAULER).filter((c) => { var _a; return ((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) === room.name; });
     const allowedEnergy = bodyBudget(room, existingHaulers.length === 0 ? "available" : "capacity");
     const body = buildScaledBody(ROLE_HAULER, allowedEnergy);
@@ -13453,11 +13588,11 @@ function spawnHauler(room, spawn) {
         if (room.energyAvailable < calculateBodyPartCost(affordableBody)) {
             return false;
         }
-        return trackedSpawn(room, spawn, affordableBody, newName, {
+        return trackedSpawn(room, spawn, affordableBody, {
             memory: { role: ROLE_HAULER, homeRoom: room.name },
         }) === OK;
     }
-    return trackedSpawn(room, spawn, body, newName, {
+    return trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_HAULER, homeRoom: room.name },
     }) === OK;
 }
@@ -13555,7 +13690,7 @@ function spawnFiller(room, spawn) {
     const body = buildScaledBody(ROLE_FILLER, allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_FILLER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_FILLER, homeRoom: room.name },
     });
     return res === OK;
@@ -13567,7 +13702,7 @@ function spawnEmergencyHarvester(room, spawn) {
     const body = [];
     for (let i = 0; i < sets; i++)
         body.push(WORK, CARRY, MOVE);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_HARVESTER}_emrg${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_HARVESTER },
     });
     return res === OK;
@@ -13593,10 +13728,9 @@ function shouldSpawnMineralMiner(room) {
     return countByRoleInRoom(ROLE_MINERAL_MINER, room) === 0;
 }
 function spawnRepairer(room, spawn) {
-    const newName = `${ROLE_REPAIRER}${Game.time}`;
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
-    const res = trackedSpawn(room, spawn, body, newName, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_REPAIRER },
     });
     return res === OK;
@@ -13614,19 +13748,17 @@ function buildMineralMinerBody(availableEnergy) {
     ];
 }
 function spawnMineralMiner(room, spawn) {
-    const newName = `${ROLE_MINERAL_MINER}${Game.time}`;
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildMineralMinerBody(allowedEnergy);
-    const res = trackedSpawn(room, spawn, body, newName, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_MINERAL_MINER },
     });
     return res === OK;
 }
 function spawnHarvester(room, spawn) {
-    const newName = `${ROLE_HARVESTER}${Game.time}`;
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildScaledBody(ROLE_HARVESTER, allowedEnergy);
-    const res = trackedSpawn(room, spawn, body, newName, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_HARVESTER },
     });
     return res === OK;
@@ -13655,7 +13787,6 @@ function buildUpgraderBody(availableEnergy) {
 }
 function spawnUpgrader(room, spawn) {
     var _a, _b;
-    const newName = `${ROLE_UPGRADER}${Game.time}`;
     const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
     const allowedEnergy = bodyBudget(room, rcl >= 8 ? "capacity" : "available");
     const body = rcl >= 8
@@ -13668,16 +13799,15 @@ function spawnUpgrader(room, spawn) {
         const workParts = body.filter((p) => p === WORK).length;
         queue = buildBoostQueue(room, "upgrader", workParts, 0);
     }
-    const res = trackedSpawn(room, spawn, body, newName, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_UPGRADER, ...boostMemory(queue) },
     });
     return res === OK;
 }
 function spawnBuilder(room, spawn) {
-    const newName = `${ROLE_BUILDER}${Game.time}`;
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildScaledBody(ROLE_BUILDER, allowedEnergy);
-    const res = trackedSpawn(room, spawn, body, newName, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_BUILDER },
     });
     return res === OK;
@@ -13698,7 +13828,6 @@ function buildMinerBody(availableEnergy) {
     return body;
 }
 function spawnMiner(room, spawn) {
-    const newName = `${ROLE_MINER}${Game.time}`;
     const existingMiners = getCreepsByRoleInRoom(ROLE_MINER, room).length;
     const allowedEnergy = existingMiners === 0 ? bodyBudget(room, "available") : minerBudget(room);
     const body = buildMinerBody(allowedEnergy);
@@ -13706,11 +13835,11 @@ function spawnMiner(room, spawn) {
         if (existingMiners > 0 && hasCoreRefiller(room) && holdSpawnFor(room, ROLE_MINER))
             return true;
         const affordable = buildMinerBody(bodyBudget(room, "available"));
-        return trackedSpawn(room, spawn, affordable, newName, {
+        return trackedSpawn(room, spawn, affordable, {
             memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
         }) === OK;
     }
-    return trackedSpawn(room, spawn, body, newName, {
+    return trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
     }) === OK;
 }
@@ -13751,7 +13880,7 @@ function spawnApothecary(room, spawn) {
     const body = buildScaledBody(ROLE_APOTHECARY, allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_APOTHECARY}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_APOTHECARY },
     });
     return res === OK;
@@ -13844,7 +13973,7 @@ function spawnKnight(room, spawn) {
     const toughParts = body.filter((p) => p === TOUGH).length;
     const moveParts = body.filter((p) => p === MOVE).length;
     const queue = buildBoostQueue(room, 'melee', attackParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_KNIGHT}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
     });
     return res === OK;
@@ -13863,7 +13992,7 @@ function spawnWizard(room, spawn) {
         return false;
     const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
     const queue = buildBoostQueue(room, 'ranged', rangedParts, 0);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_WIZARD}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_WIZARD, ...boostMemory(queue) },
     });
     return res === OK;
@@ -13886,7 +14015,7 @@ function spawnCleric(room, spawn) {
         return false;
     const healParts = body.filter((p) => p === HEAL).length;
     const queue = buildBoostQueue(room, 'healer', healParts, 0);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_CLERIC}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_CLERIC, ...boostMemory(queue) },
     });
     return res === OK;
@@ -13904,7 +14033,7 @@ function spawnConqueror(room, spawn) {
     const body = [CLAIM, MOVE, MOVE, MOVE, MOVE];
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_CONQUEROR}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_CONQUEROR,
             homeRoom: room.name,
@@ -13947,7 +14076,7 @@ function spawnUnclaimer(room, spawn) {
     const body = buildUnclaimerBody(room.energyCapacityAvailable);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_UNCLAIMER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_UNCLAIMER, homeRoom: room.name, targetRoom: target },
     });
     return res === OK;
@@ -13968,7 +14097,7 @@ function spawnSettler(room, spawn) {
         return false;
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildScaledBody(ROLE_SETTLER, allowedEnergy);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_SETTLER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_SETTLER,
             homeRoom: room.name,
@@ -14021,7 +14150,7 @@ function spawnDrainLeech(room, spawn) {
     const healParts = body.filter((p) => p === HEAL).length;
     const toughParts = body.filter((p) => p === TOUGH).length;
     const queue = buildBoostQueue(room, "drainer", healParts, toughParts);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_DRAINER}_drain${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_DRAINER,
             homeRoom: room.name,
@@ -14094,7 +14223,7 @@ function spawnNextOffensiveCreep(room, spawn) {
         ? body.filter((p) => p === MOVE).length
         : 0;
     const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, `${roleToSpawn}_off${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: roleToSpawn,
             homeRoom: room.name,
@@ -14181,7 +14310,7 @@ function spawnNextDefender(room, spawn) {
     const toughParts = body.filter((p) => p === TOUGH).length;
     const moveParts = boostKey === "melee" ? body.filter((p) => p === MOVE).length : 0;
     const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, `${roleToSpawn}_def${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: roleToSpawn,
             homeRoom: room.name,
@@ -14206,7 +14335,7 @@ function spawnChildRoomDefender(room, spawn) {
     const toughParts = body.filter((p) => p === TOUGH).length;
     const moveParts = body.filter((p) => p === MOVE).length;
     const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_KNIGHT}_child${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_KNIGHT,
             homeRoom: room.name,
@@ -14261,7 +14390,7 @@ function spawnRemoteDefender(room, spawn) {
     const toughParts = body.filter((p) => p === TOUGH).length;
     const moveParts = body.filter((p) => p === MOVE).length;
     const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_KNIGHT}_remote${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_KNIGHT,
             homeRoom: room.name,
@@ -14327,7 +14456,7 @@ function spawnNextPowerCreep(room, spawn) {
     }
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${roleToSpawn}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: roleToSpawn,
             homeRoom: room.name,
@@ -14401,7 +14530,7 @@ function spawnNextDepositCreep(room, spawn) {
     }
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${roleToSpawn}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: roleToSpawn, homeRoom: room.name, depositOpId: op.id },
     });
     if (res === OK) {
@@ -14457,7 +14586,7 @@ function spawnSkGuardian(room, spawn, op) {
         return false;
     const healParts = body.filter((p) => p === HEAL).length;
     const queue = buildBoostQueue(room, "healer", healParts, 0);
-    const res = trackedSpawn(room, spawn, body, `${ROLE_SK_GUARDIAN}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_SK_GUARDIAN, homeRoom: room.name, skOpId: op.id, ...boostMemory(queue) },
     });
     if (res === OK)
@@ -14477,7 +14606,7 @@ function spawnSkMiner(room, spawn, op, sourceId) {
     const body = buildSkMinerBody(room.energyCapacityAvailable);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_SK_MINER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_SK_MINER, homeRoom: room.name, skOpId: op.id, skSourceId: sourceId },
     });
     if (res === OK)
@@ -14489,7 +14618,7 @@ function spawnSkHauler(room, spawn, op) {
     const body = buildRemoteHaulerBody(allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const res = trackedSpawn(room, spawn, body, `${ROLE_SK_HAULER}${Game.time}`, {
+    const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_SK_HAULER, homeRoom: room.name, skOpId: op.id },
     });
     if (res === OK)
@@ -14647,7 +14776,7 @@ function nextSpawnName(room) {
     const used = new Set();
     for (const name in Game.spawns)
         used.add(baseTownName(Game.spawns[name].name));
-    return MU_TOWN_NAMES.find((t) => !used.has(t));
+    return TOWN_NAMES.find((t) => !used.has(t));
 }
 function ensureMemoryRoomStructures(room) {
     if (!room.memory.plannedStructures)
@@ -16173,7 +16302,7 @@ function evacuate(room, terminal) {
             if (amount < EVAC_MIN_SEND)
                 continue;
             if (terminal.send(RESOURCE_ENERGY, amount, dest) === OK) {
-                console.log(`[Nuke] ${room.name}: evacuated ${amount} energy -> ${dest}`);
+                console.log(`[Nuke] ${room.name}: evacuated ${amount} gold -> ${dest}`);
             }
             return;
         }
@@ -16943,11 +17072,11 @@ function drawRoomHUD(room) {
     const energyCap = room.energyCapacityAvailable;
     const energyPct = energyCap > 0 ? energy / energyCap : 0;
     const energyColor = energyPct < 0.3 ? "#ff6644" : energyPct < 0.6 ? "#ffcc44" : "#88ff88";
-    v.text(`Energy: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
+    v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
     y += lineH;
     if (room.storage) {
         const stored = room.storage.store[RESOURCE_ENERGY];
-        v.text(`Storage: ${formatK(stored)}`, x, y, dimStyle);
+        v.text(`Treasury: ${formatK(stored)}`, x, y, dimStyle);
         y += lineH;
     }
     const counts = countCreepsByRole(room);
@@ -17065,16 +17194,13 @@ function formatK(n) {
     return String(n);
 }
 
-const ROLE_THEME = "mu";
+const ROLE_THEME = "darkfantasy";
 const ROLE_RENAMES = {
-    intern: "villager", associate: "miner", courier: "porter", admin: "barmaid",
-    consultant: "enchanter", facilities: "mason", helpdesk: "blacksmith", procurement: "jeweler",
-    research: "goblin", recruiter: "raven", freelancer: "wanderer", logistics: "merchant",
-    legal: "envoy", hr: "dragonknight", compliance: "darkwizard", wellness: "fairyelf",
-    auditor: "ragefighter", pr: "gladiator", regional: "darklord", onboarding: "pilgrim",
-    downsizer: "blademaster", benefits: "museelf", treasury: "looter", offshore: "nomad",
-    shipping: "caravan", security: "lancer", overtime: "delver", payroll: "packmule",
-    bizdev: "seeker", liquidator: "usurper",
+    wanderer: "peddler",
+    fairyelf: "cleric",
+    ragefighter: "ravager",
+    blademaster: "reaver",
+    museelf: "acolyte",
 };
 function migrateRoleNames() {
     if (Memory.roleTheme === ROLE_THEME)
@@ -17195,7 +17321,7 @@ function setupConsole() {
             }
             const homeRoom = resolveFundingHome(roomName);
             if (!homeRoom) {
-                console.log("[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, 50k stored energy, no threats)");
+                console.log("[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, 50k gold in the treasury, no threats)");
                 return;
             }
             Memory.expansion = {
@@ -17303,7 +17429,7 @@ function setupConsole() {
                 const pendingStr = pending
                     ? `  PENDING: ${pending.amount} ${pending.resource} -> ${pending.to} (loaded ${(_h = (_g = room.terminal) === null || _g === void 0 ? void 0 : _g.store.getUsedCapacity(pending.resource)) !== null && _h !== void 0 ? _h : 0}/${pending.loadTarget})`
                     : "";
-                console.log(`  ${room.name}: storage=${storageEnergy}  terminal=${terminalEnergy} (cd=${cooldown})${pendingStr}`);
+                console.log(`  ${room.name}: treasury=${storageEnergy} gold  terminal=${terminalEnergy} gold (cd=${cooldown})${pendingStr}`);
                 const minerals = ['H', 'O', 'Z', 'K', 'U', 'L', 'X'];
                 const stockParts = minerals.map((m) => {
                     var _a, _b, _c, _d;
@@ -17630,7 +17756,7 @@ function setupConsole() {
                     ? `  BLOCKADED${((_c = room.memory.blockade) === null || _c === void 0 ? void 0 : _c.manual) ? "(manual)" : ""}`
                     : "";
                 console.log(`[Threat] ${rn}: severity=${severity} score=${score} hostiles=${hostiles.length}` +
-                    `  towers=${towerIds.length} energy=${towerEnergy}  safemode=${safemodeStatus}${blockadeStatus}`);
+                    `  towers=${towerIds.length} gold=${towerEnergy}  safemode=${safemodeStatus}${blockadeStatus}`);
                 if (hostiles.length > 0) {
                     for (const h of hostiles) {
                         const parts = h.body.map((p) => p.type).join(",");
@@ -17682,7 +17808,7 @@ function setupConsole() {
                 const gPct = Math.round((s.ghodium / s.ghodiumCapacity) * 100);
                 const cd = s.cooldown > 0 ? `cooldown=${s.cooldown}t` : "cooldown=0";
                 const state = s.ready ? "READY" : "loading";
-                console.log(`[Nuker] ${s.room}: energy=${s.energy}/${s.energyCapacity} (${ePct}%)  ` +
+                console.log(`[Nuker] ${s.room}: gold=${s.energy}/${s.energyCapacity} (${ePct}%)  ` +
                     `ghodium=${s.ghodium}/${s.ghodiumCapacity} (${gPct}%)  ${cd}  [${state}]`);
             }
             console.log("[Nuker] Launch with: Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)  or  Game.arca.launchNuke('W1N1', 'FLAG_NAME')");
@@ -17776,7 +17902,7 @@ function setupConsole() {
                 if (!ps)
                     continue;
                 foundPs = true;
-                console.log(`[Power] ${rn} PowerSpawn: power=${ps.power}  energy=${ps.store[RESOURCE_ENERGY]}`);
+                console.log(`[Power] ${rn} PowerSpawn: power=${ps.power}  gold=${ps.store[RESOURCE_ENERGY]}`);
             }
             if (!foundPs)
                 console.log("[Power] No PowerSpawn structures found (RCL 8 required)");
