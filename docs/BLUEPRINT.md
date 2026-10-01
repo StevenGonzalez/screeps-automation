@@ -45,12 +45,16 @@ Each step works around everything placed before it.
 5. **Trunk roads** run from storage to each source, the controller, the mineral
    and each side of the room that has exits. Each trunk ends in a container,
    plus a link except at the mineral. Later trunks reuse earlier ones, and
-   trunks route around standing extensions.
+   trunks route around standing extensions. Every road pays a little for
+   each bend, more the sharper it is, so roads run in long straight lines
+   and turn gently, like a cart road, instead of zigzagging. A road takes a
+   short detour to stay straight, never a long one. Where a trunk passes
+   right beside the mineral, its container sits on the road.
 6. **Everything else**, extensions last, goes on the nearest free tiles of a
    diagonal lattice, so every building touches a walkway. Extensions that
    already stand are placed first.
-7. **Roads.** A road is built only on the shortest walk from storage to a
-   building. Other walkway tiles stay bare ground.
+7. **Roads.** A road is built only on the cheapest walk from storage to a
+   building, bends counted as in step 5. Other walkway tiles stay bare ground.
 
 **No build is cut off by a wall.** Each placement is checked before it is
 accepted. The planner rejects a building if it would leave any of these

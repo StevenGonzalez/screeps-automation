@@ -214,6 +214,17 @@ describe.each(ROOMS.map((r) => [r.name, r] as const))("blueprint for %s", (_name
     const roads = bp.entries.filter((e) => e.type === "road").length;
     expect(roads).toBeLessThan(200);
   });
+
+  it("runs exit roads straight instead of zigzagging", () => {
+    for (const [side, path] of Object.entries(planFor(room).exits)) {
+      let bends = 0;
+      for (let k = 2; k < path!.length; k++) {
+        const [a, b, c] = [path![k - 2], path![k - 1], path![k]];
+        if (b.x - a.x !== c.x - b.x || b.y - a.y !== c.y - b.y) bends++;
+      }
+      expect(bends * 3, `${side} road bends ${bends} times in ${path!.length} tiles`).toBeLessThanOrEqual(path!.length);
+    }
+  });
 });
 
 describe("blueprint memory", () => {

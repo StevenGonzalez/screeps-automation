@@ -22,10 +22,11 @@ import { townFootprint } from "../services/services.town";
 //      tiles of a diagonal lattice, so every building touches a walkway. A
 //      building is only placed if every walkway, trunk and building placed
 //      before it can still be reached from storage.
-//   6. Roads: only the tiles on the shortest walk from storage to each
-//      building. Other walkway tiles stay bare ground.
+//   6. Roads: only the tiles on the cheapest walk from storage to each
+//      building. Other walkway tiles stay bare ground. Roads here and in
+//      step 4 pay for every bend, so they run straight and turn gently.
 
-export const BLUEPRINT_VERSION = 1;
+export const BLUEPRINT_VERSION = 2;
 
 const SIZE = 50;
 const idx = (x: number, y: number): number => y * SIZE + x;
@@ -49,6 +50,17 @@ const ROAD = 2;
 const OPEN = 3;
 
 const UNREACHED = 0x3fffffff;
+
+// The eight directions in turning order, so two directions k apart turn by
+// 45 degrees times k (the short way round).
+const HEADINGS: ReadonlyArray<readonly [number, number]> = [
+  [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1],
+];
+// What a road pays for bending, by how sharply it bends: a step on plain
+// ground costs 8 here, so a road takes a short detour to run straight or
+// bend gently, the way a cart road would, but never a long one.
+const BEND_COST = [0, 1, 4, 12, 40];
+const STEP_SCALE = 4;
 
 export type ExitSide = "top" | "right" | "bottom" | "left";
 
@@ -278,10 +290,9 @@ class Planner {
     return this.neighbours(this.hub).filter((n) => this.passable(n));
   }
 
-  /** Cheapest walking cost from storage to every tile, with the step taken to get there. */
-  private dijkstra(): { dist: Int32Array; parent: Int32Array } {
+  /** Cheapest walking cost from storage to every tile. */
+  private dijkstra(): { dist: Int32Array } {
     const dist = new Int32Array(SIZE * SIZE).fill(UNREACHED);
-    const parent = new Int32Array(SIZE * SIZE).fill(-1);
     const heap = new MinHeap();
     for (const s of this.hubStarts()) {
       dist[s] = 0;
@@ -295,18 +306,67 @@ class Planner {
         const nd = d + this.moveCost(n);
         if (nd < dist[n]) {
           dist[n] = nd;
-          parent[n] = i;
           heap.push(nd, n);
         }
       }
     }
-    return { dist, parent };
+    return { dist };
   }
 
-  private walkBack(parent: Int32Array, from: number): number[] {
-    const out: number[] = [];
-    for (let i = from; i >= 0; i = parent[i]) out.push(i);
-    return out;
+  /**
+   * Like dijkstra, but a road pays for each bend, so roads run in long
+   * straight lines and turn gently instead of zigzagging. Returns the
+   * cheapest cost to each tile and the road from storage to any tile,
+   * that tile first.
+   */
+  private roadDijkstra(): { dist: Int32Array; road: (to: number) => number[] } {
+    const states = SIZE * SIZE * 8;
+    const cost = new Int32Array(states).fill(UNREACHED);
+    const parent = new Int32Array(states).fill(-1);
+    const heap = new MinHeap();
+    const hx = tx(this.hub);
+    const hy = ty(this.hub);
+    for (const s of this.hubStarts()) {
+      // Leaving storage straight out costs nothing.
+      const h = HEADINGS.findIndex(([dx, dy]) => dx === tx(s) - hx && dy === ty(s) - hy);
+      cost[s * 8 + h] = 0;
+      heap.push(0, s * 8 + h);
+    }
+    while (heap.size > 0) {
+      const [d, st] = heap.pop();
+      if (d > cost[st]) continue;
+      const i = st >> 3;
+      const h = st & 7;
+      const x = tx(i);
+      const y = ty(i);
+      for (let nh = 0; nh < 8; nh++) {
+        const n = this.at(x + HEADINGS[nh][0], y + HEADINGS[nh][1]);
+        if (n < 0 || !this.passable(n)) continue;
+        const turn = Math.abs(nh - h);
+        const nd = d + this.moveCost(n) * STEP_SCALE + BEND_COST[Math.min(turn, 8 - turn)];
+        const ns = n * 8 + nh;
+        if (nd < cost[ns]) {
+          cost[ns] = nd;
+          parent[ns] = st;
+          heap.push(nd, ns);
+        }
+      }
+    }
+    const dist = new Int32Array(SIZE * SIZE).fill(UNREACHED);
+    const best = new Int32Array(SIZE * SIZE).fill(-1);
+    for (let st = 0; st < states; st++) {
+      const i = st >> 3;
+      if (cost[st] < dist[i]) {
+        dist[i] = cost[st];
+        best[i] = st;
+      }
+    }
+    const road = (to: number): number[] => {
+      const out: number[] = [];
+      for (let st = best[to]; st >= 0; st = parent[st]) out.push(st >> 3);
+      return out;
+    };
+    return { dist, road };
   }
 
   /** Every tile reachable on foot from storage. */
@@ -531,19 +591,21 @@ class Planner {
    * Returns the container tile.
    */
   private trunkTo(target: number, range: number, tag: string, rcl: number): number {
-    const { dist, parent } = this.dijkstra();
+    const { dist, road } = this.roadDijkstra();
     let end = this.oldContainers.find((i) => cheb(i, target) <= range && dist[i] < UNREACHED) ?? -1;
-    if (end < 0) {
+    // Off the trunks if possible; a container on a road still lets carts by.
+    for (const onRoad of [false, true]) {
+      if (end >= 0) break;
       let best = UNREACHED;
       for (let i = 0; i < SIZE * SIZE; i++) {
-        if (cheb(i, target) > range || !this.passable(i) || this.occ[i] === ROAD) continue;
+        if (cheb(i, target) > range || !this.passable(i) || (this.occ[i] === ROAD) !== onRoad) continue;
         if (this.byTile.has(i) || dist[i] >= best) continue;
         best = dist[i];
         end = i;
       }
     }
     if (end < 0) return -1;
-    for (const i of this.walkBack(parent, parent[end])) this.markRoad(i, rcl);
+    for (const i of road(end).slice(1)) this.markRoad(i, rcl);
     this.add(STRUCTURE_CONTAINER, end, {
       tag,
       minRcl: tag.startsWith("mineral:") ? MINERAL_RCL : undefined,
@@ -597,7 +659,7 @@ class Planner {
       if (this.terrain[idx(x, y)] !== 1) edge.push(idx(x, y));
     }
     if (edge.length === 0) return;
-    const { dist, parent } = this.dijkstra();
+    const { dist, road } = this.roadDijkstra();
     let end = -1;
     let best = UNREACHED;
     for (const e of edge) {
@@ -609,7 +671,7 @@ class Planner {
       }
     }
     if (end < 0) return;
-    const path = this.walkBack(parent, end);
+    const path = road(end);
     this.exits[side] = path.map((i) => ({ x: tx(i), y: ty(i) }));
     // Kept unbuilt so the road can be laid when a remote on that side is
     // worked, but not built until then.
@@ -724,7 +786,7 @@ class Planner {
     // Roads: the walk from storage to each building, at the age of the
     // earliest building it serves, plus the trunks.
     const roadRcl = new Map(this.trunkRcl);
-    const { dist, parent } = this.dijkstra();
+    const { dist, road } = this.roadDijkstra();
     for (const [d, rcl] of rclOf) {
       if (d.tag && d.tag !== "storage") continue;
       if (d.type === STRUCTURE_CONTAINER || d.type === STRUCTURE_EXTRACTOR) continue;
@@ -733,7 +795,7 @@ class Planner {
         if (this.passable(n) && (door < 0 || dist[n] < dist[door])) door = n;
       }
       if (door < 0 || dist[door] >= UNREACHED) continue;
-      for (const i of this.walkBack(parent, door)) {
+      for (const i of road(door)) {
         roadRcl.set(i, Math.min(roadRcl.get(i) ?? 8, rcl));
       }
     }
