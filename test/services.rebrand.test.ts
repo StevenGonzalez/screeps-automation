@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { migrateRoleNames } from "../src/services/services.rebrand";
 import * as roles from "../src/config/config.roles";
-import { ROLE_HAULER, ROLE_KNIGHT, ROLE_POWER_CARRIER } from "../src/config/config.roles";
+import {
+  ROLE_HAULER,
+  ROLE_REMOTE_MINER,
+  ROLE_CLERIC,
+  ROLE_SIEGER,
+  ROLE_POWER_ATTACKER,
+  ROLE_POWER_HEALER,
+} from "../src/config/config.roles";
 
 const g = globalThis as Record<string, unknown>;
 
@@ -10,12 +17,15 @@ describe("migrateRoleNames", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
   });
 
-  it("renames live corporate-era creeps and carries in-flight squad counts across", () => {
+  it("renames live creeps with MU class names and carries in-flight squad counts across", () => {
     g.Memory = {
       creeps: {
-        a: { role: "courier" },
-        b: { role: "hr" },
-        c: { role: "treasury" },
+        a: { role: "wanderer" },
+        b: { role: "fairyelf" },
+        c: { role: "ragefighter" },
+        d: { role: "blademaster" },
+        e: { role: "museelf" },
+        f: { role: "porter" },
       },
       militaryQueue: [{ requiredBiters: 4, requiredLickers: 2, requiredChewers: 1 }],
       defenseOps: { W1N1: { requiredBiters: 2, requiredSpitters: 1, requiredLickers: 1 } },
@@ -24,9 +34,12 @@ describe("migrateRoleNames", () => {
     migrateRoleNames();
 
     const mem = g.Memory as any;
-    expect(mem.creeps.a.role).toBe(ROLE_HAULER);
-    expect(mem.creeps.b.role).toBe(ROLE_KNIGHT);
-    expect(mem.creeps.c.role).toBe(ROLE_POWER_CARRIER);
+    expect(mem.creeps.a.role).toBe(ROLE_REMOTE_MINER);
+    expect(mem.creeps.b.role).toBe(ROLE_CLERIC);
+    expect(mem.creeps.c.role).toBe(ROLE_SIEGER);
+    expect(mem.creeps.d.role).toBe(ROLE_POWER_ATTACKER);
+    expect(mem.creeps.e.role).toBe(ROLE_POWER_HEALER);
+    expect(mem.creeps.f.role).toBe(ROLE_HAULER);
     expect(mem.militaryQueue[0]).toEqual({ requiredMelee: 4, requiredHealers: 2, requiredSiege: 1 });
     expect(mem.defenseOps.W1N1).toEqual({ requiredMelee: 2, requiredRanged: 1, requiredHealers: 1 });
   });
@@ -41,24 +54,19 @@ describe("migrateRoleNames", () => {
     expect((g.Memory as any).creeps.x.role).toBe(ROLE_HAULER);
   });
 
-  it("maps every corporate title onto a distinct current role", () => {
-    const corporate = [
-      "intern", "associate", "courier", "admin", "consultant", "facilities", "helpdesk",
-      "procurement", "research", "recruiter", "freelancer", "logistics", "legal", "hr",
-      "compliance", "wellness", "auditor", "pr", "regional", "onboarding", "downsizer",
-      "benefits", "treasury", "offshore", "shipping", "security", "overtime", "payroll",
-      "bizdev", "liquidator",
-    ];
-    g.Memory = { creeps: Object.fromEntries(corporate.map((r) => [r, { role: r }])) };
+  it("maps every dropped name onto a distinct current role", () => {
+    const dropped = ["wanderer", "fairyelf", "ragefighter", "blademaster", "museelf"];
+    g.Memory = { creeps: Object.fromEntries(dropped.map((r) => [r, { role: r }])) };
 
     migrateRoleNames();
 
-    // Townsfolk came after the rebrand, so no corporate title maps onto them.
-    const current = Object.entries(roles)
-      .filter(([k]) => k.startsWith("ROLE_") && k !== "ROLE_TOWNSFOLK")
-      .map(([, v]) => v);
-    const migrated = corporate.map((r) => (g.Memory as any).creeps[r].role);
-    expect(new Set(migrated).size).toBe(corporate.length);
-    expect([...migrated].sort()).toEqual([...current].sort());
+    const current = new Set(
+      Object.entries(roles)
+        .filter(([k]) => k.startsWith("ROLE_") && k !== "ROLE_TITLES")
+        .map(([, v]) => v)
+    );
+    const migrated = dropped.map((r) => (g.Memory as any).creeps[r].role);
+    expect(new Set(migrated).size).toBe(dropped.length);
+    for (const role of migrated) expect(current.has(role)).toBe(true);
   });
 });

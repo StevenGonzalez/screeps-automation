@@ -99,12 +99,12 @@ function drawRoomHUD(room: Room) {
   const energyCap = room.energyCapacityAvailable;
   const energyPct = energyCap > 0 ? energy / energyCap : 0;
   const energyColor = energyPct < 0.3 ? "#ff6644" : energyPct < 0.6 ? "#ffcc44" : "#88ff88";
-  v.text(`Energy: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
+  v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
   y += lineH;
 
   if (room.storage) {
     const stored = room.storage.store[RESOURCE_ENERGY];
-    v.text(`Storage: ${formatK(stored)}`, x, y, dimStyle);
+    v.text(`Treasury: ${formatK(stored)}`, x, y, dimStyle);
     y += lineH;
   }
 

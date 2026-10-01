@@ -36,7 +36,7 @@ Ghodium acquisition (market buys + inter-room transfers) happens in the **termin
 ## Launching (manual)
 
 ```javascript
-Game.arca.nuker()                              // load status per room (energy %, ghodium %, cooldown, ready)
+Game.arca.nuker()                              // load status per room (gold %, ghodium %, cooldown, ready)
 Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)   // launch at room coordinates
 Game.arca.launchNuke('W1N1', 'NUKE_HERE')      // launch at a flag's position
 ```

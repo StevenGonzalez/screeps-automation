@@ -22,9 +22,9 @@ Each stage waits for the room to afford it.
 | Stage | Needs | Adds |
 |---|---|---|
 | Watch posts + square | RCL 6, anchor and perimeter planned, 90% of the perimeter built | Up to 3 rampart posts behind the ring for each side with exits; a 3x3 square around a fountain wall |
-| First cottage | RCL 7, 150k energy in storage | The House of Hanzo: 15 walls, a rampart door, 9 rampart beds |
+| First cottage | RCL 7, 150k energy in storage | The House of Aldermere: 15 walls, a rampart door, 9 rampart beds |
 | Militia | A built bed each, the storage gate, posture not `RECOVER`, no energy emergency | Up to 4 militia at RCL 7, 8 at RCL 8 |
-| Second cottage | RCL 8, 250k energy in storage | The House of Pasi |
+| Second cottage | RCL 8, 250k energy in storage | The House of Blackwood |
 | Lookouts | RCL 8, militia at strength | Up to 4, one per neighbouring room nobody else owns or reserves and we do not already mine |
 
 Townsfolk spawn last, after every economic and military role, and never while
@@ -84,8 +84,8 @@ within 14 tiles of the anchor. The planner then asks the perimeter to be
 re-planned, and the min-cut wraps the new house inside the walls. A failed
 search is retried 1500 ticks later.
 
-Cottages take their names from the townsfolk of Lorencia: Hanzo, Pasi, Lumen,
-Martin, Liaman, Zienna, Thompson and Caren.
+Cottages take their names from the families of the realm: Aldermere, Blackwood,
+Cotter, Fairweather, Holloway, Marsh, Thatcher and Wren.
 
 ---
 

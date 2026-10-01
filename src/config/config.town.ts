@@ -51,15 +51,14 @@ export const TOWN_PHASES: ReadonlyArray<{ name: TownPhase; start: number }> = [
 
 export type TownPhase = "dawn" | "day" | "dusk" | "night";
 
-// Families of the town, after the townsfolk of Lorencia. A cottage takes the
-// name at its index.
+// Families of the town. A cottage takes the name at its index.
 export const COTTAGE_FAMILIES = [
-  "Hanzo",
-  "Pasi",
-  "Lumen",
-  "Martin",
-  "Liaman",
-  "Zienna",
-  "Thompson",
-  "Caren",
+  "Aldermere",
+  "Blackwood",
+  "Cotter",
+  "Fairweather",
+  "Holloway",
+  "Marsh",
+  "Thatcher",
+  "Wren",
 ];

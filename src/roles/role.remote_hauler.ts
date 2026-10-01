@@ -6,6 +6,7 @@ import {
   flagRemoteDamage,
   clearRemoteInvader,
 } from "../services/services.creep";
+import { cryFlight, settleFlight } from "../services/services.herald";
 import { getThreatInfo, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
@@ -41,6 +42,7 @@ export function runRemoteHauler(creep: Creep) {
   }
 
   if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
+    cryFlight(creep);
     if (creep.store[RESOURCE_ENERGY] > 0) {
       depositEnergy(creep, homeRoom);
     } else if (creep.room.name !== homeRoom) {
@@ -49,6 +51,7 @@ export function runRemoteHauler(creep: Creep) {
     return;
   }
 
+  settleFlight(creep);
   if (inTarget && !core) clearRemoteInvader(creep);
 
   // Fill up before the trip home: deciding on "empty vs not" sent haulers back

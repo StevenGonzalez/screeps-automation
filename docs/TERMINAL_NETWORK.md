@@ -54,7 +54,7 @@ All transfers skip pairs more than 10 rooms apart.
 ## Console Command
 
 ```javascript
-Game.arca.network()   // per-room storage/terminal energy, pending sends, and mineral stocks
+Game.arca.network()   // per-room treasury/terminal gold, pending sends, and mineral stocks
 ```
 
 (There is no `Game.arca.sendEnergy()` - inter-room energy moves are planned

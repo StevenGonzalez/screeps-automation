@@ -157,7 +157,7 @@ export function spawnKnight(room: Room, spawn: StructureSpawn): boolean {
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
   const queue = buildBoostQueue(room, 'melee', attackParts, toughParts, moveParts);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_KNIGHT}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
   });
   return res === OK;
@@ -177,7 +177,7 @@ export function spawnWizard(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
   const queue = buildBoostQueue(room, 'ranged', rangedParts, 0);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_WIZARD}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_WIZARD, ...boostMemory(queue) },
   });
   return res === OK;
@@ -199,7 +199,7 @@ export function spawnCleric(room: Room, spawn: StructureSpawn): boolean {
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
   const queue = buildBoostQueue(room, 'healer', healParts, 0);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_CLERIC}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_CLERIC, ...boostMemory(queue) },
   });
   return res === OK;
@@ -218,7 +218,7 @@ export function spawnConqueror(room: Room, spawn: StructureSpawn): boolean {
   if (!exp) return false;
   const body: BodyPartConstant[] = [CLAIM, MOVE, MOVE, MOVE, MOVE];
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = trackedSpawn(room, spawn, body, `${ROLE_CONQUEROR}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_CONQUEROR,
       homeRoom: room.name,
@@ -260,7 +260,7 @@ export function spawnUnclaimer(room: Room, spawn: StructureSpawn): boolean {
   if (!target) return false;
   const body = buildUnclaimerBody(room.energyCapacityAvailable);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = trackedSpawn(room, spawn, body, `${ROLE_UNCLAIMER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_UNCLAIMER, homeRoom: room.name, targetRoom: target },
   });
   return res === OK;
@@ -285,7 +285,7 @@ export function spawnSettler(room: Room, spawn: StructureSpawn): boolean {
   if (!exp) return false;
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_SETTLER, allowedEnergy);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_SETTLER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_SETTLER,
       homeRoom: room.name,
@@ -349,7 +349,7 @@ export function spawnDrainLeech(room: Room, spawn: StructureSpawn): boolean {
   const toughParts = body.filter((p) => p === TOUGH).length;
   const queue = buildBoostQueue(room, "drainer", healParts, toughParts);
 
-  const res = trackedSpawn(room, spawn, body, `${ROLE_DRAINER}_drain${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_DRAINER,
       homeRoom: room.name,
@@ -417,7 +417,7 @@ export function spawnNextOffensiveCreep(room: Room, spawn: StructureSpawn): bool
       : 0;
   const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
 
-  const res = trackedSpawn(room, spawn, body, `${roleToSpawn}_off${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: roleToSpawn,
       homeRoom: room.name,
@@ -524,7 +524,7 @@ export function spawnNextDefender(room: Room, spawn: StructureSpawn): boolean {
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = boostKey === "melee" ? body.filter((p) => p === MOVE).length : 0;
   const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
-  const res = trackedSpawn(room, spawn, body, `${roleToSpawn}_def${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: roleToSpawn,
       homeRoom: room.name,
@@ -548,7 +548,7 @@ function spawnChildRoomDefender(room: Room, spawn: StructureSpawn): boolean {
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
   const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_KNIGHT}_child${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_KNIGHT,
       homeRoom: room.name,
@@ -607,7 +607,7 @@ export function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean 
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
   const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_KNIGHT}_remote${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_KNIGHT,
       homeRoom: room.name,

@@ -3,7 +3,7 @@
 > **Status**: Implemented. `orchestrators/orchestrator.expansion.ts` does GCL-driven
 > autonomous claiming, drives the full bootstrap lifecycle, runs safety checks for
 > contested rooms, and manages a multi-target expansion **queue**. Remote mining
-> (wanderers + merchants + envoys) feeds the candidate data.
+> (peddlers + merchants + envoys) feeds the candidate data.
 
 ---
 
@@ -14,7 +14,7 @@ produces is exactly what the expander ranks candidates from:
 
 1. **Ravens** survey adjacent rooms and record source positions + hostile status
    into `Memory.rooms[home].remoteRooms`.
-2. **Wanderers** travel to remote rooms and mine sources into containers.
+2. **Peddlers** travel to remote rooms and mine sources into containers.
 3. **Merchants** haul that energy back to the castle to trade.
 4. **Envoys** reserve the remote controller, doubling source regen.
 

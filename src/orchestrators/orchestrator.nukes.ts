@@ -184,7 +184,7 @@ function evacuate(room: Room, terminal: StructureTerminal): void {
       const amount = Math.floor(have / (1 + (1 - Math.exp(-dist / 30))));
       if (amount < EVAC_MIN_SEND) continue;
       if (terminal.send(RESOURCE_ENERGY, amount, dest) === OK) {
-        console.log(`[Nuke] ${room.name}: evacuated ${amount} energy -> ${dest}`);
+        console.log(`[Nuke] ${room.name}: evacuated ${amount} gold -> ${dest}`);
       }
       return;
     }

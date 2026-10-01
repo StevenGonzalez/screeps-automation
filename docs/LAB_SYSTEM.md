@@ -3,7 +3,7 @@
 > **Status**: Implemented. `orchestrators/orchestrator.labs.ts` runs full compound
 > production - multi-tier reaction chains, T4 boost auto-production, and creep
 > boosting. Jeweler creeps (`role.mineral_miner.ts`) supply the raw minerals; the
-> goblin (`role.apothecary.ts`, keeper of the Chaos Machine) ferries reagents into the labs and product out.
+> goblin (`role.apothecary.ts`, keeper of the alchemy hall) ferries reagents into the labs and product out.
 
 ---
 

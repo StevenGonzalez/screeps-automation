@@ -222,6 +222,8 @@ declare global {
     remoteSourceId?: Id<Source>;
     _hp?: number;
     remoteBackoffUntil?: number;
+    // Set once a remote creep has cried out and turned for home; cleared when the remote is safe.
+    fled?: boolean;
     fillTargetId?: string;
     coreRelief?: boolean;
     constructionSiteId?: Id<ConstructionSite>;
@@ -248,6 +250,8 @@ declare global {
     lastSigned?: number;
     lastSignedIndex?: number;
     townName?: string;
+    // Controller level the herald last proclaimed (services.herald).
+    heraldLevel?: number;
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];

@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Welcome to the **Kingdom of Lorencia** - a Screeps bot themed around a medieval castle
+Welcome to the **Kingdom of Arca** - a Screeps bot themed around a medieval castle
 (villagers and miners gather the energy, enchanters and masons build up the keep,
 dragon knights and dark wizards deal with trouble), but the architecture is plain: a set of
 per-system `loop()` modules run in order from `main.ts`. There's no central AI
@@ -62,16 +62,16 @@ grows. It reports CPU and creep counts every 100 ticks.
 | **jeweler** | Mineral miner | Extracts minerals for lab chains (RCL 6+) |
 | **goblin** | Lab logistics | Loads lab reagents, drains product, boosts creeps |
 | **raven** | Scout | Surveys adjacent rooms and records intel |
-| **wanderer** | Remote miner | Mines sources in frontier rooms |
+| **peddler** | Remote miner | Mines sources in frontier rooms |
 | **merchant** | Remote hauler | Carries remote energy back home |
 | **envoy** | Reserver | Reserves remote controllers, doubling source yield |
 | **darklord** | Claimer | Claims new room controllers |
 | **pilgrim** | Bootstrapper | Establishes a freshly claimed room |
 | **dragonknight** | Melee | Offensive squads + home defense |
 | **darkwizard** | Ranged | Offensive squads + home defense |
-| **fairyelf** | Healer | Offensive squads + home defense |
-| **ragefighter** | Dismantler | Boosted breacher for fortified rooms |
-| **blademaster / museelf / looter** | PowerBank squad | Crack and collect power banks |
+| **cleric** | Healer | Offensive squads + home defense |
+| **ravager** | Dismantler | Boosted breacher for fortified rooms |
+| **reaver / acolyte / looter** | PowerBank squad | Crack and collect power banks |
 
 ## Implemented Systems
 
@@ -79,7 +79,7 @@ grows. It reports CPU and creep counts every 100 ticks.
 - Adaptive spawn priorities: core economy first, remote roles after local stability
 - Scaled creep bodies: bigger bodies when more energy is available
 - Energy-emergency detection: shed non-critical spawns to recover
-- Remote mining: ravens scout -> wanderers mine -> merchants haul -> envoys reserve
+- Remote mining: ravens scout -> peddlers mine -> merchants haul -> envoys reserve
 - Traffic manager: stuck-repath + guarded shove (toggle with `Game.arca.traffic`)
 
 ### RCL 6+ / 7+ / 8 Systems
@@ -129,7 +129,7 @@ Game.arca.autoFactory('W1N1', true) // toggle factory auto-production
 
 ### Terminal
 ```javascript
-Game.arca.network()                 // per-room energy/mineral/pending-send status
+Game.arca.network()                 // per-room gold/mineral/pending-send status
 ```
 
 ### Military

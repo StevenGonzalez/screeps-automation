@@ -1,7 +1,8 @@
-export const MU_TOWN_NAMES = [
-  "Lorencia", "Devias", "Noria", "Atlans", "Tarkan", "Icarus",
-  "Aida", "Kanturu", "Crywolf", "Vulcanus", "Elbeland", "Karutan",
-  "LostTower", "Dungeon", "Kalima",
+// Spawn names: the keeps and holds of the realm.
+export const TOWN_NAMES = [
+  "Ravenhold", "Blackmoor", "Ashfall", "Grimward", "Thornkeep", "Duskmere",
+  "Ironvale", "Wolfsbane", "Hollowmere", "Cinderfell", "Stormwatch", "Gallowgate",
+  "Bleakharrow", "Mournspire", "Frosthaven",
 ];
 
 export const STRUCTURE_PLANNER = {

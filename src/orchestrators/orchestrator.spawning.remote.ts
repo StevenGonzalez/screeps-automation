@@ -267,7 +267,7 @@ export function spawnScout(room: Room, spawn: StructureSpawn): boolean {
   const target = pending.find((r) => !assignedRooms.has(r));
   if (!target) return false;
 
-  const res = trackedSpawn(room, spawn, [MOVE], `${ROLE_SCOUT}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, [MOVE], {
     memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
   });
   return res === OK;
@@ -319,7 +319,7 @@ export function shouldSpawnScoreHunter(room: Room): boolean {
 }
 
 export function spawnScoreHunter(room: Room, spawn: StructureSpawn): boolean {
-  const res = trackedSpawn(room, spawn, [MOVE], `${ROLE_SCORE_HUNTER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, [MOVE], {
     memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
   });
   return res === OK;
@@ -362,7 +362,7 @@ export function spawnRemoteMiner(room: Room, spawn: StructureSpawn): boolean {
   const body = buildRemoteMinerBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
-  const res = trackedSpawn(room, spawn, body, `${ROLE_REMOTE_MINER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_REMOTE_MINER,
       homeRoom: room.name,
@@ -461,7 +461,7 @@ export function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
   const body = buildRemoteHaulerBody(allowedEnergy, remoteRoadsEnabled(room));
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
-  const res = trackedSpawn(room, spawn, body, `${ROLE_REMOTE_HAULER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_REMOTE_HAULER,
       homeRoom: room.name,
@@ -563,7 +563,7 @@ export function spawnReserver(room: Room, spawn: StructureSpawn): boolean {
   const body = buildReserverBody(room.energyCapacityAvailable);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
-  const res = trackedSpawn(room, spawn, body, `${ROLE_RESERVER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_RESERVER,
       homeRoom: room.name,

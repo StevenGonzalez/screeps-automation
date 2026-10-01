@@ -64,5 +64,5 @@ export function spawnTownsfolk(room: Room, spawn: StructureSpawn): boolean {
     homeRoom: room.name,
     ...(next.job === "lookout" ? { targetRoom: next.targetRoom } : {}),
   };
-  return trackedSpawn(room, spawn, body, `${ROLE_TOWNSFOLK}${Game.time}`, { memory }) === OK;
+  return trackedSpawn(room, spawn, body, { memory }) === OK;
 }

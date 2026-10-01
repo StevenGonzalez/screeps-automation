@@ -4,7 +4,7 @@
 
 **"By decree of the crown, this room now flies our banner."**
 
-This is a Screeps automation bot built around a small MU-style kingdom where every owned room is a castle.
+This is a Screeps automation bot built around a small medieval, dark-fantasy kingdom where every owned room is a castle.
 Villagers and miners gather the energy, enchanters and masons build up the keep,
 and dragon knights and dark wizards deal with anything that comes near the walls. The flavor is medieval;
 the architecture is a flat, pragmatic set of per-system loops - no central AI
@@ -85,7 +85,7 @@ planner (`planning/planner.blueprint.ts`). The blueprint plans every structure
 and road up to RCL 8 at once, and each RCL unlocks the next "age" of it. See
 [BLUEPRINT.md](BLUEPRINT.md).
 
-**THE VAULT** - Storage at the heart of the base (where the zen is). Terminal, Factory,
+**THE VAULT** - Storage at the heart of the base (where the gold is). Terminal, Factory,
 Power Spawn, Nuker, and Observer sit around it.
 
 **THE GREAT HALL** - Spawns placed within the stamp, where new subjects are sworn in.
@@ -96,7 +96,7 @@ growing outward as RCL rises.
 **WATCHTOWERS** - Towers placed around the vault (count scales with RCL: 1 at
 RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
 
-**THE CHAOS MACHINE** - Labs clustered so reaction chains stay in range.
+**THE ALCHEMY HALL** - Labs clustered so reaction chains stay in range.
 
 ### Defense layers
 
@@ -172,21 +172,21 @@ src/
 |   +-- role.mineral_miner.ts        # jeweler - mineral extraction
 |   +-- role.apothecary.ts           # goblin - lab compound logistics
 |   +-- role.scout.ts                # raven - room scouting
-|   +-- role.remote_miner.ts         # wanderer - remote source mining
+|   +-- role.remote_miner.ts         # peddler - remote source mining
 |   +-- role.remote_hauler.ts        # merchant - remote energy hauling
 |   +-- role.reserver.ts             # envoy - remote room reservation
 |   +-- role.conqueror.ts            # darklord - room claiming
 |   +-- role.settler.ts              # pilgrim - new-room bootstrap
 |   +-- role.knight.ts               # dragonknight - melee (offense + defense)
 |   +-- role.wizard.ts               # darkwizard - ranged (offense + defense)
-|   +-- role.cleric.ts               # fairyelf - healing (offense + defense)
-|   +-- role.sieger.ts               # ragefighter - boosted dismantler/breacher
+|   +-- role.cleric.ts               # cleric - healing (offense + defense)
+|   +-- role.sieger.ts               # ravager - boosted dismantler/breacher
 |   +-- role.tower.ts                # tower targeting + safe-mode helpers
 |   +-- role.sk_miner.ts             # Source Keeper room miner
 |   +-- role.sk_hauler.ts            # Source Keeper room hauler
 |   +-- role.sk_guardian.ts          # Source Keeper killer / guardian
-|   +-- role.powerattacker.ts        # blademaster - PowerBank assault
-|   +-- role.powerhealer.ts          # museelf - PowerBank squad healing
+|   +-- role.powerattacker.ts        # reaver - PowerBank assault
+|   +-- role.powerhealer.ts          # acolyte - PowerBank squad healing
 |   +-- role.powercarrier.ts         # looter - power collection
 |   +-- role.depositminer.ts         # nomad - highway deposit harvesting
 |   +-- role.deposithauler.ts        # caravan - highway deposit hauling
@@ -207,14 +207,15 @@ src/
     +-- services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache) + civilian shelter
     +-- services.coordination.ts     # Per-tick fill-target claims + hauler-to-worker energy handoff
     +-- services.town.ts             # Town clock, cottage geometry, parking-spot claims
+    +-- services.herald.ts           # Battle cries and level-up proclamations
 ```
 
 ---
 
 ## Role-name mapping
 
-The castle titles map to plain Screeps roles. The left column is what shows up
-in creep names and `Game.arca` output; the right is what it does.
+The castle titles map to plain Screeps roles. The left column is the role value
+stored in `memory.role` and shown in `Game.arca` output; the right is what it does.
 
 | Name | Role file | Responsibility |
 |------|-----------|----------------|
@@ -228,17 +229,17 @@ in creep names and `Game.arca` output; the right is what it does.
 | **jeweler** | `role.mineral_miner.ts` | Mineral extraction (RCL 6+) |
 | **goblin** | `role.apothecary.ts` | Lab reagent/product logistics + boosting |
 | **raven** | `role.scout.ts` | Adjacent-room scouting |
-| **wanderer** | `role.remote_miner.ts` | Remote source mining |
+| **peddler** | `role.remote_miner.ts` | Remote source mining |
 | **merchant** | `role.remote_hauler.ts` | Remote energy hauling |
 | **envoy** | `role.reserver.ts` | Remote controller reservation |
 | **darklord** | `role.conqueror.ts` | Room claiming |
 | **pilgrim** | `role.settler.ts` | New-room bootstrap |
 | **dragonknight** | `role.knight.ts` | Melee (offensive squads + home defense) |
 | **darkwizard** | `role.wizard.ts` | Ranged kiter (offensive squads + home defense) |
-| **fairyelf** | `role.cleric.ts` | Healer (offensive squads + home defense) |
-| **ragefighter** | `role.sieger.ts` | Boosted dismantler / rampart breacher |
-| **blademaster** | `role.powerattacker.ts` | PowerBank assault |
-| **museelf** | `role.powerhealer.ts` | PowerBank squad healing |
+| **cleric** | `role.cleric.ts` | Healer (offensive squads + home defense) |
+| **ravager** | `role.sieger.ts` | Boosted dismantler / rampart breacher |
+| **reaver** | `role.powerattacker.ts` | PowerBank assault |
+| **acolyte** | `role.powerhealer.ts` | PowerBank squad healing |
 | **looter** | `role.powercarrier.ts` | Power collection |
 | **nomad** | `role.depositminer.ts` | Highway deposit harvesting (silicon/metal/biomass/mist) |
 | **caravan** | `role.deposithauler.ts` | Highway deposit hauling home |
@@ -246,6 +247,29 @@ in creep names and `Game.arca` output; the right is what it does.
 
 (Source Keeper roles: **delver** (`role.sk_miner.ts`), **packmule** (`role.sk_hauler.ts`),
 **lancer** (`role.sk_guardian.ts`). The season-only score chaser is **seeker** (`role.scoreHunter.ts`).)
+
+### Names, cries and signs
+
+Every spawned creep is named by its role title and a given name, such as
+"Mason Aldric" or "Dragon Knight Edric" (`creepName` in
+`orchestrators/orchestrator.spawning.shared.ts`, titles in `ROLE_TITLES` in
+`config/config.roles.ts`). A name is reused only after its bearer has died and
+its entry has left Memory.
+
+Creeps also shout when something happens (`services/services.herald.ts`). A creep
+that lands the killing blow on a hostile shouts a kill cry, and a kill by towers
+alone has every creep in the room shout "Huzzah!". When an owned room reaches a
+new controller level, every creep there shouts "Long live!" and the console logs a
+`[Herald]` proclamation. A remote peddler or merchant fleeing a contested remote
+shouts "Bandits!" once.
+
+Controller signs are dark-fantasy proclamations (`config/signatures.ts`), and
+envoys sign the remote controllers they reserve.
+
+Player-facing text calls energy gold: the room HUD shows `Gold: x/y` (spawn and
+extension energy) and `Treasury: Nk` (storage energy), and console reports such as
+`network()`, `threat()`, `nuker()` and `power()` print `gold` where they used to
+print `energy`.
 
 ---
 

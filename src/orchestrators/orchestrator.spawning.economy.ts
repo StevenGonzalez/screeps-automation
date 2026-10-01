@@ -329,7 +329,6 @@ export function shouldSpawnHauler(room: Room): boolean {
 }
 
 export function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
-  const newName = `${ROLE_HAULER}${Game.time}`;
   const existingHaulers = getCreepsByRole(ROLE_HAULER).filter(
     (c) => (c.memory.homeRoom ?? c.room.name) === room.name
   );
@@ -354,12 +353,12 @@ export function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
       // so let the chain move on rather than holding the spawn again.
       return false;
     }
-    return trackedSpawn(room, spawn, affordableBody, newName, {
+    return trackedSpawn(room, spawn, affordableBody, {
       memory: { role: ROLE_HAULER, homeRoom: room.name },
     }) === OK;
   }
 
-  return trackedSpawn(room, spawn, body, newName, {
+  return trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_HAULER, homeRoom: room.name },
   }) === OK;
 }
@@ -480,7 +479,7 @@ export function spawnFiller(room: Room, spawn: StructureSpawn): boolean {
   );
   const body = buildScaledBody(ROLE_FILLER, allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = trackedSpawn(room, spawn, body, `${ROLE_FILLER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_FILLER, homeRoom: room.name },
   });
   return res === OK;
@@ -491,7 +490,7 @@ export function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): bool
   const sets = Math.min(3, Math.floor(room.energyAvailable / 200));
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < sets; i++) body.push(WORK, CARRY, MOVE);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_HARVESTER}_emrg${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_HARVESTER },
   });
   return res === OK;
@@ -518,10 +517,9 @@ export function shouldSpawnMineralMiner(room: Room): boolean {
 }
 
 export function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
-  const newName = `${ROLE_REPAIRER}${Game.time}`;
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
-  const res = trackedSpawn(room, spawn, body, newName, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_REPAIRER },
   });
   return res === OK;
@@ -554,20 +552,18 @@ function buildMineralMinerBody(availableEnergy: number): BodyPartConstant[] {
 }
 
 export function spawnMineralMiner(room: Room, spawn: StructureSpawn): boolean {
-  const newName = `${ROLE_MINERAL_MINER}${Game.time}`;
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildMineralMinerBody(allowedEnergy);
-  const res = trackedSpawn(room, spawn, body, newName, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_MINERAL_MINER },
   });
   return res === OK;
 }
 
 export function spawnHarvester(room: Room, spawn: StructureSpawn): boolean {
-  const newName = `${ROLE_HARVESTER}${Game.time}`;
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_HARVESTER, allowedEnergy);
-  const res = trackedSpawn(room, spawn, body, newName, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_HARVESTER },
   });
   return res === OK;
@@ -600,7 +596,6 @@ export function buildUpgraderBody(availableEnergy: number): BodyPartConstant[] {
 }
 
 export function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
-  const newName = `${ROLE_UPGRADER}${Game.time}`;
   const rcl = room.controller?.level ?? 0;
 
   const allowedEnergy = bodyBudget(room, rcl >= 8 ? "capacity" : "available");
@@ -616,17 +611,16 @@ export function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
     queue = buildBoostQueue(room, "upgrader", workParts, 0);
   }
 
-  const res = trackedSpawn(room, spawn, body, newName, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_UPGRADER, ...boostMemory(queue) },
   });
   return res === OK;
 }
 
 export function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
-  const newName = `${ROLE_BUILDER}${Game.time}`;
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_BUILDER, allowedEnergy);
-  const res = trackedSpawn(room, spawn, body, newName, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_BUILDER },
   });
   return res === OK;
@@ -650,7 +644,6 @@ function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
 }
 
 export function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
-  const newName = `${ROLE_MINER}${Game.time}`;
   const existingMiners = getCreepsByRoleInRoom(ROLE_MINER, room).length;
 
   const allowedEnergy =
@@ -665,12 +658,12 @@ export function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
     // With nothing refilling the core the hold can only run out the clock.
     if (existingMiners > 0 && hasCoreRefiller(room) && holdSpawnFor(room, ROLE_MINER)) return true;
     const affordable = buildMinerBody(bodyBudget(room, "available"));
-    return trackedSpawn(room, spawn, affordable, newName, {
+    return trackedSpawn(room, spawn, affordable, {
       memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
     }) === OK;
   }
 
-  return trackedSpawn(room, spawn, body, newName, {
+  return trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
   }) === OK;
 }
@@ -711,7 +704,7 @@ export function spawnApothecary(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_APOTHECARY, allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = trackedSpawn(room, spawn, body, `${ROLE_APOTHECARY}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_APOTHECARY },
   });
   return res === OK;

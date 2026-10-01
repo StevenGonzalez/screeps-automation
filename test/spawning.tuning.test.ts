@@ -8,7 +8,7 @@ import {
   getUpgraderPopulationTarget,
   buildUpgraderBody,
 } from "../src/orchestrators/orchestrator.spawning.economy";
-import { waitForFullBody } from "../src/orchestrators/orchestrator.spawning.shared";
+import { waitForFullBody, creepName, trackedSpawn } from "../src/orchestrators/orchestrator.spawning.shared";
 import {
   getActiveRemoteRooms,
   getPickedRemoteRoomNames,
@@ -164,5 +164,31 @@ describe("remote picks look past invaders", () => {
       }
     }
     expect(busy).toBeGreaterThan(0);
+  });
+});
+
+describe("creep names", () => {
+  it("styles a creep by its role and a given name", () => {
+    storageRoom(0);
+    expect(creepName(ROLE_UPGRADER)).toMatch(/^Enchanter [A-Z][a-z]+$/);
+  });
+
+  it("skips names worn by the living, left in Memory, or given out this tick", () => {
+    const room = storageRoom(0);
+    const first = creepName(ROLE_UPGRADER);
+    (g.Game as any).creeps[first] = {};
+    const second = creepName(ROLE_UPGRADER);
+    expect(second).not.toBe(first);
+    (g.Memory as any).creeps[second] = { role: ROLE_UPGRADER };
+    const third = creepName(ROLE_UPGRADER);
+    expect([first, second]).not.toContain(third);
+
+    const named: string[] = [];
+    const spawn = { spawnCreep: (_b: unknown, name: string) => (named.push(name), 0) };
+    trackedSpawn(room, spawn as unknown as StructureSpawn, [], { memory: { role: ROLE_UPGRADER } as CreepMemory });
+    trackedSpawn(room, spawn as unknown as StructureSpawn, [], { memory: { role: ROLE_REMOTE_MINER } as CreepMemory });
+    expect(named[0]).toBe(third);
+    expect(named[1]).toMatch(/^Peddler /);
+    expect(creepName(ROLE_UPGRADER)).not.toBe(third);
   });
 });

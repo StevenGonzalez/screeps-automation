@@ -64,6 +64,7 @@ import { runUnclaimer } from "../roles/role.unclaimer";
 import { runTownsfolk } from "../roles/role.townsfolk";
 import { resolveTraffic, shelterFromHostiles } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
+import { cryFor, heraldRooms } from "../services/services.herald";
 
 const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_HARVESTER]: runHarvester,
@@ -99,33 +100,39 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_TOWNSFOLK]: runTownsfolk,
 };
 
-const GENERAL_CHATTER = ["for Mu!", "zen?", "+13 plz", "Jewel!", "party?", "lvl up!", "Lorencia", "Kundun?!"];
+// creep.say shows at most 10 characters, so every line fits in 10.
+const GENERAL_CHATTER = ["for Crown!", "gold?", "huzzah!", "long live!", "ale later", "hark!", "onward!", "dragons?!"];
 const ROLE_CHATTER: Record<string, string[]> = {
-  [ROLE_MINER]: ["dig dig", "ore ho!", "rock+stone"],
-  [ROLE_HARVESTER]: ["lvl 1", "spiders!", "Budge?!"],
-  [ROLE_HAULER]: ["make way", "heavy!", "delivery"],
+  [ROLE_MINER]: ["dig dig", "gold vein!", "rock+stone"],
+  [ROLE_HARVESTER]: ["new here", "spiders!", "rats?!"],
+  [ROLE_HAULER]: ["make way", "heavy!", "gold run"],
   [ROLE_FILLER]: ["ale's up!", "refilled", "tavern!"],
-  [ROLE_UPGRADER]: ["Bless +1", "Soul +1", "it glows!"],
+  [ROLE_UPGRADER]: ["by runes", "it glows!", "Crown +1"],
   [ROLE_BUILDER]: ["stone up", "mortar!", "new wall"],
-  [ROLE_REPAIRER]: ["clang!", "mended", "repair?"],
-  [ROLE_MINERAL_MINER]: ["Chaos!", "gems!", "Jewel?"],
+  [ROLE_REPAIRER]: ["clang!", "mended", "anvil!"],
+  [ROLE_MINERAL_MINER]: ["gems!", "rare ore", "shiny!"],
   [ROLE_SCOUT]: ["caw!", "caw caw", "I see you"],
-  [ROLE_REMOTE_MINER]: ["passing by", "barter?", "fresh ore"],
-  [ROLE_REMOTE_HAULER]: ["zen only", "fair trade", "wares!"],
+  [ROLE_REMOTE_MINER]: ["fine ore!", "good rates", "for sale!"],
+  [ROLE_REMOTE_HAULER]: ["gold only", "fair trade", "wares!"],
   [ROLE_RESERVER]: ["by decree", "king's law", "claimed"],
-  [ROLE_KNIGHT]: ["Twisting!", "Death Stab", "for Mu!"],
-  [ROLE_WIZARD]: ["Meteorite!", "Hellfire!", "Ice Storm"],
-  [ROLE_CLERIC]: ["heal!", "buffed!", "stay close"],
-  [ROLE_SIEGER]: ["smash!", "Uppercut!", "wall down"],
+  [ROLE_KNIGHT]: ["for Crown!", "Have at ye", "no mercy"],
+  [ROLE_WIZARD]: ["Burn!", "Hexed!", "Doom!"],
+  [ROLE_CLERIC]: ["heal!", "blessed!", "stay close"],
+  [ROLE_SIEGER]: ["smash!", "ram it!", "wall down"],
   [ROLE_DRAINER]: ["hit me!", "over here!", "tanking"],
-  [ROLE_CONQUEROR]: ["kneel!", "my castle", "Earthshake"],
+  [ROLE_CONQUEROR]: ["kneel!", "my castle", "bow!"],
   [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
   [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
-  [ROLE_TOWNSFOLK]: ["fresh bread", "nice day", "hail Arca!", "Lorencia!", "tax again?"],
+  [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
 };
 
 const SAY_PERIOD = 30;
 function maybeChatter(creep: Creep): void {
+  const cry = cryFor(creep);
+  if (cry) {
+    creep.say(cry, true);
+    return;
+  }
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
   if ((Game.time + hash) % SAY_PERIOD !== 0) return;
@@ -136,6 +143,7 @@ function maybeChatter(creep: Creep): void {
 
 export function loop() {
   const profile = Memory.profileRoles === true;
+  heraldRooms();
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
     if (creep.spawning) continue;

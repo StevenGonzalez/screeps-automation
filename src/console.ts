@@ -143,7 +143,7 @@ export function setupConsole() {
 
       const homeRoom = resolveFundingHome(roomName);
       if (!homeRoom) {
-        console.log("[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, 50k stored energy, no threats)");
+        console.log("[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, 50k gold in the treasury, no threats)");
         return;
       }
 
@@ -262,7 +262,7 @@ export function setupConsole() {
             }/${pending.loadTarget})`
           : "";
         console.log(
-          `  ${room.name}: storage=${storageEnergy}  terminal=${terminalEnergy} (cd=${cooldown})${pendingStr}`
+          `  ${room.name}: treasury=${storageEnergy} gold  terminal=${terminalEnergy} gold (cd=${cooldown})${pendingStr}`
         );
 
         const minerals = ['H','O','Z','K','U','L','X'] as const;
@@ -625,7 +625,7 @@ export function setupConsole() {
           : "";
         console.log(
           `[Threat] ${rn}: severity=${severity} score=${score} hostiles=${hostiles.length}` +
-          `  towers=${towerIds.length} energy=${towerEnergy}  safemode=${safemodeStatus}${blockadeStatus}`
+          `  towers=${towerIds.length} gold=${towerEnergy}  safemode=${safemodeStatus}${blockadeStatus}`
         );
         if (hostiles.length > 0) {
           for (const h of hostiles) {
@@ -679,7 +679,7 @@ export function setupConsole() {
         const cd = s.cooldown > 0 ? `cooldown=${s.cooldown}t` : "cooldown=0";
         const state = s.ready ? "READY" : "loading";
         console.log(
-          `[Nuker] ${s.room}: energy=${s.energy}/${s.energyCapacity} (${ePct}%)  ` +
+          `[Nuker] ${s.room}: gold=${s.energy}/${s.energyCapacity} (${ePct}%)  ` +
           `ghodium=${s.ghodium}/${s.ghodiumCapacity} (${gPct}%)  ${cd}  [${state}]`
         );
       }
@@ -779,7 +779,7 @@ export function setupConsole() {
         if (!ps) continue;
         foundPs = true;
         console.log(
-          `[Power] ${rn} PowerSpawn: power=${ps.power}  energy=${ps.store[RESOURCE_ENERGY]}`
+          `[Power] ${rn} PowerSpawn: power=${ps.power}  gold=${ps.store[RESOURCE_ENERGY]}`
         );
       }
       if (!foundPs) console.log("[Power] No PowerSpawn structures found (RCL 8 required)");

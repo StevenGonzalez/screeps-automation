@@ -4,7 +4,7 @@ import {
   TOWER_COUNT_PER_RCL,
   TOWER_DISTRIBUTION_MODE,
   TOWER_PRIMARY_SPAWN_MEMORY_KEY,
-  MU_TOWN_NAMES,
+  TOWN_NAMES,
 } from "../config/config.structures";
 
 const SPAWN_SUFFIXES = ["", "-II", "-III", "-IV"];
@@ -31,7 +31,7 @@ export function nextSpawnName(room: Room): string | undefined {
 
   const used = new Set<string>();
   for (const name in Game.spawns) used.add(baseTownName(Game.spawns[name].name));
-  return MU_TOWN_NAMES.find((t) => !used.has(t));
+  return TOWN_NAMES.find((t) => !used.has(t));
 }
 
 function isWalkable(room: Room, x: number, y: number): boolean {

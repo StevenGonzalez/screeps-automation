@@ -30,7 +30,7 @@ rooms the bot can currently see (including rooms an observer just scanned). See
 
 ### Hostile Detection
 
-- **Source Keepers**: flagged but recorded so wanderers avoid them.
+- **Source Keepers**: flagged but recorded so peddlers avoid them.
 - **Player creeps**: any non-Source-Keeper, non-Invader creep marks the room hostile
   for **2,000 ticks** (`hostileUntil`).
 - Hostile rooms are skipped both when selecting remote-mining targets and when
@@ -59,7 +59,7 @@ Body: `[MOVE]` - minimal cost, just needs to enter and read the room.
 ```
 pendingScoutRooms[] -> raven surveys    -> remoteRooms[]
                                               v
-                               wanderers mine sources
+                               peddlers mine sources
                                merchants haul energy home
                                envoys reserve the controller
                                (expander ranks them as colony candidates)
@@ -67,7 +67,7 @@ pendingScoutRooms[] -> raven surveys    -> remoteRooms[]
 
 ### Invader contention
 
-When a wanderer or merchant sees an **Invader creep** in its remote it flags the room
+When a peddler or merchant sees an **Invader creep** in its remote it flags the room
 (`invaderUntil`, 1,500 ticks) and waits at home; the spawner raises one dragon knight
 (`spawnRemoteDefender`) to clear it. The same flag is raised by an **Invader Core**
 (`findInvaderCore`) - the NPC structure that reserves the room for "Invader" and
@@ -77,7 +77,7 @@ the flag once the room holds neither creeps nor a core. Without this the dragon 
 kill the spawned creeps, declare the room clear, and leave the core to re-reserve and
 re-spawn indefinitely - the remote stays bricked. A **player** creep instead marks the
 room hostile and we abandon it rather than send a lone dragon knight. Damage a
-wanderer or merchant takes inside its remote is judged the same way: it counts as a
+peddler or merchant takes inside its remote is judged the same way: it counts as a
 player strike only when a player creep is in the room, and otherwise raises the
 Invader flag.
 

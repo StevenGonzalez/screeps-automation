@@ -6,6 +6,7 @@ import {
   flagRemoteDamage,
   clearRemoteInvader,
 } from "../services/services.creep";
+import { cryFlight, settleFlight } from "../services/services.herald";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -39,10 +40,12 @@ export function runRemoteMiner(creep: Creep) {
   }
 
   if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
+    cryFlight(creep);
     if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
     return;
   }
 
+  settleFlight(creep);
   if (inTarget && !core) clearRemoteInvader(creep);
 
   if (creep.room.name !== targetRoom) {

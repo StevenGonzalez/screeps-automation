@@ -74,7 +74,7 @@ export function spawnNextPowerCreep(room: Room, spawn: StructureSpawn): boolean 
 
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
-  const res = trackedSpawn(room, spawn, body, `${roleToSpawn}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: roleToSpawn,
       homeRoom: room.name,
@@ -156,7 +156,7 @@ export function spawnNextDepositCreep(room: Room, spawn: StructureSpawn): boolea
   }
 
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = trackedSpawn(room, spawn, body, `${roleToSpawn}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: roleToSpawn, homeRoom: room.name, depositOpId: op.id },
   });
   if (res === OK) {
@@ -220,7 +220,7 @@ function spawnSkGuardian(room: Room, spawn: StructureSpawn, op: SourceKeeperOp):
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const healParts = body.filter((p) => p === HEAL).length;
   const queue = buildBoostQueue(room, "healer", healParts, 0);
-  const res = trackedSpawn(room, spawn, body, `${ROLE_SK_GUARDIAN}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_SK_GUARDIAN, homeRoom: room.name, skOpId: op.id, ...boostMemory(queue) },
   });
   if (res === OK) console.log(`[SK] Spawning guardian for ${op.roomName}`);
@@ -245,7 +245,7 @@ function spawnSkMiner(
 ): boolean {
   const body = buildSkMinerBody(room.energyCapacityAvailable);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = trackedSpawn(room, spawn, body, `${ROLE_SK_MINER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_SK_MINER, homeRoom: room.name, skOpId: op.id, skSourceId: sourceId },
   });
   if (res === OK) console.log(`[SK] Spawning ${ROLE_SK_MINER} for ${op.roomName}`);
@@ -256,7 +256,7 @@ function spawnSkHauler(room: Room, spawn: StructureSpawn, op: SourceKeeperOp): b
   const allowedEnergy = bodyBudget(room, "capacity");
   const body = buildRemoteHaulerBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const res = trackedSpawn(room, spawn, body, `${ROLE_SK_HAULER}${Game.time}`, {
+  const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_SK_HAULER, homeRoom: room.name, skOpId: op.id },
   });
   if (res === OK) console.log(`[SK] Spawning packer for ${op.roomName}`);

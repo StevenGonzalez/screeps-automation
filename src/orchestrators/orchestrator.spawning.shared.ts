@@ -1,6 +1,7 @@
 import { getStockForCompound } from "../services/services.labs";
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
+import { ROLE_TITLES } from "../config/config.roles";
 
 export function buildScaledBody(
   role: string,
@@ -55,16 +56,19 @@ const spawningCache: Record<string, Record<string, number>> = {};
 // another idle spawn deciding in the same tick has to count these orders itself.
 let issuedTick = -1;
 
-let issuedTotal = 0;
-
 const issuedThisTick: Record<string, Record<string, number>> = {};
 
+const issuedNames = new Set<string>();
+
+function freshIssued(): void {
+  if (issuedTick === Game.time) return;
+  issuedTick = Game.time;
+  issuedNames.clear();
+  for (const k of Object.keys(issuedThisTick)) delete issuedThisTick[k];
+}
+
 function getIssuedCount(room: Room, role: string): number {
-  if (issuedTick !== Game.time) {
-    issuedTick = Game.time;
-    issuedTotal = 0;
-    for (const k of Object.keys(issuedThisTick)) delete issuedThisTick[k];
-  }
+  freshIssued();
   return issuedThisTick[room.name]?.[role] ?? 0;
 }
 
@@ -88,23 +92,43 @@ export function getRoomSpawningCount(room: Room, role: string): number {
   return (spawningCache[room.name][role] ?? 0) + getIssuedCount(room, role);
 }
 
+const GIVEN_NAMES = [
+  "Aldric", "Agnes", "Bertram", "Beatrix", "Brannoc", "Cedric", "Cecily", "Corvin",
+  "Dunstan", "Edith", "Edric", "Fulk", "Gareth", "Gisela", "Godric", "Hild",
+  "Isolde", "Ivo", "Jocelin", "Kenric", "Leofric", "Lucan", "Maud", "Merek",
+  "Mordred", "Morwen", "Osric", "Percival", "Roderick", "Rowena", "Sigmund", "Sybil",
+  "Thorne", "Tristan", "Ulric", "Wulfric", "Ysolde", "Varian",
+];
+
+// A creep is named for its role and a given name: "Mason Aldric". A name worn
+// by a live creep, still in Memory, or handed out this tick is skipped, so
+// names come free again only once their bearer is dead and buried.
+export function creepName(role: string): string {
+  freshIssued();
+  const title = ROLE_TITLES[role] ?? role;
+  const start = Game.time % GIVEN_NAMES.length;
+  for (let i = 0; i < GIVEN_NAMES.length; i++) {
+    const name = `${title} ${GIVEN_NAMES[(start + i) % GIVEN_NAMES.length]}`;
+    if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name)) return name;
+  }
+  return `${title} ${Game.time}`;
+}
+
 // At most one order per role per room per tick: roles matched by memory (remote
 // source, scout target, squad slot) cannot see a same-tick order, so a second idle
-// spawn would duplicate it. Names are `${role}${Game.time}`-style, so a per-tick
-// suffix keeps two rooms spawning the same role from hitting ERR_NAME_EXISTS.
+// spawn would duplicate it.
 export function trackedSpawn(
   room: Room,
   spawn: StructureSpawn,
   body: BodyPartConstant[],
-  name: string,
   opts: SpawnOptions & { memory: CreepMemory }
 ): ScreepsReturnCode {
   const role = opts.memory.role;
   if (getIssuedCount(room, role) > 0) return ERR_BUSY;
-  const uniqueName = issuedTotal > 0 ? `${name}_${issuedTotal}` : name;
-  const res = spawn.spawnCreep(body, uniqueName, opts);
+  const name = creepName(role);
+  const res = spawn.spawnCreep(body, name, opts);
   if (res === OK) {
-    issuedTotal++;
+    issuedNames.add(name);
     const byRole = issuedThisTick[room.name] ?? (issuedThisTick[room.name] = {});
     byRole[role] = (byRole[role] ?? 0) + 1;
   }

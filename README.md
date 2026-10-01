@@ -1,6 +1,6 @@
-# Kingdom of Lorencia - Screeps Automation
+# Kingdom of Arca - Screeps Automation
 
-A Screeps automation project themed around a small medieval kingdom where every room is a castle and wandering merchants come to the gates to trade. Focused on modular systems, stable logistics, and iterative strategy. Nobody is sure where all the Jewels of Bless come from. The controller keeps leveling anyway.
+A Screeps automation project themed around a small medieval kingdom where every room is a castle and wandering merchants come to the gates to trade. Focused on modular systems, stable logistics, and iterative strategy. Nobody is sure where all the gold in the treasury comes from. The controller keeps leveling anyway.
 
 ## Features
 

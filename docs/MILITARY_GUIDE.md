@@ -2,7 +2,7 @@
 
 > **Status**: Implemented. Towers fire automatically via `orchestrator.tower.ts` and
 > safe mode is handled automatically. Offensive squad warfare (formations + tactics),
-> organized home defense (Dragon Knight, Dark Wizard, Fairy Elf), and the WarCouncil intel/targeting
+> organized home defense (Dragon Knight, Dark Wizard, Cleric), and the WarCouncil intel/targeting
 > layer are live. Squad coordination lives in `orchestrators/orchestrator.military.ts`;
 > combat targeting and formation geometry live in `services/services.combat.ts`.
 
@@ -25,8 +25,8 @@ defensive squad whenever an owned room is meaningfully threatened
   group at each room border before pushing in.
 - **Intelligent Targeting**: priority-based selection for both creeps (healers first)
   and structures (spawns/towers first, then economy), with rampart-shield breaking.
-- **Role-Based Combat**: Dragon Knight (melee/tank), Dark Wizard (ranged kiter), Fairy Elf (healer),
-  Rage Fighter (boosted dismantler for breaching).
+- **Role-Based Combat**: Dragon Knight (melee/tank), Dark Wizard (ranged kiter), Cleric (healer),
+  Ravager (boosted dismantler for breaching).
 - **Dynamic Adaptation**: auto-retreat on sustained casualties (tactic-dependent
   threshold), heal at home, then resume; dark wizards kite automatically.
 - **Boost Integration**: combat creeps auto-request the best available boost for their
@@ -108,14 +108,14 @@ Game.arca.safemode('W1N1');     // manually activate safe mode in a room
 ## Formations
 
 Offsets are relative to the leader (slot 0). Members are slotted front-to-back by role
-- tanks/rage fighters front, healers center, ranged back - so each formation expresses its
+- tanks/ravagers front, healers center, ranged back - so each formation expresses its
 doctrine. The formation reorients naturally as the leader moves.
 
 ### Line
 Wide single row. Best for corridor fighting and spreading out along a front.
 
 ### Box (Default)
-Layered 3-wide block: dragon knights front, fairy elves center, dark wizards back. Best balanced
+Layered 3-wide block: dragon knights front, clerics center, dark wizards back. Best balanced
 formation for most engagements.
 
 ### Wedge
@@ -131,8 +131,8 @@ Advance in formation, engage all hostiles, then raze structures (spawns first, t
 towers and the economy). Best for wiping an enemy room.
 
 ### Siege
-Rage fighters dismantle structures with towers prioritized first (cut defensive fire),
-while dragon knights screen them and fairy elves keep them alive. Best for fortified rooms.
+Ravagers dismantle structures with towers prioritized first (cut defensive fire),
+while dragon knights screen them and clerics keep them alive. Best for fortified rooms.
 
 ### Raid
 Hit-and-run. Same advance, but the auto-retreat threshold is high (55% avg HP) so the
@@ -159,12 +159,12 @@ Ranged kiter. Holds enemies at range 3, uses `rangedMassAttack` when 3+ are clos
 otherwise focuses the squad's priority target. Boosted with the ranged line
 (KO -> KHO2 -> XKHO2).
 
-### Fairy Elf () - `fairyelf`
+### Cleric () - `cleric`
 Healer. Heals the lowest-HP% squad member (range 1 `heal`, range 3 `rangedHeal`),
 self-heals, and stays in the formation's protected center. Boosted with the heal line
 (LO -> LHO2 -> XLHO2). Also spawns for home defense during high-threat scenarios.
 
-### Rage Fighter () - `ragefighter`
+### Ravager () - `ravager`
 Boosted dismantler. TOUGH soaks tower fire while WORK parts dismantle ramparts and
 raze structures far faster than melee. Operates only as part of an operation - too
 fragile to act alone. Boosted with the dismantle line (ZH -> ZH2O -> XZH2O).
@@ -189,10 +189,10 @@ rampart, the rampart is broken first.
 ## Integration with Existing Systems
 
 ### Spawn Queue
-- Defensive dragon knight/dark wizard/fairy elf creeps jump the economy queue under threat (high-severity
+- Defensive dragon knight/dark wizard/cleric creeps jump the economy queue under threat (high-severity
   raids take priority over miners - a dead miner respawns, a dead spawn does not).
 - Offensive squad creeps spawn at full energy capacity for max-strength bodies, in
-  formation order (dragon knights -> rage fighters -> dark wizards -> fairy elves).
+  formation order (dragon knights -> ravagers -> dark wizards -> clerics).
 
 ### DefenseCouncil (automatic standing defense)
 Runs every 5 ticks inside `orchestrator.military.ts`, separate from the manual
@@ -202,8 +202,8 @@ offensive ops. Each owned room is its own theatre:
   (~ a healer-backed raid towers can't comfortably out-damage), gets a `DefenseOp`
   declared in `Memory.defenseOps[roomName]`.
 - **Spawning**: the spawn orchestrator reads `getDefenseOp(room)` and raises the
-  needed dragon knights/fairy elves/dark wizards, jumping the economy queue. Composition scales with
-  the threat score (up to 4 dragon knights, 2 fairy elves, +1 dark wizard for ranged-heavy raids).
+  needed dragon knights/clerics/dark wizards, jumping the economy queue. Composition scales with
+  the threat score (up to 4 dragon knights, 2 clerics, +1 dark wizard for ranged-heavy raids).
 - **Behavior**: defenders rally and fight **inside** the threatened room only. They
   focus-fire with the same healers-first priority as offensive squads, hold near the
   rally point, and refuse to chase hostiles onto room-edge exit tiles (so a kiting
@@ -232,7 +232,7 @@ critically damaged (`orchestrator.tower.ts`).
 1. **Start with box/assault** for standard attacks; the squad auto-scales to defenses.
 2. **Watch HP** with `Game.arca.squads()` - the squad auto-retreats and re-pushes.
 3. **Use wedge for offense, box for defense, scatter against towers.**
-4. **Use siege** (with rage fighters) against fortified rooms; towers fall first.
+4. **Use siege** (with ravagers) against fortified rooms; towers fall first.
 5. **Scout first** - `Game.arca.warcouncil()` shows what intel knows about a target.
 6. **Energy reserve** - keep the home room healthy before launching; offensive bodies
    are expensive and spawn at full capacity.

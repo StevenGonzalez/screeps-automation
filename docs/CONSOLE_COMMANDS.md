@@ -23,8 +23,8 @@ Arguments in `'quotes'` are room names like `'W1N1'`. `?` marks an optional argu
 | Command | What it tells you / does | When |
 |---|---|---|
 | `Game.arca.ops()` | One-screen overview of every active operation (expansion, war, SK) | Whenever you wonder "what's my bot doing right now?" |
-| `Game.arca.threat()` | Per-room: threat level, hostiles, tower energy, safe mode, **blockade** | Anytime you suspect you're under attack |
-| `Game.arca.network()` | Energy + minerals in every room's storage/terminal | Checking economic health |
+| `Game.arca.threat()` | Per-room: threat level, hostiles, tower gold, safe mode, **blockade** | Anytime you suspect you're under attack |
+| `Game.arca.network()` | Gold in every room's treasury (storage) and terminal, plus minerals | Checking economic health |
 | `Game.arca.expand()` | Ranked list of good rooms to claim next | When you're ready to grow |
 | `Game.arca.cpu()` | Per-subsystem CPU usage, highest first | If the game feels slow / you're near your CPU limit |
 
@@ -91,7 +91,7 @@ Mostly automatic once you hit the right RCL. Touch these only to force specific 
 | `Game.arca.factory()` | Factory/commodity production status | RCL 7+, checking the factory |
 | `Game.arca.produceCommodity('W1N1', 'battery')` | Force a specific commodity | Making something specific to sell |
 | `Game.arca.autoFactory('W1N1', true)` | Toggle factory auto-production | - |
-| `Game.arca.network()` | Energy + mineral stocks across all rooms | Economic overview |
+| `Game.arca.network()` | Gold + mineral stocks across all rooms | Economic overview |
 
 ---
 
@@ -101,7 +101,7 @@ High-RCL opportunistic income. All auto-managed once launched; these are status 
 
 | Command | Does | When |
 |---|---|---|
-| `Game.arca.power()` | Power-bank operation + PowerSpawn status | Running power harvesting (RCL 8) |
+| `Game.arca.power()` | Power-bank operation + PowerSpawn status (power and gold) | Running power harvesting (RCL 8) |
 | `Game.arca.powercreeps()` | Power creep (Operator) level, location, powers | Managing power creeps |
 | `Game.arca.deposits()` | Highway deposit-mining operation status | Deposit mining active |
 | `Game.arca.sk('W5N4')` | Start mining a Source Keeper room (or, no arg, show status) | RCL 7+ with spare military capacity |
@@ -113,7 +113,7 @@ High-RCL opportunistic income. All auto-managed once launched; these are status 
 
 | Command | Does | When |
 |---|---|---|
-| `Game.arca.nuker()` | Your nuker load status (energy/ghodium/cooldown) | Prepping an offensive nuke |
+| `Game.arca.nuker()` | Your nuker load status (gold/ghodium/cooldown) | Prepping an offensive nuke |
 | `Game.arca.launchNuke('W1N1', 'W5N5', 25, 25)` | **Fires a nuke** at a target (or a flag by name). Manual only - never automatic | You mean it |
 | `Game.arca.nukes()` | Inbound-nuke defense status | Under nuke threat |
 

@@ -1,29 +1,27 @@
 // One-time migration of live creeps' memory.role to the CURRENT role vocabulary.
 //
 // The theme has changed more than once (medieval -> crime -> dumb bugs -> corporate -> MU
-// Online fantasy). memory.role is the single source of truth for behavior, so any creep alive
-// across a deploy still carries its OLD role string and would fall through ROLE_HANDLERS (going
-// inert, wasting a population slot) until it dies. This maps every corporate value to its
-// current "mu" value. It's guarded by a version tag so it runs exactly once per theme change:
-// bump ROLE_THEME (and rewrite the map) whenever the roster is renamed again.
+// Online fantasy -> medieval dark fantasy). memory.role is the single source of truth for
+// behavior, so any creep alive across a deploy still carries its OLD role string and would fall
+// through ROLE_HANDLERS (going inert, wasting a population slot) until it dies. This maps every
+// MU class name that was dropped to its current value. It's guarded by a version tag so it runs
+// exactly once per theme change: bump ROLE_THEME (and rewrite the map) whenever the roster is
+// renamed again.
 //
 // Only the previous theme is mapped. Creeps live 1500 ticks, so nothing older survives, and
-// several older names ("caravan", "delver", ...) are reused by the current roster for a
-// different role, so mapping them could misroute a creep.
+// several older names are reused by the current roster for a different role, so mapping them
+// could misroute a creep.
 //
 // Iterating Memory.creeps (not Game.creeps) also covers creeps still spawning this tick.
 
-const ROLE_THEME = "mu";
+const ROLE_THEME = "darkfantasy";
 
 const ROLE_RENAMES: Record<string, string> = {
-  intern: "villager", associate: "miner", courier: "porter", admin: "barmaid",
-  consultant: "enchanter", facilities: "mason", helpdesk: "blacksmith", procurement: "jeweler",
-  research: "goblin", recruiter: "raven", freelancer: "wanderer", logistics: "merchant",
-  legal: "envoy", hr: "dragonknight", compliance: "darkwizard", wellness: "fairyelf",
-  auditor: "ragefighter", pr: "gladiator", regional: "darklord", onboarding: "pilgrim",
-  downsizer: "blademaster", benefits: "museelf", treasury: "looter", offshore: "nomad",
-  shipping: "caravan", security: "lancer", overtime: "delver", payroll: "packmule",
-  bizdev: "seeker", liquidator: "usurper",
+  wanderer: "peddler",
+  fairyelf: "cleric",
+  ragefighter: "ravager",
+  blademaster: "reaver",
+  museelf: "acolyte",
 };
 
 export function migrateRoleNames(): void {
