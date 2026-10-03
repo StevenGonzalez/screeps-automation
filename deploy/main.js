@@ -5247,7 +5247,10 @@ function runMineralMiner(creep) {
         return;
     const depleted = mineral.mineralAmount === 0;
     const carrying = creep.store.getUsedCapacity() > 0;
-    if (creep.store.getFreeCapacity() === 0 || (depleted && carrying)) {
+    const harvestYield = creep.getActiveBodyparts(WORK) * HARVEST_MINERAL_POWER;
+    const spilled = container.store.getUsedCapacity() > 0;
+    if (creep.store.getFreeCapacity() < harvestYield ||
+        (depleted && carrying && !spilled)) {
         const terminalId = creep.room.memory.terminalId;
         const terminal = terminalId
             ? Game.getObjectById(terminalId)
@@ -5279,7 +5282,7 @@ function runMineralMiner(creep) {
         }
         return;
     }
-    if (depleted) {
+    if (depleted && !spilled) {
         creep.suicide();
         return;
     }
@@ -5287,6 +5290,18 @@ function runMineralMiner(creep) {
         creep.moveTo(container.pos, { reusePath: 50 });
         return;
     }
+    const space = creep.store.getFreeCapacity() - (depleted ? 0 : harvestYield);
+    if (spilled && space > 0) {
+        for (const resourceType in container.store) {
+            const amount = container.store[resourceType];
+            if (amount > 0) {
+                creep.withdraw(container, resourceType, Math.min(amount, space));
+                break;
+            }
+        }
+    }
+    if (depleted)
+        return;
     const result = creep.harvest(mineral);
     if (result === ERR_NOT_IN_RANGE) {
         creep.moveTo(mineral, { reusePath: 50 });
@@ -13763,7 +13778,9 @@ function shouldSpawnMineralMiner(room) {
     if (!mineralId)
         return false;
     const mineral = Game.getObjectById(mineralId);
-    if (!mineral || mineral.mineralAmount === 0)
+    if (!mineral)
+        return false;
+    if (mineral.mineralAmount === 0 && container.store.getUsedCapacity() === 0)
         return false;
     const extractorId = room.memory.extractorId;
     if (!extractorId)
