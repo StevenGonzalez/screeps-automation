@@ -30,11 +30,19 @@ function processNuker(room: Room): void {
   if (!nuker) return;
 
   const job = findFillJob(room, nuker);
-  if (!job) {
+  // A courier still holding cargo puts it away before going back to hauling:
+  // a hauler only moves energy, so ghodium would ride with it for life.
+  if (!job && !courierHoldsCargo(room)) {
     releaseCourier(room);
     return;
   }
   commandCourier(room, nuker, job);
+}
+
+function courierHoldsCargo(room: Room): boolean {
+  const name = room.memory.nukerSystem?.courierName;
+  const courier = name ? Game.creeps[name] : undefined;
+  return !!courier && (courier.store.getUsedCapacity() ?? 0) > 0;
 }
 
 function resolveNuker(room: Room): StructureNuker | null {
@@ -98,7 +106,7 @@ function findEnergyJob(room: Room, nuker: StructureNuker): FillJob | null {
   return { resource: RESOURCE_ENERGY, source: storage, amount };
 }
 
-function commandCourier(room: Room, nuker: StructureNuker, job: FillJob): void {
+function commandCourier(room: Room, nuker: StructureNuker, job: FillJob | null): void {
   const storage = room.storage;
   if (!storage) return;
 
@@ -112,8 +120,11 @@ function commandCourier(room: Room, nuker: StructureNuker, job: FillJob): void {
   if (carried.length > 0) {
     const r = carried[0];
     const carriedAmount = courier.store.getUsedCapacity(r) ?? 0;
-    if (r === job.resource && carriedAmount > 0) {
-      if (courier.transfer(nuker, r, Math.min(carriedAmount, job.amount)) === ERR_NOT_IN_RANGE) {
+    // Deliver whatever the nuker still has room for, even once taking the last
+    // ghodium has switched the job over to energy.
+    const space = nuker.store.getFreeCapacity(r) ?? 0;
+    if (space > 0) {
+      if (courier.transfer(nuker, r, Math.min(carriedAmount, space)) === ERR_NOT_IN_RANGE) {
         courier.moveTo(nuker, { reusePath: 5 });
       }
     } else {
@@ -122,6 +133,7 @@ function commandCourier(room: Room, nuker: StructureNuker, job: FillJob): void {
     return;
   }
 
+  if (!job) return;
   const amount = Math.min(courier.store.getFreeCapacity() ?? 0, job.amount);
   if (amount <= 0) return;
   if (courier.withdraw(job.source, job.resource, amount) === ERR_NOT_IN_RANGE) {

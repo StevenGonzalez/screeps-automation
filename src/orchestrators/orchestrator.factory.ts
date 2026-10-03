@@ -207,7 +207,9 @@ function commandCourier(room: Room, factory: StructureFactory, recipe: Recipe | 
 
   const evict = findEvictResource(factory, wanted);
   const load = recipe ? findLoadResource(room, factory, recipe) : null;
-  if (!evict && !load) {
+  // A courier still holding cargo puts it away before going back to hauling:
+  // a hauler only moves energy, so anything else would ride with it for life.
+  if (!evict && !load && !courierHoldsCargo(room)) {
     releaseCourier(room);
     return;
   }
@@ -221,7 +223,9 @@ function commandCourier(room: Room, factory: StructureFactory, recipe: Recipe | 
 
   if (carried.length > 0) {
     const r = carried[0];
-    if (load && r === load.resource) {
+    // Deliver what the factory still wants even when that withdrawal took the
+    // last spare stock, which drops it out of findLoadResource.
+    if ((load && r === load.resource) || (recipe && factoryWantsMore(factory, recipe, r))) {
       if (courier.transfer(factory, r) === ERR_NOT_IN_RANGE) courier.moveTo(factory, { reusePath: 5 });
     } else {
       const terminal = room.terminal;
@@ -275,6 +279,23 @@ interface LoadJob {
   amount: number;
 }
 
+function inputShortfall(factory: StructureFactory, recipe: Recipe, rc: ResourceConstant): number {
+  const need = recipe.components[rc] ?? 0;
+  if (need <= 0) return 0;
+  const desired = Math.min(FACTORY_MAX_INPUT_LOAD, Math.max(need * 4, need));
+  return desired - (factory.store.getUsedCapacity(rc) ?? 0);
+}
+
+function factoryWantsMore(factory: StructureFactory, recipe: Recipe, rc: ResourceConstant): boolean {
+  return inputShortfall(factory, recipe, rc) > 0 && (factory.store.getFreeCapacity(rc) ?? 0) > 0;
+}
+
+function courierHoldsCargo(room: Room): boolean {
+  const name = room.memory.factorySystem?.courierName;
+  const courier = name ? Game.creeps[name] : undefined;
+  return !!courier && (courier.store.getUsedCapacity() ?? 0) > 0;
+}
+
 function findLoadResource(room: Room, factory: StructureFactory, recipe: Recipe): LoadJob | null {
   const storage = room.storage;
   const terminal = room.terminal;
@@ -284,11 +305,8 @@ function findLoadResource(room: Room, factory: StructureFactory, recipe: Recipe)
     const need = recipe.components[rc] ?? 0;
     if (need <= 0) continue;
 
-    const inFactory = factory.store.getUsedCapacity(rc) ?? 0;
-    const desired = Math.min(FACTORY_MAX_INPUT_LOAD, Math.max(need * 4, need));
-    if (inFactory >= desired) continue;
-
-    const want = desired - inFactory;
+    const want = inputShortfall(factory, recipe, rc);
+    if (want <= 0) continue;
 
     const spare = totalStock(room, rc) - mineralReserve(rc);
     for (const src of [storage, terminal]) {
