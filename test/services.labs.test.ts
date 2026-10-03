@@ -75,7 +75,8 @@ describe("getBoostRequests", () => {
       ...Array(5).fill({ type: "tough" }),
       ...Array(5).fill({ type: "move" }),
     ];
-    return { find: () => [{ memory, body }] } as unknown as Room;
+    const stock = { getUsedCapacity: (r: string) => (r === "XGHO2" || r === "XZHO2" ? 5000 : 0) };
+    return { find: () => [{ memory, body }], storage: { store: stock } } as unknown as Room;
   }
 
   it("asks for every queued boost up front, not only the current one", async () => {
@@ -88,6 +89,14 @@ describe("getBoostRequests", () => {
         ["XZHO2", 150],
       ])
     );
+  });
+
+  it("skips a queued boost the room has no stock for", async () => {
+    const { getBoostRequests } = await import("../src/services/services.labs");
+    const room = roomWith({ boostCompound: "XUH2O", boostQueue: ["XZHO2", "XGHO2"] } as Partial<CreepMemory>);
+    (room.storage!.store as unknown as { getUsedCapacity: (r: string) => number }).getUsedCapacity = (r) =>
+      r === "XGHO2" ? 5000 : 0;
+    expect([...getBoostRequests(room).keys()]).toEqual(["XUH2O", "XGHO2"]);
   });
 
   it("asks for nothing once the creep is boosted", async () => {

@@ -49,6 +49,7 @@ function courier(cargo: Record<string, number>) {
     transfer: (t: { id: string }, r: string) => { calls.push(`transfer ${r} ${t.id}`); return 0; },
     withdraw: (t: { id: string }, r: string) => { calls.push(`withdraw ${r} ${t.id}`); return 0; },
     moveTo: () => 0,
+    drop: (r: string) => { calls.push(`drop ${r}`); return 0; },
   };
   return { c, calls };
 }
@@ -145,5 +146,11 @@ describe("nuker courier", () => {
     nukerMod.loop();
     expect(calls).toEqual(["transfer G storage"]);
     expect(memory.nukerSystem?.courierName).toBe("hauler1");
+  });
+
+  it("drops ghodium it cannot put anywhere rather than holding the hauler", () => {
+    const { calls } = scene({ G: 200 }, 5_000, { energy: 1_000_000 });
+    nukerMod.loop();
+    expect(calls).toEqual(["drop G"]);
   });
 });

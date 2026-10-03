@@ -208,8 +208,9 @@ describe("auto production planning", () => {
 
   it("benches the target and drops its chain when a step stalls", () => {
     const queue = [
-      { compound: "UH2O", amount: 3000 },
-      { compound: "XUH2O", amount: 3000 },
+      { compound: "UH2O", amount: 3000, auto: true },
+      { compound: "XUH2O", amount: 3000, auto: true },
+      { compound: "GH", amount: 1000 },
     ];
     const room = makeRoom({ name: "R", queue, lastProduced: 0 });
     const out = { id: "R-out", store: store({}), runReaction: () => 0 };
@@ -226,7 +227,8 @@ describe("auto production planning", () => {
     });
     setGame([room], 1500);
     labLoop();
-    expect(ls.queue).toEqual([]);
+    // The console order queued behind the auto chain survives.
+    expect(ls.queue).toEqual([{ compound: "GH", amount: 1000 }]);
     expect(ls.plannedTarget).toBeUndefined();
     expect(ls.benchedUntil?.XUH2O).toBe(11_500);
   });

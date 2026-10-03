@@ -129,11 +129,12 @@ function processLabSystem(room: Room) {
       `[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
       `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`
     );
-    ls.queue.shift();
-    // The rest of an auto chain feeds the stalled step's target, so it goes too.
-    if (ls.plannedTarget) {
+    const stalled = ls.queue.shift();
+    // The rest of an auto chain feeds the stalled step's target, so it goes
+    // too. Steps queued from the console stay.
+    if (stalled?.auto && ls.plannedTarget) {
       ls.benchedUntil = { ...ls.benchedUntil, [ls.plannedTarget]: Game.time + LAB_TARGET_BENCH_TICKS };
-      ls.queue = [];
+      ls.queue = ls.queue.filter((e) => !e.auto);
       delete ls.plannedTarget;
     }
     delete ls.activeCompound;
@@ -219,7 +220,7 @@ export function planAutoProduction(room: Room) {
     if (stock < target) {
       const chain = resolveChain(compound, target, room);
       if (chain.length > 0) {
-        ls.queue.push(...chain);
+        ls.queue.push(...chain.map((e) => ({ ...e, auto: true })));
         ls.plannedTarget = compound;
         return;
       }

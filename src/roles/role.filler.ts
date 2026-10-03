@@ -213,10 +213,12 @@ function loadPower(
   return true;
 }
 
-/** Carries power to the power spawn, else to storage or terminal; drops it if all are full. */
+/** Carries power to the power spawn, else to terminal or storage; drops it if all are full. */
 function deliverPower(creep: Creep, storage: StructureStorage | undefined): void {
   const ps = getPowerSpawn(creep.room);
-  const dest = [ps, storage, creep.room.terminal].find(
+  // Terminal before storage: surplus power is staged there for sale, and
+  // loadPower draws from either.
+  const dest = [ps, creep.room.terminal, storage].find(
     (s) => s && s.store.getFreeCapacity(RESOURCE_POWER) > 0
   );
   if (!dest) {
@@ -234,6 +236,9 @@ function deliverPower(creep: Creep, storage: StructureStorage | undefined): void
  * tombstone. Haulers only collect energy, so these otherwise decay.
  */
 function collectLoot(creep: Creep): boolean {
+  // With nowhere to put it, the pickup would only be dropped again.
+  const room = creep.room;
+  if (![room.terminal, room.storage].some((s) => s && s.store.getFreeCapacity() > 0)) return false;
   const looted = (store: StoreDefinition) =>
     (Object.keys(store) as ResourceConstant[]).find(
       (r) => r !== RESOURCE_ENERGY && typeof store[r] === "number" && store[r] > 0

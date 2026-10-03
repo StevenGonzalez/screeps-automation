@@ -10,6 +10,8 @@ declare global {
   interface LabQueueEntry {
     compound: string;
     amount: number;
+    // Queued by auto production rather than from the console.
+    auto?: boolean;
   }
 
   interface LabSystemMemory {

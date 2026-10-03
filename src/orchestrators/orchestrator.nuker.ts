@@ -128,7 +128,13 @@ function commandCourier(room: Room, nuker: StructureNuker, job: FillJob | null):
         courier.moveTo(nuker, { reusePath: 5 });
       }
     } else {
-      if (courier.transfer(storage, r) === ERR_NOT_IN_RANGE) courier.moveTo(storage, { reusePath: 5 });
+      const dest = [storage, room.terminal].find((s) => s && (s.store.getFreeCapacity(r) ?? 0) > 0);
+      if (!dest) {
+        // Nowhere to put it; holding it would keep the hauler on loan for good.
+        courier.drop(r);
+        return;
+      }
+      if (courier.transfer(dest, r) === ERR_NOT_IN_RANGE) courier.moveTo(dest, { reusePath: 5 });
     }
     return;
   }

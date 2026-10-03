@@ -163,3 +163,27 @@ describe("filler loot collection", () => {
     expect(calls).toEqual(["withdraw:tomb1:XUH2O:undefined"]);
   });
 });
+
+describe("filler power staging", () => {
+  it("delivers power it drew for sale to the terminal, not back to storage", () => {
+    const { creep, calls } = makeFiller(makeRoom({ storageH: 0, terminalH: 0, storageExtra: { power: 5_000 } }), {
+      power: 800,
+    });
+    runFiller(creep);
+    expect(calls).toEqual(["transfer:terminal1:power"]);
+  });
+
+  it("leaves loot alone when terminal and storage are both full", () => {
+    const room = makeRoom({ storageH: 0, terminalH: 0 });
+    for (const s of [room.storage!, room.terminal!]) {
+      (s.store as unknown as { getFreeCapacity: () => number }).getFreeCapacity = () => 0;
+    }
+    const { creep, calls } = makeFiller(room, { energy: 0 });
+    (creep as unknown as { pos: unknown }).pos = {
+      isNearTo: () => true,
+      findClosestByRange: () => ({ id: "drop1", resourceType: "H" }),
+    };
+    runFiller(creep);
+    expect(calls).toEqual([]);
+  });
+});

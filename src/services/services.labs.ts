@@ -81,21 +81,24 @@ function boostedPartType(compound: string): BodyPartConstant | undefined {
 
 // Compound -> mineral needed by creeps (spawning included) waiting on a boost.
 // Queued boosts count too, so every lab is loaded before the creep arrives
-// rather than one at a time inside its short boosting window.
+// rather than one at a time inside its short boosting window - but only when
+// the room holds the compound, so a lab is not held from reactions for a
+// boost that can never load.
 export function getBoostRequests(room: Room): Map<string, number> {
   const requests = new Map<string, number>();
   for (const c of room.find(FIND_MY_CREEPS)) {
     if (c.memory.boosted) continue;
     const pending = [c.memory.boostCompound, ...(c.memory.boostQueue ?? [])];
-    for (const compound of pending) {
-      if (!compound) continue;
+    pending.forEach((compound, i) => {
+      if (!compound) return;
       const part = boostedPartType(compound);
-      if (!part) continue;
+      if (!part) return;
       const parts = c.body.filter((b) => b.type === part && !b.boost).length;
-      if (parts > 0) {
-        requests.set(compound, (requests.get(compound) ?? 0) + parts * LAB_BOOST_MINERAL);
-      }
-    }
+      if (parts === 0) return;
+      const amount = (requests.get(compound) ?? 0) + parts * LAB_BOOST_MINERAL;
+      if (i > 0 && getStockForCompound(compound, room) < amount) return;
+      requests.set(compound, amount);
+    });
   }
   return requests;
 }
