@@ -75,6 +75,7 @@ export function runFiller(creep: Creep) {
         }
         return;
       }
+      if (!underThreat && collectLoot(creep)) return;
       if (storage && !creep.pos.isNearTo(storage)) {
         creep.moveTo(storage, { range: 1, reusePath: 20 });
       }
@@ -226,6 +227,31 @@ function deliverPower(creep: Creep, storage: StructureStorage | undefined): void
   if (creep.transfer(dest, RESOURCE_POWER) === ERR_NOT_IN_RANGE) {
     creep.moveTo(dest, { range: 1, reusePath: 20 });
   }
+}
+
+/**
+ * Picks up minerals, compounds and power lying in the room or left in a
+ * tombstone. Haulers only collect energy, so these otherwise decay.
+ */
+function collectLoot(creep: Creep): boolean {
+  const looted = (store: StoreDefinition) =>
+    (Object.keys(store) as ResourceConstant[]).find(
+      (r) => r !== RESOURCE_ENERGY && typeof store[r] === "number" && store[r] > 0
+    );
+  const drop = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
+    filter: (d) => d.resourceType !== RESOURCE_ENERGY,
+  });
+  if (drop) {
+    if (creep.pickup(drop) === ERR_NOT_IN_RANGE) creep.moveTo(drop, { range: 1, reusePath: 20 });
+    return true;
+  }
+  const tomb = creep.pos.findClosestByRange(FIND_TOMBSTONES, { filter: (t) => !!looted(t.store) });
+  const resource = tomb && looted(tomb.store);
+  if (tomb && resource) {
+    if (creep.withdraw(tomb, resource) === ERR_NOT_IN_RANGE) creep.moveTo(tomb, { range: 1, reusePath: 20 });
+    return true;
+  }
+  return false;
 }
 
 /** Anything carried besides energy and power, which have their own handling. */

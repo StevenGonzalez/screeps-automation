@@ -51,7 +51,7 @@ function makeFiller(
   const creep = {
     room,
     memory: {},
-    pos: { isNearTo: () => true },
+    pos: { isNearTo: () => true, findClosestByRange: () => null },
     store: { energy },
     withdraw: (t: { id: string }) => {
       calls.push(`withdraw:${t.id}`);

@@ -52,7 +52,7 @@ function makeFiller(room: Room, cargo: Record<string, number>) {
   const creep = {
     room,
     memory: {},
-    pos: { isNearTo: () => true },
+    pos: { isNearTo: () => true, findClosestByRange: () => null },
     store: { ...cargo, getFreeCapacity: () => 800 },
     withdraw: (t: { id: string }, r: string, n?: number) => {
       calls.push(`withdraw:${t.id}:${r}:${n}`);
@@ -122,5 +122,44 @@ describe("filler mineral staging", () => {
     const { creep, calls } = makeFiller(makeRoom({ storageH: 30_000, terminalH: 0 }), { H: 800 });
     runFiller(creep);
     expect(calls).toEqual(["transfer:terminal1:H"]);
+  });
+});
+
+describe("filler loot collection", () => {
+  function idleFiller(found: { drop?: unknown; tomb?: unknown }) {
+    // Nothing to stage: no surplus mineral, so the filler is idle.
+    const room = makeRoom({ storageH: 0, terminalH: 0 });
+    const { creep, calls } = makeFiller(room, { energy: 0 });
+    const c = creep as unknown as Record<string, unknown>;
+    c.pos = {
+      isNearTo: () => true,
+      findClosestByRange: (type: number, opts: { filter: (o: unknown) => boolean }) => {
+        const o = type === g.FIND_DROPPED_RESOURCES ? found.drop : found.tomb;
+        return o && opts.filter(o) ? o : null;
+      },
+    };
+    c.pickup = (t: { id: string }) => {
+      calls.push(`pickup:${t.id}`);
+      return g.OK;
+    };
+    return { creep, calls };
+  }
+
+  it("picks up a dropped mineral", () => {
+    const { creep, calls } = idleFiller({ drop: { id: "drop1", resourceType: "H" } });
+    runFiller(creep);
+    expect(calls).toEqual(["pickup:drop1"]);
+  });
+
+  it("leaves dropped energy to the haulers", () => {
+    const { creep, calls } = idleFiller({ drop: { id: "drop1", resourceType: "energy" } });
+    runFiller(creep);
+    expect(calls).toEqual([]);
+  });
+
+  it("empties boost compounds out of a tombstone", () => {
+    const { creep, calls } = idleFiller({ tomb: { id: "tomb1", store: { energy: 50, XUH2O: 90 } } });
+    runFiller(creep);
+    expect(calls).toEqual(["withdraw:tomb1:XUH2O:undefined"]);
   });
 });
