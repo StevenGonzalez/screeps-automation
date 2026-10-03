@@ -55,6 +55,7 @@ const GAME_CONSTANTS: Record<string, unknown> = {
   ROAD_DECAY_AMOUNT: 100,
   ROAD_DECAY_TIME: 1000,
   RESOURCE_ENERGY: "energy",
+  RESOURCE_GHODIUM: "G",
   NUKER_GHODIUM_CAPACITY: 5000,
   NUKER_ENERGY_CAPACITY: 300000,
   POWER_BANK_DECAY: 5000,
@@ -64,5 +65,22 @@ const GAME_CONSTANTS: Record<string, unknown> = {
 for (const [name, value] of Object.entries(GAME_CONSTANTS)) {
   if ((globalThis as Record<string, unknown>)[name] === undefined) {
     (globalThis as Record<string, unknown>)[name] = value;
+  }
+}
+
+// config.factory lists every commodity at load time, and the terminal
+// orchestrator that imports it is reached from roles. In the game each
+// commodity's constant is its lowercase name.
+for (const n of [
+  "BATTERY", "UTRIUM_BAR", "LEMERGIUM_BAR", "ZYNTHIUM_BAR", "KEANIUM_BAR", "OXIDANT",
+  "REDUCTANT", "PURIFIER", "GHODIUM_MELT", "WIRE", "CELL", "ALLOY", "CONDENSATE",
+  "COMPOSITE", "CRYSTAL", "LIQUID", "SWITCH", "TRANSISTOR", "MICROCHIP", "CIRCUIT",
+  "DEVICE", "PHLEGM", "TISSUE", "MUSCLE", "ORGANOID", "ORGANISM", "TUBE", "FIXTURES",
+  "FRAME", "HYDRAULICS", "MACHINE", "CONCENTRATE", "EXTRACT", "SPIRIT", "EMANATION",
+  "ESSENCE",
+]) {
+  const name = `RESOURCE_${n}`;
+  if ((globalThis as Record<string, unknown>)[name] === undefined) {
+    (globalThis as Record<string, unknown>)[name] = n.toLowerCase();
   }
 }

@@ -38,7 +38,7 @@ const BUY_CONFIG = {
 
 // Base mineral kept back for labs and factory; stock above this may be sold.
 export const MINERAL_LAB_RESERVE = 20_000;
-// Most of a room's own mineral the miner will stage in the terminal for sale.
+// Most of a room's own mineral staged in the terminal for sale.
 export const MINERAL_TERMINAL_CAP = 20_000;
 
 const GHODIUM_CONFIG = {
@@ -222,6 +222,39 @@ export function sellableMineral(
   const total = (room.storage?.store.getUsedCapacity(mineralType) ?? 0) + inTerminal;
   const keep = Math.max(MINERAL_LAB_RESERVE, labMineralNeed(room).get(mineralType) ?? 0);
   return Math.max(0, Math.min(inTerminal - reserved, total - keep));
+}
+
+/**
+ * Non-energy stock the terminal should pull from storage: a pending send's
+ * load first, then the room's own mineral surplus so it can be sold. Sales
+ * only read the terminal, so surplus left in storage would never go.
+ */
+export function terminalStockJob(room: Room): { resource: ResourceConstant; amount: number } | null {
+  const storage = room.storage;
+  const terminal = room.terminal;
+  if (!storage || !terminal || terminal.store.getFreeCapacity() <= 0) return null;
+
+  const pending = room.memory.pendingSend;
+  if (pending && pending.resource !== RESOURCE_ENERGY) {
+    const rc = pending.resource as ResourceConstant;
+    const amount = Math.min(
+      pending.loadTarget - (terminal.store.getUsedCapacity(rc) ?? 0),
+      storage.store.getUsedCapacity(rc) ?? 0
+    );
+    if (amount > 0) return { resource: rc, amount };
+  }
+
+  const mineralId = room.memory.mineralId;
+  const mineral = mineralId ? (Game.getObjectById(mineralId) as Mineral | null) : null;
+  if (!mineral) return null;
+  const rc = mineral.mineralType;
+  const inTerminal = terminal.store.getUsedCapacity(rc) ?? 0;
+  const inStorage = storage.store.getUsedCapacity(rc) ?? 0;
+  const keep = Math.max(MINERAL_LAB_RESERVE, labMineralNeed(room).get(rc) ?? 0);
+  const staged = Math.min(MINERAL_TERMINAL_CAP, inStorage + inTerminal - keep);
+  const amount = Math.min(staged - inTerminal, inStorage);
+  // Move it a sale's worth at a time, not a few units after every deal.
+  return amount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD ? { resource: rc, amount } : null;
 }
 
 function ghodiumTarget(room: Room): number {

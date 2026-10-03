@@ -6,6 +6,7 @@ import {
 import { getThreatInfo } from "../services/services.combat";
 import { findRelayLink } from "../orchestrators/orchestrator.links";
 import { setFillTarget } from "../services/services.coordination";
+import { terminalStockJob } from "../orchestrators/orchestrator.terminal";
 
 // Power spawn upkeep, done only once spawns/extensions/towers are full.
 const POWER_SPAWN_POWER_LOW = 50;
@@ -28,6 +29,12 @@ export function runFiller(creep: Creep) {
 
   if (carryingPower(creep)) {
     deliverPower(creep, storage);
+    return;
+  }
+
+  const stockCarried = carriedStock(creep);
+  if (stockCarried) {
+    deliverStock(creep, stockCarried, storage);
     return;
   }
 
@@ -57,6 +64,14 @@ export function runFiller(creep: Creep) {
       if (terminalJob?.kind === "drain") {
         if (creep.withdraw(terminalJob.terminal, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
           creep.moveTo(terminalJob.terminal, { range: 1, reusePath: 20 });
+        }
+        return;
+      }
+      const stock = relay || !storage ? null : terminalStockJob(creep.room);
+      if (stock && storage) {
+        const amount = Math.min(creep.store.getFreeCapacity(), stock.amount);
+        if (creep.withdraw(storage, stock.resource, amount) === ERR_NOT_IN_RANGE) {
+          creep.moveTo(storage, { range: 1, reusePath: 20 });
         }
         return;
       }
@@ -209,6 +224,30 @@ function deliverPower(creep: Creep, storage: StructureStorage | undefined): void
     return;
   }
   if (creep.transfer(dest, RESOURCE_POWER) === ERR_NOT_IN_RANGE) {
+    creep.moveTo(dest, { range: 1, reusePath: 20 });
+  }
+}
+
+/** Anything carried besides energy and power, which have their own handling. */
+function carriedStock(creep: Creep): ResourceConstant | undefined {
+  return (Object.keys(creep.store) as ResourceConstant[]).find(
+    (r) => r !== RESOURCE_ENERGY && r !== RESOURCE_POWER && typeof creep.store[r] === "number" && creep.store[r] > 0
+  );
+}
+
+/** Carries non-energy stock to the terminal, else back to storage. */
+function deliverStock(
+  creep: Creep,
+  resource: ResourceConstant,
+  storage: StructureStorage | undefined
+): void {
+  const dest = [creep.room.terminal, storage].find((s) => s && s.store.getFreeCapacity(resource) > 0);
+  if (!dest) {
+    // Nowhere to put it; holding it would stall the filler for good.
+    creep.drop(resource);
+    return;
+  }
+  if (creep.transfer(dest, resource) === ERR_NOT_IN_RANGE) {
     creep.moveTo(dest, { range: 1, reusePath: 20 });
   }
 }
