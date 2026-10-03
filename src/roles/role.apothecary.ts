@@ -135,22 +135,21 @@ export function runApothecary(creep: Creep) {
     }
   }
 
+  // Empty output labs before refilling inputs only once they are filling up.
+  // A lab's store has no capacity without a resource named, so this has to
+  // measure the product itself.
   for (const outputLab of outputLabs) {
-    const used = outputLab.store.getUsedCapacity() ?? 0;
-    const cap = outputLab.store.getCapacity() ?? 0;
-    if (used >= cap * 0.75) {
-      const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
-        (r) =>
-          r !== RESOURCE_ENERGY &&
-          (outputLab.store.getUsedCapacity(r) ?? 0) > 0 &&
-          !pendingBoostCompounds.has(r)
-      );
-      if (resource) {
-        if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
-          creep.moveTo(outputLab, { reusePath: 5 });
-        }
-        return;
+    const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
+      (r) =>
+        r !== RESOURCE_ENERGY &&
+        (outputLab.store.getUsedCapacity(r) ?? 0) >= LAB_MINERAL_CAPACITY * 0.75 &&
+        !pendingBoostCompounds.has(r)
+    );
+    if (resource) {
+      if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(outputLab, { reusePath: 5 });
       }
+      return;
     }
   }
 
@@ -185,16 +184,19 @@ export function runApothecary(creep: Creep) {
     }
   }
 
-  for (const outputLab of outputLabs) {
-    const resource = (Object.keys(outputLab.store) as ResourceConstant[]).find(
+  // With nothing queued, inputs left in the input labs go back to storage too,
+  // where stock counts and boosts can see them.
+  const idleInputs = !ls.inputCompounds && ls.queue.length === 0 ? inputLabs : [];
+  for (const lab of [...outputLabs, ...idleInputs]) {
+    const resource = (Object.keys(lab.store) as ResourceConstant[]).find(
       (r) =>
         r !== RESOURCE_ENERGY &&
-        (outputLab.store.getUsedCapacity(r) ?? 0) > 0 &&
+        (lab.store.getUsedCapacity(r) ?? 0) > 0 &&
         !pendingBoostCompounds.has(r)
     );
     if (resource) {
-      if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(outputLab, { reusePath: 5 });
+      if (creep.withdraw(lab, resource) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(lab, { reusePath: 5 });
       }
       return;
     }
