@@ -3888,178 +3888,6 @@ function collectEnergy$1(creep, storageModel) {
     return false;
 }
 
-const POWER_SPAWN_POWER_LOW = 50;
-const POWER_SPAWN_ENERGY_STORAGE_FLOOR = 100000;
-const TERMINAL_ENERGY_TARGET = 10000;
-const TERMINAL_ENERGY_DRAIN_SLACK = 5000;
-const TERMINAL_FILL_STORAGE_FLOOR = 20000;
-function runFiller(creep) {
-    var _a, _b;
-    const storage = creep.room.storage;
-    const underThreat = getThreatInfo(creep.room).hostiles.length > 0;
-    const coreTarget = (_a = (underThreat ? findEmptiestTower(creep.room) : null)) !== null && _a !== void 0 ? _a : getCoreFillTarget(creep);
-    if (carryingPower(creep)) {
-        deliverPower(creep, storage);
-        return;
-    }
-    const relay = coreTarget ? null : findRelayLink(creep.room);
-    const terminalJob = coreTarget || relay ? null : getTerminalEnergyJob(creep.room, storage);
-    const powerSpawn = coreTarget ? null : getPowerSpawn(creep.room);
-    const target = (_b = coreTarget !== null && coreTarget !== void 0 ? coreTarget : ((terminalJob === null || terminalJob === void 0 ? void 0 : terminalJob.kind) === "fill" ? terminalJob.terminal : null)) !== null && _b !== void 0 ? _b : (!relay && !terminalJob && powerSpawn && powerSpawnWantsEnergy(powerSpawn, storage)
-        ? powerSpawn
-        : null);
-    if (creep.store[RESOURCE_ENERGY] === 0) {
-        if (powerSpawn && loadPower(creep, powerSpawn, storage))
-            return;
-        if (!target) {
-            if (relay && storage && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-                if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    creep.moveTo(storage, { reusePath: 20 });
-                }
-                return;
-            }
-            if ((terminalJob === null || terminalJob === void 0 ? void 0 : terminalJob.kind) === "drain") {
-                if (creep.withdraw(terminalJob.terminal, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                    creep.moveTo(terminalJob.terminal, { range: 1, reusePath: 20 });
-                }
-                return;
-            }
-            if (storage && !creep.pos.isNearTo(storage)) {
-                creep.moveTo(storage, { range: 1, reusePath: 20 });
-            }
-            return;
-        }
-        if ((terminalJob === null || terminalJob === void 0 ? void 0 : terminalJob.kind) === "fill" && storage) {
-            if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(storage, { range: 1, reusePath: 20 });
-            }
-            return;
-        }
-        const source = findFillerSource(creep, storage);
-        if (source) {
-            if (creep.withdraw(source, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(source, { reusePath: 10 });
-            }
-        }
-        else if (storage && !creep.pos.isNearTo(storage)) {
-            creep.moveTo(storage, { range: 1, reusePath: 20 });
-        }
-        return;
-    }
-    if (target) {
-        if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(target, { reusePath: 10 });
-        }
-        return;
-    }
-    if (relay && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        if (creep.transfer(relay, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(relay, { reusePath: 20 });
-        }
-        return;
-    }
-    if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        if (creep.transfer(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(storage, { reusePath: 20 });
-        }
-    }
-}
-function getCoreFillTarget(creep) {
-    var _a;
-    const cachedId = creep.memory.fillTargetId;
-    if (cachedId) {
-        const cached = Game.getObjectById(cachedId);
-        if (cached &&
-            ((_a = cached.room) === null || _a === void 0 ? void 0 : _a.name) === creep.room.name &&
-            cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-            return cached;
-        }
-        setFillTarget(creep, undefined);
-    }
-    const target = findCoreFillTarget(creep);
-    if (target)
-        setFillTarget(creep, target.id);
-    return target;
-}
-function getTerminalEnergyJob(room, storage) {
-    var _a, _b;
-    const terminal = room.terminal;
-    if (!terminal || !storage)
-        return null;
-    const pending = room.memory.pendingSend;
-    const want = Math.max(TERMINAL_ENERGY_TARGET, (pending === null || pending === void 0 ? void 0 : pending.resource) === RESOURCE_ENERGY ? pending.loadTarget : 0);
-    const have = (_a = terminal.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0;
-    if (have < want &&
-        ((_b = storage.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) > TERMINAL_FILL_STORAGE_FLOOR &&
-        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        return { kind: "fill", terminal };
-    }
-    if (have > want + TERMINAL_ENERGY_DRAIN_SLACK && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        return { kind: "drain", terminal };
-    }
-    return null;
-}
-function getPowerSpawn(room) {
-    const id = room.memory.powerSpawnId;
-    return id ? Game.getObjectById(id) : null;
-}
-function powerSpawnWantsEnergy(ps, storage) {
-    var _a;
-    return (((_a = storage === null || storage === void 0 ? void 0 : storage.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0) > POWER_SPAWN_ENERGY_STORAGE_FLOOR &&
-        ps.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
-}
-function carryingPower(creep) {
-    var _a;
-    return ((_a = creep.store[RESOURCE_POWER]) !== null && _a !== void 0 ? _a : 0) > 0;
-}
-function loadPower(creep, ps, storage) {
-    var _a, _b;
-    const inSpawn = (_a = ps.store[RESOURCE_POWER]) !== null && _a !== void 0 ? _a : 0;
-    if (inSpawn >= POWER_SPAWN_POWER_LOW)
-        return false;
-    const source = [storage, creep.room.terminal].find((s) => { var _a; return !!s && ((_a = s.store[RESOURCE_POWER]) !== null && _a !== void 0 ? _a : 0) > 0; });
-    if (!source)
-        return false;
-    const amount = Math.min(POWER_SPAWN_POWER_CAPACITY - inSpawn, (_b = source.store[RESOURCE_POWER]) !== null && _b !== void 0 ? _b : 0, creep.store.getFreeCapacity());
-    if (amount <= 0)
-        return false;
-    if (creep.withdraw(source, RESOURCE_POWER, amount) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(source, { range: 1, reusePath: 20 });
-    }
-    return true;
-}
-function deliverPower(creep, storage) {
-    const ps = getPowerSpawn(creep.room);
-    const dest = [ps, storage, creep.room.terminal].find((s) => s && s.store.getFreeCapacity(RESOURCE_POWER) > 0);
-    if (!dest) {
-        creep.drop(RESOURCE_POWER);
-        return;
-    }
-    if (creep.transfer(dest, RESOURCE_POWER) === ERR_NOT_IN_RANGE) {
-        creep.moveTo(dest, { range: 1, reusePath: 20 });
-    }
-}
-function findFillerSource(creep, storage) {
-    var _a;
-    if (storage) {
-        const link = getRoomStructures(creep.room).find((s) => s.structureType === STRUCTURE_LINK &&
-            s.pos.inRangeTo(storage.pos, 2) &&
-            s.store[RESOURCE_ENERGY] > 0);
-        if (link)
-            return link;
-        if (storage.store[RESOURCE_ENERGY] > 0)
-            return storage;
-    }
-    const upgradeId = creep.room.memory.upgradeContainerId;
-    const containers = getRoomStructures(creep.room).filter((s) => s.structureType === STRUCTURE_CONTAINER &&
-        s.id !== upgradeId &&
-        s.store[RESOURCE_ENERGY] > 0);
-    if (containers.length > 0) {
-        return (_a = creep.pos.findClosestByPath(containers, { ignoreCreeps: true })) !== null && _a !== void 0 ? _a : null;
-    }
-    return null;
-}
-
 const NUKER_GHODIUM_RESERVE = NUKER_GHODIUM_CAPACITY;
 const STORAGE_ENERGY_SURPLUS = 250000;
 const MAX_FILL_PER_TICK = 1000;
@@ -4077,11 +3905,17 @@ function processNuker(room) {
     if (!nuker)
         return;
     const job = findFillJob(room, nuker);
-    if (!job) {
+    if (!job && !courierHoldsCargo$1(room)) {
         releaseCourier$1(room);
         return;
     }
     commandCourier$1(room, nuker, job);
+}
+function courierHoldsCargo$1(room) {
+    var _a, _b;
+    const name = (_a = room.memory.nukerSystem) === null || _a === void 0 ? void 0 : _a.courierName;
+    const courier = name ? Game.creeps[name] : undefined;
+    return !!courier && ((_b = courier.store.getUsedCapacity()) !== null && _b !== void 0 ? _b : 0) > 0;
 }
 function resolveNuker(room) {
     if (!room.memory.nukerSystem)
@@ -4142,7 +3976,7 @@ function findEnergyJob(room, nuker) {
     return { resource: RESOURCE_ENERGY, source: storage, amount };
 }
 function commandCourier$1(room, nuker, job) {
-    var _a, _b;
+    var _a, _b, _c;
     const storage = room.storage;
     if (!storage)
         return;
@@ -4153,18 +3987,26 @@ function commandCourier$1(room, nuker, job) {
     if (carried.length > 0) {
         const r = carried[0];
         const carriedAmount = (_a = courier.store.getUsedCapacity(r)) !== null && _a !== void 0 ? _a : 0;
-        if (r === job.resource && carriedAmount > 0) {
-            if (courier.transfer(nuker, r, Math.min(carriedAmount, job.amount)) === ERR_NOT_IN_RANGE) {
+        const space = (_b = nuker.store.getFreeCapacity(r)) !== null && _b !== void 0 ? _b : 0;
+        if (space > 0) {
+            if (courier.transfer(nuker, r, Math.min(carriedAmount, space)) === ERR_NOT_IN_RANGE) {
                 courier.moveTo(nuker, { reusePath: 5 });
             }
         }
         else {
-            if (courier.transfer(storage, r) === ERR_NOT_IN_RANGE)
-                courier.moveTo(storage, { reusePath: 5 });
+            const dest = [storage, room.terminal].find((s) => { var _a; return s && ((_a = s.store.getFreeCapacity(r)) !== null && _a !== void 0 ? _a : 0) > 0; });
+            if (!dest) {
+                courier.drop(r);
+                return;
+            }
+            if (courier.transfer(dest, r) === ERR_NOT_IN_RANGE)
+                courier.moveTo(dest, { reusePath: 5 });
         }
         return;
     }
-    const amount = Math.min((_b = courier.store.getFreeCapacity()) !== null && _b !== void 0 ? _b : 0, job.amount);
+    if (!job)
+        return;
+    const amount = Math.min((_c = courier.store.getFreeCapacity()) !== null && _c !== void 0 ? _c : 0, job.amount);
     if (amount <= 0)
         return;
     if (courier.withdraw(job.source, job.resource, amount) === ERR_NOT_IN_RANGE) {
@@ -4401,16 +4243,24 @@ function getBoostRequests(room) {
     var _a;
     const requests = new Map();
     for (const c of room.find(FIND_MY_CREEPS)) {
-        const compound = c.memory.boostCompound;
-        if (!compound || c.memory.boosted)
+        if (c.memory.boosted)
             continue;
-        const part = boostedPartType(compound);
-        if (!part)
-            continue;
-        const parts = c.body.filter((b) => b.type === part && !b.boost).length;
-        if (parts > 0) {
-            requests.set(compound, ((_a = requests.get(compound)) !== null && _a !== void 0 ? _a : 0) + parts * LAB_BOOST_MINERAL);
-        }
+        const pending = [c.memory.boostCompound, ...((_a = c.memory.boostQueue) !== null && _a !== void 0 ? _a : [])];
+        pending.forEach((compound, i) => {
+            var _a;
+            if (!compound)
+                return;
+            const part = boostedPartType(compound);
+            if (!part)
+                return;
+            const parts = c.body.filter((b) => b.type === part && !b.boost).length;
+            if (parts === 0)
+                return;
+            const amount = ((_a = requests.get(compound)) !== null && _a !== void 0 ? _a : 0) + parts * LAB_BOOST_MINERAL;
+            if (i > 0 && getStockForCompound(compound, room) < amount)
+                return;
+            requests.set(compound, amount);
+        });
     }
     return requests;
 }
@@ -4649,6 +4499,8 @@ function processTerminal(room) {
         room.memory.lastCommoditySaleTick = Game.time;
         if (attemptCommoditySale(room, terminal))
             return;
+        if (attemptRawSale(room, terminal))
+            return;
     }
     const lastEnergyTrade = (_f = room.memory.lastEnergyTradeTick) !== null && _f !== void 0 ? _f : 0;
     if (Game.time - lastEnergyTrade >= ENERGY_TRADE_CONFIG.INTERVAL) {
@@ -4671,6 +4523,66 @@ function sellableMineral(room, terminal, mineralType) {
     const total = ((_c = (_b = room.storage) === null || _b === void 0 ? void 0 : _b.store.getUsedCapacity(mineralType)) !== null && _c !== void 0 ? _c : 0) + inTerminal;
     const keep = Math.max(MINERAL_LAB_RESERVE, (_d = labMineralNeed(room).get(mineralType)) !== null && _d !== void 0 ? _d : 0);
     return Math.max(0, Math.min(inTerminal - reserved, total - keep));
+}
+function terminalStockJob(room) {
+    var _a, _b, _c, _d;
+    const storage = room.storage;
+    const terminal = room.terminal;
+    if (!storage || !terminal || terminal.store.getFreeCapacity() <= 0)
+        return null;
+    const pending = room.memory.pendingSend;
+    if (pending && pending.resource !== RESOURCE_ENERGY) {
+        const rc = pending.resource;
+        const amount = Math.min(pending.loadTarget - ((_a = terminal.store.getUsedCapacity(rc)) !== null && _a !== void 0 ? _a : 0), (_b = storage.store.getUsedCapacity(rc)) !== null && _b !== void 0 ? _b : 0);
+        if (amount > 0)
+            return { resource: rc, amount };
+    }
+    for (const { resource, keep } of saleStock(room)) {
+        const inTerminal = (_c = terminal.store.getUsedCapacity(resource)) !== null && _c !== void 0 ? _c : 0;
+        const inStorage = (_d = storage.store.getUsedCapacity(resource)) !== null && _d !== void 0 ? _d : 0;
+        const staged = Math.min(MINERAL_TERMINAL_CAP, inStorage + inTerminal - keep);
+        const amount = Math.min(staged - inTerminal, inStorage);
+        if (amount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD)
+            return { resource, amount };
+    }
+    return null;
+}
+const DEPOSIT_KEEP = 5000;
+const POWER_KEEP = 10000;
+function saleStock(room) {
+    var _a, _b;
+    const out = [];
+    const mineralId = room.memory.mineralId;
+    const mineral = mineralId ? Game.getObjectById(mineralId) : null;
+    if (mineral) {
+        const rc = mineral.mineralType;
+        out.push({ resource: rc, keep: Math.max(MINERAL_LAB_RESERVE, (_a = labMineralNeed(room).get(rc)) !== null && _a !== void 0 ? _a : 0) });
+    }
+    const depositKeep = ((_b = room.memory.factorySystem) === null || _b === void 0 ? void 0 : _b.factoryId) ? DEPOSIT_KEEP : 0;
+    for (const rc of [RESOURCE_SILICON, RESOURCE_METAL, RESOURCE_BIOMASS, RESOURCE_MIST]) {
+        out.push({ resource: rc, keep: depositKeep });
+    }
+    out.push({ resource: RESOURCE_POWER, keep: room.memory.powerSpawnId ? POWER_KEEP : 0 });
+    return out;
+}
+function sellableRaw(room, terminal, resource, keep) {
+    var _a, _b, _c;
+    const inTerminal = (_a = terminal.store.getUsedCapacity(resource)) !== null && _a !== void 0 ? _a : 0;
+    const total = ((_c = (_b = room.storage) === null || _b === void 0 ? void 0 : _b.store.getUsedCapacity(resource)) !== null && _c !== void 0 ? _c : 0) + inTerminal;
+    return Math.max(0, Math.min(inTerminal, total - keep));
+}
+function attemptRawSale(room, terminal) {
+    for (const { resource, keep } of saleStock(room)) {
+        if (BASE_MINERALS.includes(resource))
+            continue;
+        const sellable = sellableRaw(room, terminal, resource, keep);
+        if (sellable < TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD)
+            continue;
+        if (sellResourceToMarket(room, terminal, resource, sellable, TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT, TERMINAL_CONFIG.COMMODITY_MIN_PRICE_RATIO)) {
+            return true;
+        }
+    }
+    return false;
 }
 function ghodiumTarget(room) {
     var _a, _b;
@@ -5229,6 +5141,228 @@ function reconcileOrder(room, terminal, order, resource, surplus, fair) {
             }
         }
     }
+}
+
+const POWER_SPAWN_POWER_LOW = 50;
+const POWER_SPAWN_ENERGY_STORAGE_FLOOR = 100000;
+const TERMINAL_ENERGY_TARGET = 10000;
+const TERMINAL_ENERGY_DRAIN_SLACK = 5000;
+const TERMINAL_FILL_STORAGE_FLOOR = 20000;
+function runFiller(creep) {
+    var _a, _b;
+    const storage = creep.room.storage;
+    const underThreat = getThreatInfo(creep.room).hostiles.length > 0;
+    const coreTarget = (_a = (underThreat ? findEmptiestTower(creep.room) : null)) !== null && _a !== void 0 ? _a : getCoreFillTarget(creep);
+    if (carryingPower(creep)) {
+        deliverPower(creep, storage);
+        return;
+    }
+    const stockCarried = carriedStock(creep);
+    if (stockCarried) {
+        deliverStock(creep, stockCarried, storage);
+        return;
+    }
+    const relay = coreTarget ? null : findRelayLink(creep.room);
+    const terminalJob = coreTarget || relay ? null : getTerminalEnergyJob(creep.room, storage);
+    const powerSpawn = coreTarget ? null : getPowerSpawn(creep.room);
+    const target = (_b = coreTarget !== null && coreTarget !== void 0 ? coreTarget : ((terminalJob === null || terminalJob === void 0 ? void 0 : terminalJob.kind) === "fill" ? terminalJob.terminal : null)) !== null && _b !== void 0 ? _b : (!relay && !terminalJob && powerSpawn && powerSpawnWantsEnergy(powerSpawn, storage)
+        ? powerSpawn
+        : null);
+    if (creep.store[RESOURCE_ENERGY] === 0) {
+        if (powerSpawn && loadPower(creep, powerSpawn, storage))
+            return;
+        if (!target) {
+            if (relay && storage && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+                if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    creep.moveTo(storage, { reusePath: 20 });
+                }
+                return;
+            }
+            if ((terminalJob === null || terminalJob === void 0 ? void 0 : terminalJob.kind) === "drain") {
+                if (creep.withdraw(terminalJob.terminal, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                    creep.moveTo(terminalJob.terminal, { range: 1, reusePath: 20 });
+                }
+                return;
+            }
+            const stock = relay || !storage ? null : terminalStockJob(creep.room);
+            if (stock && storage) {
+                const amount = Math.min(creep.store.getFreeCapacity(), stock.amount);
+                if (creep.withdraw(storage, stock.resource, amount) === ERR_NOT_IN_RANGE) {
+                    creep.moveTo(storage, { range: 1, reusePath: 20 });
+                }
+                return;
+            }
+            if (!underThreat && collectLoot(creep))
+                return;
+            if (storage && !creep.pos.isNearTo(storage)) {
+                creep.moveTo(storage, { range: 1, reusePath: 20 });
+            }
+            return;
+        }
+        if ((terminalJob === null || terminalJob === void 0 ? void 0 : terminalJob.kind) === "fill" && storage) {
+            if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(storage, { range: 1, reusePath: 20 });
+            }
+            return;
+        }
+        const source = findFillerSource(creep, storage);
+        if (source) {
+            if (creep.withdraw(source, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(source, { reusePath: 10 });
+            }
+        }
+        else if (storage && !creep.pos.isNearTo(storage)) {
+            creep.moveTo(storage, { range: 1, reusePath: 20 });
+        }
+        return;
+    }
+    if (target) {
+        if (creep.transfer(target, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(target, { reusePath: 10 });
+        }
+        return;
+    }
+    if (relay && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        if (creep.transfer(relay, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(relay, { reusePath: 20 });
+        }
+        return;
+    }
+    if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        if (creep.transfer(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(storage, { reusePath: 20 });
+        }
+    }
+}
+function getCoreFillTarget(creep) {
+    var _a;
+    const cachedId = creep.memory.fillTargetId;
+    if (cachedId) {
+        const cached = Game.getObjectById(cachedId);
+        if (cached &&
+            ((_a = cached.room) === null || _a === void 0 ? void 0 : _a.name) === creep.room.name &&
+            cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+            return cached;
+        }
+        setFillTarget(creep, undefined);
+    }
+    const target = findCoreFillTarget(creep);
+    if (target)
+        setFillTarget(creep, target.id);
+    return target;
+}
+function getTerminalEnergyJob(room, storage) {
+    var _a, _b;
+    const terminal = room.terminal;
+    if (!terminal || !storage)
+        return null;
+    const pending = room.memory.pendingSend;
+    const want = Math.max(TERMINAL_ENERGY_TARGET, (pending === null || pending === void 0 ? void 0 : pending.resource) === RESOURCE_ENERGY ? pending.loadTarget : 0);
+    const have = (_a = terminal.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0;
+    if (have < want &&
+        ((_b = storage.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) > TERMINAL_FILL_STORAGE_FLOOR &&
+        terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        return { kind: "fill", terminal };
+    }
+    if (have > want + TERMINAL_ENERGY_DRAIN_SLACK && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        return { kind: "drain", terminal };
+    }
+    return null;
+}
+function getPowerSpawn(room) {
+    const id = room.memory.powerSpawnId;
+    return id ? Game.getObjectById(id) : null;
+}
+function powerSpawnWantsEnergy(ps, storage) {
+    var _a;
+    return (((_a = storage === null || storage === void 0 ? void 0 : storage.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0) > POWER_SPAWN_ENERGY_STORAGE_FLOOR &&
+        ps.store.getFreeCapacity(RESOURCE_ENERGY) > 0);
+}
+function carryingPower(creep) {
+    var _a;
+    return ((_a = creep.store[RESOURCE_POWER]) !== null && _a !== void 0 ? _a : 0) > 0;
+}
+function loadPower(creep, ps, storage) {
+    var _a, _b;
+    const inSpawn = (_a = ps.store[RESOURCE_POWER]) !== null && _a !== void 0 ? _a : 0;
+    if (inSpawn >= POWER_SPAWN_POWER_LOW)
+        return false;
+    const source = [storage, creep.room.terminal].find((s) => { var _a; return !!s && ((_a = s.store[RESOURCE_POWER]) !== null && _a !== void 0 ? _a : 0) > 0; });
+    if (!source)
+        return false;
+    const amount = Math.min(POWER_SPAWN_POWER_CAPACITY - inSpawn, (_b = source.store[RESOURCE_POWER]) !== null && _b !== void 0 ? _b : 0, creep.store.getFreeCapacity());
+    if (amount <= 0)
+        return false;
+    if (creep.withdraw(source, RESOURCE_POWER, amount) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(source, { range: 1, reusePath: 20 });
+    }
+    return true;
+}
+function deliverPower(creep, storage) {
+    const ps = getPowerSpawn(creep.room);
+    const dest = [ps, creep.room.terminal, storage].find((s) => s && s.store.getFreeCapacity(RESOURCE_POWER) > 0);
+    if (!dest) {
+        creep.drop(RESOURCE_POWER);
+        return;
+    }
+    if (creep.transfer(dest, RESOURCE_POWER) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(dest, { range: 1, reusePath: 20 });
+    }
+}
+function collectLoot(creep) {
+    const room = creep.room;
+    if (![room.terminal, room.storage].some((s) => s && s.store.getFreeCapacity() > 0))
+        return false;
+    const looted = (store) => Object.keys(store).find((r) => r !== RESOURCE_ENERGY && typeof store[r] === "number" && store[r] > 0);
+    const drop = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
+        filter: (d) => d.resourceType !== RESOURCE_ENERGY,
+    });
+    if (drop) {
+        if (creep.pickup(drop) === ERR_NOT_IN_RANGE)
+            creep.moveTo(drop, { range: 1, reusePath: 20 });
+        return true;
+    }
+    const tomb = creep.pos.findClosestByRange(FIND_TOMBSTONES, { filter: (t) => !!looted(t.store) });
+    const resource = tomb && looted(tomb.store);
+    if (tomb && resource) {
+        if (creep.withdraw(tomb, resource) === ERR_NOT_IN_RANGE)
+            creep.moveTo(tomb, { range: 1, reusePath: 20 });
+        return true;
+    }
+    return false;
+}
+function carriedStock(creep) {
+    return Object.keys(creep.store).find((r) => r !== RESOURCE_ENERGY && r !== RESOURCE_POWER && typeof creep.store[r] === "number" && creep.store[r] > 0);
+}
+function deliverStock(creep, resource, storage) {
+    const dest = [creep.room.terminal, storage].find((s) => s && s.store.getFreeCapacity(resource) > 0);
+    if (!dest) {
+        creep.drop(resource);
+        return;
+    }
+    if (creep.transfer(dest, resource) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(dest, { range: 1, reusePath: 20 });
+    }
+}
+function findFillerSource(creep, storage) {
+    var _a;
+    if (storage) {
+        const link = getRoomStructures(creep.room).find((s) => s.structureType === STRUCTURE_LINK &&
+            s.pos.inRangeTo(storage.pos, 2) &&
+            s.store[RESOURCE_ENERGY] > 0);
+        if (link)
+            return link;
+        if (storage.store[RESOURCE_ENERGY] > 0)
+            return storage;
+    }
+    const upgradeId = creep.room.memory.upgradeContainerId;
+    const containers = getRoomStructures(creep.room).filter((s) => s.structureType === STRUCTURE_CONTAINER &&
+        s.id !== upgradeId &&
+        s.store[RESOURCE_ENERGY] > 0);
+    if (containers.length > 0) {
+        return (_a = creep.pos.findClosestByPath(containers, { ignoreCreeps: true })) !== null && _a !== void 0 ? _a : null;
+    }
+    return null;
 }
 
 function runMineralMiner(creep) {
@@ -8771,7 +8905,7 @@ function moveToRoom$3(creep, roomName) {
 
 const MIN_REFILL_AMOUNT = 200;
 function runApothecary(creep) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const room = creep.room;
     const ls = room.memory.labSystem;
     const storage = room.storage;
@@ -8885,21 +9019,17 @@ function runApothecary(creep) {
         }
     }
     for (const outputLab of outputLabs) {
-        const used = (_g = outputLab.store.getUsedCapacity()) !== null && _g !== void 0 ? _g : 0;
-        const cap = (_h = outputLab.store.getCapacity()) !== null && _h !== void 0 ? _h : 0;
-        if (used >= cap * 0.75) {
-            const resource = Object.keys(outputLab.store).find((r) => {
-                var _a;
-                return r !== RESOURCE_ENERGY &&
-                    ((_a = outputLab.store.getUsedCapacity(r)) !== null && _a !== void 0 ? _a : 0) > 0 &&
-                    !pendingBoostCompounds.has(r);
-            });
-            if (resource) {
-                if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
-                    creep.moveTo(outputLab, { reusePath: 5 });
-                }
-                return;
+        const resource = Object.keys(outputLab.store).find((r) => {
+            var _a;
+            return r !== RESOURCE_ENERGY &&
+                ((_a = outputLab.store.getUsedCapacity(r)) !== null && _a !== void 0 ? _a : 0) >= LAB_MINERAL_CAPACITY * 0.75 &&
+                !pendingBoostCompounds.has(r);
+        });
+        if (resource) {
+            if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(outputLab, { reusePath: 5 });
             }
+            return;
         }
     }
     for (let i = 0; i < 2; i++) {
@@ -8919,29 +9049,30 @@ function runApothecary(creep) {
         for (let i = 0; i < 2; i++) {
             const compound = ls.inputCompounds[i];
             const lab = inputLabs[i];
-            const labFree = (_j = lab.store.getFreeCapacity(compound)) !== null && _j !== void 0 ? _j : 0;
+            const labFree = (_g = lab.store.getFreeCapacity(compound)) !== null && _g !== void 0 ? _g : 0;
             if (labFree < MIN_REFILL_AMOUNT)
                 continue;
             const src = findStoreWith(room, compound);
             if (!src)
                 continue;
-            const amount = Math.min((_k = creep.store.getFreeCapacity()) !== null && _k !== void 0 ? _k : 0, labFree, src.store.getUsedCapacity(compound));
+            const amount = Math.min((_h = creep.store.getFreeCapacity()) !== null && _h !== void 0 ? _h : 0, labFree, src.store.getUsedCapacity(compound));
             if (creep.withdraw(src, compound, amount) === ERR_NOT_IN_RANGE) {
                 creep.moveTo(src, { reusePath: 5 });
             }
             return;
         }
     }
-    for (const outputLab of outputLabs) {
-        const resource = Object.keys(outputLab.store).find((r) => {
+    const idleInputs = !ls.inputCompounds && ls.queue.length === 0 ? inputLabs : [];
+    for (const lab of [...outputLabs, ...idleInputs]) {
+        const resource = Object.keys(lab.store).find((r) => {
             var _a;
             return r !== RESOURCE_ENERGY &&
-                ((_a = outputLab.store.getUsedCapacity(r)) !== null && _a !== void 0 ? _a : 0) > 0 &&
+                ((_a = lab.store.getUsedCapacity(r)) !== null && _a !== void 0 ? _a : 0) > 0 &&
                 !pendingBoostCompounds.has(r);
         });
         if (resource) {
-            if (creep.withdraw(outputLab, resource) === ERR_NOT_IN_RANGE) {
-                creep.moveTo(outputLab, { reusePath: 5 });
+            if (creep.withdraw(lab, resource) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(lab, { reusePath: 5 });
             }
             return;
         }
@@ -11404,6 +11535,7 @@ const LAB_SUPPLY_WAIT_TIMEOUT = 3000;
 const SUPPLIED_INPUTS = new Set(["H", "O", "U", "L", "K", "Z", "X", "G"]);
 const REACTION_INPUT_MIN = 5;
 const LAB_PLAN_INTERVAL = 100;
+const LAB_TARGET_BENCH_TICKS = 10000;
 const AUTO_PRODUCTION_TARGETS = {
     XUH2O: 3000,
     XKHO2: 3000,
@@ -11495,6 +11627,8 @@ function processLabSystem(room) {
     const produced = producedStock(ls.activeCompound, room, outputLabs) - ((_a = ls.startStock) !== null && _a !== void 0 ? _a : 0);
     if (produced >= ((_b = ls.targetAmount) !== null && _b !== void 0 ? _b : 0)) {
         ls.queue.shift();
+        if (ls.queue.length === 0)
+            delete ls.plannedTarget;
         delete ls.activeCompound;
         delete ls.inputCompounds;
         delete ls.startStock;
@@ -11510,7 +11644,12 @@ function processLabSystem(room) {
     else if (Game.time - ((_d = ls.lastProgressTick) !== null && _d !== void 0 ? _d : Game.time) > stallTimeout(room, ls.inputCompounds)) {
         console.log(`[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
             `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`);
-        ls.queue.shift();
+        const stalled = ls.queue.shift();
+        if ((stalled === null || stalled === void 0 ? void 0 : stalled.auto) && ls.plannedTarget) {
+            ls.benchedUntil = { ...ls.benchedUntil, [ls.plannedTarget]: Game.time + LAB_TARGET_BENCH_TICKS };
+            ls.queue = ls.queue.filter((e) => !e.auto);
+            delete ls.plannedTarget;
+        }
         delete ls.activeCompound;
         delete ls.inputCompounds;
         delete ls.startStock;
@@ -11572,13 +11711,17 @@ function refreshLabIdentity(room) {
     ls.outputLabIds = labs.filter((l) => !inputIds.has(l.id)).map((l) => l.id);
 }
 function planAutoProduction(room) {
+    var _a, _b;
     const ls = room.memory.labSystem;
     for (const [compound, target] of Object.entries(AUTO_PRODUCTION_TARGETS)) {
+        if (((_b = (_a = ls.benchedUntil) === null || _a === void 0 ? void 0 : _a[compound]) !== null && _b !== void 0 ? _b : 0) > Game.time)
+            continue;
         const stock = getStockForCompound(compound, room);
         if (stock < target) {
             const chain = resolveChain(compound, target, room);
             if (chain.length > 0) {
-                ls.queue.push(...chain);
+                ls.queue.push(...chain.map((e) => ({ ...e, auto: true })));
+                ls.plannedTarget = compound;
                 return;
             }
         }
@@ -11745,7 +11888,7 @@ function commandCourier(room, factory, recipe) {
     }
     const evict = findEvictResource(factory, wanted);
     const load = recipe ? findLoadResource(room, factory, recipe) : null;
-    if (!evict && !load) {
+    if (!evict && !load && !courierHoldsCargo(room)) {
         releaseCourier(room);
         return;
     }
@@ -11755,18 +11898,23 @@ function commandCourier(room, factory, recipe) {
     const carried = Object.keys(courier.store).filter((r) => { var _a; return ((_a = courier.store.getUsedCapacity(r)) !== null && _a !== void 0 ? _a : 0) > 0; });
     if (carried.length > 0) {
         const r = carried[0];
-        if (load && r === load.resource) {
+        if ((load && r === load.resource) || (recipe && factoryWantsMore(factory, recipe, r))) {
             if (courier.transfer(factory, r) === ERR_NOT_IN_RANGE)
                 courier.moveTo(factory, { reusePath: 5 });
         }
         else {
             const terminal = room.terminal;
-            const dest = MANAGED_COMMODITIES.has(r) &&
+            const preferred = MANAGED_COMMODITIES.has(r) &&
                 terminal &&
                 ((_a = terminal.store.getUsedCapacity(r)) !== null && _a !== void 0 ? _a : 0) < COMMODITY_TERMINAL_STOCK &&
                 ((_b = terminal.store.getFreeCapacity(r)) !== null && _b !== void 0 ? _b : 0) > 0
                 ? terminal
                 : storage;
+            const dest = [preferred, storage, terminal].find((s) => { var _a; return s && ((_a = s.store.getFreeCapacity(r)) !== null && _a !== void 0 ? _a : 0) > 0; });
+            if (!dest) {
+                courier.drop(r);
+                return;
+            }
             if (courier.transfer(dest, r) === ERR_NOT_IN_RANGE)
                 courier.moveTo(dest, { reusePath: 5 });
         }
@@ -11802,8 +11950,26 @@ function findEvictResource(factory, wanted) {
     }
     return null;
 }
+function inputShortfall(factory, recipe, rc) {
+    var _a, _b;
+    const need = (_a = recipe.components[rc]) !== null && _a !== void 0 ? _a : 0;
+    if (need <= 0)
+        return 0;
+    const desired = Math.min(FACTORY_MAX_INPUT_LOAD, Math.max(need * 4, need));
+    return desired - ((_b = factory.store.getUsedCapacity(rc)) !== null && _b !== void 0 ? _b : 0);
+}
+function factoryWantsMore(factory, recipe, rc) {
+    var _a;
+    return inputShortfall(factory, recipe, rc) > 0 && ((_a = factory.store.getFreeCapacity(rc)) !== null && _a !== void 0 ? _a : 0) > 0;
+}
+function courierHoldsCargo(room) {
+    var _a, _b;
+    const name = (_a = room.memory.factorySystem) === null || _a === void 0 ? void 0 : _a.courierName;
+    const courier = name ? Game.creeps[name] : undefined;
+    return !!courier && ((_b = courier.store.getUsedCapacity()) !== null && _b !== void 0 ? _b : 0) > 0;
+}
 function findLoadResource(room, factory, recipe) {
-    var _a, _b, _c;
+    var _a, _b;
     const storage = room.storage;
     const terminal = room.terminal;
     for (const comp in recipe.components) {
@@ -11811,16 +11977,14 @@ function findLoadResource(room, factory, recipe) {
         const need = (_a = recipe.components[rc]) !== null && _a !== void 0 ? _a : 0;
         if (need <= 0)
             continue;
-        const inFactory = (_b = factory.store.getUsedCapacity(rc)) !== null && _b !== void 0 ? _b : 0;
-        const desired = Math.min(FACTORY_MAX_INPUT_LOAD, Math.max(need * 4, need));
-        if (inFactory >= desired)
+        const want = inputShortfall(factory, recipe, rc);
+        if (want <= 0)
             continue;
-        const want = desired - inFactory;
         const spare = totalStock(room, rc) - mineralReserve(rc);
         for (const src of [storage, terminal]) {
             if (!src)
                 continue;
-            let avail = (_c = src.store.getUsedCapacity(rc)) !== null && _c !== void 0 ? _c : 0;
+            let avail = (_b = src.store.getUsedCapacity(rc)) !== null && _b !== void 0 ? _b : 0;
             if (rc === RESOURCE_ENERGY && src === storage) {
                 avail = Math.max(0, avail - FACTORY_MIN_RESERVE_ENERGY);
             }
