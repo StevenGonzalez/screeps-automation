@@ -24,7 +24,15 @@ vi.mock("../src/orchestrators/orchestrator.links", () => ({
 import { runFiller, getTerminalEnergyJob } from "../src/roles/role.filler";
 
 function makeStore(id: string, energy: number, free: number) {
-  return { id, pos: { x: 25, y: 25 }, store: { energy, getFreeCapacity: () => free } };
+  return {
+    id,
+    pos: { x: 25, y: 25 },
+    store: {
+      energy,
+      getFreeCapacity: () => free,
+      getUsedCapacity: (r?: string) => (r === undefined || r === "energy" ? energy : 0),
+    },
+  };
 }
 
 function makeFiller(

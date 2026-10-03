@@ -31,11 +31,17 @@ function store(id: string, contents: Record<string, number>, capacity: number) {
   };
 }
 
-function makeRoom(opts: { storageH: number; terminalH: number; storageO?: number; pendingSend?: unknown }) {
+function makeRoom(opts: {
+  storageH: number;
+  terminalH: number;
+  storageO?: number;
+  storageExtra?: Record<string, number>;
+  pendingSend?: unknown;
+}) {
   return {
     name: "W1N1",
     // Energy in both sits inside the filler's working band, so no energy job.
-    storage: store("storage1", { energy: 200_000, H: opts.storageH, O: opts.storageO ?? 0 }, 1_000_000),
+    storage: store("storage1", { energy: 200_000, H: opts.storageH, O: opts.storageO ?? 0, ...opts.storageExtra }, 1_000_000),
     terminal: store("terminal1", { energy: 12_000, H: opts.terminalH }, 300_000),
     memory: { mineralId: "min1", pendingSend: opts.pendingSend },
   } as unknown as Room;
@@ -89,6 +95,19 @@ describe("terminalStockJob", () => {
     const pendingSend = { resource: "O", amount: 3_000, loadTarget: 3_000, to: "W2N2" };
     const room = makeRoom({ storageH: 30_000, terminalH: 0, storageO: 5_000, pendingSend });
     expect(terminalStockJob(room)).toEqual({ resource: "O", amount: 3_000 });
+  });
+});
+
+describe("raw stock staging", () => {
+  it("stages raw deposit a room without a factory cannot use", () => {
+    const room = makeRoom({ storageH: 0, terminalH: 0, storageExtra: { silicon: 3_000 } });
+    expect(terminalStockJob(room)).toEqual({ resource: "silicon", amount: 3_000 });
+  });
+
+  it("keeps power for the power spawn", () => {
+    const room = makeRoom({ storageH: 0, terminalH: 0, storageExtra: { power: 9_000 } });
+    (room.memory as RoomMemory).powerSpawnId = "ps1" as Id<StructurePowerSpawn>;
+    expect(terminalStockJob(room)).toBeNull();
   });
 });
 

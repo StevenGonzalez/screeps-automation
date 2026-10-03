@@ -188,6 +188,7 @@ function processTerminal(room: Room): void {
   if (Game.time - lastCommoditySale >= COMMODITY_SALE_INTERVAL) {
     room.memory.lastCommoditySaleTick = Game.time;
     if (attemptCommoditySale(room, terminal)) return;
+    if (attemptRawSale(room, terminal)) return;
   }
 
   const lastEnergyTrade = room.memory.lastEnergyTradeTick ?? 0;
@@ -244,17 +245,69 @@ export function terminalStockJob(room: Room): { resource: ResourceConstant; amou
     if (amount > 0) return { resource: rc, amount };
   }
 
+  for (const { resource, keep } of saleStock(room)) {
+    const inTerminal = terminal.store.getUsedCapacity(resource) ?? 0;
+    const inStorage = storage.store.getUsedCapacity(resource) ?? 0;
+    const staged = Math.min(MINERAL_TERMINAL_CAP, inStorage + inTerminal - keep);
+    const amount = Math.min(staged - inTerminal, inStorage);
+    // Move it a sale's worth at a time, not a few units after every deal.
+    if (amount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD) return { resource, amount };
+  }
+  return null;
+}
+
+// Raw deposit a room with a factory keeps for its commodity chains, and power
+// a room with a power spawn keeps to process. Anything above is sold.
+const DEPOSIT_KEEP = 5_000;
+const POWER_KEEP = 10_000;
+
+/**
+ * Stock that is sold above what the room keeps: its own mineral above the lab
+ * reserve, then raw deposits and power, which nothing else ever sells.
+ */
+export function saleStock(room: Room): { resource: ResourceConstant; keep: number }[] {
+  const out: { resource: ResourceConstant; keep: number }[] = [];
   const mineralId = room.memory.mineralId;
   const mineral = mineralId ? (Game.getObjectById(mineralId) as Mineral | null) : null;
-  if (!mineral) return null;
-  const rc = mineral.mineralType;
-  const inTerminal = terminal.store.getUsedCapacity(rc) ?? 0;
-  const inStorage = storage.store.getUsedCapacity(rc) ?? 0;
-  const keep = Math.max(MINERAL_LAB_RESERVE, labMineralNeed(room).get(rc) ?? 0);
-  const staged = Math.min(MINERAL_TERMINAL_CAP, inStorage + inTerminal - keep);
-  const amount = Math.min(staged - inTerminal, inStorage);
-  // Move it a sale's worth at a time, not a few units after every deal.
-  return amount >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD ? { resource: rc, amount } : null;
+  if (mineral) {
+    const rc = mineral.mineralType;
+    out.push({ resource: rc, keep: Math.max(MINERAL_LAB_RESERVE, labMineralNeed(room).get(rc) ?? 0) });
+  }
+  const depositKeep = room.memory.factorySystem?.factoryId ? DEPOSIT_KEEP : 0;
+  for (const rc of [RESOURCE_SILICON, RESOURCE_METAL, RESOURCE_BIOMASS, RESOURCE_MIST]) {
+    out.push({ resource: rc, keep: depositKeep });
+  }
+  out.push({ resource: RESOURCE_POWER, keep: room.memory.powerSpawnId ? POWER_KEEP : 0 });
+  return out;
+}
+
+/** Terminal stock of a raw resource that may be sold without eating into its keep. */
+function sellableRaw(room: Room, terminal: StructureTerminal, resource: ResourceConstant, keep: number): number {
+  const inTerminal = terminal.store.getUsedCapacity(resource) ?? 0;
+  const total = (room.storage?.store.getUsedCapacity(resource) ?? 0) + inTerminal;
+  return Math.max(0, Math.min(inTerminal, total - keep));
+}
+
+function attemptRawSale(room: Room, terminal: StructureTerminal): boolean {
+  // The room's own mineral (first in saleStock) has its own sale path.
+  for (const { resource, keep } of saleStock(room)) {
+    if (BASE_MINERALS.includes(resource as MineralConstant)) continue;
+    const sellable = sellableRaw(room, terminal, resource, keep);
+    if (sellable < TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD) continue;
+    if (
+      sellResourceToMarket(
+        room,
+        terminal,
+        resource,
+        sellable,
+        TERMINAL_CONFIG.MINERAL_MAX_TRADE_AMOUNT,
+        TERMINAL_CONFIG.COMMODITY_MIN_PRICE_RATIO
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function ghodiumTarget(room: Room): number {

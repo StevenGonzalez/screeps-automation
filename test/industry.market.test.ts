@@ -186,3 +186,66 @@ describe("terminal transactions", () => {
     expect(calls).toEqual(["send"]);
   });
 });
+
+describe("raw resource sales", () => {
+  g.FIND_MY_STRUCTURES = 104;
+
+  function setup(opts: { terminal: Record<string, number>; storage: Record<string, number>; memory?: object }) {
+    const deals: string[] = [];
+    const terminal = { id: "t1", cooldown: 0, store: store({ energy: 50_000, ...opts.terminal }), send: () => 0 };
+    const room = {
+      name: "W1N1",
+      controller: { my: true },
+      storage: { store: store({ energy: 200_000, ...opts.storage }) },
+      memory: { terminalId: "t1", ...opts.memory },
+      find: () => [],
+    };
+    g.Game = {
+      time: clock + 1,
+      rooms: { W1N1: room },
+      getObjectById: (id: string) => (id === "t1" ? terminal : null),
+      map: { getRoomLinearDistance: () => 2 },
+      gcl: { level: 1 },
+      market: {
+        credits: 0,
+        orders: {},
+        getAllOrders: () => [
+          { id: "silicon", type: "buy", resourceType: "silicon", price: 10, amount: 5000, roomName: "W3N1" },
+          { id: "power", type: "buy", resourceType: "power", price: 10, amount: 5000, roomName: "W3N1" },
+        ],
+        getHistory: () => [{ avgPrice: 10 }],
+        calcTransactionCost: () => 10,
+        deal: (id: string, amount: number) => {
+          deals.push(`${id}:${amount}`);
+          return 0;
+        },
+      },
+    };
+    return deals;
+  }
+
+  it("sells raw deposit a room without a factory has no use for", () => {
+    const deals = setup({ terminal: { silicon: 4_000 }, storage: {} });
+    loop();
+    expect(deals).toEqual(["silicon:1000"]);
+  });
+
+  it("keeps a factory's raw deposit and sells only above it", () => {
+    const memory = { factorySystem: { factoryId: "f1" } };
+    expect(setup({ terminal: { silicon: 4_000 }, storage: {}, memory })).toEqual([]);
+    loop();
+    const deals = setup({ terminal: { silicon: 4_000 }, storage: { silicon: 4_000 }, memory });
+    loop();
+    expect(deals).toEqual(["silicon:1000"]);
+  });
+
+  it("sells power above what the power spawn keeps", () => {
+    const memory = { powerSpawnId: "ps1" };
+    const kept = setup({ terminal: { power: 3_000 }, storage: { power: 7_000 }, memory });
+    loop();
+    expect(kept).toEqual([]);
+    const deals = setup({ terminal: { power: 3_000 }, storage: { power: 9_000 }, memory });
+    loop();
+    expect(deals).toEqual(["power:1000"]);
+  });
+});
