@@ -15,8 +15,15 @@ export function runMineralMiner(creep: Creep): void {
 
   const depleted = mineral.mineralAmount === 0;
   const carrying = creep.store.getUsedCapacity() > 0;
+  // A harvest that does not fit spills onto the container, and nothing else
+  // empties it, so head off before the next harvest would overflow.
+  const harvestYield = creep.getActiveBodyparts(WORK) * HARVEST_MINERAL_POWER;
+  const spilled = container.store.getUsedCapacity() > 0;
 
-  if (creep.store.getFreeCapacity() === 0 || (depleted && carrying)) {
+  if (
+    creep.store.getFreeCapacity() < harvestYield ||
+    (depleted && carrying && !spilled)
+  ) {
     const terminalId = creep.room.memory.terminalId;
     const terminal = terminalId
       ? (Game.getObjectById(terminalId) as StructureTerminal | null)
@@ -50,7 +57,7 @@ export function runMineralMiner(creep: Creep): void {
     return;
   }
 
-  if (depleted) {
+  if (depleted && !spilled) {
     creep.suicide();
     return;
   }
@@ -59,6 +66,19 @@ export function runMineralMiner(creep: Creep): void {
     creep.moveTo(container.pos, { reusePath: 50 });
     return;
   }
+
+  // Take back what spilled, leaving room for this tick's harvest.
+  const space = creep.store.getFreeCapacity() - (depleted ? 0 : harvestYield);
+  if (spilled && space > 0) {
+    for (const resourceType in container.store) {
+      const amount = container.store[resourceType as ResourceConstant];
+      if (amount > 0) {
+        creep.withdraw(container, resourceType as ResourceConstant, Math.min(amount, space));
+        break;
+      }
+    }
+  }
+  if (depleted) return;
 
   const result = creep.harvest(mineral);
   if (result === ERR_NOT_IN_RANGE) {

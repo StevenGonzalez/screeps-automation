@@ -505,7 +505,9 @@ export function shouldSpawnMineralMiner(room: Room): boolean {
   if (!mineralId) return false;
 
   const mineral = Game.getObjectById(mineralId) as Mineral | null;
-  if (!mineral || mineral.mineralAmount === 0) return false;
+  if (!mineral) return false;
+  // A depleted mineral still needs its miner while its container holds a spill.
+  if (mineral.mineralAmount === 0 && container.store.getUsedCapacity() === 0) return false;
 
   const extractorId = room.memory.extractorId;
   if (!extractorId) return false;
