@@ -58,3 +58,41 @@ describe("resolveChain", () => {
     }
   });
 });
+
+describe("getBoostRequests", () => {
+  const g = globalThis as Record<string, unknown>;
+  g.LAB_BOOST_MINERAL = 30;
+  g.FIND_MY_CREEPS = 102;
+  g.BOOSTS = {
+    attack: { XUH2O: { attack: 4 } },
+    tough: { XGHO2: { damage: 0.3 } },
+    move: { XZHO2: { fatigue: 0.25 } },
+  };
+
+  function roomWith(memory: Partial<CreepMemory>) {
+    const body = [
+      ...Array(10).fill({ type: "attack" }),
+      ...Array(5).fill({ type: "tough" }),
+      ...Array(5).fill({ type: "move" }),
+    ];
+    return { find: () => [{ memory, body }] } as unknown as Room;
+  }
+
+  it("asks for every queued boost up front, not only the current one", async () => {
+    const { getBoostRequests } = await import("../src/services/services.labs");
+    const room = roomWith({ boostCompound: "XUH2O", boostQueue: ["XGHO2", "XZHO2"] } as Partial<CreepMemory>);
+    expect(getBoostRequests(room)).toEqual(
+      new Map([
+        ["XUH2O", 300],
+        ["XGHO2", 150],
+        ["XZHO2", 150],
+      ])
+    );
+  });
+
+  it("asks for nothing once the creep is boosted", async () => {
+    const { getBoostRequests } = await import("../src/services/services.labs");
+    const room = roomWith({ boosted: true, boostQueue: ["XGHO2"] } as Partial<CreepMemory>);
+    expect(getBoostRequests(room).size).toBe(0);
+  });
+});
