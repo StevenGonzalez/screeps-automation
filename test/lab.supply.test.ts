@@ -10,13 +10,14 @@ g.ORDER_BUY = "buy";
 g.RESOURCE_GHODIUM = "G";
 g.COMMODITIES = {};
 g.FIND_MY_STRUCTURES = 108;
+g.FIND_MY_CREEPS = 102;
 
 vi.mock("../src/config/config.factory", () => ({ MANAGED_COMMODITIES: [] }));
 vi.mock("../src/orchestrators/orchestrator.nuker", () => ({ NUKER_GHODIUM_RESERVE: 5000 }));
 vi.mock("../src/services/services.combat", () => ({ advanceBoost: () => undefined }));
 
 const { loop: terminalLoop, sellableMineral } = await import("../src/orchestrators/orchestrator.terminal");
-const { stallTimeout } = await import("../src/orchestrators/orchestrator.labs");
+const { stallTimeout, planAutoProduction, loop: labLoop } = await import("../src/orchestrators/orchestrator.labs");
 const { queuedBaseMineralNeed, labMineralShortfall, resolveChain } = await import(
   "../src/services/services.labs"
 );
@@ -175,6 +176,59 @@ describe("lab stall timeout", () => {
     const room = makeRoom({ name: "R", storage: { UH: 1000 }, queue: [{ compound: "UH2O", amount: 3000 }] });
     setGame([room], 1);
     expect(stallTimeout(room as unknown as Room, ["UH", "OH"])).toBe(200);
+  });
+});
+
+describe("auto production planning", () => {
+  it("plans the first target under its cap", () => {
+    const room = makeRoom({ name: "R", queue: [] });
+    setGame([room], 1000);
+    planAutoProduction(room as unknown as Room);
+    expect((room.memory.labSystem as LabSystemMemory).plannedTarget).toBe("XUH2O");
+  });
+
+  it("skips a benched target so the ones after it get a turn", () => {
+    const room = makeRoom({ name: "R", queue: [] });
+    const ls = room.memory.labSystem as LabSystemMemory;
+    ls.benchedUntil = { XUH2O: 2000 };
+    setGame([room], 1000);
+    planAutoProduction(room as unknown as Room);
+    expect(ls.plannedTarget).toBe("XKHO2");
+    expect(ls.queue.at(-1)?.compound).toBe("XKHO2");
+  });
+
+  it("plans a benched target again once its bench ends", () => {
+    const room = makeRoom({ name: "R", queue: [] });
+    const ls = room.memory.labSystem as LabSystemMemory;
+    ls.benchedUntil = { XUH2O: 2000 };
+    setGame([room], 2000);
+    planAutoProduction(room as unknown as Room);
+    expect(ls.plannedTarget).toBe("XUH2O");
+  });
+
+  it("benches the target and drops its chain when a step stalls", () => {
+    const queue = [
+      { compound: "UH2O", amount: 3000 },
+      { compound: "XUH2O", amount: 3000 },
+    ];
+    const room = makeRoom({ name: "R", queue, lastProduced: 0 });
+    const out = { id: "R-out", store: store({}), runReaction: () => 0 };
+    objects[out.id] = out;
+    const ls = room.memory.labSystem as LabSystemMemory;
+    Object.assign(ls, {
+      outputLabIds: [out.id],
+      inputCompounds: ["UH", "OH"],
+      startStock: 0,
+      targetAmount: 3000,
+      lastProgressTick: 1000,
+      lastPlanTick: 1500,
+      plannedTarget: "XUH2O",
+    });
+    setGame([room], 1500);
+    labLoop();
+    expect(ls.queue).toEqual([]);
+    expect(ls.plannedTarget).toBeUndefined();
+    expect(ls.benchedUntil?.XUH2O).toBe(11_500);
   });
 });
 

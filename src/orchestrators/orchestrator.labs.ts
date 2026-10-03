@@ -17,6 +17,9 @@ const SUPPLIED_INPUTS = new Set(["H", "O", "U", "L", "K", "Z", "X", "G"]);
 const REACTION_INPUT_MIN = 5;
 
 const LAB_PLAN_INTERVAL = 100;
+// An auto target whose chain stalled sits out this long, so the targets after
+// it get the labs instead of the same stalled chain being planned again.
+const LAB_TARGET_BENCH_TICKS = 10_000;
 
 export const AUTO_PRODUCTION_TARGETS: Record<string, number> = {
   XUH2O: 3000,
@@ -108,6 +111,7 @@ function processLabSystem(room: Room) {
   const produced = producedStock(ls.activeCompound, room, outputLabs) - (ls.startStock ?? 0);
   if (produced >= (ls.targetAmount ?? 0)) {
     ls.queue.shift();
+    if (ls.queue.length === 0) delete ls.plannedTarget;
     delete ls.activeCompound;
     delete ls.inputCompounds;
     delete ls.startStock;
@@ -126,6 +130,12 @@ function processLabSystem(room: Room) {
       `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`
     );
     ls.queue.shift();
+    // The rest of an auto chain feeds the stalled step's target, so it goes too.
+    if (ls.plannedTarget) {
+      ls.benchedUntil = { ...ls.benchedUntil, [ls.plannedTarget]: Game.time + LAB_TARGET_BENCH_TICKS };
+      ls.queue = [];
+      delete ls.plannedTarget;
+    }
     delete ls.activeCompound;
     delete ls.inputCompounds;
     delete ls.startStock;
@@ -201,14 +211,16 @@ function refreshLabIdentity(room: Room) {
   ls.outputLabIds = labs.filter((l) => !inputIds.has(l.id)).map((l) => l.id as Id<StructureLab>);
 }
 
-function planAutoProduction(room: Room) {
+export function planAutoProduction(room: Room) {
   const ls = room.memory.labSystem!;
   for (const [compound, target] of Object.entries(AUTO_PRODUCTION_TARGETS)) {
+    if ((ls.benchedUntil?.[compound] ?? 0) > Game.time) continue;
     const stock = getStockForCompound(compound, room);
     if (stock < target) {
       const chain = resolveChain(compound, target, room);
       if (chain.length > 0) {
         ls.queue.push(...chain);
+        ls.plannedTarget = compound;
         return;
       }
     }

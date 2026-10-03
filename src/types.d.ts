@@ -24,6 +24,10 @@ declare global {
     autoEnabled?: boolean;
     lastProduced?: number;
     lastProgressTick?: number;
+    // The auto target the queued chain is building, and auto targets benched
+    // until a tick after their chain stalled.
+    plannedTarget?: string;
+    benchedUntil?: Record<string, number>;
   }
 
   interface PowerBankOp {
