@@ -7602,13 +7602,15 @@ function heraldWorks(room) {
     room.memory.heraldWorks = counts;
     if (!known)
         return;
+    const exp = Memory.expansion;
+    const builders = (exp === null || exp === void 0 ? void 0 : exp.roomName) === room.name && exp.phase === "bootstrapping" ? "pilgrims" : "masons";
     for (const type of Object.keys(LANDMARKS)) {
         const gained = ((_b = counts[type]) !== null && _b !== void 0 ? _b : 0) - ((_c = known[type]) !== null && _c !== void 0 ? _c : 0);
         if (gained <= 0)
             continue;
         const [one, many] = LANDMARKS[type];
         const a = /^[aeiou]/.test(one) ? "an" : "a";
-        tally(`works:${room.name}:${type}`, gained, (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
+        tally(`works:${room.name}:${type}`, gained, (n) => `The ${builders} of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
     }
 }
 function heraldRoads(room) {
