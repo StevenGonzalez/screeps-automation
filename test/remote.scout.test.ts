@@ -216,6 +216,19 @@ describe("refreshVisibleRemoteRooms", () => {
       expect(entry.hostile).toBe(true);
       expect(entry.rival).toBe("Stranger");
     });
+
+    it("tells the chronicle once the rival's men have left", () => {
+      const entry = refreshAmong("attack", "move");
+      (g.Game as any).rooms.W1N2.find = () => [];
+      (g.Game as any).time = tick += 5000;
+      const room = { name: HOME, controller: { owner: { username: ME } }, memory: { remoteRooms: [entry] } };
+      refreshVisibleRemoteRooms(room as unknown as Room);
+      refreshVisibleRemoteRooms(room as unknown as Room);
+      const lines = ((g.Memory as any).chronicle as { text: string }[]).map((e) => e.text);
+      expect(entry.hostile).toBe(false);
+      expect(lines.filter((t) => / have left the /.test(t))).toHaveLength(1);
+      expect(lines[lines.length - 1]).toMatch(/The vendors take to the road again\.$/);
+    });
   });
 });
 

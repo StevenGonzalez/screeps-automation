@@ -236,6 +236,12 @@ export function markRemotePlayerHostile(entry: RemoteRoomData, who?: string): vo
 }
 
 export function clearRemotePlayerHostile(entry: RemoteRoomData): void {
+  // Rewrites the line that told of the rival's men holding the remote, so a
+  // player who comes and goes leaves one line saying how things stand.
+  if (entry.hostile && entry.rival) {
+    const text = `The men of ${lordName(entry.rival)} have left the ${wildsName(entry.roomName)}. The vendors take to the road again.`;
+    tally(`rival:${entry.roomName}`, 0, () => text, RIVAL_CHRONICLE_WINDOW);
+  }
   entry.hostile = false;
   delete entry.rival;
   // Forgive one strike per clean window rather than all of them on the first
