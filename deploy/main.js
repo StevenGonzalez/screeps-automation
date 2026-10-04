@@ -18459,23 +18459,34 @@ function drawTown(room) {
         }
     }
 }
-const DRAGON = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.9 };
+const DRAGON = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.92 };
+const DRAGON_SHADOW = { fill: "#000000", opacity: 0.2 };
+function dragonShapes(span, wag) {
+    const body = [
+        [3.3, 0], [2.7, -0.18], [2.45, -0.5], [2.35, -0.2], [1.9, -0.18], [1, -0.35], [0.2, -0.5], [-0.8, -0.42],
+        [-1.6, -0.2], [-2.6, -0.12 + wag * 0.3], [-3.6, -0.08 + wag * 0.8], [-4.2, -0.35 + wag], [-4.7, wag],
+        [-4.2, 0.35 + wag], [-3.6, 0.08 + wag * 0.8], [-2.6, 0.12 + wag * 0.3], [-1.6, 0.2], [-0.8, 0.42],
+        [0.2, 0.5], [1, 0.35], [1.9, 0.18], [2.35, 0.2], [2.45, 0.5], [2.7, 0.18],
+    ];
+    const wing = (side) => [
+        [0.7, 0.35 * side], [1, span * 0.55 * side], [0.1, span * side], [-0.35, span * 0.62 * side],
+        [-0.8, span * 0.8 * side], [-1.1, span * 0.5 * side], [-1.5, span * 0.58 * side], [-1.2, 0.4 * side],
+    ];
+    return [wing(-1), wing(1), body];
+}
 function drawDragon(room, time = Game.time) {
     const d = townDragon(time);
     if (!d)
         return;
     const v = room.visual;
-    const at = (dx, dy) => [d.x + dx * d.dir, d.y + dy];
-    v.circle(d.x - 1.5 * d.dir, d.y + 3, { radius: 1.8, fill: "#000000", opacity: 0.25 });
-    const span = 1.2 + 2.4 * Math.abs(Math.sin(time * 0.9));
-    v.poly([at(-1, -0.3), at(1.2, -0.3), at(-0.6, -span)], DRAGON);
-    v.poly([at(-1, 0.3), at(1.2, 0.3), at(-0.6, span)], DRAGON);
-    v.poly([at(-2.5, 0), at(-1.2, -0.45), at(1.4, -0.4), at(2.3, -0.25), at(3, 0), at(2.3, 0.25), at(1.4, 0.4), at(-1.2, 0.45), at(-2.5, 0)], DRAGON);
-    const [tx, ty] = at(-2.5, 0);
-    const [ex, ey] = at(-4.4, 0.4 * Math.sin(time * 0.5));
-    v.line(tx, ty, ex, ey, { color: "#160a0a", width: 0.2, opacity: 0.9 });
-    const [eyeX, eyeY] = at(2.5, -0.1);
-    v.circle(eyeX, eyeY, { radius: 0.1, fill: "#ff5522", opacity: 1 });
+    const shapes = dragonShapes(1.6 + 2.2 * Math.abs(Math.sin(time * 0.9)), 0.35 * Math.sin(time * 0.5));
+    const place = (shape, dx, dy) => shape.map(([f, s]) => [d.x + dx + f * d.dir, d.y + dy + s]);
+    for (const shape of shapes)
+        v.poly(place(shape, -1.5 * d.dir, 3), DRAGON_SHADOW);
+    for (const shape of shapes)
+        v.poly(place(shape, 0, 0), DRAGON);
+    for (const side of [-0.1, 0.1])
+        v.circle(d.x + 2.75 * d.dir, d.y + side, { radius: 0.09, fill: "#ff5522", opacity: 1 });
 }
 const SONG = { font: "italic 0.45 serif", color: "#f5e6a8", stroke: "#000000", strokeWidth: 0.05 };
 function drawSong(room, x, y) {
