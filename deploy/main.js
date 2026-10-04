@@ -13029,6 +13029,10 @@ function cutArms(a) {
         }
     }
 }
+function armsColours(roomName) {
+    const a = castleArmsOf(roomName);
+    return { field: a.field.hex, other: a.other.hex };
+}
 function shieldOutline() {
     return SHIELD;
 }
@@ -18738,10 +18742,12 @@ function drawTown(room) {
         }
         v.text(`House of ${c.name}`, c.x + 2, c.y - 0.3, label);
     }
+    const colours = armsColours(room.name);
     town.posts.forEach((p, i) => {
         const { x, y } = parseTile(p);
         const manned = spotHolder(room.name, p) !== undefined;
-        v.poly([[x, y + 0.35], [x, y - 0.4], [x + 0.35, y - 0.25], [x, y - 0.1]], { stroke: manned ? "#ff5544" : "#aa6655", strokeWidth: 0.06, fill: manned ? "#ff5544" : "transparent", opacity: 0.8 });
+        v.line(x, y + 0.35, x, y - 0.4, { color: "#8a7a66", width: 0.05, opacity: 0.8 });
+        v.poly([[x, y - 0.4], [x + 0.4, y - 0.27], [x, y - 0.12]], { stroke: colours.other, strokeWidth: 0.04, fill: manned ? colours.field : "transparent", opacity: manned ? 0.9 : 0.5 });
         if (lit) {
             const flicker = 0.5 + 0.5 * Math.sin(Game.time * 1.7 + i * 2.3);
             v.circle(x - 0.25, y - 0.45, { radius: 0.55, fill: "#ff9933", opacity: 0.08 + 0.06 * flicker });
