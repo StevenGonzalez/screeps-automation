@@ -14972,6 +14972,7 @@ function spawnUnclaimer(room, spawn) {
     return res === OK;
 }
 const MAX_SETTLERS = 3;
+const PILGRIM_WINDOW = 2000;
 function shouldSpawnSettler(room) {
     const exp = Memory.expansion;
     if (!exp || exp.phase !== "bootstrapping" || exp.homeRoom !== room.name)
@@ -14997,7 +14998,11 @@ function spawnSettler(room, spawn) {
             targetRoom: exp.roomName,
         },
     });
-    return res === OK;
+    if (res !== OK)
+        return false;
+    const keep = castleName(exp.roomName);
+    tally(`pilgrims:${exp.roomName}`, 1, (n) => `${n === 1 ? "A pilgrim has" : `${n} pilgrims have`} set out from ${castleName(room.name)} to raise the keep of ${keep}.`, PILGRIM_WINDOW);
+    return true;
 }
 function getOffensiveSquadMembers(op) {
     return Object.values(Game.creeps).filter((c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom);
