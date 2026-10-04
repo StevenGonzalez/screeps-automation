@@ -1,13 +1,4 @@
-import {
-  ROLE_BUILDER,
-  ROLE_HARVESTER,
-  ROLE_HAULER,
-  ROLE_MINER,
-  ROLE_MINERAL_MINER,
-  ROLE_REPAIRER,
-  ROLE_UPGRADER,
-  ROLE_TOWNSFOLK,
-} from "../config/config.roles";
+import { ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
 import { cottageLayout, parseTile, spotHolder, townClock } from "../services/services.town";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
@@ -29,6 +20,60 @@ export function loop() {
     drawChronicle(room);
     drawTown(room);
     drawBlueprint(room);
+  }
+  drawRealmMap();
+}
+
+const MAP_GOLD = "#f2c14e";
+const MAP_DANGER = "#e05a5a";
+const MAP_KEEP = "#b06bff";
+
+// The realm on the world map: each castle's name over its room, a road to
+// each remote its peddlers work (red while raiders or rivals hold it), and the
+// keep it is founding or saving for.
+export function drawRealmMap(): void {
+  const mv = Game.map.visual;
+  const worked: Record<string, Set<string>> = {};
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.memory.role !== ROLE_REMOTE_MINER || !c.memory.homeRoom || !c.memory.targetRoom) continue;
+    (worked[c.memory.homeRoom] ??= new Set()).add(c.memory.targetRoom);
+  }
+
+  for (const roomName in Game.rooms) {
+    const room = Game.rooms[roomName];
+    if (!room.controller?.my) continue;
+    const centre = new RoomPosition(25, 25, roomName);
+    mv.text(castleName(roomName), new RoomPosition(25, 6, roomName), {
+      color: MAP_GOLD,
+      fontSize: 6,
+      stroke: "#000000",
+      strokeWidth: 0.6,
+    });
+    mv.text(`RCL ${room.controller.level}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
+
+    for (const remote of room.memory.remoteRooms ?? []) {
+      if (!worked[roomName]?.has(remote.roomName)) continue;
+      const raided = remote.hostile || (remote.invaderUntil ?? 0) > Game.time;
+      const colour = raided ? MAP_DANGER : MAP_GOLD;
+      mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
+      mv.text(raided ? "raided" : "vendors", new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
+    }
+  }
+
+  const exp = Memory.expansion;
+  const savings = Memory.expansionSavings;
+  const keep =
+    exp && exp.phase !== "established"
+      ? { from: exp.homeRoom, at: exp.roomName, label: `keep: ${exp.phase}` }
+      : savings
+        ? { from: savings.room, at: savings.target, label: "keep planned" }
+        : undefined;
+  if (keep) {
+    const at = new RoomPosition(25, 25, keep.at);
+    if (keep.from) mv.line(new RoomPosition(25, 25, keep.from), at, { color: MAP_KEEP, width: 1.5, opacity: 0.7, lineStyle: "dotted" });
+    mv.circle(at, { radius: 8, fill: "transparent", stroke: MAP_KEEP, strokeWidth: 1, opacity: 0.8 });
+    mv.text(keep.label, new RoomPosition(25, 12, keep.at), { color: MAP_KEEP, fontSize: 5 });
   }
 }
 
@@ -131,24 +176,13 @@ function drawRoomHUD(room: Room) {
   }
 
   const counts = countCreepsByRole(room);
-  const roleOrder = [ROLE_MINER, ROLE_HAULER, ROLE_HARVESTER, ROLE_UPGRADER, ROLE_BUILDER, ROLE_REPAIRER, ROLE_MINERAL_MINER];
-  const roleShort: Record<string, string> = {
-    [ROLE_MINER]: "Miner",
-    [ROLE_HAULER]: "Hauler",
-    [ROLE_HARVESTER]: "Harvest",
-    [ROLE_UPGRADER]: "Upgrade",
-    [ROLE_BUILDER]: "Build",
-    [ROLE_REPAIRER]: "Repair",
-    [ROLE_MINERAL_MINER]: "Mineral",
-  };
-
-  let creepLine = "";
-  for (const role of roleOrder) {
-    const n = counts[role] ?? 0;
-    if (n > 0) creepLine += `${roleShort[role]}:${n}  `;
+  const [atHome, abroad] = describeCensus(room);
+  if (atHome) {
+    v.text(atHome, x, y, dimStyle);
+    y += lineH;
   }
-  if (creepLine) {
-    v.text(creepLine.trim(), x, y, dimStyle);
+  if (abroad) {
+    v.text(`Abroad: ${abroad}`, x, y, dimStyle);
     y += lineH;
   }
 
@@ -265,6 +299,32 @@ function getRoomPhase(rcl: number): string {
   if (rcl <= 4) return "developing";
   if (rcl <= 6) return "established";
   return "powerhouse";
+}
+
+// The castle's people by title, most numerous first: those who serve at home,
+// and those posted abroad (vendors, envoys, knights), wherever they stand this
+// tick. Townsfolk have a line of their own.
+export function describeCensus(room: Room): [string, string] {
+  const home: Record<string, number> = {};
+  const away: Record<string, number> = {};
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if ((c.memory.homeRoom ?? c.room.name) !== room.name) continue;
+    const role = c.memory.role;
+    if (role === ROLE_TOWNSFOLK) continue;
+    const sent = c.memory.targetRoom !== undefined && c.memory.targetRoom !== room.name;
+    const tally = sent ? away : home;
+    tally[role] = (tally[role] ?? 0) + 1;
+  }
+  const line = (tally: Record<string, number>) =>
+    Object.keys(tally)
+      .sort((a, b) => tally[b] - tally[a] || a.localeCompare(b))
+      .map((role) => {
+        const title = ROLE_TITLES[role] ?? role;
+        return `${tally[role]} ${tally[role] === 1 ? title : `${title}s`}`;
+      })
+      .join(" · ");
+  return [line(home), line(away)];
 }
 
 function countCreepsByRole(room: Room): Record<string, number> {
