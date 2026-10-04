@@ -9,7 +9,7 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-const { shouldSpawnSettler, spawnConqueror } = await import("../src/orchestrators/orchestrator.spawning.military");
+const { shouldSpawnSettler, spawnConqueror, spawnSettler } = await import("../src/orchestrators/orchestrator.spawning.military");
 
 describe("settler spawning", () => {
   it("waits for a full settler while the extensions still fill, rather than sending a runt", () => {
@@ -41,5 +41,27 @@ describe("conqueror spawning", () => {
     expect(spawnConqueror(room, spawn)).toBe(true);
     const chronicle = (g.Memory as { chronicle?: Array<{ text: string }> }).chronicle ?? [];
     expect(chronicle.at(-1)?.text).toMatch(/^A conqueror rides out from .+ for the .+\.$/);
+  });
+});
+
+describe("settler spawning chronicle", () => {
+  it("counts the pilgrims sent to a keep in one chronicle line", () => {
+    const room = { name: "W1N1", energyAvailable: 2300, energyCapacityAvailable: 2300, memory: {} } as unknown as Room;
+    g.WORK = "work";
+    g.CARRY = "carry";
+    g.BODYPART_COST = { claim: 600, move: 50, work: 100, carry: 50 };
+    g.Memory = {
+      creeps: {},
+      rooms: { W1N1: room.memory },
+      expansion: { roomName: "W2N1", homeRoom: "W1N1", phase: "bootstrapping", startedAt: 0 },
+    };
+    const spawn = { spawnCreep: () => 0 } as unknown as StructureSpawn;
+    for (const time of [300, 400]) {
+      g.Game = { time, creeps: {}, rooms: { W1N1: room } };
+      expect(spawnSettler(room, spawn)).toBe(true);
+    }
+    const lines = ((g.Memory as { chronicle?: Array<{ text: string }> }).chronicle ?? []).map((l) => l.text);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^2 pilgrims have set out from .+ to raise the keep of .+\.$/);
   });
 });

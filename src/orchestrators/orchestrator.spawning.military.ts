@@ -9,7 +9,7 @@ import {
   ROLE_UNCLAIMER,
 } from "../config/config.roles";
 import { getThreatInfo, summarizeHostiles, meleeDefendersToWin } from "../services/services.combat";
-import { castleName, chronicle, wildsName } from "../services/services.chronicle";
+import { castleName, chronicle, tally, wildsName } from "../services/services.chronicle";
 import { towersCanHold } from "../roles/role.tower";
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
@@ -270,6 +270,9 @@ export function spawnUnclaimer(room: Room, spawn: StructureSpawn): boolean {
 }
 
 const MAX_SETTLERS = 3;
+// Settlers sent while the last one is younger than this share one chronicle
+// line; a settler lives 1500 ticks, so its replacement still counts.
+const PILGRIM_WINDOW = 2000;
 
 export function shouldSpawnSettler(room: Room): boolean {
   const exp = Memory.expansion;
@@ -297,7 +300,15 @@ export function spawnSettler(room: Room, spawn: StructureSpawn): boolean {
       targetRoom: exp.roomName,
     },
   });
-  return res === OK;
+  if (res !== OK) return false;
+  const keep = castleName(exp.roomName);
+  tally(
+    `pilgrims:${exp.roomName}`,
+    1,
+    (n) => `${n === 1 ? "A pilgrim has" : `${n} pilgrims have`} set out from ${castleName(room.name)} to raise the keep of ${keep}.`,
+    PILGRIM_WINDOW
+  );
+  return true;
 }
 
 function getOffensiveSquadMembers(op: MilitaryOp): Creep[] {
