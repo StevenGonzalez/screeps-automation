@@ -4642,6 +4642,7 @@ function runUpgrader(creep) {
     }
     if (creep.memory.working) {
         upgradeController(creep);
+        topUp(creep);
         return;
     }
     const controllerLink = findControllerLink(creep);
@@ -4676,6 +4677,16 @@ function runUpgrader(creep) {
     if (storage && !nearDowngrade(creep.room))
         return;
     acquireEnergy(creep);
+}
+function topUp(creep) {
+    if (creep.store[RESOURCE_ENERGY] > creep.getActiveBodyparts(WORK))
+        return;
+    const link = findControllerLink(creep);
+    const upgradeId = creep.room.memory.upgradeContainerId;
+    const cont = upgradeId ? Game.getObjectById(upgradeId) : null;
+    const from = [link, cont].find((s) => s && s.store[RESOURCE_ENERGY] > 0 && creep.pos.getRangeTo(s) <= 1);
+    if (from)
+        creep.withdraw(from, RESOURCE_ENERGY);
 }
 const CONTROLLER_LINK_SCAN_TTL = 200;
 function findControllerLink(creep) {
