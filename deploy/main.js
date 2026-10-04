@@ -1743,6 +1743,7 @@ function heraldRooms() {
             heraldVisitors(room);
             heraldWorks(room);
             heraldRoads(room);
+            heraldVendors(room);
             heraldVein(room);
         }
         heraldKills(room);
@@ -1981,6 +1982,29 @@ function heraldRoads(room) {
         spreadWord("new road!");
         chronicle(`The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`);
     }
+}
+const VENDOR_NEWS_AGE = 2 * WORKS_CHECK_PERIOD;
+function heraldVendors(room) {
+    if (room.memory.heraldVendors || Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const peddlers = [];
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (c.memory.role === ROLE_REMOTE_MINER && c.memory.targetRoom)
+            peddlers.push(c);
+    }
+    const ours = peddlers.filter((c) => c.memory.homeRoom === room.name);
+    if (ours.length === 0)
+        return;
+    room.memory.heraldVendors = true;
+    if (ours.some((c) => { var _a; return ((_a = c.ticksToLive) !== null && _a !== void 0 ? _a : CREEP_LIFE_TIME) < CREEP_LIFE_TIME - VENDOR_NEWS_AGE; }))
+        return;
+    const target = ours[0].memory.targetRoom;
+    const neighbour = peddlers.find((c) => c.memory.homeRoom !== room.name && c.memory.targetRoom === target);
+    const shared = (neighbour === null || neighbour === void 0 ? void 0 : neighbour.memory.homeRoom) ? ` ${castleName(neighbour.memory.homeRoom)}'s vendors already dig there.` : "";
+    roomCries[room.name] = "Godspeed!";
+    spreadWord("vendors!");
+    chronicle(`${castleName(room.name)} sends its first vendors out into the ${wildsName(target)}.${shared}`);
 }
 function heraldVein(room) {
     var _a, _b;
@@ -9765,17 +9789,19 @@ function pickupContainer(creep) {
     return chosen;
 }
 function minedContainers() {
-    const mined = new Set();
+    const mined = new Map();
     for (const name in Game.creeps) {
         const c = Game.creeps[name];
-        if (c.memory.role === ROLE_REMOTE_MINER && c.memory.assignedContainerId)
-            mined.add(c.memory.assignedContainerId);
+        if (c.memory.role === ROLE_REMOTE_MINER && c.memory.assignedContainerId) {
+            mined.set(c.memory.assignedContainerId, c.memory.homeRoom);
+        }
     }
     return mined;
 }
 function chooseContainer(creep) {
     var _a, _b;
-    const candidates = remoteContainers(creep);
+    const mined = minedContainers();
+    const candidates = remoteContainers(creep, mined);
     if (candidates.length === 0)
         return null;
     const claimed = new Map();
@@ -9786,7 +9812,6 @@ function chooseContainer(creep) {
             continue;
         claimed.set(id, ((_a = claimed.get(id)) !== null && _a !== void 0 ? _a : 0) + other.store.getFreeCapacity(RESOURCE_ENERGY));
     }
-    const mined = minedContainers();
     const piles = creep.room.find(FIND_DROPPED_RESOURCES, {
         filter: (d) => d.resourceType === RESOURCE_ENERGY,
     });
@@ -9807,8 +9832,9 @@ function chooseContainer(creep) {
     }
     return best;
 }
-function remoteContainers(creep) {
+function remoteContainers(creep, mined) {
     var _a, _b;
+    const ours = (c) => { var _a; return ((_a = mined.get(c.id)) !== null && _a !== void 0 ? _a : creep.memory.homeRoom) === creep.memory.homeRoom; };
     const homeMemory = Memory.rooms[creep.memory.homeRoom];
     const remoteEntry = (_a = homeMemory === null || homeMemory === void 0 ? void 0 : homeMemory.remoteRooms) === null || _a === void 0 ? void 0 : _a.find((r) => r.roomName === creep.room.name);
     const containers = [];
@@ -9820,14 +9846,14 @@ function remoteContainers(creep) {
             containers.push(c);
     }
     if (containers.length > 0)
-        return containers;
+        return containers.filter(ours);
     for (const source of creep.room.find(FIND_SOURCES)) {
         const found = source.pos.findInRange(FIND_STRUCTURES, 1, {
             filter: (s) => s.structureType === STRUCTURE_CONTAINER,
         });
         containers.push(...found);
     }
-    return containers;
+    return containers.filter(ours);
 }
 function depositEnergy(creep, homeRoom) {
     if (creep.room.name !== homeRoom) {
@@ -15629,9 +15655,6 @@ function buildRemoteHaulerBody(availableEnergy, withWork = false, paved = false)
         body.push(...pattern);
     return body;
 }
-function getReserversForRoom(homeRoom) {
-    return getCreepsByRole(ROLE_RESERVER).filter((c) => c.memory.homeRoom === homeRoom.name);
-}
 const RESERVATION_TOP_UP_TICKS = 1500;
 const MAX_RESERVER_CLAIM = 3;
 function needsReservation(room, roomName) {
@@ -15644,15 +15667,30 @@ function needsReservation(room, roomName) {
         return true;
     return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
 }
+function reservedByAnotherCastle(room, roomName) {
+    var _a;
+    for (const name in Game.rooms) {
+        const other = Game.rooms[name];
+        if (other === room || !((_a = other.controller) === null || _a === void 0 ? void 0 : _a.my) || other.controller.level < 3)
+            continue;
+        const bigger = other.energyCapacityAvailable > room.energyCapacityAvailable ||
+            (other.energyCapacityAvailable === room.energyCapacityAvailable && other.name < room.name);
+        if (bigger && getActiveRemoteRooms(other, "reserve").some((r) => r.roomName === roomName))
+            return true;
+    }
+    return false;
+}
 function findReserverTarget(room) {
     var _a, _b;
     if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
         return null;
-    const covered = new Set(getReserversForRoom(room)
-        .filter((c) => !isRemoteCreepRetiring(room, c))
+    const covered = new Set(getCreepsByRole(ROLE_RESERVER)
+        .filter((c) => { var _a, _b; return !isRemoteCreepRetiring((_b = Game.rooms[(_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : ""]) !== null && _b !== void 0 ? _b : room, c); })
         .map((c) => c.memory.targetRoom));
     for (const r of getActiveRemoteRooms(room, "reserve")) {
-        if (!covered.has(r.roomName) && needsReservation(room, r.roomName))
+        if (covered.has(r.roomName) || !needsReservation(room, r.roomName))
+            continue;
+        if (!reservedByAnotherCastle(room, r.roomName))
             return r.roomName;
     }
     return null;
