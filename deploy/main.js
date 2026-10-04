@@ -14176,6 +14176,8 @@ function advanceExpansionQueue() {
         return;
     if (Game.cpu.bucket < MIN_BUCKET)
         return;
+    if (cpuShareUsed() > MAX_CPU_SHARE_TO_EXPAND)
+        return;
     let toExamine = queue.length;
     while (queue.length > 0 && toExamine-- > 0) {
         const next = queue.shift();
@@ -14353,11 +14355,15 @@ function loop$9() {
     planSavings();
 }
 function cpuShareUsed() {
-    let total = 0;
+    if (!Game.cpu.limit)
+        return 0;
     const stats = getCpuStats();
+    if (!stats.creeps)
+        return 1;
+    let total = 0;
     for (const name in stats)
         total += stats[name].ema;
-    return Game.cpu.limit ? total / Game.cpu.limit : 0;
+    return total / Game.cpu.limit;
 }
 function autoQueue() {
     var _a, _b, _c;
@@ -14397,7 +14403,7 @@ function autoQueue() {
 }
 function planSavings() {
     var _a;
-    const next = (_a = Memory.expansionQueue) === null || _a === void 0 ? void 0 : _a[0];
+    const next = cpuShareUsed() > MAX_CPU_SHARE_TO_EXPAND ? undefined : (_a = Memory.expansionQueue) === null || _a === void 0 ? void 0 : _a[0];
     const home = next ? resolveFundingHome(next.roomName, next.homeRoom, canFundKeeps) : undefined;
     if (!next || !home) {
         delete Memory.expansionSavings;
