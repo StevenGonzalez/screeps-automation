@@ -87,7 +87,10 @@ shows the plan under the treasury line.
    orchestrator:
    - **Pauses** pilgrim spawning for ~200 ticks and flags `needsDefender` if the
      child room is invaded (pilgrims retreat; a home spawn rule raises a defender).
-   - **Times out** after 6,000 ticks if the bootstrap never completes.
+   - **Times out** after 6,000 ticks if the bootstrap never completes. A keep
+     with a spawn of its own stays ours and the pilgrims stop coming; the
+     chronicle blazons its arms then, since it never reaches the established
+     line that would. A keep with no spawn is unclaimed.
 3. **Established** - declared self-sufficient (see completion criteria), kept around
    ~1,000 ticks for inspection, then cleared so the next queued target can start.
 
