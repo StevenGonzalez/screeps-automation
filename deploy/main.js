@@ -1060,21 +1060,41 @@ const NAME_HEADS = [
     "Storm", "Ember", "Hollow", "Frost", "Gloam", "Bramble", "Crow", "Stone",
 ];
 const NAME_TAILS = ["hold", "moor", "keep", "spire", "fell", "gate", "watch", "barrow", "crag", "mere", "ford", "reach"];
-function castleName(roomName) {
-    var _a, _b;
-    const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
-    if (given)
-        return given;
+function nameHash(roomName) {
     let h = 2166136261;
     for (let i = 0; i < roomName.length; i++) {
         h ^= roomName.charCodeAt(i);
         h = Math.imul(h, 16777619) >>> 0;
     }
+    return h;
+}
+function castleName(roomName) {
+    var _a, _b;
+    const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
+    if (given)
+        return given;
+    const h = nameHash(roomName);
     const head = NAME_HEADS[h % NAME_HEADS.length];
     let t = (h >>> 8) % NAME_TAILS.length;
     if (NAME_TAILS[t][0] === head[head.length - 1])
         t = (t + 1) % NAME_TAILS.length;
     return head + NAME_TAILS[t];
+}
+const WILD_HEADS = [
+    "Ashen", "Bleak", "Gallows", "Weeping", "Black", "Wolf", "Raven", "Thorn",
+    "Misty", "Grey", "Witch", "Bone", "Sorrow", "Cinder", "Hollow", "Crow",
+    "Blood", "Shadow", "Dread", "Barrow", "Silent", "Rotting", "Howling", "Wither",
+];
+const WILD_LANDS = [
+    "Moor", "Fen", "Wood", "Vale", "Heath", "Marsh", "Waste", "Mire",
+    "Glen", "Weald", "Forest", "March", "Bog", "Reach", "Thicket", "Scar",
+];
+function wildsName(roomName) {
+    let h = nameHash(roomName);
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return `${WILD_HEADS[(h >>> 4) % WILD_HEADS.length]} ${WILD_LANDS[(h >>> 12) % WILD_LANDS.length]}`;
 }
 
 const TOWN_NAMES = [
@@ -3265,8 +3285,8 @@ function markRemoteInvader(entry, room) {
     if (!fresh)
         return;
     chronicle(findInvaderCore(room)
-        ? `Invaders raised a stronghold in the wilds of ${room.name}. The vendors flee the road.`
-        : `Raiders fell upon the vendors in the wilds of ${room.name}.`);
+        ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
+        : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`);
 }
 function flagRemoteDamage(creep) {
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
@@ -3287,7 +3307,7 @@ function markRemotePlayerHostile(entry, who) {
     const avoided = entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
     if (!avoided) {
         entry.hostileStrikes = ((_a = entry.hostileStrikes) !== null && _a !== void 0 ? _a : 0) + 1;
-        const text = `${who ? `The men of ${who}` : "Strangers"} hold the wilds of ${entry.roomName}. The vendors keep away.`;
+        const text = `${who ? `The men of ${who}` : "Strangers"} hold the ${wildsName(entry.roomName)}. The vendors keep away.`;
         tally(`rival:${entry.roomName}`, 1, () => text, RIVAL_CHRONICLE_WINDOW);
     }
     const window = Math.min(REMOTE_PLAYER_WINDOW * 2 ** (((_b = entry.hostileStrikes) !== null && _b !== void 0 ? _b : 1) - 1), REMOTE_PLAYER_WINDOW_MAX);
@@ -3320,7 +3340,7 @@ function clearRemoteInvader(creep) {
         return;
     if (entry.invaderUntil !== undefined) {
         if (entry.invaderUntil > Game.time) {
-            chronicle(`The wilds of ${entry.roomName} are safe again. The vendors take to the road.`);
+            chronicle(`The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`);
         }
         entry.invaderUntil = undefined;
     }
@@ -8357,7 +8377,7 @@ function whereIn(roomName) {
     var _a, _b;
     return ((_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my)
         ? `before the walls of ${castleName(roomName)}`
-        : `in the wilds of ${roomName}`;
+        : `in the ${wildsName(roomName)}`;
 }
 function chronicleKill(room) {
     const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
@@ -13037,7 +13057,7 @@ function manageActiveExpansion() {
                 if (!Memory.claimFailures)
                     Memory.claimFailures = {};
                 Memory.claimFailures[exp.roomName] = Game.time + CLAIM_FAILED_COOLDOWN;
-                chronicle(`The conqueror never reached the throne of ${exp.roomName}. The claim is abandoned.`);
+                chronicle(`The conqueror never reached the throne in the ${wildsName(exp.roomName)}. The claim is abandoned.`);
                 clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
                 return;
             }
@@ -13159,7 +13179,7 @@ function planSavings() {
     if ((plan === null || plan === void 0 ? void 0 : plan.room) === home && plan.target === next.roomName)
         return;
     Memory.expansionSavings = { room: home, target: next.roomName };
-    chronicle(`${castleName(home)} fills its coffers to found a keep at ${next.roomName}.`);
+    chronicle(`${castleName(home)} fills its coffers to found a keep in the ${wildsName(next.roomName)}.`);
 }
 
 const BODY_PATTERNS = {
@@ -17827,6 +17847,7 @@ function drawRealmMap() {
                 mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
             }
             const label = held ? `held by ${(_h = remote.rival) !== null && _h !== void 0 ? _h : "strangers"}` : raided ? "raided" : "vendors";
+            mv.text(wildsName(remote.roomName), new RoomPosition(25, 34, remote.roomName), { color: "#e8e8e8", fontSize: 4 });
             mv.text(label, new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
         }
     }
