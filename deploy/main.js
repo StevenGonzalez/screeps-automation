@@ -14977,19 +14977,21 @@ function spawnRemoteHauler(room, spawn) {
     return res === OK;
 }
 function buildRemoteMinerBody(availableEnergy) {
-    const maxWork = 5;
+    const maxWork = 6;
     const groupCost = 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE];
     const maxGroups = Math.max(1, Math.floor(availableEnergy / groupCost));
     const groups = Math.min(maxGroups, Math.ceil(maxWork / 2));
-    const work = Math.min(maxWork, groups * 2);
+    let work = Math.min(maxWork, groups * 2);
     const move = groups;
+    const cost = () => work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
+    if (work === maxWork && availableEnergy < cost() + BODYPART_COST[CARRY])
+        work--;
     const body = [];
     for (let i = 0; i < work; i++)
         body.push(WORK);
     for (let i = 0; i < move; i++)
         body.push(MOVE);
-    const cost = work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
-    if (availableEnergy >= cost + BODYPART_COST[CARRY])
+    if (availableEnergy >= cost() + BODYPART_COST[CARRY])
         body.push(CARRY);
     return body;
 }
