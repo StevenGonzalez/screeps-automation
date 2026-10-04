@@ -190,9 +190,8 @@ describe("dragon", () => {
       visual: { circle: record("circle"), poly: record("poly"), line: record("line") },
     } as unknown as Room;
     drawDragon(room, start + 20);
-    // Two wings and a body, a tail, a shadow and an eye.
-    expect(drawn.filter((d) => d.kind === "poly")).toHaveLength(3);
-    expect(drawn.filter((d) => d.kind === "line")).toHaveLength(1);
+    // Two wings and a body, the same again for the shadow, and two eyes.
+    expect(drawn.filter((d) => d.kind === "poly")).toHaveLength(6);
     expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(2);
     drawn = [];
     drawDragon(room, start - 1);
