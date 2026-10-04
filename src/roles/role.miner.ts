@@ -42,7 +42,17 @@ export function runMiner(creep: Creep) {
         // room nothing once the creep is already beside the source. This matters
         // while a replacement overlaps the miner it relieves and cannot reach
         // the container tile at all.
-        if (creep.pos.isNearTo(source)) creep.harvest(source);
+        if (creep.pos.isNearTo(source)) {
+          // A second miner at a post digs from beside the container. Its gold
+          // would spill to rot on the ground once its packs are full, so it
+          // hands them in to the container first.
+          const dug = creep.getActiveBodyparts(WORK) * HARVEST_POWER;
+          const full = creep.store[RESOURCE_ENERGY] > 0 && creep.store.getFreeCapacity() < dug;
+          if (full && creep.pos.isNearTo(container)) {
+            creep.transfer(container, RESOURCE_ENERGY);
+          }
+          creep.harvest(source);
+        }
         return;
       }
 
