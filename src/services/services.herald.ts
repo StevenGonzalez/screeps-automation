@@ -4,7 +4,7 @@
 // is worth remembering also goes into the Royal Chronicle.
 
 import { castleName, chronicle, tally } from "./services.chronicle";
-import { isSourceKeeperRoom } from "./services.combat";
+import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 
@@ -42,6 +42,7 @@ export function settleFlight(creep: Creep): void {
 // Run once a tick, before creeps act.
 export function heraldRooms(): void {
   freshCries();
+  heraldFallen();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (room.controller?.my) heraldRise(room);
@@ -62,10 +63,55 @@ function heraldRise(room: Room): void {
 // A fight's kills in one room gather into one line while it lasts.
 const BATTLE_WINDOW = 300;
 
+function whereIn(roomName: string): string {
+  return Game.rooms[roomName]?.controller?.my
+    ? `before the walls of ${castleName(roomName)}`
+    : `in the wilds of ${roomName}`;
+}
+
 function chronicleKill(room: Room): void {
   const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
-  const where = room.controller?.my ? `before the walls of ${castleName(room.name)}` : `in the wilds of ${room.name}`;
-  tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${where}`, BATTLE_WINDOW);
+  tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}`, BATTLE_WINDOW);
+}
+
+// Each of our creeps as it stood at the start of last tick.
+interface Muster {
+  room: string;
+  hurt: boolean;
+  ttl: number;
+}
+let muster = new Map<string, Muster>();
+
+// Who killed one of ours, judged from what is still in the room.
+function foeIn(roomName: string): string | undefined {
+  const hostiles = Game.rooms[roomName]?.find(FIND_HOSTILE_CREEPS) ?? [];
+  const player = hostiles.find(isPlayerCreep);
+  if (player) return `the men of ${player.owner.username}`;
+  if (hostiles.length === 0) return undefined;
+  return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
+}
+
+// One of ours gone before its time, last seen wounded, fell in a fight. A
+// creep that dies of age or is recycled at full health is not mourned.
+function heraldFallen(): void {
+  const next = new Map<string, Muster>();
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.spawning) continue;
+    next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: c.ticksToLive ?? 0 });
+  }
+  for (const [name, last] of muster) {
+    if (next.has(name) || !last.hurt || last.ttl <= 1) continue;
+    const foe = foeIn(last.room);
+    const by = foe ? ` to ${foe}` : "";
+    tally(
+      `fallen:${last.room}`,
+      1,
+      (n) => `${n === 1 ? name : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`,
+      BATTLE_WINDOW
+    );
+  }
+  muster = next;
 }
 
 // A hostile creep died last tick to something of ours. A creep that struck it

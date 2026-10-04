@@ -3,7 +3,7 @@ import { TOWN, COTTAGE_FAMILIES } from "../config/config.town";
 import { cottageLayout, parseTile, townBarrierTiles, townFootprint } from "../services/services.town";
 import { CASTLE_STAMP, MERCHANT_RING_EXTENSION_OFFSETS } from "./planner.stamp";
 import { readBlueprint } from "./planner.blueprint";
-import { castleName } from "../services/services.chronicle";
+import { castleName, chronicle } from "../services/services.chronicle";
 
 // The town quarter. Laid out once the perimeter mostly stands:
 //
@@ -523,6 +523,9 @@ export function planTown(room: Room): void {
         console.log(
           `[Town] ${room.name}: the House of ${cottage.name} is raised at ${cottage.x},${cottage.y}` +
             (cottage.outside ? " (beyond the walls; the ring will be redrawn)" : "")
+        );
+        chronicle(
+          `The House of ${cottage.name} settles ${cottage.outside ? "beyond" : "within"} the walls of ${castleName(room.name)}.`
         );
         if (cottage.outside && room.memory.plannedStructuresMeta) {
           // A missing timestamp makes the next structure pass re-plan the ring,

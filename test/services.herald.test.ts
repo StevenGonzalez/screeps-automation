@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const g = globalThis as Record<string, unknown>;
 g.EVENT_ATTACK = 1;
 g.EVENT_OBJECT_DESTROYED = 2;
+g.FIND_HOSTILE_CREEPS = 103;
 class FakeCreep {
   my = true;
   memory: CreepMemory = { role: "x" } as CreepMemory;
@@ -102,6 +103,34 @@ describe("herald", () => {
     const log = (g.Memory as Memory).chronicle!;
     expect(log).toHaveLength(1);
     expect(log[0].text).toBe("2 raiders fell in the wilds of W1N1");
+  });
+
+  it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
+    const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
+    const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900 };
+    tick++;
+    g.Game = { time: tick, rooms: {}, creeps: { "Merchant Leofric": merchant } };
+    heraldRooms();
+    tick++;
+    g.Game = { time: tick, rooms: { W2N1: wilds }, creeps: {} };
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Merchant Leofric fell to raiders in the wilds of W2N1.",
+    ]);
+  });
+
+  it("does not mourn a creep that died of age or unhurt", () => {
+    const old = { pos: { roomName: ROOM }, hits: 300, hitsMax: 1000, ticksToLive: 1 };
+    const recycled = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 600 };
+    tick++;
+    g.Game = { time: tick, rooms: {}, creeps: { "Porter Ada": old, "Reeve Bran": recycled } };
+    heraldRooms();
+    tick++;
+    g.Game = { time: tick, rooms: {}, creeps: {} };
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle).toBeUndefined();
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {

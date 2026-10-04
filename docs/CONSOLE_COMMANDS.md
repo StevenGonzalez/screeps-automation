@@ -127,7 +127,7 @@ High-RCL opportunistic income. All auto-managed once launched; these are status 
 | `Game.arca.traffic(false)` | Disable the traffic manager (falls back to vanilla movement) | Kill-switch if creep movement ever misbehaves |
 | `Game.arca.town()` | Town clock, cottages, watch posts and townsfolk of every room (pass `'W1N1'` for one) | Checking on the town quarter |
 | `Game.arca.ledger()` | The Royal Exchequer's books: gold a tick each castle earns (mines, vendors) and spends (recruits, enchanting, masonry, smithy, towers) | Finding where the gold goes |
-| `Game.arca.chronicle()` | The Royal Chronicle: levels gained, keeps founded or lost, raids on the vendors and the rivals who hold their wilds, raiders slain, nukes, pixels (pass a number for more or fewer entries) | Catching up on what happened while you were away |
+| `Game.arca.chronicle()` | The Royal Chronicle: levels gained, keeps founded or lost, raids on the vendors and the rivals who hold their wilds, raiders slain, our own who fell in a fight, houses settled in the town, nukes, pixels (pass a number for more or fewer entries) | Catching up on what happened while you were away |
 | `Game.arca.name('W1N1', 'Ravenhold')` | Names a castle; leave the name out to go back to the one drawn from its room | Giving your castle a name of your own |
 | `Game.arca.razeTown('W1N1')` | Tears the town's walls and ramparts down so it is planned afresh | After a layout change leaves the town in the wrong place |
 | `Game.arca.blueprint('W1N1')` | What each age (RCL) of the castle brings and how much stands; draws the plan, coloured by age, for 50 ticks | Checking what the next RCL will build |

@@ -81,6 +81,7 @@ function makeRoom(opts: { rcl: number; storage: number; ramparts?: boolean; barr
 
 beforeEach(() => {
   g.Game = { time: 5000 };
+  g.Memory = {};
   g.console = console;
 });
 
@@ -189,6 +190,9 @@ describe("planTown", () => {
     const ramparts = room.memory.plannedStructures!.town_ramparts!;
     expect(walls).toHaveLength(16);
     expect(ramparts).toEqual(expect.arrayContaining([c.door, ...layout.beds, ...town.posts]));
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      expect.stringMatching(/^The House of Aldermere settles within the walls of /),
+    ]);
   });
 
   it("holds off the cottage while storage is short of the gate", () => {
