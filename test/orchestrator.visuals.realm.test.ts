@@ -24,9 +24,10 @@ import {
   drawRealmMap,
   drawSeason,
   drawSky,
+  drawMist,
   drawTown,
 } from "../src/orchestrators/orchestrator.visuals";
-import { townDragon } from "../src/services/services.town";
+import { townDragon, townStorm } from "../src/services/services.town";
 import { armsColours } from "../src/services/services.heraldry";
 import {
   ROLE_FILLER,
@@ -556,5 +557,39 @@ describe("seasons", () => {
       expect(Math.hypot(x - 25, y - 25)).toBeLessThan(4);
     }
     expect(drawn.some((d) => d.kind === "text" && d.args[0] === "Midsummer Fair")).toBe(true);
+  });
+});
+
+describe("mist", () => {
+  // Marsh in the west half of the room only, unless told otherwise.
+  // Marsh tiles are worked out once a day per room, so each case is its own room.
+  const mist = (time: number, marsh: (x: number) => boolean = (x) => x < 25, name = "W1N2") => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const room = {
+      name,
+      visual: { circle: record("circle") },
+      getTerrain: () => ({ get: (x: number) => (marsh(x) ? 2 : 0) }),
+    } as unknown as Room;
+    drawn = [];
+    drawMist(room, time);
+    return drawn.map((d) => ({ x: d.args[0] as number, opacity: (d.args[2] as { opacity: number }).opacity }));
+  };
+  let calm = 1;
+  while (townStorm(calm * 1000)) calm++;
+  let stormy = 1;
+  while (!townStorm(stormy * 1000)) stormy++;
+
+  it("lies over the marshes at dawn, thickening and then burning off", () => {
+    const morning = mist(calm * 1000 + 50);
+    expect(morning.length).toBeGreaterThan(0);
+    for (const p of morning) expect(p.x).toBeLessThan(30);
+    expect(mist(calm * 1000)[0].opacity).toBeLessThan(morning[0].opacity);
+    expect(mist(calm * 1000 + 95)[0].opacity).toBeLessThan(morning[0].opacity);
+  });
+
+  it("is gone by day, under a storm, and where there is no marsh", () => {
+    expect(mist(calm * 1000 + 300)).toEqual([]);
+    expect(mist(stormy * 1000 + 50)).toEqual([]);
+    expect(mist(calm * 1000 + 50, () => false, "W2N2")).toEqual([]);
   });
 });

@@ -2,9 +2,11 @@ import { ROLE_MINSTREL, ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from ".
 import { currentVerse } from "../roles/role.minstrel";
 import { nightWatchman } from "../roles/role.townsfolk";
 import {
+  DAY_START,
   NIGHT_START,
   cottageLayout,
   isNightfall,
+  mistTiles,
   parseTile,
   spotHolder,
   townAurora,
@@ -13,6 +15,7 @@ import {
   townFallingStar,
   townFeast,
   townHowl,
+  townMist,
   townMoon,
   townSeason,
   townStorm,
@@ -508,7 +511,8 @@ function drawStorm(v: RoomVisual, time: number): void {
 }
 
 // The sky every castle shares, town or none: the dark of night, the moon and
-// the northern lights, falling stars, the wolves, and after dark a brazier
+// the northern lights, falling stars, the wolves, the wisps and the morning
+// mist over the marshes, and after dark a brazier
 // burning atop each watchtower and the barracks' hearth glowing through its
 // doors.
 export function drawSky(room: Room): void {
@@ -524,6 +528,7 @@ export function drawSky(room: Room): void {
   drawFallingStar(v, Game.time);
   drawHowl(v, Game.time);
   drawWisps(room, Game.time);
+  drawMist(room, Game.time);
 
   if (!lit) return;
   for (const s of room.find(FIND_MY_STRUCTURES)) {
@@ -720,30 +725,65 @@ function drawHowl(v: RoomVisual, time: number): void {
   v.text("Awoo-oo!", howl.x, howl.y - 0.7 - howl.t * 0.15, { ...HOWL_STYLE, opacity: 0.4 + 0.6 * fade });
 }
 
-// Tonight's wisp tiles per room, worked out once a night.
-let wispNight = -1;
-let wispsByRoom: Record<string, Array<[number, number]>> = {};
+// Each room's marsh tiles for the wisps and the mist, worked out once a day.
+let marshDay = -1;
+let marshByRoom: Record<string, Array<[number, number]>> = {};
+
+function marshFor(
+  room: Room,
+  time: number,
+  kind: "wisps" | "mist",
+  pick: (time: number, isMarsh: (x: number, y: number) => boolean) => Array<[number, number]>
+): Array<[number, number]> {
+  const day = Math.floor(time / TOWN_DAY_LENGTH);
+  if (marshDay !== day) {
+    marshDay = day;
+    marshByRoom = {};
+  }
+  const key = `${kind}:${room.name}`;
+  let tiles = marshByRoom[key];
+  if (!tiles) {
+    const terrain = room.getTerrain();
+    tiles = marshByRoom[key] = pick(time, (x, y) => terrain.get(x, y) === TERRAIN_MASK_SWAMP);
+  }
+  return tiles;
+}
 
 // Will-o'-the-wisps over the marshes on a new-moon night: pale green lights,
 // each drifting about its own tile and flickering out of step with the rest.
 function drawWisps(room: Room, time: number): void {
   if (!townWisps(time)) return;
-  const night = Math.floor(time / TOWN_DAY_LENGTH);
-  if (wispNight !== night) {
-    wispNight = night;
-    wispsByRoom = {};
-  }
-  let tiles = wispsByRoom[room.name];
-  if (!tiles) {
-    const terrain = room.getTerrain();
-    tiles = wispsByRoom[room.name] = wispTiles(time, (x, y) => terrain.get(x, y) === TERRAIN_MASK_SWAMP);
-  }
-  tiles.forEach(([x, y], i) => {
+  marshFor(room, time, "wisps", wispTiles).forEach(([x, y], i) => {
     const wx = x + 0.7 * Math.sin(time * 0.09 + i * 1.7);
     const wy = y + 0.5 * Math.cos(time * 0.07 + i * 2.3);
     const flicker = 0.5 + 0.5 * Math.sin(time * 0.8 + i * 3.1);
     room.visual.circle(wx, wy, { radius: 0.5, fill: "#6fe8c8", opacity: 0.08 + 0.05 * flicker });
     room.visual.circle(wx, wy, { radius: 0.1 + 0.04 * flicker, fill: "#d8fff4", opacity: 0.5 + 0.4 * flicker });
+  });
+}
+
+// A bank of mist is a few pale puffs that drift slowly east.
+const MIST_PUFFS: Array<[number, number, number]> = [
+  [0, 0, 1.7],
+  [1.4, 0.3, 1.2],
+  [-1.3, 0.4, 1.1],
+];
+// Ticks over which the mist thickens at first light and burns off before day.
+const MIST_RISE = 20;
+const MIST_FADE = 40;
+
+// Mist over the marshes at dawn, but not under a storm: it thickens at first
+// light and burns off as the day comes. A room with no marsh has none.
+export function drawMist(room: Room, time = Game.time): void {
+  if (!townMist(time)) return;
+  const tiles = marshFor(room, time, "mist", mistTiles);
+  const t = time % TOWN_DAY_LENGTH;
+  const thick = Math.min(1, (t + 1) / MIST_RISE, (DAY_START - t) / MIST_FADE);
+  tiles.forEach(([x, y], i) => {
+    const mx = x + t * 0.03 + Math.sin(time * 0.05 + i * 2.1) * 0.4;
+    for (const [dx, dy, r] of MIST_PUFFS) {
+      room.visual.circle(mx + dx, y + dy, { radius: r, fill: "#d6dde3", opacity: 0.1 * thick });
+    }
   });
 }
 

@@ -8,6 +8,7 @@ import {
   TOWN_FEASTS,
   TOWN_HOWL_EVERY,
   TOWN_HOWL_TICKS,
+  TOWN_MIST_BANKS,
   TOWN_MOON_DAYS,
   TOWN_PHASES,
   TOWN_SEASONS,
@@ -117,6 +118,7 @@ export interface Howl {
 }
 
 export const NIGHT_START = TOWN_PHASES.find((p) => p.name === "night")!.start;
+export const DAY_START = TOWN_PHASES.find((p) => p.name === "day")!.start;
 
 /**
  * The wolves' howl at `time`, if one is sounding: on a full-moon night they
@@ -146,10 +148,30 @@ export function townWisps(time: number): boolean {
  * where the draw falls has fewer, or none.
  */
 export function wispTiles(time: number, isMarsh: (x: number, y: number) => boolean): Array<[number, number]> {
+  return marshTiles(time, isMarsh, TOWN_WISPS, 0x5bd1e995);
+}
+
+/** Whether the morning mist is out: every dawn but a stormy one. */
+export function townMist(time: number): boolean {
+  return townClock(time).phase === "dawn" && !townStorm(time);
+}
+
+/** Where this morning's mist lies in a room: up to TOWN_MIST_BANKS marsh tiles, new each day. */
+export function mistTiles(time: number, isMarsh: (x: number, y: number) => boolean): Array<[number, number]> {
+  return marshTiles(time, isMarsh, TOWN_MIST_BANKS, 0x165667b1);
+}
+
+// Up to `count` marsh tiles drawn from the day's hash, away from the edges.
+function marshTiles(
+  time: number,
+  isMarsh: (x: number, y: number) => boolean,
+  count: number,
+  salt: number
+): Array<[number, number]> {
   const day = Math.floor(time / TOWN_DAY_LENGTH);
   const tiles: Array<[number, number]> = [];
-  for (let i = 0; i < 64 && tiles.length < TOWN_WISPS; i++) {
-    const h = dayHash(day * 64 + i, 0x5bd1e995);
+  for (let i = 0; i < 64 && tiles.length < count; i++) {
+    const h = dayHash(day * 64 + i, salt);
     const x = 3 + (h % 44);
     const y = 3 + ((h >>> 8) % 44);
     if (isMarsh(x, y)) tiles.push([x, y]);
