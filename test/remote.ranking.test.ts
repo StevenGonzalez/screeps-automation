@@ -296,6 +296,25 @@ describe("merchants on a paved road", () => {
   });
 });
 
+describe("merchants for a young keep", () => {
+  // Two sources 92 and 97 steps out need 76 CARRY. An 800-gold home plans
+  // merchants of 720 gold, 7 CARRY each, so the remote takes eleven of them.
+  function youngKeep(merchants: number): Room {
+    const posted = Array.from({ length: merchants }, () => creep(ROLE_REMOTE_HAULER, 16, { targetRoom: "W4N5" }));
+    const room = home({ remotes: [remote("W4N5", [92, 97])], rcl: 3, creeps: posted });
+    Object.assign(room, { energyAvailable: 800, energyCapacityAvailable: 800 });
+    return room;
+  }
+
+  it("raises as many small merchants as a far remote needs", () => {
+    expect(shouldSpawnRemoteHauler(youngKeep(6))).toBe(true);
+    clock += 1;
+    expect(shouldSpawnRemoteHauler(youngKeep(10))).toBe(true);
+    clock += 1;
+    expect(shouldSpawnRemoteHauler(youngKeep(11))).toBe(false);
+  });
+});
+
 describe("stray merchants", () => {
   it("sends a merchant whose remote has become a keep to a remote still worked", () => {
     const keep = remote("W5N4", [30]);

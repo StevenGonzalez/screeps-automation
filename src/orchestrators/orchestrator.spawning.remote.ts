@@ -439,7 +439,10 @@ function estimateRemoteDistance(homeRoom: Room, remoteRoomName: string): number 
 }
 
 // A sanity bound per remote rather than a throughput limit: two sources two
-// rooms out need about this many full-size haulers.
+// rooms out need about this many full-size haulers. It bounds their CARRY, not
+// their heads. Grimford's 800-gold merchants hold a third of a full-size one,
+// and six of them carried home about half of what its peddlers dug two rooms
+// out, while the rest overflowed the containers and rotted.
 const MAX_REMOTE_HAULERS_PER_ROOM = 6;
 
 // Remote haulers carry this much more than their sources' output strictly
@@ -471,6 +474,8 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
     Math.max(1, buildRemoteHaulerBody(budget, roads, paved).filter((p) => p === CARRY).length);
   const carryOnFoot = carryOf(false);
   const carryPaved = carryOf(true);
+  const fullSizeCarry = (paved: boolean) =>
+    buildRemoteHaulerBody(Infinity, roads, paved).filter((p) => p === CARRY).length;
   const output = remoteSourceOutput(room);
 
   const plans: Record<string, RemoteHaulPlan> = {};
@@ -482,7 +487,7 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
       requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
     }
     const count = Math.min(
-      MAX_REMOTE_HAULERS_PER_ROOM,
+      Math.ceil((MAX_REMOTE_HAULERS_PER_ROOM * fullSizeCarry(paved)) / carryPerHauler),
       Math.max(1, Math.ceil(requiredCarry / carryPerHauler))
     );
     const carryEach = Math.min(
