@@ -12589,6 +12589,7 @@ const FEAST_CHATTER = ["feast!", "ale!", "fair day!"];
 const STORM_CHATTER = ["rain!", "soaked!", "thunder!"];
 const NIGHT_CHATTER = ["yawn...", "torches!", "so dark", "owls hoot"];
 const WEATHER_EVERY = 4;
+const FIRST_WORDS = ["reporting!", "ready!", "first day!", "hail all!", "I live!"];
 const ELDER_TICKS = 150;
 const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
 const SAY_PERIOD = 30;
@@ -12603,7 +12604,7 @@ function turnReplies() {
     replyTick = Game.time;
 }
 function chatterLine(creep) {
-    var _a, _b;
+    var _a, _b, _c;
     turnReplies();
     const reply = repliesDue[creep.name];
     if (reply)
@@ -12611,6 +12612,8 @@ function chatterLine(creep) {
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
+    if (((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : 0) >= CREEP_LIFE_TIME - 1)
+        return FIRST_WORDS[hash % FIRST_WORDS.length];
     if ((Game.time + hash) % SAY_PERIOD !== 0)
         return undefined;
     const eventNo = (Game.time + hash) / SAY_PERIOD;
@@ -12631,8 +12634,8 @@ function chatterLine(creep) {
     const hail = pick % WEATHER_EVERY === 1 ? greeting(creep, pick) : undefined;
     if (hail)
         return hail;
-    const elder = ((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : Infinity) <= ELDER_TICKS;
-    const lines = elder ? ELDER_CHATTER : ((_b = ROLE_CHATTER[creep.memory.role]) !== null && _b !== void 0 ? _b : GENERAL_CHATTER);
+    const elder = ((_b = creep.ticksToLive) !== null && _b !== void 0 ? _b : Infinity) <= ELDER_TICKS;
+    const lines = elder ? ELDER_CHATTER : ((_c = ROLE_CHATTER[creep.memory.role]) !== null && _c !== void 0 ? _c : GENERAL_CHATTER);
     return lines[pick % lines.length];
 }
 function greeting(creep, pick) {
