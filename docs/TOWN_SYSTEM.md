@@ -164,7 +164,12 @@ A town day lasts 1000 ticks:
 | 600-699 | Dusk |
 | 700-999 | Night |
 
-The room HUD shows the part of the day and the hour: `Night, 19:00  8 townsfolk`.
+Seven days make a season, and the year turns through spring, summer, autumn
+and winter, the same in every castle. The Royal Chronicle notes each new
+season.
+
+The room HUD shows the part of the day, the hour and the season:
+`Night, 19:00 in winter  8 townsfolk`.
 
 ---
 
@@ -176,7 +181,10 @@ When room visuals are on, the town draws itself:
 - each cottage gets a roof and a "House of ..." sign, and a lamp is lit in
   every occupied bed;
 - a flag at each watch post, turned red when someone stands there;
-- rippling water in the fountain and a "... Square" sign.
+- rippling water in the fountain and a "... Square" sign;
+- the season: a faint green tint and drifting petals in spring, fireflies
+  round the fountain on a summer night, an amber tint and falling leaves in
+  autumn, and a pale tint and falling snow in winter.
 
 ---
 

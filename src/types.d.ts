@@ -329,6 +329,8 @@ declare global {
     heraldGcl?: number;
     // Last tick whose market trades the herald has chronicled (services.herald).
     heraldTradeAt?: number;
+    // Season the herald last proclaimed (services.herald).
+    heraldSeason?: string;
     initialized?: boolean;
     uuid: number;
     log: any;

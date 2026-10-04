@@ -241,6 +241,21 @@ describe("herald", () => {
     ]);
   });
 
+  it("tells of each new season once, not on the first look", () => {
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    at(6_998);
+    at(6_999);
+    at(7_000);
+    at(7_001);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Summer comes to the realm. The days run long on the vendors' roads.",
+    ]);
+  });
+
   it("has a fleeing vendor cry out once, and again only after it settles", () => {
     const peddler = new FakeCreep("Peddler Osric", { name: "W1N2" });
     setup(roomWith([]), {});

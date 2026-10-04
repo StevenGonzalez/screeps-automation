@@ -1,4 +1,11 @@
-import { TOWN_DAY_LENGTH, TOWN_PHASES, TownPhase } from "../config/config.town";
+import {
+  TOWN_DAY_LENGTH,
+  TOWN_DAYS_PER_SEASON,
+  TOWN_PHASES,
+  TOWN_SEASONS,
+  TownPhase,
+  TownSeason,
+} from "../config/config.town";
 
 export interface TownClock {
   phase: TownPhase;
@@ -14,6 +21,11 @@ export function townClock(time: number): TownClock {
     phase,
     hour: Math.floor((t * 24) / TOWN_DAY_LENGTH),
   };
+}
+
+export function townSeason(time: number): TownSeason {
+  const day = Math.floor(time / TOWN_DAY_LENGTH);
+  return TOWN_SEASONS[Math.floor(day / TOWN_DAYS_PER_SEASON) % TOWN_SEASONS.length];
 }
 
 export function isNightfall(phase: TownPhase): boolean {

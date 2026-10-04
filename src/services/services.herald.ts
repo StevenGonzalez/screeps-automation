@@ -5,6 +5,8 @@
 
 import { castleName, chronicle, tally } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
+import { townSeason } from "./services.town";
+import { TownSeason } from "../config/config.town";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 
@@ -45,6 +47,7 @@ export function heraldRooms(): void {
   heraldFallen();
   heraldRenown();
   heraldTrade();
+  heraldSeason();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (room.controller?.my) {
@@ -63,6 +66,21 @@ function heraldRenown(): void {
   Memory.heraldGcl = level;
   if (known === undefined || level <= known) return;
   chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
+}
+
+const SEASON_TIDINGS: Record<TownSeason, string> = {
+  spring: "Spring comes to the realm. The snow melts from the castle walls.",
+  summer: "Summer comes to the realm. The days run long on the vendors' roads.",
+  autumn: "Autumn comes to the realm. Leaves blow across the wilds.",
+  winter: "Winter comes to the realm. Snow settles on the battlements.",
+};
+
+function heraldSeason(): void {
+  const season = townSeason(Game.time);
+  const known = Memory.heraldSeason;
+  Memory.heraldSeason = season;
+  if (known === undefined || known === season) return;
+  chronicle(SEASON_TIDINGS[season]);
 }
 
 // Trade with other players, read from the market's own records every few

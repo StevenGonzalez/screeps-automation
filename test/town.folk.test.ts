@@ -25,7 +25,7 @@ vi.mock("../src/services/services.combat", () => ({
 }));
 
 import { runTownsfolk, lookoutTargets } from "../src/roles/role.townsfolk";
-import { claimSpot, townClock } from "../src/services/services.town";
+import { claimSpot, townClock, townSeason } from "../src/services/services.town";
 import { nextTownJob } from "../src/orchestrators/orchestrator.spawning.town";
 import { ROLE_TOWNSFOLK } from "../src/config/config.roles";
 import { TOWN, TOWN_DAY_LENGTH } from "../src/config/config.town";
@@ -110,6 +110,17 @@ describe("townClock", () => {
     expect(townClock(1250).phase).toBe("day");
     expect(townClock(2650).phase).toBe("dusk");
     expect(townClock(3999)).toEqual({ phase: "night", hour: 23 });
+  });
+});
+
+describe("townSeason", () => {
+  it("turns spring, summer, autumn and winter every seven days, then the year again", () => {
+    expect(townSeason(0)).toBe("spring");
+    expect(townSeason(6_999)).toBe("spring");
+    expect(townSeason(7_000)).toBe("summer");
+    expect(townSeason(14_000)).toBe("autumn");
+    expect(townSeason(27_999)).toBe("winter");
+    expect(townSeason(28_000)).toBe("spring");
   });
 });
 

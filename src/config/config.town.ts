@@ -54,6 +54,11 @@ export const TOWN_PHASES: ReadonlyArray<{ name: TownPhase; start: number }> = [
 
 export type TownPhase = "dawn" | "day" | "dusk" | "night";
 
+// Seven days to a season and four seasons to the year, the same for every castle.
+export const TOWN_DAYS_PER_SEASON = 7;
+export type TownSeason = "spring" | "summer" | "autumn" | "winter";
+export const TOWN_SEASONS: ReadonlyArray<TownSeason> = ["spring", "summer", "autumn", "winter"];
+
 // Families of the town. A cottage takes the name at its index.
 export const COTTAGE_FAMILIES = [
   "Aldermere",

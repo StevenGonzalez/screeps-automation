@@ -5,7 +5,7 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-import { describeCensus, drawGraves, drawRealmMap } from "../src/orchestrators/orchestrator.visuals";
+import { describeCensus, drawGraves, drawRealmMap, drawSeason } from "../src/orchestrators/orchestrator.visuals";
 import {
   ROLE_FILLER,
   ROLE_HAULER,
@@ -146,5 +146,37 @@ describe("graves", () => {
 
     expect(drawn.filter((d) => d.kind === "text").map((d) => d.args[0])).toEqual(["Merchant Leofric"]);
     expect(drawn.filter((d) => d.kind === "line")).toHaveLength(2);
+  });
+});
+
+describe("seasons", () => {
+  function townRoom(): Room {
+    const visual = {
+      text: (...args: unknown[]) => drawn.push({ kind: "text", args }),
+      line: (...args: unknown[]) => drawn.push({ kind: "line", args }),
+      rect: (...args: unknown[]) => drawn.push({ kind: "rect", args }),
+      circle: (...args: unknown[]) => drawn.push({ kind: "circle", args }),
+    };
+    return { name: HOME, visual, memory: { town: { fountain: "25,25" } } } as unknown as Room;
+  }
+
+  it("lets snow fall over the castle in winter, inside the room", () => {
+    drawSeason(townRoom(), 21_500);
+    const flakes = drawn.filter((d) => d.kind === "circle");
+    expect(flakes.length).toBeGreaterThan(10);
+    for (const f of flakes) {
+      const [x, y] = f.args as number[];
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThan(50);
+      expect(y).toBeGreaterThanOrEqual(-1);
+      expect(y).toBeLessThan(51);
+    }
+  });
+
+  it("brings out fireflies by the fountain on a summer night, and nothing on a summer day", () => {
+    drawSeason(townRoom(), 7_300);
+    expect(drawn).toHaveLength(0);
+    drawSeason(townRoom(), 7_800);
+    expect(drawn.filter((d) => d.kind === "circle").length).toBeGreaterThan(0);
   });
 });

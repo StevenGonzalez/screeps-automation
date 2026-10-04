@@ -1,5 +1,6 @@
 import { ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
-import { cottageLayout, parseTile, spotHolder, townClock } from "../services/services.town";
+import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townSeason } from "../services/services.town";
+import { TownSeason } from "../config/config.town";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
@@ -19,6 +20,7 @@ export function loop() {
     if (!room.controller?.my) continue;
     drawRoomHUD(room);
     drawChronicle(room);
+    drawSeason(room);
     drawTown(room);
     drawBlueprint(room);
   }
@@ -221,7 +223,8 @@ function drawRoomHUD(room: Room) {
     const folk = counts[ROLE_TOWNSFOLK] ?? 0;
     const hh = String(clock.hour).padStart(2, "0");
     const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
-    v.text(`${icon} ${phase}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+    const season = townSeason(Game.time);
+    v.text(`${icon} ${phase}, ${hh}:00 in ${season}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
     y += lineH;
   }
 
@@ -269,6 +272,64 @@ const PHASE_ICON: Record<string, string> = { dawn: "🌅", day: "☀", dusk: "�
 
 // How dark the town gets through the day.
 const NIGHT_SHADE: Record<string, number> = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
+
+// The season over the castle: a faint tint and something drifting down through
+// the air, or fireflies round the fountain on a summer night. Every mote's place
+// is worked out from the tick alone, so the weather moves without memory.
+const SEASON_TINT: Partial<Record<TownSeason, string>> = {
+  spring: "#88cc77",
+  autumn: "#cc7a33",
+  winter: "#aaccff",
+};
+
+interface Drift {
+  count: number;
+  colours: string[];
+  radius: number;
+  // Tiles a mote falls each tick.
+  fall: number;
+}
+
+const SEASON_DRIFT: Partial<Record<TownSeason, Drift>> = {
+  spring: { count: 10, colours: ["#ffb7c5", "#ffd9e0"], radius: 0.1, fall: 0.12 },
+  autumn: { count: 14, colours: ["#d9822b", "#a0522d", "#c9a227"], radius: 0.13, fall: 0.18 },
+  winter: { count: 30, colours: ["#ffffff"], radius: 0.08, fall: 0.25 },
+};
+
+const FIREFLIES = 8;
+
+export function drawSeason(room: Room, time = Game.time): void {
+  const v = room.visual;
+  const season = townSeason(time);
+  const tint = SEASON_TINT[season];
+  if (tint) v.rect(-0.5, -0.5, 50, 50, { fill: tint, opacity: 0.05 });
+
+  const drift = SEASON_DRIFT[season];
+  if (drift) {
+    for (let i = 0; i < drift.count; i++) {
+      // A low-discrepancy spread keeps the motes from bunching into columns.
+      const sway = Math.sin((time + i * 13) / 8) * 0.8;
+      const x = ((((i * 0.7548776662) % 1) * 50 + sway) % 50 + 50) % 50;
+      const y = ((time * drift.fall + ((i * 0.5698402910) % 1) * 52) % 52) - 1;
+      v.circle(x, y, { radius: drift.radius, fill: drift.colours[i % drift.colours.length], opacity: 0.7 });
+    }
+    return;
+  }
+
+  const fountain = room.memory.town?.fountain;
+  if (!fountain || !isNightfall(townClock(time).phase)) return;
+  const { x, y } = parseTile(fountain);
+  for (let i = 0; i < FIREFLIES; i++) {
+    const angle = (i * Math.PI * 2) / FIREFLIES + time / 40;
+    const reach = 2 + (i % 3) + Math.sin((time + i * 7) / 11) * 0.6;
+    const glow = Math.max(0, Math.sin((time + i * 5) / 4));
+    v.circle(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach, {
+      radius: 0.1,
+      fill: "#d4ff66",
+      opacity: 0.2 + 0.7 * glow,
+    });
+  }
+}
 
 function drawTown(room: Room): void {
   const town = room.memory.town;
