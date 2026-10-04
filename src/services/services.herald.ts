@@ -3,7 +3,7 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { castleName, chronicle, tally, wildsName } from "./services.chronicle";
+import { castleName, chronicle, lordName, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { townSeason } from "./services.town";
 import { TownSeason } from "../config/config.town";
@@ -118,7 +118,7 @@ function chronicleTrade(t: Transaction, verb: "sold" | "bought", ours: string, t
   // A send between our own castles is no trade.
   if (them !== undefined && them === us) return;
   const ware = WARES[t.resourceType] ?? t.resourceType;
-  const partner = them ? `the merchants of ${them}` : "the free markets";
+  const partner = them ? `the merchants of ${lordName(them)}` : "the free markets";
   const dir = verb === "sold" ? "to" : "from";
   tally(
     `trade:${verb}:${ours}:${them ?? ""}:${t.resourceType}`,
@@ -138,8 +138,8 @@ function heraldVisitors(room: Room): void {
     const who = c.owner.username;
     const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
     const text = armed
-      ? `A war party of ${who} came in arms to the walls of ${castleName(room.name)}.`
-      : `Spies of ${who} crept about ${castleName(room.name)}.`;
+      ? `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`
+      : `Spies of ${lordName(who)} crept about ${castleName(room.name)}.`;
     tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
   }
 }
@@ -208,7 +208,7 @@ let muster = new Map<string, Muster>();
 function foeIn(roomName: string): string | undefined {
   const hostiles = Game.rooms[roomName]?.find(FIND_HOSTILE_CREEPS) ?? [];
   const player = hostiles.find(isPlayerCreep);
-  if (player) return `the men of ${player.owner.username}`;
+  if (player) return `the men of ${lordName(player.owner.username)}`;
   if (hostiles.length === 0) return undefined;
   return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
 }

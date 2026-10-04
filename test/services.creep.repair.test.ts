@@ -183,7 +183,7 @@ describe("remote player strikes", () => {
     markRemotePlayerHostile(e, "Rival");
 
     const log = (g.Memory as Memory).chronicle ?? [];
-    expect(log.map((l) => l.text)).toEqual(["The men of Rival hold the Shadow March. The vendors keep away."]);
+    expect(log.map((l) => l.text)).toEqual(["The men of Rival the Fair hold the Shadow March. The vendors keep away."]);
   });
 
   it("remembers who holds the remote for the realm map until it is clear again", () => {

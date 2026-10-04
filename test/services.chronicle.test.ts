@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 
-import { castleName, chronicle, chronicleDate, recentChronicle, tally, wildsName } from "../src/services/services.chronicle";
+import { castleName, chronicle, chronicleDate, lordName, recentChronicle, tally, wildsName } from "../src/services/services.chronicle";
 
 describe("chronicle", () => {
   beforeEach(() => {
@@ -40,6 +40,11 @@ describe("chronicle", () => {
     expect(castleName("W48S7")).not.toBe(castleName("W47S8"));
     (g.Memory as Memory).rooms = { W48S8: { townName: "Ashford" } as RoomMemory };
     expect(castleName("W48S8")).toBe("Ashford");
+  });
+
+  it("gives each other player the same epithet every time", () => {
+    expect(lordName("Rival")).toBe("Rival the Fair");
+    expect(lordName("_oleksii")).toBe(lordName("_oleksii"));
   });
 
   it("names wild country by its room, and the next room over differently", () => {

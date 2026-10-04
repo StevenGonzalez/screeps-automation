@@ -1,6 +1,6 @@
 import { pickSignature } from "../config/signatures";
 import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
-import { chronicle, tally, wildsName } from "./services.chronicle";
+import { chronicle, lordName, tally, wildsName } from "./services.chronicle";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -220,7 +220,7 @@ export function markRemotePlayerHostile(entry: RemoteRoomData, who?: string): vo
     entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
   if (!avoided) {
     entry.hostileStrikes = (entry.hostileStrikes ?? 0) + 1;
-    const text = `${who ? `The men of ${who}` : "Strangers"} hold the ${wildsName(entry.roomName)}. The vendors keep away.`;
+    const text = `${who ? `The men of ${lordName(who)}` : "Strangers"} hold the ${wildsName(entry.roomName)}. The vendors keep away.`;
     tally(`rival:${entry.roomName}`, 1, () => text, RIVAL_CHRONICLE_WINDOW);
   }
   const window = Math.min(

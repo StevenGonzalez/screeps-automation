@@ -101,6 +101,16 @@ export function castleName(roomName: string): string {
   return head + NAME_TAILS[t];
 }
 
+const EPITHETS = [
+  "the Red", "the Grey", "the Bold", "the Pale", "the Grim", "the Silent", "the Wanderer", "the Elder",
+  "the Black", "Ironhand", "the Unbowed", "the Fair", "the Cunning", "the Restless", "the Far-Seeing", "the Stern",
+];
+
+/** Another player as the chronicle knows them, with an epithet drawn from the name: "Jumpp the Bold". */
+export function lordName(username: string): string {
+  return `${username} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
+}
+
 const WILD_HEADS = [
   "Ashen", "Bleak", "Gallows", "Weeping", "Black", "Wolf", "Raven", "Thorn",
   "Misty", "Grey", "Witch", "Bone", "Sorrow", "Cinder", "Hollow", "Crow",

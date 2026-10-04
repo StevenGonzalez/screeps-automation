@@ -166,8 +166,8 @@ describe("herald", () => {
 
     const lines = (g.Memory as Memory).chronicle?.map((l) => l.text) ?? [];
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatch(/^Spies of Rival crept about /);
-    expect(lines[1]).toMatch(/^A war party of Rival came in arms to the walls of /);
+    expect(lines[0]).toMatch(/^Spies of Rival the Fair crept about /);
+    expect(lines[1]).toMatch(/^A war party of Rival the Fair came in arms to the walls of /);
   });
 
   it("writes the realm's trades with other players, one line a partner and ware", () => {
@@ -206,12 +206,12 @@ describe("herald", () => {
     at(150);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Ravenhold sold 1294 oxygen to the merchants of Jumpp.",
+      "Ravenhold sold 1294 oxygen to the merchants of Jumpp the Elder.",
       "Ravenhold sold 7 gold to the free markets.",
-      "Ravenhold bought 4500 hydrogen from the merchants of Oleksii.",
+      "Ravenhold bought 4500 hydrogen from the merchants of Oleksii the Grey.",
     ]);
     at(175);
-    expect((g.Memory as Memory).chronicle?.[0].text).toBe("Ravenhold sold 1300 oxygen to the merchants of Jumpp.");
+    expect((g.Memory as Memory).chronicle?.[0].text).toBe("Ravenhold sold 1300 oxygen to the merchants of Jumpp the Elder.");
   });
 
   it("tells of the masons' new works once they stand, and not what stood at the first look", () => {
