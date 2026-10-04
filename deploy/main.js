@@ -8213,6 +8213,7 @@ function heraldRooms() {
     freshCries();
     heraldFallen();
     heraldRenown();
+    heraldTrade();
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
@@ -8229,6 +8230,45 @@ function heraldRenown() {
     if (known === undefined || level <= known)
         return;
     chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
+}
+const TRADE_CHECK_PERIOD = 25;
+const TRADE_WINDOW = 1500;
+const WARES = {
+    energy: "gold",
+    H: "hydrogen",
+    O: "oxygen",
+    U: "utrium",
+    L: "lemergium",
+    K: "keanium",
+    Z: "zynthium",
+    X: "catalyst",
+};
+function heraldTrade() {
+    var _a, _b, _c, _d;
+    if (Game.time % TRADE_CHECK_PERIOD !== 0)
+        return;
+    const seen = Memory.heraldTradeAt;
+    Memory.heraldTradeAt = Game.time - 1;
+    if (seen === undefined)
+        return;
+    const fresh = (t) => t.time > seen && t.time < Game.time;
+    for (const t of Game.market.outgoingTransactions) {
+        if (fresh(t))
+            chronicleTrade(t, "sold", t.from, (_a = t.recipient) === null || _a === void 0 ? void 0 : _a.username, (_b = t.sender) === null || _b === void 0 ? void 0 : _b.username);
+    }
+    for (const t of Game.market.incomingTransactions) {
+        if (fresh(t))
+            chronicleTrade(t, "bought", t.to, (_c = t.sender) === null || _c === void 0 ? void 0 : _c.username, (_d = t.recipient) === null || _d === void 0 ? void 0 : _d.username);
+    }
+}
+function chronicleTrade(t, verb, ours, them, us) {
+    var _a;
+    if (them !== undefined && them === us)
+        return;
+    const ware = (_a = WARES[t.resourceType]) !== null && _a !== void 0 ? _a : t.resourceType;
+    const partner = them ? `the merchants of ${them}` : "the free markets";
+    const dir = verb === "sold" ? "to" : "from";
+    tally(`trade:${verb}:${ours}:${them !== null && them !== void 0 ? them : ""}:${t.resourceType}`, t.amount, (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`, TRADE_WINDOW);
 }
 const VISIT_WINDOW = 1500;
 function heraldVisitors(room) {
