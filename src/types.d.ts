@@ -350,8 +350,12 @@ declare global {
   interface Memory {
     // GCL the herald last proclaimed (services.herald).
     heraldGcl?: number;
-    // Most gold any merchant has brought home in its life (services.herald).
+    // Most gold any merchant has brought home in its life, and who brought it
+    // (services.herald).
     richestHaul?: number;
+    richestHauler?: string;
+    // The creep that slew the most foes in its life (services.herald).
+    greatestSlayer?: { name: string; kills: number };
     // News the realm's creeps repeat in their chatter until it goes stale
     // (services.herald).
     gossip?: { line: string; until: number };

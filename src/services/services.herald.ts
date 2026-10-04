@@ -607,6 +607,7 @@ function heraldFallen(): void {
       if (slew) {
         spreadWord(mourn(name));
         chronicle(`${name}${slew} was laid to rest with honours.`);
+        heraldSlayer(name, last.kills);
       }
       heraldRetired(name, last.hauled);
       if (last.ttl <= 1) heraldFirstBornRest(name);
@@ -622,14 +623,24 @@ function heraldFallen(): void {
       (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`,
       BATTLE_WINDOW
     );
+    heraldSlayer(name, last.kills);
   }
   muster = next;
+}
+
+// A creep that dies having slain more foes than any before it. The minstrels
+// sing of it at every feast after (role.minstrel).
+function heraldSlayer(name: string, kills: number): void {
+  if (kills <= (Memory.greatestSlayer?.kills ?? 0)) return;
+  Memory.greatestSlayer = { name, kills };
+  chronicle(`The minstrels make a song of ${name}, who slew more foes than any before.`);
 }
 
 // A merchant who ends its days having brought home more gold than any before.
 function heraldRetired(name: string, hauled: number): void {
   if (hauled <= (Memory.richestHaul ?? 0)) return;
   Memory.richestHaul = hauled;
+  Memory.richestHauler = name;
   chronicle(`${name} retired from the road with ${formatK(hauled)} gold brought home, the most of any merchant yet.`);
 }
 

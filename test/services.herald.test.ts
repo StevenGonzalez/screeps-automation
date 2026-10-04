@@ -249,6 +249,7 @@ describe("herald", () => {
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "Dragon Knight Edric, who slew 3 foes, fell in the Shadow March.",
+      "The minstrels make a song of Dragon Knight Edric, who slew more foes than any before.",
     ]);
   });
 
@@ -263,8 +264,31 @@ describe("herald", () => {
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "Dragon Knight Edric, who slew a foe, was laid to rest with honours.",
+      "The minstrels make a song of Dragon Knight Edric, who slew more foes than any before.",
     ]);
     expect((g.Memory as Memory).annals?.fallen).toBeUndefined();
+  });
+
+  it("makes a song of each veteran who dies having slain more than any before", () => {
+    const life = (name: string, kills: number, hits: number) => {
+      const veteran = { pos: { roomName: ROOM }, hits, hitsMax: 1000, ticksToLive: hits < 1000 ? 900 : 1, memory: { kills } };
+      tick++;
+      g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { [name]: veteran } };
+      heraldRooms();
+      tick++;
+      g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    life("Dragon Knight Edric", 2, 1000);
+    life("Dragon Knight Bran", 1, 1000);
+    life("Dragon Knight Ada", 3, 300);
+
+    const songs = (g.Memory as Memory).chronicle?.map((l) => l.text).filter((t) => t.includes("song"));
+    expect(songs).toEqual([
+      "The minstrels make a song of Dragon Knight Edric, who slew more foes than any before.",
+      "The minstrels make a song of Dragon Knight Ada, who slew more foes than any before.",
+    ]);
+    expect((g.Memory as Memory).greatestSlayer).toEqual({ name: "Dragon Knight Ada", kills: 3 });
   });
 
   it("tells once of a vendors' road that is paved", () => {
@@ -309,6 +333,7 @@ describe("herald", () => {
       "Merchant Leofric retired from the road with 31.2K gold brought home, the most of any merchant yet.",
       "Merchant Ada retired from the road with 40.5K gold brought home, the most of any merchant yet.",
     ]);
+    expect((g.Memory as Memory).richestHauler).toBe("Merchant Ada");
   });
 
   it("adds each load a merchant brings home to its lifetime haul", () => {

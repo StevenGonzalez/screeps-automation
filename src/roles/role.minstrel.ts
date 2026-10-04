@@ -4,7 +4,8 @@ import { TownSeason } from "../config/config.town";
 
 // A minstrel comes to a castle's square on a feast day and walks round the
 // fountain singing ballads of the realm: its castles, the season's feast, the
-// raiders slain and the gold gathered. It leaves when the feast is over.
+// raiders slain and the gold gathered, and the realm's legends. It leaves when
+// the feast is over.
 
 // How long the minstrel stands at one place on its round, and how long it
 // sings each couplet.
@@ -48,8 +49,19 @@ export function ballad(room: Room, time: number): Array<[string, string]> {
         : [`${slain} raiders came to steal our gold;`, "now they lie in the earth so cold!"]
     );
   }
+  const slayer = Memory.greatestSlayer;
+  if (slayer) {
+    const foes = slayer.kills === 1 ? "a foe" : `${slayer.kills} foes`;
+    verses.push([`Of ${slayer.name} let the minstrels sing,`, `who slew ${foes} for Crown and King!`]);
+  }
   const gold = annals?.gold ?? 0;
   if (gold > 0) verses.push([`${formatK(gold)} gold the mines have brought,`, "and not a coin of it for naught!"]);
+  if (Memory.richestHauler) {
+    verses.push([
+      `Of ${Memory.richestHauler}, who walked the vendors' road`,
+      `and brought home ${formatK(Memory.richestHaul ?? 0)} gold, the richest load!`,
+    ]);
+  }
   const recruits = annals?.recruits ?? 0;
   if (recruits > 0) {
     verses.push([`${recruits === 1 ? "One recruit" : `${recruits} recruits`} marched out the barracks door,`, "to serve the Crown as those before!"]);

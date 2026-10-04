@@ -78,6 +78,23 @@ describe("ballad", () => {
     expect(lines[lines.length - 1]).toBe("Raise a cup to the Crown so high, whose banners over 2 castles fly!");
   });
 
+  it("sings of the realm's greatest slayer and richest merchant once it has them", () => {
+    const sung = () => ballad(room as unknown as Room, FEAST_DAY).map((v) => v.join(" "));
+    expect(sung().some((l) => l.startsWith("Of "))).toBe(false);
+
+    g.Memory = {
+      creeps: {},
+      rooms: {},
+      greatestSlayer: { name: "Dragon Knight Edric", kills: 4 },
+      richestHaul: 40_500,
+      richestHauler: "Merchant Ada",
+    };
+    expect(sung()).toContain("Of Dragon Knight Edric let the minstrels sing, who slew 4 foes for Crown and King!");
+    expect(sung()).toContain(
+      "Of Merchant Ada, who walked the vendors' road and brought home 40.5K gold, the richest load!"
+    );
+  });
+
   it("sings of the quiet when no raider came and leaves out what the scribes have not counted", () => {
     const lines = ballad(room as unknown as Room, ORDINARY_DAY).map((v) => v.join(" "));
     expect(lines).toContain("No raider came to our gates this spring; they fear our archers, and with reason!");
