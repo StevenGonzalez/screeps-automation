@@ -5,8 +5,8 @@
 
 import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
-import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason } from "./services.town";
-import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TownSeason } from "../config/config.town";
+import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
+import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
@@ -64,6 +64,7 @@ export function heraldRooms(): void {
   }
   heraldDragon(castles);
   heraldWolves(castles);
+  heraldWisps(castles);
 }
 
 // "Embercrag", "Embercrag and Grimford", "Embercrag, Grimford and Ashford".
@@ -223,6 +224,22 @@ function heraldWolves(castles: Room[]): void {
   if (castles.length === 0 || !howl || howl.t !== 0) return;
   for (const room of castles) roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
   if (howl.n === 0) chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
+}
+
+// On a new-moon night the wisps come out over the marshes. Every castle mutters
+// at them as night falls, and the chronicle notes them once.
+const WISP_CRIES = ["Wisps!", "Don't follow!", "Spirits..."];
+const WISP_TIDINGS = [
+  "Under the dark moon, will-o'-the-wisps drifted over the marshes. None who followed them came back.",
+  "Pale lights wandered the bogs all night beneath the new moon.",
+  "The marsh-lights were out under the dark moon. The old folk barred their doors.",
+];
+
+function heraldWisps(castles: Room[]): void {
+  if (castles.length === 0 || Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townWisps(Game.time)) return;
+  castles.forEach((room, i) => (roomCries[room.name] = WISP_CRIES[i % WISP_CRIES.length]));
+  const moon = Math.floor(Game.time / (TOWN_DAY_LENGTH * TOWN_MOON_DAYS));
+  chronicle(WISP_TIDINGS[moon % WISP_TIDINGS.length]);
 }
 
 // The northern lights hang over the whole realm at once, so the chronicle

@@ -218,7 +218,10 @@ different day of each season. On a full-moon night the wolves howl from the
 dark beyond the walls every 50 ticks; every castle starts at each howl
 ("Wolves!", "Hark!", "Hear that?"), and the chronicle notes the first in one
 line ("Wolves howled beneath the full moon outside the walls of Embercrag and
-Grimford.").
+Grimford."). On a new-moon night will-o'-the-wisps drift over each castle's
+marshes; every castle mutters at them as night falls ("Wisps!", "Don't
+follow!"), and the chronicle notes them once ("Under the dark moon,
+will-o'-the-wisps drifted over the marshes. None who followed them came back.").
 
 On about one winter night in three the northern lights hang over the realm,
 and the chronicle notes them as night falls ("The northern lights burned green
@@ -236,7 +239,7 @@ lights, then how many townsfolk there are, if any: `Day, 10:00 in autumn, Harves
 
 When room visuals are on, the town draws itself. The sky, the watchtower
 braziers and the barracks' hearth are drawn over every castle, so a young keep
-with no town yet shares the realm's nights, moon and wolves. Until its town is
+with no town yet shares the realm's nights, moon, wolves and wisps. Until its town is
 planned, such a keep is a pilgrims' camp: three tents pitched round its
 barracks (or the ground marked out for it) and a campfire that burns after
 dark and smoulders by day.
@@ -262,6 +265,8 @@ In full, sky and town together:
 - from dusk to dawn, unless a storm hides it, the moon in the north-east
   corner, lit as it is tonight and glowing when full; on a full-moon night, a
   wolf's eyes at the room's west or east edge with its howl rising over them;
+- on a new-moon night, up to five pale green wisps drifting and flickering
+  over the room's marsh tiles;
 - on a winter night with the northern lights, three ribbons of green, teal and
   violet rippling across the top of the room, fading in at nightfall;
 - now and then on a clear night, a falling star streaking across the sky;

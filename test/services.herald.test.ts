@@ -424,6 +424,18 @@ describe("herald", () => {
     expect(room.memory.heraldBorn).toBe(true);
   });
 
+  it("tells of the wisps once, as a new-moon night falls, and has every castle mutter", () => {
+    const room = roomWith([], { my: true, level: 4 });
+    const mason = new FakeCreep("Mason Aldric", { name: ROOM });
+    for (const time of [8 * TOWN_DAY_LENGTH + 699, 8 * TOWN_DAY_LENGTH + 700, 8 * TOWN_DAY_LENGTH + 701, 9 * TOWN_DAY_LENGTH + 700]) {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {}, getObjectById: () => null };
+      heraldRooms();
+      if (time === 8 * TOWN_DAY_LENGTH + 700) expect(cryFor(mason as unknown as Creep)).toBe("Wisps!");
+    }
+    const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => /wisp|lights|marsh/i.test(t));
+    expect(lines).toHaveLength(1);
+  });
+
   it("chronicles the northern lights once, as night falls", () => {
     let day = 0;
     while (!townAurora(day * TOWN_DAY_LENGTH + 800)) day++;

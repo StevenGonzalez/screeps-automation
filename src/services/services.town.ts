@@ -14,6 +14,7 @@ import {
   TOWN_STAR_ODDS,
   TOWN_STAR_TICKS,
   TOWN_STORM_ODDS,
+  TOWN_WISPS,
   TownPhase,
   TownSeason,
 } from "../config/config.town";
@@ -132,6 +133,28 @@ export function townHowl(time: number): Howl | undefined {
   const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
   // Below the HUD in the top-left corner and above the chronicle in the bottom-left.
   return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
+}
+
+/** Whether the will-o'-the-wisps are out: every new-moon night. */
+export function townWisps(time: number): boolean {
+  return townMoon(time) === 0 && townClock(time).phase === "night";
+}
+
+/**
+ * Where tonight's wisps hover in a room: up to TOWN_WISPS marsh tiles drawn
+ * from the night's hash, the same all night long. A room with no marsh near
+ * where the draw falls has fewer, or none.
+ */
+export function wispTiles(time: number, isMarsh: (x: number, y: number) => boolean): Array<[number, number]> {
+  const day = Math.floor(time / TOWN_DAY_LENGTH);
+  const tiles: Array<[number, number]> = [];
+  for (let i = 0; i < 64 && tiles.length < TOWN_WISPS; i++) {
+    const h = dayHash(day * 64 + i, 0x5bd1e995);
+    const x = 3 + (h % 44);
+    const y = 3 + ((h >>> 8) % 44);
+    if (isMarsh(x, y)) tiles.push([x, y]);
+  }
+  return tiles;
 }
 
 /** Whether the northern lights are up: on about one winter night in TOWN_AURORA_ODDS. */

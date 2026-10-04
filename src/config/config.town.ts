@@ -81,6 +81,9 @@ export const TOWN_MOON_NAMES = [
 ];
 export const TOWN_HOWL_EVERY = 50;
 export const TOWN_HOWL_TICKS = 6;
+// On a new-moon night will-o'-the-wisps drift over each castle's marshes, at
+// most this many to a castle.
+export const TOWN_WISPS = 5;
 // About one winter night in this many the northern lights dance over the realm.
 export const TOWN_AURORA_ODDS = 3;
 // On a clear night a star falls in about one window of this many, each window

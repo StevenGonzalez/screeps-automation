@@ -8,6 +8,7 @@ g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.STRUCTURE_SPAWN = "spawn";
 g.STRUCTURE_TOWER = "tower";
 g.TERRAIN_MASK_WALL = 1;
+g.TERRAIN_MASK_SWAMP = 2;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -318,6 +319,35 @@ describe("town at night", () => {
     expect(howls(4_702)).toBe(1);
     expect(howls(4_720)).toBe(0);
     expect(howls(3_702)).toBe(0);
+  });
+});
+
+describe("wisps", () => {
+  it("sends wisps over the marshes on a new-moon night, and nowhere else", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    // Marsh in the west half of the room only.
+    const sky = (time: number, marsh: (x: number) => boolean) => {
+      const room = {
+        name: `W${time}N1`,
+        visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly"), line: record("line") },
+        memory: {},
+        getTerrain: () => ({ get: (x: number) => (marsh(x) ? 2 : 0) }),
+        find: () => [],
+      } as unknown as Room;
+      drawn = [];
+      g.Game = { time, creeps: {}, rooms: {} };
+      drawSky(room);
+      // The moon hangs in the north-east corner, clear of the west half.
+      return drawn.filter((d) => d.kind === "circle" && (d.args[0] as number) < 30).map((d) => d.args[0] as number);
+    };
+    const wisps = sky(8_800, (x) => x < 25);
+    expect(wisps.length).toBeGreaterThan(0);
+    expect(wisps.length).toBeLessThanOrEqual(10);
+    for (const x of wisps) expect(x).toBeLessThan(25);
+    // Not by day, not on another night, and not where there is no marsh.
+    expect(sky(8_300, (x) => x < 25)).toEqual([]);
+    expect(sky(9_800, (x) => x < 25)).toEqual([]);
+    expect(sky(16_800, () => false)).toEqual([]);
   });
 });
 

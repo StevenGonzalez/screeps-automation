@@ -16,6 +16,8 @@ import {
   townMoon,
   townSeason,
   townStorm,
+  townWisps,
+  wispTiles,
 } from "../services/services.town";
 import {
   TOWN_DAY_LENGTH,
@@ -521,6 +523,7 @@ export function drawSky(room: Room): void {
   if (lit && !townStorm(Game.time)) drawMoon(v, townMoon(Game.time));
   drawFallingStar(v, Game.time);
   drawHowl(v, Game.time);
+  drawWisps(room, Game.time);
 
   if (!lit) return;
   for (const s of room.find(FIND_MY_STRUCTURES)) {
@@ -715,6 +718,33 @@ function drawHowl(v: RoomVisual, time: number): void {
   v.circle(howl.x - 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
   v.circle(howl.x + 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
   v.text("Awoo-oo!", howl.x, howl.y - 0.7 - howl.t * 0.15, { ...HOWL_STYLE, opacity: 0.4 + 0.6 * fade });
+}
+
+// Tonight's wisp tiles per room, worked out once a night.
+let wispNight = -1;
+let wispsByRoom: Record<string, Array<[number, number]>> = {};
+
+// Will-o'-the-wisps over the marshes on a new-moon night: pale green lights,
+// each drifting about its own tile and flickering out of step with the rest.
+function drawWisps(room: Room, time: number): void {
+  if (!townWisps(time)) return;
+  const night = Math.floor(time / TOWN_DAY_LENGTH);
+  if (wispNight !== night) {
+    wispNight = night;
+    wispsByRoom = {};
+  }
+  let tiles = wispsByRoom[room.name];
+  if (!tiles) {
+    const terrain = room.getTerrain();
+    tiles = wispsByRoom[room.name] = wispTiles(time, (x, y) => terrain.get(x, y) === TERRAIN_MASK_SWAMP);
+  }
+  tiles.forEach(([x, y], i) => {
+    const wx = x + 0.7 * Math.sin(time * 0.09 + i * 1.7);
+    const wy = y + 0.5 * Math.cos(time * 0.07 + i * 2.3);
+    const flicker = 0.5 + 0.5 * Math.sin(time * 0.8 + i * 3.1);
+    room.visual.circle(wx, wy, { radius: 0.5, fill: "#6fe8c8", opacity: 0.08 + 0.05 * flicker });
+    room.visual.circle(wx, wy, { radius: 0.1 + 0.04 * flicker, fill: "#d8fff4", opacity: 0.5 + 0.4 * flicker });
+  });
 }
 
 const DRAGON: PolyStyle = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.92 };
