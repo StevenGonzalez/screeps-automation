@@ -3,6 +3,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_STRUCTURES = 108;
 g.FIND_MY_CREEPS = 102;
+g.FIND_MY_SPAWNS = 112;
+g.FIND_MY_CONSTRUCTION_SITES = 114;
+g.STRUCTURE_SPAWN = "spawn";
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -158,6 +161,24 @@ describe("realm map", () => {
     expect(texts).not.toContain("vendors");
     expect(texts).toContain("RCL 1");
     expect(drawn.filter((d) => d.kind === "line")).toHaveLength(0);
+  });
+
+  it("shows how far the keep being founded has come", () => {
+    world([]);
+    let spawns: unknown[] = [];
+    const sites = [{ structureType: "spawn", progress: 5_250, progressTotal: 15_000 }];
+    const keep = { name: "W2N1", controller: { my: true, level: 1 }, memory: {}, find: (type: number) => (type === g.FIND_MY_SPAWNS ? spawns : sites) };
+    (g.Game as { rooms: Record<string, unknown> }).rooms.W2N1 = keep;
+    (g.Memory as Memory).expansion = { roomName: "W2N1", homeRoom: HOME, phase: "bootstrapping", startedAt: 0 } as Memory["expansion"];
+    const label = () => {
+      drawn = [];
+      drawRealmMap();
+      return drawn.filter((d) => d.kind === "text").map((d) => d.args[0] as string).find((t) => t.startsWith("keep"));
+    };
+    expect(label()).toBe("keep: barracks 35%");
+    spawns = [{}];
+    keep.controller.level = 2;
+    expect(label()).toBe("keep: growing, RCL 2");
   });
 });
 

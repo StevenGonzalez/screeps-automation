@@ -98,7 +98,7 @@ export function drawRealmMap(): void {
   const savings = Memory.expansionSavings;
   const keep =
     exp && exp.phase !== "established"
-      ? { from: exp.homeRoom, at: exp.roomName, label: `keep: ${exp.phase}` }
+      ? { from: exp.homeRoom, at: exp.roomName, label: keepLabel(exp) }
       : savings
         ? { from: savings.room, at: savings.target, label: "keep planned" }
         : undefined;
@@ -108,6 +108,17 @@ export function drawRealmMap(): void {
     mv.circle(at, { radius: 8, fill: "transparent", stroke: MAP_KEEP, strokeWidth: 1, opacity: 0.8 });
     mv.text(keep.label, new RoomPosition(25, 12, keep.at), { color: MAP_KEEP, fontSize: 5 });
   }
+}
+
+// How far a keep being founded has come: claimed, its barracks rising, or its
+// barracks standing while it grows.
+function keepLabel(exp: NonNullable<Memory["expansion"]>): string {
+  const room = Game.rooms[exp.roomName];
+  if (exp.phase === "claiming" || !room?.controller?.my) return "keep: claiming";
+  if (room.find(FIND_MY_SPAWNS).length > 0) return `keep: growing, RCL ${room.controller.level}`;
+  const site = room.find(FIND_MY_CONSTRUCTION_SITES).find((s) => s.structureType === STRUCTURE_SPAWN);
+  if (!site) return "keep: pilgrims at work";
+  return `keep: barracks ${Math.floor((site.progress * 100) / site.progressTotal)}%`;
 }
 
 // Rooms whose blueprint is on show, to the tick the preview ends. Kept on the
