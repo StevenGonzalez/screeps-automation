@@ -211,6 +211,60 @@ describe("remote source ranking", () => {
   });
 });
 
+describe("CPU governor", () => {
+  const peddler = (roomName: string) =>
+    creep(ROLE_REMOTE_MINER, 9, { targetRoom: roomName, remoteSourceId: `${roomName}-s0` as Id<Source> });
+  // A near remote and a far one, both mined. The far one's merchants walk three
+  // times as far, so it earns less gold for each creep it keeps busy.
+  const realm = (bucket: number) =>
+    home({
+      remotes: [remote("W4N5", [30]), remote("W6N5", [95])],
+      spawns: 3,
+      creeps: [peddler("W4N5"), peddler("W6N5")],
+      bucket,
+    });
+  const later = (ticks: number, bucket: number) => {
+    const game = g.Game as { time: number; cpu: { bucket: number } };
+    game.time += ticks;
+    game.cpu.bucket = bucket;
+  };
+  const lastLine = () => (g.Memory as Memory).chronicle?.at(-1)?.text;
+
+  it("sets aside the source earning least per creep while the bucket keeps falling", () => {
+    const room = realm(4500);
+    expect(sourceIds(getActiveRemoteRooms(room))).toHaveLength(2);
+    later(500, 4000);
+    expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
+    expect(lastLine()).toContain("give up a digging");
+    later(500, 3800);
+    expect(sourceIds(getActiveRemoteRooms(room))).toEqual([]);
+  });
+
+  it("sets nothing aside while the bucket climbs", () => {
+    const room = realm(3000);
+    getActiveRemoteRooms(room);
+    later(500, 3500);
+    expect(sourceIds(getActiveRemoteRooms(room))).toHaveLength(2);
+  });
+
+  it("checks no sooner than the interval", () => {
+    const room = realm(4500);
+    getActiveRemoteRooms(room);
+    later(400, 4000);
+    expect(sourceIds(getActiveRemoteRooms(room))).toHaveLength(2);
+  });
+
+  it("takes the source back once the bucket climbs fast", () => {
+    const room = realm(4500);
+    getActiveRemoteRooms(room);
+    later(500, 4000);
+    expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
+    later(500, 6000);
+    expect(sourceIds(getActiveRemoteRooms(room))).toHaveLength(2);
+    expect(lastLine()).toContain("return to a digging");
+  });
+});
+
 describe("remote hauler body", () => {
   const count = (body: BodyPartConstant[], type: string) => body.filter((p) => p === type).length;
 

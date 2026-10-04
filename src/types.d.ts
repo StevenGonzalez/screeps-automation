@@ -355,6 +355,13 @@ declare global {
     heraldTradeAt?: number;
     // Season the herald last proclaimed (services.herald).
     heraldSeason?: string;
+    // Remote sources the CPU governor has set aside, latest last, and the
+    // bucket at its last check (orchestrator.spawning.remote).
+    remoteShed?: {
+      ids: Array<{ id: string; home: string; room: string }>;
+      at: number;
+      bucket: number;
+    };
     initialized?: boolean;
     uuid: number;
     log: any;

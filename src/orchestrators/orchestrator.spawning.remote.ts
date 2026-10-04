@@ -11,6 +11,7 @@ import {
   ROLE_CLERIC,
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
+import { castleName, chronicle, wildsName } from "../services/services.chronicle";
 import { inPixelRefill } from "./orchestrator.pixels";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import {
@@ -135,6 +136,64 @@ const REMOTE_PICK_HOLD = 100;
 // merchants until the bucket climbed back.
 const REMOTE_CPU_BUCKET_FLOOR = 5000;
 
+// The realm's CPU governor. Remote creeps are most of the realm's creeps, and
+// the creeps use most of its CPU: at 76 creeps they used 22 of the 20 allowed,
+// and the bucket drained by two a tick. Holding back new remotes under the
+// floor did not stop it, since the ones already mined went on. Every
+// REMOTE_CPU_SHED_INTERVAL ticks the bucket is weighed against the last check.
+// One under the floor and still falling sets aside the mined source that earns
+// the least gold per creep it keeps busy, whichever castle works it. One rising
+// by REMOTE_CPU_RESTORE_RISE a tick or more, or full and holding, takes back
+// the source set aside last. A source's creeps die off over a lifetime rather
+// than at once, so the checks are spaced well apart.
+const REMOTE_CPU_SHED_INTERVAL = 500;
+const REMOTE_CPU_RESTORE_RISE = 3;
+const REMOTE_CPU_RESTORE_BUCKET = 9000;
+
+function remoteShedSources(): Set<string> {
+  const state = (Memory.remoteShed ??= { ids: [], at: Game.time, bucket: Game.cpu.bucket });
+  const elapsed = Game.time - state.at;
+  if (elapsed >= REMOTE_CPU_SHED_INTERVAL) {
+    const bucket = Game.cpu.bucket;
+    const rise = (bucket - state.bucket) / elapsed;
+    state.at = Game.time;
+    state.bucket = bucket;
+    if (bucket < REMOTE_CPU_BUCKET_FLOOR && rise < 0 && !inPixelRefill()) {
+      shedWorstRemoteSource(state.ids);
+    } else if (
+      state.ids.length > 0 &&
+      (rise >= REMOTE_CPU_RESTORE_RISE || (bucket >= REMOTE_CPU_RESTORE_BUCKET && rise >= 0))
+    ) {
+      const back = state.ids.pop()!;
+      chronicle(
+        `The scribes have caught up with their ledgers. ${castleName(back.home)}'s vendors return to a digging in the ${wildsName(back.room)}.`
+      );
+    }
+  }
+  return new Set(state.ids.map((s) => s.id));
+}
+
+function shedWorstRemoteSource(shed: Array<{ id: string; home: string; room: string }>): void {
+  const done = new Set(shed.map((s) => s.id));
+  let worst: { id: string; home: string; room: string; score: number } | undefined;
+  for (const c of getCreepsByRole(ROLE_REMOTE_MINER)) {
+    const id = c.memory.remoteSourceId;
+    const home = Game.rooms[c.memory.homeRoom ?? ""];
+    if (!id || !home || done.has(id)) continue;
+    const remote = home.memory.remoteRooms?.find((r) => r.roomName === c.memory.targetRoom);
+    const src = remote?.sources.find((s) => s.sourceId === id);
+    if (!remote || !src) continue;
+    const plan = planRemoteSource(home, remote, src);
+    const score = plan.profit / plan.creeps;
+    if (!worst || score < worst.score) worst = { id, home: home.name, room: remote.roomName, score };
+  }
+  if (!worst) return;
+  shed.push({ id: worst.id, home: worst.home, room: worst.room });
+  chronicle(
+    `The Crown's scribes cannot keep the ledgers of so many roads. ${castleName(worst.home)}'s vendors give up a digging in the ${wildsName(worst.room)}.`
+  );
+}
+
 const REMOTE_ECONOMY_ROLES = new Set<string>([
   ROLE_REMOTE_MINER,
   ROLE_REMOTE_HAULER,
@@ -166,15 +225,15 @@ function getRemoteSourceDistance(
   );
 }
 
-// Net energy per tick a remote source earns, and the spawn time per creep
-// lifetime it takes to keep it worked. Upkeep is the miner, the hauler carry
+// Net energy per tick a remote source earns, the spawn time per creep lifetime
+// it takes to keep it worked, and the creeps that keeps busy. Upkeep is the miner, the hauler carry
 // for its round trip (with REMOTE_HAUL_MARGIN), its share of the room's reserver, and decay on its
 // container and (once roads are laid) the road out to it.
 export function planRemoteSource(
   room: Room,
   remote: RemoteRoomData,
   src: RemoteSourceData
-): { profit: number; spawnTime: number } {
+): { profit: number; spawnTime: number; creeps: number } {
   const capacity = room.energyCapacityAvailable;
   const output = remoteSourceOutput(room);
   const dist = getRemoteSourceDistance(room, remote, src);
@@ -209,7 +268,11 @@ export function planRemoteSource(
     decay;
   const parts =
     miner.length + carry * haulerPartsPerCarry + reserver.length * reserverShare * reserverRespawns;
-  return { profit: output - upkeep, spawnTime: parts * CREEP_SPAWN_TIME };
+  return {
+    profit: output - upkeep,
+    spawnTime: parts * CREEP_SPAWN_TIME,
+    creeps: 1 + carry / haulerCarry + reserverShare,
+  };
 }
 
 // Creeps that are not kept up as a matter of course: defenders raised against a
@@ -258,7 +321,8 @@ const remotePickCache: Record<
 // eligible source is ranked by net energy per tick and taken best first while
 // the home's spawn time covers it, up to MAX_REMOTE_SOURCES. A source that
 // costs more than it earns is never taken. On a low CPU bucket only sources
-// that already have a miner stay in.
+// that already have a miner stay in, and the CPU governor's set-aside sources
+// are left out altogether.
 function pickRemoteSources(room: Room): Map<string, number> {
   const cached = remotePickCache[room.name];
   if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
@@ -266,6 +330,7 @@ function pickRemoteSources(room: Room): Map<string, number> {
   }
 
   const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
+  const shed = remoteShedSources();
   const peddlers = getCreepsByRole(ROLE_REMOTE_MINER);
   const mined = new Set(
     peddlers.filter((c) => c.memory.homeRoom === room.name).map((c) => c.memory.remoteSourceId)
@@ -281,7 +346,7 @@ function pickRemoteSources(room: Room): Map<string, number> {
   for (const r of room.memory.remoteRooms ?? []) {
     if (!isRemoteEligible(room, r, "reserve", true)) continue;
     for (const s of r.sources) {
-      if (minedElsewhere.has(s.sourceId)) continue;
+      if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId)) continue;
       if (lowCpu && !mined.has(s.sourceId)) continue;
       const plan = planRemoteSource(room, r, s);
       if (plan.profit > 0) plans.push({ sourceId: s.sourceId, ...plan });
