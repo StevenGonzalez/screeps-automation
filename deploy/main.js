@@ -476,7 +476,8 @@ const EPITHETS = [
     "the Black", "Ironhand", "the Unbowed", "the Fair", "the Cunning", "the Restless", "the Far-Seeing", "the Stern",
 ];
 function lordName(username) {
-    return `${username} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
+    const name = username.replace(/^[^A-Za-z]+|[^A-Za-z0-9]+$/g, "") || username;
+    return `${name[0].toUpperCase()}${name.slice(1)} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
 }
 const WILD_HEADS = [
     "Ashen", "Bleak", "Gallows", "Weeping", "Black", "Wolf", "Raven", "Thorn",
