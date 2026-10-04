@@ -8468,15 +8468,17 @@ function collectEnergy(creep, targetRoom) {
         return;
     }
     const container = findBestContainer(creep);
-    if (container) {
+    const dropped = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
+        filter: (d) => d.resourceType === RESOURCE_ENERGY &&
+            d.amount >= 50 &&
+            (!container || d.pos.inRangeTo(container, 1)),
+    });
+    if (container && !dropped) {
         const res = creep.withdraw(container, RESOURCE_ENERGY);
         if (res === ERR_NOT_IN_RANGE)
             creep.moveTo(container, { reusePath: 30 });
         return;
     }
-    const dropped = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
-        filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount >= 50,
-    });
     if (dropped) {
         const res = creep.pickup(dropped);
         if (res === ERR_NOT_IN_RANGE)
@@ -13518,7 +13520,7 @@ function planRemoteSource(room, remote, src) {
     const miner = buildRemoteMinerBody(capacity);
     const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads);
     const haulerCarry = Math.max(1, hauler.filter((p) => p === CARRY).length);
-    const carry = remoteHaulCarry(output, dist);
+    const carry = remoteHaulCarry(output, dist) * REMOTE_HAUL_MARGIN;
     const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
     const haulerPartsPerCarry = hauler.length / haulerCarry;
     const reserver = buildReserverBody(capacity);
@@ -13690,21 +13692,25 @@ function estimateRemoteDistance(homeRoom, remoteRoomName) {
     return rooms * 50 + 25;
 }
 const MAX_REMOTE_HAULERS_PER_ROOM = 6;
-function getRemoteHaulerTargets(room) {
+const REMOTE_HAUL_MARGIN = 1.2;
+const MIN_REMOTE_HAULER_CARRY = 4;
+function getRemoteHaulPlans(room) {
     const carryPerHauler = Math.max(1, buildRemoteHaulerBody(bodyBudget(room, "capacity"), remoteRoadsEnabled(room)).filter((p) => p === CARRY).length);
     const output = remoteSourceOutput(room);
-    const targets = {};
+    const plans = {};
     for (const remote of getActiveRemoteRooms(room)) {
         let requiredCarry = 0;
         for (const src of remote.sources) {
             requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
         }
-        targets[remote.roomName] = Math.min(MAX_REMOTE_HAULERS_PER_ROOM, Math.max(1, Math.ceil(requiredCarry / carryPerHauler)));
+        const count = Math.min(MAX_REMOTE_HAULERS_PER_ROOM, Math.max(1, Math.ceil(requiredCarry / carryPerHauler)));
+        const carryEach = Math.min(carryPerHauler, Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil((requiredCarry * REMOTE_HAUL_MARGIN) / count)));
+        plans[remote.roomName] = { count, carryEach };
     }
-    return targets;
+    return plans;
 }
 function getRemoteHaulerTarget(room) {
-    return Object.values(getRemoteHaulerTargets(room)).reduce((a, b) => a + b, 0);
+    return Object.values(getRemoteHaulPlans(room)).reduce((a, p) => a + p.count, 0);
 }
 function shouldSpawnRemoteHauler(room) {
     var _a, _b;
@@ -13720,7 +13726,7 @@ function shouldSpawnRemoteHauler(room) {
     return needed;
 }
 function spawnRemoteHauler(room, spawn) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     const activeRooms = getActiveRemoteRooms(room);
     if (activeRooms.length === 0)
         return false;
@@ -13730,18 +13736,24 @@ function spawnRemoteHauler(room, spawn) {
         const r = (_a = h.memory.targetRoom) !== null && _a !== void 0 ? _a : "";
         haulersByRoom[r] = ((_b = haulersByRoom[r]) !== null && _b !== void 0 ? _b : 0) + 1;
     }
-    const targets = getRemoteHaulerTargets(room);
+    const plans = getRemoteHaulPlans(room);
     let targetRoomName = activeRooms[0].roomName;
     let maxShortfall = -Infinity;
     for (const remote of activeRooms) {
-        const shortfall = ((_c = targets[remote.roomName]) !== null && _c !== void 0 ? _c : 0) - ((_d = haulersByRoom[remote.roomName]) !== null && _d !== void 0 ? _d : 0);
+        const shortfall = ((_d = (_c = plans[remote.roomName]) === null || _c === void 0 ? void 0 : _c.count) !== null && _d !== void 0 ? _d : 0) - ((_e = haulersByRoom[remote.roomName]) !== null && _e !== void 0 ? _e : 0);
         if (shortfall > maxShortfall) {
             maxShortfall = shortfall;
             targetRoomName = remote.roomName;
         }
     }
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildRemoteHaulerBody(allowedEnergy, remoteRoadsEnabled(room));
+    const roads = remoteRoadsEnabled(room);
+    const carryEach = (_f = plans[targetRoomName]) === null || _f === void 0 ? void 0 : _f.carryEach;
+    const planEnergy = carryEach === undefined
+        ? Infinity
+        : (roads ? BODYPART_COST[WORK] + BODYPART_COST[MOVE] : 0) +
+            carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]);
+    const allowedEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
+    const body = buildRemoteHaulerBody(allowedEnergy, roads);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
     const res = trackedSpawn(room, spawn, body, {
