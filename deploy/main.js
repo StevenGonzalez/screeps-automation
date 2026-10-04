@@ -15380,7 +15380,7 @@ function processRoomSpawning(room, spawn) {
         return;
     if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn))
         return;
-    if (!blockaded && !economyCritical && spawnTownsfolk(room, spawn))
+    if (!blockaded && spawnTownsfolk(room, spawn))
         return;
 }
 
