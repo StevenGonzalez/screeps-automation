@@ -3287,10 +3287,13 @@ function markRemotePlayerHostile(entry, who) {
     const window = Math.min(REMOTE_PLAYER_WINDOW * 2 ** (((_b = entry.hostileStrikes) !== null && _b !== void 0 ? _b : 1) - 1), REMOTE_PLAYER_WINDOW_MAX);
     entry.hostile = true;
     entry.hostileUntil = Game.time + window;
+    if (who)
+        entry.rival = who;
 }
 function clearRemotePlayerHostile(entry) {
     var _a, _b;
     entry.hostile = false;
+    delete entry.rival;
     let strikes = (_a = entry.hostileStrikes) !== null && _a !== void 0 ? _a : 0;
     let since = Math.min((_b = entry.hostileUntil) !== null && _b !== void 0 ? _b : Game.time, Game.time);
     while (strikes > 0 && Game.time - since >= REMOTE_PLAYER_WINDOW) {
@@ -17763,15 +17766,15 @@ const MAP_GOLD = "#f2c14e";
 const MAP_DANGER = "#e05a5a";
 const MAP_KEEP = "#b06bff";
 function drawRealmMap() {
-    var _a, _b, _c, _d, _e;
-    var _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    var _j;
     const mv = Game.map.visual;
     const worked = {};
     for (const name in Game.creeps) {
         const c = Game.creeps[name];
         if (c.memory.role !== ROLE_REMOTE_MINER || !c.memory.homeRoom || !c.memory.targetRoom)
             continue;
-        ((_a = worked[_f = c.memory.homeRoom]) !== null && _a !== void 0 ? _a : (worked[_f] = new Set())).add(c.memory.targetRoom);
+        ((_a = worked[_j = c.memory.homeRoom]) !== null && _a !== void 0 ? _a : (worked[_j] = new Set())).add(c.memory.targetRoom);
     }
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -17786,12 +17789,17 @@ function drawRealmMap() {
         });
         mv.text(`RCL ${room.controller.level}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
         for (const remote of (_c = room.memory.remoteRooms) !== null && _c !== void 0 ? _c : []) {
-            if (!((_d = worked[roomName]) === null || _d === void 0 ? void 0 : _d.has(remote.roomName)))
+            const ours = (_e = (_d = worked[roomName]) === null || _d === void 0 ? void 0 : _d.has(remote.roomName)) !== null && _e !== void 0 ? _e : false;
+            const held = remote.hostile && ((_f = remote.hostileUntil) !== null && _f !== void 0 ? _f : 0) > Game.time;
+            if (!ours && !held)
                 continue;
-            const raided = remote.hostile || ((_e = remote.invaderUntil) !== null && _e !== void 0 ? _e : 0) > Game.time;
+            const raided = held || ((_g = remote.invaderUntil) !== null && _g !== void 0 ? _g : 0) > Game.time;
             const colour = raided ? MAP_DANGER : MAP_GOLD;
-            mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
-            mv.text(raided ? "raided" : "vendors", new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
+            if (ours) {
+                mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
+            }
+            const label = held ? `held by ${(_h = remote.rival) !== null && _h !== void 0 ? _h : "strangers"}` : raided ? "raided" : "vendors";
+            mv.text(label, new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
         }
     }
     const exp = Memory.expansion;
