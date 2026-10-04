@@ -9,8 +9,8 @@ import {
   buildRemoteHaulerBody,
   planRemoteSource,
 } from "../src/orchestrators/orchestrator.spawning";
-import { spawnRemoteHauler } from "../src/orchestrators/orchestrator.spawning.remote";
-import { ROLE_REMOTE_MINER, ROLE_UPGRADER } from "../src/config/config.roles";
+import { shouldSpawnRemoteHauler, spawnRemoteHauler } from "../src/orchestrators/orchestrator.spawning.remote";
+import { ROLE_REMOTE_HAULER, ROLE_REMOTE_MINER, ROLE_UPGRADER } from "../src/config/config.roles";
 
 const HOME = "W5N5";
 let clock = 50_000;
@@ -165,5 +165,32 @@ describe("remote hauler sizing", () => {
 
     expect(bodies).toHaveLength(1);
     expect(bodies[0].filter((p) => p === "carry")).toHaveLength(10);
+  });
+});
+
+describe("stray merchants", () => {
+  it("sends a merchant whose remote has become a keep to a remote still worked", () => {
+    const keep = remote("W5N4", [30]);
+    const room = home({
+      remotes: [remote("W4N5", [40]), keep],
+      creeps: [creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W5N4" }), creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W5N4" })],
+    });
+    (g.Game as { rooms: Record<string, unknown> }).rooms.W5N4 = { name: "W5N4", controller: { my: true } };
+
+    // W4N5 plans two merchants; the two strays now fill them, so none is spawned.
+    expect(shouldSpawnRemoteHauler(room)).toBe(false);
+    const targets = Object.values((g.Game as { creeps: Record<string, Creep> }).creeps).map((c) => c.memory.targetRoom);
+    expect(targets).toEqual(["W4N5", "W4N5"]);
+  });
+
+  it("leaves a merchant at its post while its remote is only invaded", () => {
+    const invaded = { ...remote("W5N4", [30]), invaderUntil: clock + 500 };
+    const room = home({
+      remotes: [remote("W4N5", [40]), invaded],
+      creeps: [creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W5N4" })],
+    });
+    shouldSpawnRemoteHauler(room);
+    const [merchant] = Object.values((g.Game as { creeps: Record<string, Creep> }).creeps);
+    expect(merchant.memory.targetRoom).toBe("W5N4");
   });
 });

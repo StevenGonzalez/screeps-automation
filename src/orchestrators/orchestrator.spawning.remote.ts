@@ -439,10 +439,54 @@ function getRemoteHaulerTarget(room: Room): number {
   return Object.values(getRemoteHaulPlans(room)).reduce((a, p) => a + p.count, 0);
 }
 
+// The active remote furthest short of its planned haulers.
+function neediestRemote(
+  activeRooms: RemoteRoomData[],
+  plans: Record<string, RemoteHaulPlan>,
+  haulersByRoom: Record<string, number>
+): string {
+  let neediest = activeRooms[0].roomName;
+  let maxShortfall = -Infinity;
+  for (const remote of activeRooms) {
+    const shortfall = (plans[remote.roomName]?.count ?? 0) - (haulersByRoom[remote.roomName] ?? 0);
+    if (shortfall > maxShortfall) {
+      maxShortfall = shortfall;
+      neediest = remote.roomName;
+    }
+  }
+  return neediest;
+}
+
+// A merchant whose remote is no longer worked (claimed as a keep, taken by
+// another player, or dropped from the picks) went on hauling from it, and still
+// counted against the remotes that are: when a remote became a keep, its two
+// merchants kept the home's other remote from getting any. It is sent to the
+// neediest remote instead. One that is only fleeing invaders keeps its post.
+function reassignStrayHaulers(room: Room, activeRooms: RemoteRoomData[]): void {
+  const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name);
+  const worked = getPickedRemoteRoomNames(room);
+  const strays = haulers.filter((c) => !worked.has(c.memory.targetRoom ?? ""));
+  if (strays.length === 0) return;
+
+  const haulersByRoom: Record<string, number> = {};
+  for (const h of haulers) {
+    if (strays.includes(h)) continue;
+    const r = h.memory.targetRoom!;
+    haulersByRoom[r] = (haulersByRoom[r] ?? 0) + 1;
+  }
+  const plans = getRemoteHaulPlans(room);
+  for (const c of strays) {
+    const target = neediestRemote(activeRooms, plans, haulersByRoom);
+    c.memory.targetRoom = target;
+    haulersByRoom[target] = (haulersByRoom[target] ?? 0) + 1;
+  }
+}
+
 export function shouldSpawnRemoteHauler(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 3) return false;
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return false;
+  reassignStrayHaulers(room, activeRooms);
 
   const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter(
     (c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c)
@@ -469,15 +513,7 @@ export function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
   // Send it where the shortfall against that room's target is biggest, so a
   // far remote is not held to the same count as a near one.
   const plans = getRemoteHaulPlans(room);
-  let targetRoomName = activeRooms[0].roomName;
-  let maxShortfall = -Infinity;
-  for (const remote of activeRooms) {
-    const shortfall = (plans[remote.roomName]?.count ?? 0) - (haulersByRoom[remote.roomName] ?? 0);
-    if (shortfall > maxShortfall) {
-      maxShortfall = shortfall;
-      targetRoomName = remote.roomName;
-    }
-  }
+  const targetRoomName = neediestRemote(activeRooms, plans, haulersByRoom);
 
   // Remotes have no roads until the home can lay them, so the body keeps one
   // MOVE per CARRY; once roads are going in it also carries a WORK to build
