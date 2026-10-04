@@ -3650,6 +3650,11 @@ function runUpgrader(creep) {
             if (withdrawFromContainer(creep, upgradeCont))
                 return;
         }
+        if (upgradeCont && !creep.room.storage && energyClaimedByOthers(upgradeCont.id, creep) > 0) {
+            if (creep.pos.getRangeTo(upgradeCont) > 1)
+                creep.moveTo(upgradeCont, { range: 1, reusePath: 20 });
+            return;
+        }
     }
     const storage = creep.room.storage;
     if (storage && upgradingFunded(creep.room) && storage.store[RESOURCE_ENERGY] > 0) {
