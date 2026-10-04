@@ -18380,6 +18380,7 @@ function loop$1() {
         drawSeason(room);
         drawLandmarks(room);
         drawSky(room);
+        drawCamp(room);
         drawTown(room);
         drawDragon(room);
         drawBlueprint(room);
@@ -18533,7 +18534,10 @@ function drawRoomHUD(room) {
     const energyCap = room.energyCapacityAvailable;
     const energyPct = energyCap > 0 ? energy / energyCap : 0;
     const energyColor = energyPct < 0.3 ? "#ff6644" : energyPct < 0.6 ? "#ffcc44" : "#88ff88";
-    v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
+    if (energyCap > 0)
+        v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
+    else
+        v.text("Gold: no barracks yet", x, y, dimStyle);
     y += lineH;
     const books = (_a = Memory.exchequer) === null || _a === void 0 ? void 0 : _a[room.name];
     if (room.storage) {
@@ -18785,6 +18789,40 @@ function drawSky(room) {
             v.circle(x, y, { radius: 1.4, fill: "#ffb347", opacity: 0.12 });
         }
     }
+}
+const CAMP_RING = [
+    [0, 2], [-2, 2], [2, 2], [-2, 0], [2, 0], [0, -2], [-2, -2], [2, -2],
+];
+function drawCamp(room) {
+    var _a, _b, _c;
+    if (room.memory.town)
+        return;
+    const anchor = (_b = (_a = room.find(FIND_MY_SPAWNS)[0]) === null || _a === void 0 ? void 0 : _a.pos) !== null && _b !== void 0 ? _b : (_c = room.find(FIND_MY_CONSTRUCTION_SITES).find((s) => s.structureType === STRUCTURE_SPAWN)) === null || _c === void 0 ? void 0 : _c.pos;
+    if (!anchor)
+        return;
+    const terrain = room.getTerrain();
+    const open = CAMP_RING.map(([dx, dy]) => [anchor.x + dx, anchor.y + dy]).filter(([x, y]) => x > 0 && x < 49 && y > 0 && y < 49 && terrain.get(x, y) !== TERRAIN_MASK_WALL);
+    if (open.length === 0)
+        return;
+    const v = room.visual;
+    const [[fx, fy], ...tents] = open;
+    for (const [x, y] of tents.slice(0, 3)) {
+        v.poly([[x - 0.45, y + 0.35], [x, y - 0.45], [x + 0.45, y + 0.35], [x - 0.45, y + 0.35]], {
+            fill: "#7a5a32",
+            stroke: "#c8a060",
+            strokeWidth: 0.04,
+            opacity: 0.75,
+        });
+    }
+    if (isNightfall(townClock(Game.time).phase)) {
+        const flicker = 0.5 + 0.5 * Math.sin(Game.time * 1.9 + fx);
+        v.circle(fx, fy, { radius: 1.6, fill: "#ff8a33", opacity: 0.1 + 0.05 * flicker });
+        v.circle(fx, fy, { radius: 0.22 + 0.08 * flicker, fill: "#ffcf66", opacity: 0.75 + 0.2 * flicker });
+    }
+    else {
+        v.circle(fx, fy, { radius: 0.18, fill: "#6a6058", opacity: 0.7 });
+    }
+    v.text("Pilgrims' Camp", fx, fy + 1.1, LANDMARK_LABEL);
 }
 function drawTown(room) {
     const town = room.memory.town;
