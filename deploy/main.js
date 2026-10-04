@@ -12308,10 +12308,13 @@ const SEASON_CHATTER = {
 };
 const FEAST_CHATTER = ["feast!", "ale!", "fair day!"];
 const STORM_CHATTER = ["rain!", "soaked!", "thunder!"];
+const NIGHT_CHATTER = ["yawn...", "torches!", "so dark", "owls hoot"];
 const WEATHER_EVERY = 4;
+const ELDER_TICKS = 150;
+const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
 const SAY_PERIOD = 30;
 function chatterLine(creep) {
-    var _a;
+    var _a, _b;
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
@@ -12324,13 +12327,16 @@ function chatterLine(creep) {
             ? FEAST_CHATTER
             : townStorm(Game.time)
                 ? STORM_CHATTER
-                : SEASON_CHATTER[townSeason(Game.time)];
+                : townClock(Game.time).phase === "night"
+                    ? NIGHT_CHATTER
+                    : SEASON_CHATTER[townSeason(Game.time)];
         return weather[(pick / WEATHER_EVERY) % weather.length];
     }
     const news = pick % WEATHER_EVERY === WEATHER_EVERY / 2 ? gossip() : undefined;
     if (news)
         return news;
-    const lines = (_a = ROLE_CHATTER[creep.memory.role]) !== null && _a !== void 0 ? _a : GENERAL_CHATTER;
+    const elder = ((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : Infinity) <= ELDER_TICKS;
+    const lines = elder ? ELDER_CHATTER : ((_b = ROLE_CHATTER[creep.memory.role]) !== null && _b !== void 0 ? _b : GENERAL_CHATTER);
     return lines[pick % lines.length];
 }
 function maybeChatter(creep) {
@@ -15024,7 +15030,7 @@ function getContainerDistances(room, spawn, containers) {
 const HAULER_CARRY_MARGIN = 1.5;
 const MIN_HAULER_CARRY = 4;
 function getHaulerPlan(room) {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const containerIds = (_a = room.memory.containerIds) !== null && _a !== void 0 ? _a : [];
     if (containerIds.length === 0)
         return null;
@@ -15039,11 +15045,13 @@ function getHaulerPlan(room) {
     let requiredCarry = 0;
     if (spawn) {
         const distances = getContainerDistances(room, spawn, minerContainers);
+        const dug = minerWorkByContainer(room);
+        const workTarget = getMinerWorkTarget(room);
         for (const c of minerContainers) {
             const dist = (_c = distances[c.id]) !== null && _c !== void 0 ? _c : 0;
             const roundTrip = dist * 2;
-            requiredCarry +=
-                (HAULER_SPAWN.SOURCE_OUTPUT * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
+            const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, (_d = dug[c.id]) !== null && _d !== void 0 ? _d : 0));
+            requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
         }
     }
     const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
@@ -15053,6 +15061,16 @@ function getHaulerPlan(room) {
     const share = count > 0 ? 2 * Math.ceil(neededCarry / count / 2) : 0;
     const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
     return { count, carryEach };
+}
+function minerWorkByContainer(room) {
+    var _a;
+    const work = {};
+    for (const m of getCreepsByRoleInRoom(ROLE_MINER, room)) {
+        const id = m.memory.assignedContainerId;
+        if (id)
+            work[id] = ((_a = work[id]) !== null && _a !== void 0 ? _a : 0) + m.body.filter((p) => p.type === WORK).length;
+    }
+    return work;
 }
 function shouldSpawnHauler(room) {
     const plan = getHaulerPlan(room);
