@@ -161,6 +161,17 @@ describe("remote hauler pickup", () => {
       expect(creep.moveTo).toHaveBeenCalledWith(container, expect.objectContaining({ range: 1 }));
     });
 
+    it("leaves a container another castle's peddler digs at to that castle's merchants", () => {
+      container.store.energy = 500;
+      const theirs = { name: "Peddler Oswin", memory: { role: "peddler", homeRoom: "W3N1", assignedContainerId: "cont2" } };
+      (g.Game as any).creeps = { [theirs.name]: theirs };
+      const creep = hauler();
+
+      runRemoteHauler(creep);
+
+      expect(creep.withdraw).toHaveBeenCalledWith(container, "energy");
+    });
+
     it("leaves an emptied container no peddler digs at", () => {
       container.store.energy = 0;
       const creep = hauler();

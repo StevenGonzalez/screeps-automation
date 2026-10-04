@@ -160,11 +160,14 @@ function pickupContainer(creep: Creep): StructureContainer | null {
   return chosen;
 }
 
-function minedContainers(): Set<string> {
-  const mined = new Set<string>();
+// Containers peddlers dig at, each mapped to the castle the peddler serves.
+function minedContainers(): Map<string, string | undefined> {
+  const mined = new Map<string, string | undefined>();
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
-    if (c.memory.role === ROLE_REMOTE_MINER && c.memory.assignedContainerId) mined.add(c.memory.assignedContainerId);
+    if (c.memory.role === ROLE_REMOTE_MINER && c.memory.assignedContainerId) {
+      mined.set(c.memory.assignedContainerId, c.memory.homeRoom);
+    }
   }
   return mined;
 }
@@ -172,7 +175,8 @@ function minedContainers(): Set<string> {
 // The container with the most gold left once the merchants already bound for
 // it have filled up, counting the pile spilt beside it.
 function chooseContainer(creep: Creep): StructureContainer | null {
-  const candidates = remoteContainers(creep);
+  const mined = minedContainers();
+  const candidates = remoteContainers(creep, mined);
   if (candidates.length === 0) return null;
 
   const claimed = new Map<string, number>();
@@ -182,7 +186,6 @@ function chooseContainer(creep: Creep): StructureContainer | null {
     if (!id || other.name === creep.name || other.memory.working) continue;
     claimed.set(id, (claimed.get(id) ?? 0) + other.store.getFreeCapacity(RESOURCE_ENERGY));
   }
-  const mined = minedContainers();
   const piles = creep.room.find(FIND_DROPPED_RESOURCES, {
     filter: (d) => d.resourceType === RESOURCE_ENERGY,
   });
@@ -202,7 +205,12 @@ function chooseContainer(creep: Creep): StructureContainer | null {
   return best;
 }
 
-function remoteContainers(creep: Creep): StructureContainer[] {
+// A container another castle's peddler digs at is that castle's to haul from.
+// In a remote two castles share, each castle raises merchants for the walk to
+// its own source, and loading at the other's sent them on walks they were not
+// raised for.
+function remoteContainers(creep: Creep, mined: Map<string, string | undefined>): StructureContainer[] {
+  const ours = (c: StructureContainer) => (mined.get(c.id) ?? creep.memory.homeRoom) === creep.memory.homeRoom;
   const homeMemory = Memory.rooms[creep.memory.homeRoom!];
   const remoteEntry = homeMemory?.remoteRooms?.find(
     (r) => r.roomName === creep.room.name
@@ -214,7 +222,7 @@ function remoteContainers(creep: Creep): StructureContainer[] {
     const c = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
     if (c) containers.push(c);
   }
-  if (containers.length > 0) return containers;
+  if (containers.length > 0) return containers.filter(ours);
 
   for (const source of creep.room.find(FIND_SOURCES)) {
     const found = source.pos.findInRange(FIND_STRUCTURES, 1, {
@@ -222,7 +230,7 @@ function remoteContainers(creep: Creep): StructureContainer[] {
     }) as StructureContainer[];
     containers.push(...found);
   }
-  return containers;
+  return containers.filter(ours);
 }
 
 function depositEnergy(creep: Creep, homeRoom: string) {
