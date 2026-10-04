@@ -5,7 +5,7 @@ const g = globalThis as Record<string, unknown>;
 g.FIND_MY_SPAWNS = 108;
 g.TERRAIN_MASK_WALL = 1;
 
-const { shouldSpawnHauler, shouldSpawnMiner } = await import("../src/orchestrators/orchestrator.spawning.economy");
+const { buildMinerBody, shouldSpawnHauler, shouldSpawnMiner } = await import("../src/orchestrators/orchestrator.spawning.economy");
 const { ROLE_MINER, ROLE_HAULER } = await import("../src/config/config.roles");
 
 const ROOM = "W1N1";
@@ -108,5 +108,21 @@ describe("miners for a young keep", () => {
     ];
     expect(shouldSpawnMiner(keep(400, miners(), 2))).toBe(false);
     expect(shouldSpawnMiner(keep(400, miners(), 3))).toBe(true);
+  });
+});
+
+describe("a miner's body", () => {
+  const parts = (body: BodyPartConstant[]) => body.join(",");
+
+  it("drops its CARRY for a fifth WORK when that is all the gold allows", () => {
+    expect(parts(buildMinerBody(550))).toBe("work,work,work,work,work,move");
+  });
+
+  it("keeps its CARRY once the gold covers it as well", () => {
+    expect(parts(buildMinerBody(600))).toBe("work,work,work,work,work,carry,move");
+  });
+
+  it("keeps its CARRY while five WORK are out of reach anyway", () => {
+    expect(parts(buildMinerBody(500))).toBe("work,work,work,work,carry,move");
   });
 });

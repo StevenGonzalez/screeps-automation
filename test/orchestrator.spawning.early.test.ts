@@ -224,7 +224,7 @@ describe("harvester crew before miners", () => {
 });
 
 describe("miner sizing at low capacity", () => {
-  it("gives an RCL 2 miner the four WORK that 550 capacity can buy", () => {
+  it("gives an RCL 2 miner the five WORK that 550 capacity can buy, leaving out its CARRY", () => {
     const { room, spawn } = makeRoom({
       rcl: 2,
       capacity: 550,
@@ -243,7 +243,8 @@ describe("miner sizing at low capacity", () => {
     processRoomSpawning(room, spawn);
 
     expect(spawnCalls.map((c) => c.role)).toEqual([ROLE_MINER]);
-    expect(spawnCalls[0].body.filter((p) => p === WORK)).toHaveLength(4);
+    expect(spawnCalls[0].body.filter((p) => p === WORK)).toHaveLength(5);
+    expect(spawnCalls[0].body).not.toContain(CARRY);
   });
 });
 
@@ -255,11 +256,11 @@ describe("upgraders before storage", () => {
       energy: 550,
       containerEnergy,
       creeps: [
-        makeCreep(ROLE_MINER, { work: 4, carry: 1 }, {
+        makeCreep(ROLE_MINER, { work: 5 }, {
           assignedSourceId: "src1" as Id<Source>,
           assignedContainerId: "cont1" as Id<StructureContainer>,
         }),
-        makeCreep(ROLE_MINER, { work: 4, carry: 1 }, {
+        makeCreep(ROLE_MINER, { work: 5 }, {
           assignedSourceId: "src2" as Id<Source>,
           assignedContainerId: "cont2" as Id<StructureContainer>,
         }),

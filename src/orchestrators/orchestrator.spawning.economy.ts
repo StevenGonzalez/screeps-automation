@@ -676,7 +676,7 @@ export function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
+export function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
   const workCost = BODYPART_COST[WORK];
   const moveCost = BODYPART_COST[MOVE];
   const carryCost = BODYPART_COST[CARRY];
@@ -686,6 +686,13 @@ function buildMinerBody(availableEnergy: number): BodyPartConstant[] {
     Math.floor((availableEnergy - moveCost - carryCost) / workCost)
   );
   if (workParts <= 0) return [WORK, MOVE];
+  // A full miner without CARRY beats a short one with it. At a level 2 keep's
+  // 550 gold, [4 WORK, CARRY, MOVE] left every source needing a second miner
+  // at its post, while 5 WORK and a MOVE empty it alone. Its gold falls into
+  // the container it stands on; it only gives up mending that container.
+  if (workParts < maxWork && availableEnergy >= maxWork * workCost + moveCost) {
+    return [...Array(maxWork).fill(WORK), MOVE] as BodyPartConstant[];
+  }
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < workParts; i++) body.push(WORK);
   body.push(CARRY);
