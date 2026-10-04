@@ -16041,6 +16041,8 @@ function processRoomSpawning(room, spawn) {
         return;
     if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn))
         return;
+    if (!blockaded && spawnTownsfolk(room, spawn))
+        return;
     if (!blockaded && shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn))
         return;
     const economyCritical = isEconomyCritical(room);
@@ -16073,8 +16075,6 @@ function processRoomSpawning(room, spawn) {
     if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn))
         return;
     if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn))
-        return;
-    if (!blockaded && spawnTownsfolk(room, spawn))
         return;
 }
 
