@@ -288,6 +288,10 @@ interface HaulerPlan {
 // 26-CARRY porters carried 52 parts' worth for sources that needed 15, at
 // nearly a tenth of the spawn's time. They are now sized to what the sources
 // yield over the walk, split evenly between them.
+//
+// A source yields only what its miners dig. A young keep's two-WORK miners dig
+// 4 gold a tick of the source's 10, and planning for 10 asked a 350-capacity
+// keep for a fourth porter while its two containers held 100 gold between them.
 function getHaulerPlan(room: Room): HaulerPlan | null {
   const containerIds = room.memory.containerIds ?? [];
   if (containerIds.length === 0) return null;
@@ -305,11 +309,15 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
   let requiredCarry = 0;
   if (spawn) {
     const distances = getContainerDistances(room, spawn, minerContainers);
+    const dug = minerWorkByContainer(room);
+    // A post with no miner yet, or a runt, is planned for the miner the room
+    // would raise for it now.
+    const workTarget = getMinerWorkTarget(room);
     for (const c of minerContainers) {
       const dist = distances[c.id] ?? 0;
       const roundTrip = dist * 2;
-      requiredCarry +=
-        (HAULER_SPAWN.SOURCE_OUTPUT * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
+      const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, dug[c.id] ?? 0));
+      requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
     }
   }
   const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
@@ -327,6 +335,15 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
   const share = count > 0 ? 2 * Math.ceil(neededCarry / count / 2) : 0;
   const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
   return { count, carryEach };
+}
+
+function minerWorkByContainer(room: Room): Record<string, number> {
+  const work: Record<string, number> = {};
+  for (const m of getCreepsByRoleInRoom(ROLE_MINER, room)) {
+    const id = m.memory.assignedContainerId;
+    if (id) work[id] = (work[id] ?? 0) + m.body.filter((p) => p.type === WORK).length;
+  }
+  return work;
 }
 
 export function shouldSpawnHauler(room: Room): boolean {
