@@ -204,10 +204,10 @@ describe("remote miner", () => {
       expect(lines[0].text).toMatch(/^Peddler Edric raised a waystation in the /);
     });
 
-    it("tells the second waystation in a remote as the second", () => {
+    function secondBuilt(firstId: string) {
       const last = { id: "c2", structureType: "container", progress: 4980, progressTotal: 5000, pos: { roomName: REMOTE } };
       (g.Memory as any).chronicle = [];
-      const first = { structureType: "container" };
+      const first = { id: firstId, structureType: "container" };
       (g.Game as any).time = ++tick;
       const source = {
         id: "src",
@@ -225,9 +225,22 @@ describe("remote miner", () => {
       creep.room.find = ((type: number) => (type === g.FIND_STRUCTURES ? [first] : [])) as any;
       creep.memory._hp = 100;
       runRemoteMiner(creep as unknown as Creep);
-      const lines = (g.Memory as any).chronicle;
+      return (g.Memory as any).chronicle;
+    }
+
+    it("tells the second waystation in a remote as the second", () => {
+      const lines = secondBuilt("c1");
       expect(lines).toHaveLength(1);
       expect(lines[0].text).toMatch(/^Peddler Lucan raised a second waystation in the .*, so the merchants of .* load at both its diggings\.$/);
+    });
+
+    it("tells a castle's first waystation in a remote it shares as its first", () => {
+      const theirs = { name: "Peddler Warin", memory: { role: "peddler", homeRoom: "W9N9", assignedContainerId: "c1" } };
+      (g.Game as any).creeps = { [theirs.name]: theirs };
+      const lines = secondBuilt("c1");
+      (g.Game as any).creeps = {};
+      expect(lines).toHaveLength(1);
+      expect(lines[0].text).toMatch(/^Peddler Lucan raised a waystation in the /);
     });
   });
 

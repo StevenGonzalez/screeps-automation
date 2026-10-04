@@ -404,11 +404,19 @@ function heraldWorks(room: Room): void {
 // Told once per site, even if two peddlers finish it together. The second
 // waystation in a remote is told as such: the Bleak Vale's two each said no
 // more gold rotted in the mud, and the second read as the first told again.
+// One another castle's peddler digs at is that castle's, and does not count.
 export function heraldWaystation(creep: Creep, site: ConstructionSite): void {
   const home = creep.memory.homeRoom;
   if (!home) return;
   const wilds = wildsName(site.pos.roomName);
-  const second = creep.room.find(FIND_STRUCTURES).some((s) => s.structureType === STRUCTURE_CONTAINER);
+  const theirs = new Set<string>();
+  for (const name in Game.creeps) {
+    const mem = Game.creeps[name].memory;
+    if (mem.homeRoom !== home && mem.assignedContainerId) theirs.add(mem.assignedContainerId);
+  }
+  const second = creep.room
+    .find(FIND_STRUCTURES)
+    .some((s) => s.structureType === STRUCTURE_CONTAINER && !theirs.has(s.id));
   const fresh = tally(
     `waystation:${site.id}`,
     0,
