@@ -108,16 +108,6 @@ const TOWN_STORM_ODDS = 5;
 const TOWN_DRAGON_ODDS = 6;
 const TOWN_DRAGON_FLIGHT = 48;
 const TOWN_MOON_DAYS = 8;
-const TOWN_MOON_NAMES = [
-    "new moon",
-    "waxing crescent",
-    "first quarter",
-    "waxing gibbous",
-    "full moon",
-    "waning gibbous",
-    "last quarter",
-    "waning crescent",
-];
 const TOWN_HOWL_EVERY = 50;
 const TOWN_HOWL_TICKS = 6;
 const TOWN_WISPS = 5;
@@ -19138,8 +19128,6 @@ function loop$1() {
         drawGraves(room);
         if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
             continue;
-        drawRoomHUD(room);
-        drawChronicle(room);
         scenery(room, () => drawSeason(room));
         drawLandmarks(room);
         scenery(room, () => {
@@ -19150,6 +19138,7 @@ function loop$1() {
         });
         drawBlueprint(room);
     }
+    writeDigest();
     drawRealmMap();
 }
 const MARKER = { opacity: 0 };
@@ -19278,94 +19267,44 @@ function drawBlueprint(room) {
         v.text(`${(_d = BLUEPRINT_LETTERS[e.type]) !== null && _d !== void 0 ? _d : "?"}${e.rcl}`, e.x, e.y + 0.15, { font: 0.35, color: colour });
     }
 }
-function drawRoomHUD(room) {
-    var _a, _b;
-    const v = room.visual;
-    const rcl = room.controller.level;
-    const progress = room.controller.progress;
-    const total = room.controller.progressTotal;
-    const phase = getRoomPhase(rcl);
-    const x = 0.5;
-    let y = 0.8;
-    const lineH = 0.85;
-    const style = { font: 0.55, align: "left", color: "#e8e8e8", stroke: "#000000", strokeWidth: 0.08 };
-    const dimStyle = { ...style, color: "#aaaaaa" };
-    const warnStyle = { ...style, color: "#ff6644" };
-    v.text(`${castleName(room.name)}  ·  RCL ${rcl}  ${PHASE_LABEL[phase]}`, x, y, { ...style, font: 0.6, color: "#ffffff" });
-    y += lineH;
-    if (rcl < 8 && total > 0) {
-        const pct = progress / total;
-        const barW = 6;
-        v.rect(x, y - 0.6, barW, 0.55, { fill: "#333333", opacity: 0.7, stroke: "#555555", strokeWidth: 0.05 });
-        v.rect(x, y - 0.6, barW * pct, 0.55, { fill: "#44aaff", opacity: 0.85, stroke: "transparent" });
-        v.text(`${(pct * 100).toFixed(1)}%`, x + barW / 2, y, { ...style, align: "center", color: "#ffffff" });
-        y += lineH;
+const CHRONICLE_LINES = 4;
+function writeDigest() {
+    var _a;
+    const castles = {};
+    for (const name in Game.rooms) {
+        const room = Game.rooms[name];
+        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
+            castles[name] = castleDigest(room);
     }
-    const energy = room.energyAvailable;
-    const energyCap = room.energyCapacityAvailable;
-    const energyPct = energyCap > 0 ? energy / energyCap : 0;
-    const energyColor = energyPct < 0.3 ? "#ff6644" : energyPct < 0.6 ? "#ffcc44" : "#88ff88";
-    if (energyCap > 0)
-        v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
-    else
-        v.text("Gold: no barracks yet", x, y, dimStyle);
-    y += lineH;
+    const chronicle = recentChronicle(CHRONICLE_LINES).map((e) => ({ when: chronicleDate(e.t), text: e.text }));
+    const digest = { time: Game.time, castles, chronicle };
+    Memory.digest = JSON.stringify(digest);
+}
+function castleDigest(room) {
+    var _a, _b, _c, _d, _e;
+    const controller = room.controller;
     const books = (_a = Memory.exchequer) === null || _a === void 0 ? void 0 : _a[room.name];
-    if (room.storage) {
-        const stored = room.storage.store[RESOURCE_ENERGY];
-        const trend = books === null || books === void 0 ? void 0 : books.trend;
-        const trendText = trend === undefined ? "" : `  (${trend >= 0 ? "+" : ""}${trend.toFixed(1)}/t)`;
-        v.text(`Treasury: ${formatK(stored)}${trendText}`, x, y, dimStyle);
-        y += lineH;
-        const keep = describeKeepPlan(room, stored);
-        if (keep) {
-            v.text(keep, x, y, { ...style, color: "#f2c14e" });
-            y += lineH;
-        }
-    }
-    if (books) {
-        const [headline, income, spend] = describeBooks(books);
-        v.text(headline, x, y, { ...style, color: "#f2c14e" });
-        y += lineH;
-        v.text(income.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
-        y += lineH * 0.8;
-        v.text(spend.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
-        y += lineH;
-    }
-    const counts = countCreepsByRole(room);
-    const [atHome, abroad] = describeCensus(room);
-    if (atHome) {
-        v.text(atHome, x, y, dimStyle);
-        y += lineH;
-    }
-    if (abroad) {
-        v.text(`Abroad: ${abroad}`, x, y, dimStyle);
-        y += lineH;
-    }
-    const hostiles = room.find(FIND_HOSTILE_CREEPS);
-    if (hostiles.length > 0) {
-        v.text(`RAIDERS: ${hostiles.length} about the castle`, x, y, warnStyle);
-        y += lineH;
-    }
-    const clock = townClock(Game.time);
-    const icon = PHASE_ICON[clock.phase];
-    const folk = (_b = counts[ROLE_TOWNSFOLK]) !== null && _b !== void 0 ? _b : 0;
-    const hh = String(clock.hour).padStart(2, "0");
-    const timeOfDay = clock.phase[0].toUpperCase() + clock.phase.slice(1);
-    const season = townSeason(Game.time);
-    const feast = townFeast(Game.time);
-    const storm = townStorm(Game.time) ? ", storm" : "";
-    const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
-    const aurora = townAurora(Game.time) ? ", northern lights" : "";
-    const when = `${timeOfDay}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}${aurora}`;
-    const people = folk > 0 ? `  ·  ${folk} townsfolk` : "";
-    v.text(`${icon} ${when}${people}`, x, y, { ...style, color: "#ffe9a8" });
-    y += lineH;
+    const stored = room.storage ? room.storage.store[RESOURCE_ENERGY] : null;
+    const [home, abroad] = describeCensus(room);
     const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) : null;
-    if (spawn === null || spawn === void 0 ? void 0 : spawn.spawning) {
-        const remaining = spawn.spawning.remainingTime;
-        v.text(`Mustering: ${spawn.spawning.name} (${remaining}t)`, x, y, dimStyle);
-    }
+    return {
+        name: castleName(room.name),
+        level: controller.level,
+        phase: PHASE_LABEL[getRoomPhase(controller.level)],
+        progress: controller.level < 8 && controller.progressTotal > 0 ? controller.progress / controller.progressTotal : null,
+        gold: room.energyAvailable,
+        goldCap: room.energyCapacityAvailable,
+        treasury: stored,
+        trend: (_b = books === null || books === void 0 ? void 0 : books.trend) !== null && _b !== void 0 ? _b : null,
+        income: (_c = books === null || books === void 0 ? void 0 : books.in) !== null && _c !== void 0 ? _c : {},
+        spend: (_d = books === null || books === void 0 ? void 0 : books.out) !== null && _d !== void 0 ? _d : {},
+        keep: (stored !== null && describeKeepPlan(room, stored)) || null,
+        home,
+        abroad,
+        townsfolk: (_e = countCreepsByRole(room)[ROLE_TOWNSFOLK]) !== null && _e !== void 0 ? _e : 0,
+        raiders: room.find(FIND_HOSTILE_CREEPS).length,
+        mustering: (spawn === null || spawn === void 0 ? void 0 : spawn.spawning) ? { name: spawn.spawning.name, ticks: spawn.spawning.remainingTime } : null,
+    };
 }
 function describeKeepPlan(room, stored) {
     const exp = Memory.expansion;
@@ -19378,22 +19317,6 @@ function describeKeepPlan(room, stored) {
     }
     return undefined;
 }
-const CHRONICLE_LINES = 4;
-function drawChronicle(room) {
-    const entries = recentChronicle(CHRONICLE_LINES);
-    if (entries.length === 0)
-        return;
-    const v = room.visual;
-    const style = { font: 0.45, align: "left", stroke: "#000000", strokeWidth: 0.06 };
-    let y = 48.6 - entries.length * 0.65;
-    v.text("Royal Chronicle", 0.5, y - 0.15, { ...style, font: 0.5, color: "#f2c14e" });
-    entries.forEach((e, i) => {
-        y += 0.65;
-        const fresh = i === entries.length - 1;
-        v.text(`${chronicleDate(e.t)}: ${e.text}`, 0.5, y, { ...style, color: fresh ? "#ffe9a8" : "#b8a88a" });
-    });
-}
-const PHASE_ICON = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
 const NIGHT_SHADE = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
 const LANDMARK_LABEL = { font: 0.4, color: "#d8c8a0", stroke: "#000000", strokeWidth: 0.05, opacity: 0.75 };
 function titleCase(s) {
