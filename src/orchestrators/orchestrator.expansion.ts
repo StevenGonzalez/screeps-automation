@@ -633,5 +633,7 @@ function planSavings(): void {
   const plan = Memory.expansionSavings;
   if (plan?.room === home && plan.target === next.roomName) return;
   Memory.expansionSavings = { room: home, target: next.roomName };
-  chronicle(`${castleName(home)} fills its coffers to found a keep in the ${wildsName(next.roomName)}.`);
+  // While another keep is still being raised, the saving is for the one after.
+  const after = Memory.expansion && Memory.expansion.phase !== "established" ? "the next keep, " : "a keep ";
+  chronicle(`${castleName(home)} fills its coffers to found ${after}in the ${wildsName(next.roomName)}.`);
 }

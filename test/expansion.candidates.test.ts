@@ -128,6 +128,7 @@ describe("bootstrap timeout", () => {
 
 describe("saving for a keep", () => {
   const home = () => (g.Game as any).rooms[HOME];
+  const lines = () => (((g.Memory as any).chronicle ?? []) as Array<{ text: string }>).map((l) => l.text).join("\n");
 
   it("queues the best keep while the castle is short of gold, and saves for it", () => {
     home().storage.store.energy = 20_000;
@@ -136,6 +137,7 @@ describe("saving for a keep", () => {
     expect(queue.map((q) => q.roomName).sort()).toEqual(["W1N2", "W2N1"]);
     expect((g.Memory as any).expansion).toBeUndefined();
     expect((g.Memory as any).expansionSavings).toEqual({ room: HOME, target: queue[0].roomName });
+    expect(lines()).toMatch(/fills its coffers to found a keep in the /);
 
     // Waiting on the gold does not shuffle the queue the castle is saving toward.
     const head = queue[0].roomName;
@@ -151,6 +153,7 @@ describe("saving for a keep", () => {
     // The castle now saves toward the keep after this one.
     const next = (g.Memory as any).expansionQueue[0].roomName;
     expect((g.Memory as any).expansionSavings).toEqual({ room: HOME, target: next });
+    expect(lines()).toMatch(/fills its coffers to found the next keep, in the /);
   });
 
   it("neither queues nor saves when auto-expansion is switched off", () => {
