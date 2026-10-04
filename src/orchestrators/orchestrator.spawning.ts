@@ -213,5 +213,7 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
   // Townsfolk last of all: the town lives on what the castle does not need.
-  if (!blockaded && !economyCritical && spawnTownsfolk(room, spawn)) return;
+  // The town keeps its own, lower storage gate: storage settles near the
+  // upgraders' 10k floor, so the economy-critical line would never let it grow.
+  if (!blockaded && spawnTownsfolk(room, spawn)) return;
 }

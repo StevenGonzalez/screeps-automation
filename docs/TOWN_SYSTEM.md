@@ -33,8 +33,9 @@ floor: they spend everything above it, so storage settles near 10k and a higher
 gate would never open.
 
 Townsfolk spawn last, after every economic and military role, and never while
-the room is blockaded or its economy is critical. Below the storage gate the
-town keeps what it has and stops growing.
+the room is blockaded. The economy-critical line that stops war and expansion
+(25k in storage) does not apply to them: the town's own 10k gate does. Below
+the storage gate the town keeps what it has and stops growing.
 
 All thresholds live in `src/config/config.town.ts`.
 
