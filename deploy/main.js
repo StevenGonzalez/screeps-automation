@@ -7993,7 +7993,7 @@ function heraldFirstBornRest(name) {
             continue;
         delete mem.firstBorn;
         spreadWord(mourn(name));
-        chronicle(`${name}, the first born in the barracks of ${castleName(roomName)}, has died of old age. Its bells ring once more.`);
+        chronicle(`${name}, the first born in the barracks of ${castleName(roomName)}, has died of old age. The keep's bells ring once more.`);
     }
 }
 const BATTLE_WINDOW = 300;
@@ -8039,7 +8039,7 @@ function heraldFallen() {
     for (const [name, last] of muster) {
         if (next.has(name))
             continue;
-        const slew = last.kills > 0 ? `, who slew ${last.kills},` : "";
+        const slew = last.kills > 0 ? `, who slew ${last.kills === 1 ? "a foe" : `${last.kills} foes`},` : "";
         if (!last.hurt || last.ttl <= 1) {
             if (slew) {
                 spreadWord(mourn(name));
