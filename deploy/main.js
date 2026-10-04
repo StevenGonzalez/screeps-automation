@@ -7278,6 +7278,97 @@ function isAllyPlayer(username) {
     return Array.isArray(allies) && allies.includes(username);
 }
 
+const REMOTE_ROAD_MIN_RCL = 4;
+function remoteRoadsEnabled(home) {
+    var _a, _b;
+    return ((_b = (_a = home.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) >= REMOTE_ROAD_MIN_RCL && !!home.storage;
+}
+const REMOTE_PATH_REFRESH = 10000;
+const UNREACHABLE_REMOTE_PATH = 999;
+const lastSearchTick = {};
+function roadCostMatrix(roomName) {
+    const cm = new PathFinder.CostMatrix();
+    const room = Game.rooms[roomName];
+    if (!room)
+        return cm;
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_ROAD) {
+            if (cm.get(s.pos.x, s.pos.y) === 0)
+                cm.set(s.pos.x, s.pos.y, 1);
+        }
+        else if (s.structureType === STRUCTURE_RAMPART) {
+            if (!s.my)
+                cm.set(s.pos.x, s.pos.y, 255);
+        }
+        else if (OBSTACLE_OBJECT_TYPES.includes(s.structureType)) {
+            cm.set(s.pos.x, s.pos.y, 255);
+        }
+    }
+    return cm;
+}
+function getRemoteSourcePathLength(home, remote, src) {
+    var _a;
+    const origin = (_a = home.storage) !== null && _a !== void 0 ? _a : home.find(FIND_MY_SPAWNS)[0];
+    const container = src.containerId ? Game.getObjectById(src.containerId) : null;
+    const target = container !== null && container !== void 0 ? container : Game.getObjectById(src.sourceId);
+    if (!origin || !target)
+        return src.pathLength;
+    const key = `${origin.id}:${target.id}`;
+    const fresh = src.pathKey === key &&
+        src.pathTick !== undefined &&
+        Game.time - src.pathTick < REMOTE_PATH_REFRESH;
+    if (fresh || lastSearchTick[home.name] === Game.time)
+        return src.pathLength;
+    lastSearchTick[home.name] = Game.time;
+    const result = PathFinder.search(origin.pos, { pos: target.pos, range: 1 }, {
+        plainCost: 2,
+        swampCost: 10,
+        maxOps: 4000,
+        roomCallback: (rn) => rn === home.name || rn === remote.roomName ? roadCostMatrix(rn) : false,
+    });
+    src.pathKey = key;
+    src.pathTick = Game.time;
+    if (result.incomplete) {
+        src.pathLength = UNREACHABLE_REMOTE_PATH;
+        src.roadTiles = undefined;
+    }
+    else {
+        src.pathLength = result.path.length;
+        src.roadTiles = result.path
+            .filter((p) => p.roomName === remote.roomName)
+            .map((p) => `${p.x},${p.y}`)
+            .join(";");
+    }
+    return src.pathLength;
+}
+function remoteRoadCoverage(remote) {
+    const room = Game.rooms[remote.roomName];
+    if (!room)
+        return 0;
+    const tiles = new Set();
+    for (const src of remote.sources) {
+        if (!src.containerId || !src.roadTiles)
+            continue;
+        for (const tile of src.roadTiles.split(";")) {
+            const [x, y] = tile.split(",").map(Number);
+            if (x > 0 && y > 0 && x < 49 && y < 49)
+                tiles.add(tile);
+        }
+    }
+    if (tiles.size === 0)
+        return 0;
+    let built = 0;
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_ROAD && tiles.has(`${s.pos.x},${s.pos.y}`))
+            built++;
+    }
+    return built / tiles.size;
+}
+const PAVED_ROAD_COVERAGE = 0.9;
+function remotePaved(remote) {
+    return remoteRoadCoverage(remote) >= PAVED_ROAD_COVERAGE;
+}
+
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 let cryTick = -1;
 let creepCries = {};
@@ -7303,6 +7394,8 @@ function cryFlight(creep) {
     creepCries[creep.name] = "Bandits!";
 }
 function cryHaul(creep, amount) {
+    var _a;
+    creep.memory.hauled = ((_a = creep.memory.hauled) !== null && _a !== void 0 ? _a : 0) + amount;
     freshCries();
     creepCries[creep.name] = `+${amount} gold`;
 }
@@ -7343,6 +7436,7 @@ function heraldRooms() {
             heraldFirstBorn(room);
             heraldVisitors(room);
             heraldWorks(room);
+            heraldRoads(room);
         }
         heraldKills(room);
     }
@@ -7464,6 +7558,19 @@ function heraldWorks(room) {
         const [one, many] = LANDMARKS[type];
         const a = /^[aeiou]/.test(one) ? "an" : "a";
         tally(`works:${room.name}:${type}`, gained, (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
+    }
+}
+function heraldRoads(room) {
+    var _a, _b;
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    for (const remote of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
+        const told = (_b = room.memory.heraldRoads) !== null && _b !== void 0 ? _b : [];
+        if (told.includes(remote.roomName) || !remotePaved(remote))
+            continue;
+        room.memory.heraldRoads = [...told, remote.roomName];
+        spreadWord("new road!");
+        chronicle(`The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`);
     }
 }
 const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
@@ -7589,13 +7696,19 @@ function foeIn(roomName) {
     return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
 }
 function heraldFallen() {
-    var _a, _b;
+    var _a, _b, _c;
     const next = new Map();
     for (const name in Game.creeps) {
         const c = Game.creeps[name];
         if (c.spawning)
             continue;
-        next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0, kills: (_b = c.memory.kills) !== null && _b !== void 0 ? _b : 0 });
+        next.set(name, {
+            room: c.pos.roomName,
+            hurt: c.hits < c.hitsMax,
+            ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0,
+            kills: (_b = c.memory.kills) !== null && _b !== void 0 ? _b : 0,
+            hauled: (_c = c.memory.hauled) !== null && _c !== void 0 ? _c : 0,
+        });
     }
     for (const [name, last] of muster) {
         if (next.has(name))
@@ -7606,6 +7719,7 @@ function heraldFallen() {
                 spreadWord(mourn(name));
                 chronicle(`${name}${slew} was laid to rest with honours.`);
             }
+            heraldRetired(name, last.hauled);
             continue;
         }
         const foe = foeIn(last.room);
@@ -7615,6 +7729,13 @@ function heraldFallen() {
         tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
     }
     muster = next;
+}
+function heraldRetired(name, hauled) {
+    var _a;
+    if (hauled <= ((_a = Memory.richestHaul) !== null && _a !== void 0 ? _a : 0))
+        return;
+    Memory.richestHaul = hauled;
+    chronicle(`${name} retired from the road with ${formatK(hauled)} gold brought home, the most of any merchant yet.`);
 }
 function heraldKills(room) {
     var _a;
@@ -14352,93 +14473,6 @@ function boostMemory(queue) {
     };
 }
 
-const REMOTE_ROAD_MIN_RCL = 4;
-function remoteRoadsEnabled(home) {
-    var _a, _b;
-    return ((_b = (_a = home.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) >= REMOTE_ROAD_MIN_RCL && !!home.storage;
-}
-const REMOTE_PATH_REFRESH = 10000;
-const UNREACHABLE_REMOTE_PATH = 999;
-const lastSearchTick = {};
-function roadCostMatrix(roomName) {
-    const cm = new PathFinder.CostMatrix();
-    const room = Game.rooms[roomName];
-    if (!room)
-        return cm;
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType === STRUCTURE_ROAD) {
-            if (cm.get(s.pos.x, s.pos.y) === 0)
-                cm.set(s.pos.x, s.pos.y, 1);
-        }
-        else if (s.structureType === STRUCTURE_RAMPART) {
-            if (!s.my)
-                cm.set(s.pos.x, s.pos.y, 255);
-        }
-        else if (OBSTACLE_OBJECT_TYPES.includes(s.structureType)) {
-            cm.set(s.pos.x, s.pos.y, 255);
-        }
-    }
-    return cm;
-}
-function getRemoteSourcePathLength(home, remote, src) {
-    var _a;
-    const origin = (_a = home.storage) !== null && _a !== void 0 ? _a : home.find(FIND_MY_SPAWNS)[0];
-    const container = src.containerId ? Game.getObjectById(src.containerId) : null;
-    const target = container !== null && container !== void 0 ? container : Game.getObjectById(src.sourceId);
-    if (!origin || !target)
-        return src.pathLength;
-    const key = `${origin.id}:${target.id}`;
-    const fresh = src.pathKey === key &&
-        src.pathTick !== undefined &&
-        Game.time - src.pathTick < REMOTE_PATH_REFRESH;
-    if (fresh || lastSearchTick[home.name] === Game.time)
-        return src.pathLength;
-    lastSearchTick[home.name] = Game.time;
-    const result = PathFinder.search(origin.pos, { pos: target.pos, range: 1 }, {
-        plainCost: 2,
-        swampCost: 10,
-        maxOps: 4000,
-        roomCallback: (rn) => rn === home.name || rn === remote.roomName ? roadCostMatrix(rn) : false,
-    });
-    src.pathKey = key;
-    src.pathTick = Game.time;
-    if (result.incomplete) {
-        src.pathLength = UNREACHABLE_REMOTE_PATH;
-        src.roadTiles = undefined;
-    }
-    else {
-        src.pathLength = result.path.length;
-        src.roadTiles = result.path
-            .filter((p) => p.roomName === remote.roomName)
-            .map((p) => `${p.x},${p.y}`)
-            .join(";");
-    }
-    return src.pathLength;
-}
-function remoteRoadCoverage(remote) {
-    const room = Game.rooms[remote.roomName];
-    if (!room)
-        return 0;
-    const tiles = new Set();
-    for (const src of remote.sources) {
-        if (!src.containerId || !src.roadTiles)
-            continue;
-        for (const tile of src.roadTiles.split(";")) {
-            const [x, y] = tile.split(",").map(Number);
-            if (x > 0 && y > 0 && x < 49 && y < 49)
-                tiles.add(tile);
-        }
-    }
-    if (tiles.size === 0)
-        return 0;
-    let built = 0;
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType === STRUCTURE_ROAD && tiles.has(`${s.pos.x},${s.pos.y}`))
-            built++;
-    }
-    return built / tiles.size;
-}
-
 function isRemoteCreepRetiring(home, creep) {
     const target = creep.memory.targetRoom;
     if (!target)
@@ -14705,7 +14739,6 @@ function estimateRemoteDistance(homeRoom, remoteRoomName) {
 const MAX_REMOTE_HAULERS_PER_ROOM = 6;
 const REMOTE_HAUL_MARGIN = 1.2;
 const MIN_REMOTE_HAULER_CARRY = 4;
-const PAVED_ROAD_COVERAGE = 0.9;
 function getRemoteHaulPlans(room) {
     const roads = remoteRoadsEnabled(room);
     const budget = bodyBudget(room, "capacity");
@@ -14715,7 +14748,7 @@ function getRemoteHaulPlans(room) {
     const output = remoteSourceOutput(room);
     const plans = {};
     for (const remote of getActiveRemoteRooms(room)) {
-        const paved = roads && remoteRoadCoverage(remote) >= PAVED_ROAD_COVERAGE;
+        const paved = roads && remotePaved(remote);
         const carryPerHauler = paved ? carryPaved : carryOnFoot;
         let requiredCarry = 0;
         for (const src of remote.sources) {
