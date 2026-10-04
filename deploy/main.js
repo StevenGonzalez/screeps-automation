@@ -1244,6 +1244,34 @@ function wildsName(roomName) {
     return `${WILD_HEADS[(h >>> 4) % WILD_HEADS.length]} ${WILD_LANDS[(h >>> 12) % WILD_LANDS.length]}`;
 }
 
+const UPGRADER_STORAGE_FLOOR = 10000;
+const KEEP_FUND_FLOOR = 45000;
+const UPGRADER_DOWNGRADE_GUARD = 5000;
+function nearDowngrade(room) {
+    const ctrl = room.controller;
+    return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
+}
+function savingForKeep(room) {
+    var _a;
+    const exp = Memory.expansion;
+    if (exp && exp.homeRoom === room.name && exp.phase !== "established")
+        return true;
+    return ((_a = Memory.expansionSavings) === null || _a === void 0 ? void 0 : _a.room) === room.name;
+}
+function upgraderStorageFloor(room) {
+    return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
+}
+function wallsFunded(room) {
+    const storage = room.storage;
+    return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
+}
+function upgradingFunded(room) {
+    const storage = room.storage;
+    if (!storage)
+        return true;
+    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) || nearDowngrade(room);
+}
+
 const TOWN_NAMES = [
     "Ravenhold", "Blackmoor", "Ashfall", "Grimward", "Thornkeep", "Duskmere",
     "Ironvale", "Wolfsbane", "Hollowmere", "Cinderfell", "Stormwatch", "Gallowgate",
@@ -2936,7 +2964,10 @@ function repairCandidates(room) {
     });
     if (dying.length > 0)
         return [dying.reduce((a, b) => (a.hits < b.hits ? a : b))];
-    const criticalBarriers = structures.filter((st) => isBarrier(st) && st.hits < Math.min(BREACH_DANGER_FLOOR, targetOf(st) * 0.5));
+    const walls = wallsFunded(room) || getDangerPositions(room).length > 0;
+    const criticalBarriers = walls
+        ? structures.filter((st) => isBarrier(st) && st.hits < Math.min(BREACH_DANGER_FLOOR, targetOf(st) * 0.5))
+        : [];
     if (criticalBarriers.length > 0)
         return weakestBand(criticalBarriers);
     const nonDefensive = structures.filter((st) => st.structureType !== STRUCTURE_WALL &&
@@ -2949,6 +2980,8 @@ function repairCandidates(room) {
         const tier = nonRoad.length > 0 ? nonRoad : nonDefensive;
         return [tier.reduce(lowestFraction)];
     }
+    if (!walls)
+        return [];
     const belowTarget = structures.filter((st) => isBarrier(st) && st.hits < targetOf(st));
     return belowTarget.length > 0 ? weakestBand(belowTarget) : [];
 }
@@ -3087,30 +3120,6 @@ function meetIncomingHandoff(creep) {
     if (!creep.pos.isNearTo(carrier))
         creep.moveTo(carrier, { range: 1, reusePath: 5 });
     return true;
-}
-
-const UPGRADER_STORAGE_FLOOR = 10000;
-const KEEP_FUND_FLOOR = 45000;
-const UPGRADER_DOWNGRADE_GUARD = 5000;
-function nearDowngrade(room) {
-    const ctrl = room.controller;
-    return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
-}
-function savingForKeep(room) {
-    var _a;
-    const exp = Memory.expansion;
-    if (exp && exp.homeRoom === room.name && exp.phase !== "established")
-        return true;
-    return ((_a = Memory.expansionSavings) === null || _a === void 0 ? void 0 : _a.room) === room.name;
-}
-function upgraderStorageFloor(room) {
-    return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
-}
-function upgradingFunded(room) {
-    const storage = room.storage;
-    if (!storage)
-        return true;
-    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) || nearDowngrade(room);
 }
 
 function findEnergyDepositTarget(creep, role) {
@@ -3771,6 +3780,10 @@ function runRepairer(creep) {
             return;
         if (res === ERR_NOT_ENOUGH_RESOURCES)
             creep.memory.working = false;
+        return;
+    }
+    if (!upgradingFunded(creep.room) && !getRoomBuildTarget(creep.room)) {
+        parkIdle(creep, "square");
         return;
     }
     putSurplusEnergyToWork(creep);
@@ -15464,7 +15477,7 @@ function getRepairerPopulationTarget(room) {
             if (rcl >= 3 && worn.length > 0)
                 value = Math.max(value, 1);
             const barrierTarget = barrierTargetFn(room);
-            const wallsNeedRepair = room.find(FIND_STRUCTURES, {
+            const wallsNeedRepair = wallsFunded(room) && room.find(FIND_STRUCTURES, {
                 filter: (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
                     s.hits < barrierTarget(s),
             }).length > 0;
