@@ -9267,10 +9267,20 @@ function runRemoteMiner(creep) {
         const site = source.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 1, {
             filter: (s) => s.structureType === STRUCTURE_CONTAINER,
         })[0];
-        if (site && creep.store[RESOURCE_ENERGY] > 0) {
-            if (creep.build(site) === ERR_NOT_IN_RANGE)
-                creep.moveTo(site, { reusePath: 30 });
-            return;
+        if (site) {
+            const pile = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 1, {
+                filter: (r) => r.resourceType === RESOURCE_ENERGY,
+            })[0];
+            if (pile)
+                creep.pickup(pile);
+            const loaded = pile ? creep.store[RESOURCE_ENERGY] > 0 : creep.store.getFreeCapacity() === 0;
+            if (loaded) {
+                if (creep.build(site) === ERR_NOT_IN_RANGE)
+                    creep.moveTo(site, { reusePath: 30 });
+                return;
+            }
+            if (pile)
+                return;
         }
         if (harvest$1(creep, source) === ERR_NOT_IN_RANGE) {
             creep.moveTo(source, { reusePath: 30 });
