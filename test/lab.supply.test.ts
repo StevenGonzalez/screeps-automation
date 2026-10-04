@@ -159,11 +159,29 @@ describe("lab mineral need", () => {
   });
 });
 
+// The terminal keeps each resource's order book for a few ticks, so tests that
+// set their own orders run at ticks well apart, ahead of the terminal tests.
 describe("lab stall timeout", () => {
-  it("waits for a base mineral that is being supplied", () => {
+  const cheapO = { id: "sellO", type: "sell", resourceType: "O", price: 1, amount: 50_000, roomName: "W9N9" };
+
+  it("waits for a base mineral the market sells", () => {
     const room = makeRoom({ name: "R", storage: { H: 1000 }, queue: [{ compound: "OH", amount: 3000 }] });
-    setGame([room], 1);
+    setGame([room], 100, [cheapO]);
     expect(stallTimeout(room as unknown as Room, ["O", "H"])).toBe(3000);
+  });
+
+  it("waits for a base mineral another room is sending", () => {
+    const room = makeRoom({ name: "R", storage: { H: 1000 }, queue: [{ compound: "OH", amount: 3000 }] });
+    const donor = makeRoom({ name: "D" });
+    donor.memory.pendingSend = { resource: "O", amount: 3000, loadTarget: 3000, to: "R" };
+    setGame([room, donor], 120);
+    expect(stallTimeout(room as unknown as Room, ["O", "H"])).toBe(3000);
+  });
+
+  it("does not wait for a base mineral nobody will send or sell", () => {
+    const room = makeRoom({ name: "R", storage: { H: 1000 }, queue: [{ compound: "OH", amount: 3000 }] });
+    setGame([room], 140);
+    expect(stallTimeout(room as unknown as Room, ["O", "H"])).toBe(200);
   });
 
   it("aborts quickly when both inputs are on hand", () => {
@@ -180,15 +198,43 @@ describe("lab stall timeout", () => {
 });
 
 describe("auto production planning", () => {
+  const minerals = { H: 1000, O: 1000, U: 1000, K: 1000, L: 1000, Z: 1000, X: 1000 };
+  const withoutU = { H: 1000, O: 1000, K: 1000, L: 1000, Z: 1000, X: 1000 };
+
   it("plans the first target under its cap", () => {
-    const room = makeRoom({ name: "R", queue: [] });
+    const room = makeRoom({ name: "R", storage: minerals, queue: [] });
     setGame([room], 1000);
     planAutoProduction(room as unknown as Room);
     expect((room.memory.labSystem as LabSystemMemory).plannedTarget).toBe("XUH2O");
   });
 
+  it("passes over a target short of a base mineral nobody will send or sell", () => {
+    const room = makeRoom({ name: "R", storage: withoutU, queue: [] });
+    setGame([room], 300);
+    planAutoProduction(room as unknown as Room);
+    const ls = room.memory.labSystem as LabSystemMemory;
+    expect(ls.plannedTarget).toBe("XKHO2");
+    expect(ls.queue.some((e) => e.compound === "UH")).toBe(false);
+  });
+
+  it("plans a target whose missing base mineral the market sells", () => {
+    const room = makeRoom({ name: "R", storage: withoutU, queue: [] });
+    const cheapU = { id: "sellU", type: "sell", resourceType: "U", price: 1, amount: 50_000, roomName: "W9N9" };
+    setGame([room], 400, [cheapU]);
+    planAutoProduction(room as unknown as Room);
+    expect((room.memory.labSystem as LabSystemMemory).plannedTarget).toBe("XUH2O");
+  });
+
+  it("plans a target whose missing base mineral another room has to spare", () => {
+    const room = makeRoom({ name: "R", storage: withoutU, queue: [] });
+    const donor = makeRoom({ name: "D", storage: { U: 20_000 } });
+    setGame([room, donor], 500);
+    planAutoProduction(room as unknown as Room);
+    expect((room.memory.labSystem as LabSystemMemory).plannedTarget).toBe("XUH2O");
+  });
+
   it("skips a benched target so the ones after it get a turn", () => {
-    const room = makeRoom({ name: "R", queue: [] });
+    const room = makeRoom({ name: "R", storage: minerals, queue: [] });
     const ls = room.memory.labSystem as LabSystemMemory;
     ls.benchedUntil = { XUH2O: 2000 };
     setGame([room], 1000);
@@ -198,7 +244,7 @@ describe("auto production planning", () => {
   });
 
   it("plans a benched target again once its bench ends", () => {
-    const room = makeRoom({ name: "R", queue: [] });
+    const room = makeRoom({ name: "R", storage: minerals, queue: [] });
     const ls = room.memory.labSystem as LabSystemMemory;
     ls.benchedUntil = { XUH2O: 2000 };
     setGame([room], 2000);

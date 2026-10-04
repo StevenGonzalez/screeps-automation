@@ -1,6 +1,6 @@
 import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
 import { MANAGED_COMMODITIES } from "../config/config.factory";
-import { labMineralNeed, labMineralShortfall } from "../services/services.labs";
+import { incomingSends, labMineralNeed, labMineralShortfall } from "../services/services.labs";
 
 declare global {
   interface Memory {
@@ -721,6 +721,45 @@ export function feedsLocalRecipe(room: Room, resource: ResourceConstant): boolea
   return false;
 }
 
+/**
+ * Whether `room` can expect `needed` more of a base mineral for its labs: a send
+ * already on its way, another of our rooms with it to spare, or a seller the
+ * terminal would buy from.
+ */
+export function mineralSupplyExpected(room: Room, mineral: MineralConstant, needed: number): boolean {
+  if (incomingSends(room, mineral) > 0) return true;
+  if (!room.terminal) return false;
+  if (findMineralDonor(room, mineral, Math.min(needed, NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT))) return true;
+  return !!Game.market && !!bestMineralOffer(room, mineral, needed);
+}
+
+/** The cheapest seller of `mineral` the terminal would buy `needed` from. */
+function bestMineralOffer(room: Room, mineral: MineralConstant, needed: number): Order | undefined {
+  const avg = getMarketHistoryAvg(mineral);
+  if (avg === undefined) return undefined;
+  const maxPrice = avg * BUY_CONFIG.MAX_PRICE_RATIO;
+  const orders = getMarketOrders(
+    mineral,
+    (o) =>
+      o.type === ORDER_SELL &&
+      o.resourceType === mineral &&
+      !!o.roomName &&
+      o.amount > 0 &&
+      o.price <= maxPrice
+  );
+  const viable = orders.filter(
+    (o) =>
+      energyCostPerUnit(mineralLot(o, needed), room.name, o.roomName!) <= BUY_CONFIG.MAX_ENERGY_COST_RATIO
+  );
+  if (viable.length === 0) return undefined;
+  viable.sort((a, b) => a.price - b.price);
+  return viable[0];
+}
+
+function mineralLot(order: Order, needed: number): number {
+  return Math.min(needed, order.amount, BUY_CONFIG.MAX_AMOUNT);
+}
+
 function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
   const shortfall = labMineralShortfall(room);
   for (const mineral of BASE_MINERALS) {
@@ -729,27 +768,9 @@ function buyMissingMinerals(room: Room, terminal: StructureTerminal): boolean {
     // Another of our rooms has it to spare: the network will send it for free.
     if (findMineralDonor(room, mineral, Math.min(needed, NETWORK_CONFIG.MINERAL_TRANSFER_AMOUNT))) continue;
 
-    const avg = getMarketHistoryAvg(mineral);
-    if (avg === undefined) continue;
-    const maxPrice = avg * BUY_CONFIG.MAX_PRICE_RATIO;
-    const orders = getMarketOrders(
-      mineral,
-      (o) =>
-        o.type === ORDER_SELL &&
-        o.resourceType === mineral &&
-        !!o.roomName &&
-        o.amount > 0 &&
-        o.price <= maxPrice
-    );
-    const lot = (o: Order) => Math.min(needed, o.amount, BUY_CONFIG.MAX_AMOUNT);
-    const viable = orders.filter(
-      (o) => energyCostPerUnit(lot(o), room.name, o.roomName!) <= BUY_CONFIG.MAX_ENERGY_COST_RATIO
-    );
-    if (viable.length === 0) continue;
-
-    viable.sort((a, b) => a.price - b.price);
-    const best = viable[0];
-    const amount = affordableTradeAmount(terminal, room.name, best.roomName!, lot(best));
+    const best = bestMineralOffer(room, mineral, needed);
+    if (!best) continue;
+    const amount = affordableTradeAmount(terminal, room.name, best.roomName!, mineralLot(best, needed));
     if (amount <= 0) continue;
 
     const result = Game.market.deal(best.id, amount, room.name);

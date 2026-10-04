@@ -2,11 +2,14 @@ import {
   resolveChain,
   getStockForCompound,
   labInputStock,
+  labMineralShortfall,
+  queuedBaseMineralNeed,
   REACTION_RECIPES,
   getBoostRequests,
   assignBoostLabs,
 } from "../services/services.labs";
 import { advanceBoost } from "../services/services.combat";
+import { mineralSupplyExpected } from "./orchestrator.terminal";
 
 const LAB_STALL_TIMEOUT = 200;
 // A reaction short of an input the market or another room can supply waits
@@ -124,7 +127,12 @@ function processLabSystem(room: Room) {
   if (produced > (ls.lastProduced ?? 0)) {
     ls.lastProduced = produced;
     ls.lastProgressTick = Game.time;
-  } else if (Game.time - (ls.lastProgressTick ?? Game.time) > stallTimeout(room, ls.inputCompounds)) {
+  } else if (
+    // Only a reaction idle past the shorter timeout asks after its supply,
+    // which may look at the market.
+    Game.time - (ls.lastProgressTick ?? Game.time) > LAB_STALL_TIMEOUT &&
+    Game.time - (ls.lastProgressTick ?? Game.time) > stallTimeout(room, ls.inputCompounds)
+  ) {
     console.log(
       `[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
       `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`
@@ -165,13 +173,33 @@ function processLabSystem(room: Room) {
 
 /**
  * How long a reaction may go without progress. Running dry on an input the
- * terminal is buying or another room is sending is a wait, not a fault.
+ * terminal is buying or another room is sending is a wait, not a fault. A base
+ * mineral nobody will send or sell is not waited for.
  */
 export function stallTimeout(room: Room, inputs: [string, string]): number {
   const awaitingSupply = inputs.some(
-    (c) => SUPPLIED_INPUTS.has(c) && labInputStock(room, c) < REACTION_INPUT_MIN
+    (c) =>
+      SUPPLIED_INPUTS.has(c) &&
+      labInputStock(room, c) < REACTION_INPUT_MIN &&
+      (c === RESOURCE_GHODIUM ||
+        mineralSupplyExpected(room, c as MineralConstant, labMineralShortfall(room).get(c) ?? 0))
   );
   return awaitingSupply ? LAB_SUPPLY_WAIT_TIMEOUT : LAB_STALL_TIMEOUT;
+}
+
+/**
+ * Whether every base mineral a chain needs is in the room or on its way. A
+ * chain short of one nobody will send or sell held Embercrag's labs for the
+ * whole supply wait before it was benched: on a market with no Z, K, U, L or
+ * X under the price the terminal pays, five targets did this in turn, while
+ * OH, which Embercrag had the O and some H for, waited behind them.
+ */
+function chainSupplied(room: Room, chain: LabQueueEntry[]): boolean {
+  for (const [mineral, need] of queuedBaseMineralNeed(chain)) {
+    if (labInputStock(room, mineral) >= REACTION_INPUT_MIN) continue;
+    if (!mineralSupplyExpected(room, mineral as MineralConstant, need)) return false;
+  }
+  return true;
 }
 
 function producedStock(compound: string, room: Room, outputLabs: StructureLab[]): number {
@@ -219,7 +247,7 @@ export function planAutoProduction(room: Room) {
     const stock = getStockForCompound(compound, room);
     if (stock < target) {
       const chain = resolveChain(compound, target, room);
-      if (chain.length > 0) {
+      if (chain.length > 0 && chainSupplied(room, chain)) {
         ls.queue.push(...chain.map((e) => ({ ...e, auto: true })));
         ls.plannedTarget = compound;
         return;
