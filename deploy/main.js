@@ -2178,15 +2178,24 @@ function whereIn(roomName) {
         ? `before the walls of ${castleName(roomName)}`
         : `in the ${wildsName(roomName)}`;
 }
-function chronicleKill(room, slayer) {
+function chronicleKill(room, slayer, dead) {
+    const lord = dead && isPlayerCreep(dead) ? dead.owner.username : undefined;
     const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
     annal("slain", 1);
-    if (foe === "raider")
+    if (lord || foe === "raider")
         spreadWord("victory!");
-    const band = foe === "raider" ? warbandIn(room.name) : undefined;
-    const one = band ? `A raider of ${band}'s band` : `A ${foe}`;
-    const many = (n) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
-    tally(`slain:${room.name}`, 1, (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
+    const band = foe === "raider" && !lord ? warbandIn(room.name) : undefined;
+    let one = band ? `A raider of ${band}'s band` : `A ${foe}`;
+    let many = (n) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
+    let key = `slain:${room.name}`;
+    if (lord) {
+        const armed = "body" in dead && dead.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
+        const [kind, kinds] = armed ? ["man-at-arms", "men-at-arms"] : ["spy", "spies"];
+        one = `A ${kind} of ${lordName(lord)}`;
+        many = (n) => `${n} of ${lordName(lord)}'s ${kinds}`;
+        key += `:${lord}:${kind}`;
+    }
+    tally(key, 1, (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
     if (band && warbandLoss(room.name)) {
         spreadWord("routed!");
         Memory.lastRout = { band, room: room.name, slayer };
@@ -2278,7 +2287,7 @@ function heraldRazed(room, events, id) {
     }
 }
 function heraldKills(room) {
-    var _a;
+    var _a, _b;
     const raw = room.getEventLog(true);
     if (!raw.includes(`"event":${EVENT_OBJECT_DESTROYED},`))
         return;
@@ -2298,14 +2307,15 @@ function heraldKills(room) {
             continue;
         const creeps = [...new Set(ours.filter((o) => o instanceof Creep))];
         const alone = creeps.length === 1 && creeps.length === new Set(ours).size;
-        chronicleKill(room, alone ? creeps[0].name : undefined);
+        const dead = (_a = room.find(FIND_TOMBSTONES).find((t) => t.creep.id === e.objectId)) === null || _a === void 0 ? void 0 : _a.creep;
+        chronicleKill(room, alone ? creeps[0].name : undefined, dead);
         if (creeps.length === 0) {
             roomCries[room.name] = "Huzzah!";
             continue;
         }
         for (const c of creeps) {
             creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
-            c.memory.kills = ((_a = c.memory.kills) !== null && _a !== void 0 ? _a : 0) + 1;
+            c.memory.kills = ((_b = c.memory.kills) !== null && _b !== void 0 ? _b : 0) + 1;
         }
     }
 }
