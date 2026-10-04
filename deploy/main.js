@@ -7738,12 +7738,12 @@ function whereIn(roomName) {
         ? `before the walls of ${castleName(roomName)}`
         : `in the ${wildsName(roomName)}`;
 }
-function chronicleKill(room) {
+function chronicleKill(room, slayer) {
     const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
     annal("slain", 1);
     if (foe === "raider")
         spreadWord("victory!");
-    tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}.`, BATTLE_WINDOW);
+    tally(`slain:${room.name}`, 1, (n) => (n === 1 ? `A ${foe} fell${slayer ? ` to ${slayer}` : ""}` : `${n} ${foe}s fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
 }
 let muster = new Map();
 function foeIn(roomName) {
@@ -7815,8 +7815,9 @@ function heraldKills(room) {
             .filter((o) => !!o && o.my);
         if (ours.length === 0)
             continue;
-        chronicleKill(room);
         const creeps = [...new Set(ours.filter((o) => o instanceof Creep))];
+        const alone = creeps.length === 1 && creeps.length === new Set(ours).size;
+        chronicleKill(room, alone ? creeps[0].name : undefined);
         if (creeps.length === 0) {
             roomCries[room.name] = "Huzzah!";
             continue;
@@ -15265,15 +15266,15 @@ const HAULER_SPAWN = {
     CARRY_CAPACITY: CARRY_CAPACITY,
 };
 const containerDistanceCache = {};
-function getContainerDistances(room, spawn, containers) {
-    const key = `${room.name}:${containers.map((c) => c.id).sort().join(",")}`;
+function getContainerDistances(room, from, containers) {
+    const key = `${room.name}:${from.id}:${containers.map((c) => c.id).sort().join(",")}`;
     const cache = containerDistanceCache[key];
     if (cache && Game.time - cache.cachedAt < HAULER_SPAWN.DISTANCE_CACHE_TTL) {
         return cache.distances;
     }
     const distances = {};
     for (const c of containers) {
-        const result = PathFinder.search(spawn.pos, { pos: c.pos, range: 1 }, {
+        const result = PathFinder.search(from.pos, { pos: c.pos, range: 1 }, {
             plainCost: 2,
             swampCost: 10,
             maxOps: 2000,
@@ -15291,7 +15292,7 @@ function getContainerDistances(room, spawn, containers) {
 const HAULER_CARRY_MARGIN = 1.5;
 const MIN_HAULER_CARRY = 4;
 function getHaulerPlan(room) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     const containerIds = (_a = room.memory.containerIds) !== null && _a !== void 0 ? _a : [];
     if (containerIds.length === 0)
         return null;
@@ -15306,12 +15307,15 @@ function getHaulerPlan(room) {
     let requiredCarry = 0;
     if (spawn) {
         const distances = getContainerDistances(room, spawn, minerContainers);
+        const upgradeId = room.storage ? undefined : room.memory.upgradeContainerId;
+        const upgrade = upgradeId ? Game.getObjectById(upgradeId) : null;
+        const onward = upgrade ? getContainerDistances(room, upgrade, minerContainers) : {};
         const dug = minerWorkByContainer(room);
         const workTarget = getMinerWorkTarget(room);
         for (const c of minerContainers) {
-            const dist = (_c = distances[c.id]) !== null && _c !== void 0 ? _c : 0;
+            const dist = Math.max((_c = distances[c.id]) !== null && _c !== void 0 ? _c : 0, (_d = onward[c.id]) !== null && _d !== void 0 ? _d : 0);
             const roundTrip = dist * 2;
-            const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, (_d = dug[c.id]) !== null && _d !== void 0 ? _d : 0));
+            const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, (_e = dug[c.id]) !== null && _e !== void 0 ? _e : 0));
             requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
         }
     }
