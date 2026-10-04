@@ -4,7 +4,7 @@
 // is worth remembering also goes into the Royal Chronicle.
 
 import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
-import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
+import { isArmedHostile, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
@@ -105,6 +105,12 @@ export function heraldRooms(): void {
       heraldVein(room);
     }
     heraldKills(room);
+  }
+  for (const castle of castles) {
+    for (const remote of castle.memory.remoteRooms ?? []) {
+      const wilds = Game.rooms[remote.roomName];
+      if (wilds && !wilds.controller?.my) heraldWayfarers(wilds, remote);
+    }
   }
   heraldDragon(castles);
   heraldWolves(castles);
@@ -263,6 +269,34 @@ function heraldVisitors(room: Room): void {
       roomCries[room.name] = "To arms!";
       spreadWord("raiders!");
     }
+  }
+}
+
+// Another player's creeps crossing one of our remotes unarmed make one line a
+// visit, named for what they came as. Armed ones are told as holding it.
+const WAYFARER_WINDOW = 3000;
+const WAYFARERS: [BodyPartConstant | undefined, string, string][] = [
+  [CLAIM, "An envoy", "Envoys"],
+  [WORK, "A labourer", "Labourers"],
+  [CARRY, "A carter", "Carters"],
+  [undefined, "A scout", "Scouts"],
+];
+
+function heraldWayfarers(room: Room, remote: RemoteRoomData): void {
+  const parties = new Map<string, Creep[]>();
+  for (const c of room.find(FIND_HOSTILE_CREEPS)) {
+    if (!isPlayerCreep(c)) continue;
+    const party = parties.get(c.owner.username);
+    if (party) party.push(c);
+    else parties.set(c.owner.username, [c]);
+  }
+  for (const [who, party] of parties) {
+    if (party.some(isArmedHostile) || (remote.hostile && remote.rival === who)) continue;
+    const [, one, many] = WAYFARERS.find(
+      ([part]) => !part || party.some((c) => c.body.some((p) => p.type === part))
+    )!;
+    const text = `${party.length === 1 ? one : many} of ${lordName(who)} passed through the ${wildsName(room.name)}.`;
+    tally(`wayfarers:${room.name}:${who}`, 0, () => text, WAYFARER_WINDOW);
   }
 }
 

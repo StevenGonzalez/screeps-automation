@@ -12,6 +12,8 @@ g.STRUCTURE_ROAD = "road";
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
 g.WORK = "work";
+g.CARRY = "carry";
+g.CLAIM = "claim";
 class FakeCreep {
   my = true;
   memory: CreepMemory = { role: "x" } as CreepMemory;
@@ -284,6 +286,43 @@ describe("herald", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(/^Spies of Rival the Fair crept about /);
     expect(lines[1]).toMatch(/^A war party of Rival the Fair came in arms to the walls of /);
+  });
+
+  describe("wayfarers in a remote", () => {
+    const REMOTE = "W2N1";
+
+    function remoteWith(hostiles: unknown[], entry: Partial<RemoteRoomData> = {}) {
+      const castle = roomWith([], { my: true, level: 6 });
+      castle.memory.remoteRooms = [{ roomName: REMOTE, sources: [], lastSeen: 0, hostile: false, ...entry }];
+      setup(castle, {});
+      (g.Game as { rooms: Record<string, unknown> }).rooms[REMOTE] = { name: REMOTE, find: () => hostiles, getEventLog: () => "[]" };
+      heraldRooms();
+    }
+
+    const creep = (who: string, ...parts: string[]) => ({ owner: { username: who }, body: parts.map((type) => ({ type, hits: 100 })) });
+
+    it("writes one line a visit for another player's labourers", () => {
+      const diggers = [creep("Rival", "work", "carry", "move"), creep("Rival", "carry", "move")];
+      remoteWith(diggers);
+      remoteWith(diggers);
+      expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+        `Labourers of Rival the Fair passed through the ${wildsName(REMOTE)}.`,
+      ]);
+    });
+
+    it("names a lone creep by what it came as", () => {
+      remoteWith([creep("Rival", "claim", "move")]);
+      remoteWith([creep("Other", "move")]);
+      const lines = (g.Memory as Memory).chronicle?.map((l) => l.text) ?? [];
+      expect(lines[0]).toMatch(/^An envoy of Rival the Fair passed through /);
+      expect(lines[1]).toMatch(/^A scout of Other the \w+ passed through /);
+    });
+
+    it("leaves armed men and the rival holding the remote to the line that tells of the hold", () => {
+      remoteWith([creep("Rival", "attack", "move"), creep("Rival", "work", "move")]);
+      remoteWith([creep("Rival", "work", "move")], { hostile: true, rival: "Rival" });
+      expect((g.Memory as Memory).chronicle ?? []).toEqual([]);
+    });
   });
 
   it("calls the castle to arms once, when a war party is first seen", () => {
