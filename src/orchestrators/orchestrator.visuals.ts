@@ -19,6 +19,7 @@ import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
 import { castleName, chronicleDate, formatK, recentChronicle, wildsName } from "../services/services.chronicle";
+import { armsPieces, shieldOutline } from "../services/services.heraldry";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -85,6 +86,9 @@ export function drawRealmMap(): void {
       stroke: "#000000",
       strokeWidth: 0.6,
     });
+    // Map positions are whole tiles, so the arms are drawn large enough that
+    // the rounding does not show.
+    drawArms((points, style) => mv.poly(points.map(([x, y]) => new RoomPosition(Math.round(x), Math.round(y), roomName)), style), roomName, 25, 16, 4);
     const gold = room.storage ? ` · ${formatK(room.storage.store[RESOURCE_ENERGY])} gold` : "";
     mv.text(`RCL ${room.controller.level}${gold}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
 
@@ -342,7 +346,25 @@ export function drawLandmarks(room: Room): void {
     const names = LANDMARKS[site.structureType];
     if (names) drawScaffold(v, site, names[0]);
   }
-  if (room.controller) v.text("Throne", room.controller.pos.x, room.controller.pos.y + 0.95, LANDMARK_LABEL);
+  if (room.controller) {
+    const { x, y } = room.controller.pos;
+    v.text("Throne", x, y + 0.95, LANDMARK_LABEL);
+    drawArms((points, style) => v.poly(points, style), room.name, x, y - 1.75, 0.42);
+  }
+}
+
+// The castle's arms (see services.heraldry) at x,y, `scale` tiles to half the
+// shield's width.
+function drawArms(
+  poly: (points: Array<[number, number]>, style: PolyStyle) => void,
+  roomName: string,
+  x: number,
+  y: number,
+  scale: number
+): void {
+  const place = (pts: Array<[number, number]>) => pts.map(([px, py]): [number, number] => [x + px * scale, y + py * scale]);
+  for (const piece of armsPieces(roomName)) poly(place(piece.points), { fill: piece.fill, stroke: "transparent", opacity: 0.9 });
+  poly(place(shieldOutline()), { fill: "transparent", stroke: "#8a6d1f", strokeWidth: 0.08 * scale, opacity: 0.9 });
 }
 
 const SCAFFOLD: LineStyle = { color: "#8b6b43", width: 0.06, opacity: 0.8 };

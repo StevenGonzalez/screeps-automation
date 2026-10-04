@@ -50,7 +50,7 @@ function world(creeps: Creep[], remoteRooms: Partial<RemoteRoomData>[] = []): Ro
     time: 1000,
     creeps: byName,
     rooms: { [HOME]: room },
-    map: { visual: { text: record("text"), line: record("line"), circle: record("circle") } },
+    map: { visual: { text: record("text"), line: record("line"), circle: record("circle"), poly: record("poly") } },
   };
   g.Memory = { rooms: { [HOME]: { townName: "Ravenhold" } } };
   return room;
@@ -299,7 +299,10 @@ describe("landmarks", () => {
       at("extension", 10, 10),
       at("road", 11, 10),
     ];
-    const visual = { text: (...args: unknown[]) => drawn.push({ kind: "text", args }) };
+    const visual = {
+      text: (...args: unknown[]) => drawn.push({ kind: "text", args }),
+      poly: (...args: unknown[]) => drawn.push({ kind: "poly", args }),
+    };
     const room = {
       name: HOME,
       visual,
@@ -309,7 +312,11 @@ describe("landmarks", () => {
 
     drawLandmarks(room);
 
-    const texts = drawn.map((d) => d.args[0]);
+    // The castle's arms hang over the throne.
+    const arms = drawn.filter((d) => d.kind === "poly").map((d) => d.args[0] as Array<[number, number]>);
+    expect(arms.length).toBeGreaterThanOrEqual(2);
+    for (const pts of arms) for (const [x, y] of pts) expect(Math.hypot(x - 5, y - 3.25)).toBeLessThan(1);
+    const texts = drawn.filter((d) => d.kind === "text").map((d) => d.args[0]);
     expect(texts).toContain("Treasury · 31.4K gold");
     expect(texts.filter((t) => t === "Watchtower")).toHaveLength(2);
     expect(texts.filter((t) => t === "Alchemy Labs")).toHaveLength(1);

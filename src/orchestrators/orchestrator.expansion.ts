@@ -3,6 +3,7 @@ import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles"
 import { getCpuStats } from "../services/services.profiler";
 import { KEEP_FUND_FLOOR } from "../services/services.treasury";
 import { castleName, chronicle, wildsName } from "../services/services.chronicle";
+import { blazon } from "../services/services.heraldry";
 
 const BOOTSTRAP_MIN_RCL = 3;
 const BOOTSTRAP_MIN_STORAGE_ENERGY = 10_000;
@@ -542,7 +543,9 @@ function manageActiveExpansion() {
           `[Expansion] ${exp.roomName} is self-sufficient (RCL ${child.controller!.level}, ` +
           `own spawn built) - established.`
         );
-        chronicle(`${castleName(exp.roomName)} stands on its own, with barracks of its own. The realm grows.`);
+        chronicle(
+          `${castleName(exp.roomName)} stands on its own, with barracks of its own, and raises its arms: ${blazon(exp.roomName)}. The realm grows.`
+        );
       }
     }
     return;

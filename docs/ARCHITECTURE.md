@@ -209,6 +209,7 @@ src/
     +-- services.coordination.ts     # Per-tick fill-target claims + hauler-to-worker energy handoff
     +-- services.town.ts             # Town clock, cottage geometry, parking-spot claims
     +-- services.herald.ts           # Battle cries and level-up proclamations
+    +-- services.heraldry.ts         # Each castle's coat of arms and its blazon
 ```
 
 ---
@@ -280,6 +281,14 @@ as the Throne. The names live in `LANDMARKS` (`config/config.structures.ts`),
 which the herald also uses when it tells of new works. A work still being
 built stands in scaffolding, its stone filling in from the ground, under a
 label such as `Barracks rising · 11%`.
+
+Every castle bears arms of its own, drawn from its room name
+(`services/services.heraldry.ts`): a colour with a metal charge on it (a
+cross, saltire, chevron, fess or roundel), or a field divided per pale, per
+fess, per bend or quarterly between a metal and a colour. The arms hang over
+the Throne and beside the castle's name on the world map, and the chronicle
+blazons them when a new keep stands on its own ("... and raises its arms: per
+pale or and sable.").
 
 ---
 
