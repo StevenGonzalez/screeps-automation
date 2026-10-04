@@ -2904,7 +2904,13 @@ function computeNukeRampartTarget(room) {
     }
     return worst;
 }
+const BARRIER_REPAIR_BAND = 10000;
+function weakestBand(barriers) {
+    const floor = barriers.reduce((min, b) => Math.min(min, b.hits), Infinity);
+    return barriers.filter((b) => b.hits < floor + BARRIER_REPAIR_BAND);
+}
 function findMostCriticalRepairTarget(creep) {
+    var _a, _b;
     const nukeTarget = getNukeRampartTarget(creep.room);
     if (nukeTarget)
         return nukeTarget;
@@ -2914,27 +2920,25 @@ function findMostCriticalRepairTarget(creep) {
             delete criticalRepairByRoom[k];
     }
     const rn = creep.room.name;
-    if (rn in criticalRepairByRoom)
-        return criticalRepairByRoom[rn];
-    const targetOf = barrierTargetFn(creep.room);
+    const candidates = (_a = criticalRepairByRoom[rn]) !== null && _a !== void 0 ? _a : (criticalRepairByRoom[rn] = repairCandidates(creep.room));
+    if (candidates.length <= 1)
+        return (_b = candidates[0]) !== null && _b !== void 0 ? _b : null;
+    return candidates.reduce((a, b) => (creep.pos.getRangeTo(a) <= creep.pos.getRangeTo(b) ? a : b));
+}
+function repairCandidates(room) {
+    const targetOf = barrierTargetFn(room);
     const isBarrier = (st) => st.structureType === STRUCTURE_WALL || st.structureType === STRUCTURE_RAMPART;
-    const kept = keptUp(creep.room);
-    const structures = getRoomStructures(creep.room).filter((st) => (!isBarrier(st) || targetOf(st) > 0) && kept(st));
+    const kept = keptUp(room);
+    const structures = getRoomStructures(room).filter((st) => (!isBarrier(st) || targetOf(st) > 0) && kept(st));
     const dying = structures.filter((st) => {
         const floor = decayRescueFloor(st);
         return floor > 0 && st.hits < floor;
     });
-    if (dying.length > 0) {
-        const result = dying.reduce((a, b) => (a.hits < b.hits ? a : b));
-        criticalRepairByRoom[rn] = result;
-        return result;
-    }
+    if (dying.length > 0)
+        return [dying.reduce((a, b) => (a.hits < b.hits ? a : b))];
     const criticalBarriers = structures.filter((st) => isBarrier(st) && st.hits < Math.min(BREACH_DANGER_FLOOR, targetOf(st) * 0.5));
-    if (criticalBarriers.length > 0) {
-        const result = criticalBarriers.reduce((a, b) => (a.hits < b.hits ? a : b));
-        criticalRepairByRoom[rn] = result;
-        return result;
-    }
+    if (criticalBarriers.length > 0)
+        return weakestBand(criticalBarriers);
     const nonDefensive = structures.filter((st) => st.structureType !== STRUCTURE_WALL &&
         st.structureType !== STRUCTURE_RAMPART &&
         st.hits < st.hitsMax * 0.8);
@@ -2943,16 +2947,10 @@ function findMostCriticalRepairTarget(creep) {
         const lowestFraction = (a, b) => a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b;
         const nonRoad = nonDefensive.filter((st) => !isRoad(st));
         const tier = nonRoad.length > 0 ? nonRoad : nonDefensive;
-        const result = tier.reduce(lowestFraction);
-        criticalRepairByRoom[rn] = result;
-        return result;
+        return [tier.reduce(lowestFraction)];
     }
     const belowTarget = structures.filter((st) => isBarrier(st) && st.hits < targetOf(st));
-    const result = belowTarget.length > 0
-        ? belowTarget.reduce((a, b) => (a.hits < b.hits ? a : b))
-        : null;
-    criticalRepairByRoom[rn] = result;
-    return result;
+    return belowTarget.length > 0 ? weakestBand(belowTarget) : [];
 }
 function findTowerRepairTarget(room) {
     var _a, _b;
