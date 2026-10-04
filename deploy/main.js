@@ -17870,7 +17870,8 @@ function drawRealmMap() {
             stroke: "#000000",
             strokeWidth: 0.6,
         });
-        mv.text(`RCL ${room.controller.level}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
+        const gold = room.storage ? ` · ${formatK(room.storage.store[RESOURCE_ENERGY])} gold` : "";
+        mv.text(`RCL ${room.controller.level}${gold}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
         for (const remote of (_c = room.memory.remoteRooms) !== null && _c !== void 0 ? _c : []) {
             const ours = (_e = (_d = worked[roomName]) === null || _d === void 0 ? void 0 : _d.has(remote.roomName)) !== null && _e !== void 0 ? _e : false;
             const held = remote.hostile && ((_f = remote.hostileUntil) !== null && _f !== void 0 ? _f : 0) > Game.time;
