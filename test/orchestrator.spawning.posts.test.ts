@@ -29,9 +29,14 @@ function creep(role: string, work: number, carry: number, containerId?: string, 
 
 // A keep with two source containers ten steps from its barracks. Given
 // `seats`, its source s1 can be dug from that many tiles.
-function keep(capacity: number, creeps: Creep[], seats?: number): Room {
+// Given `controllerWalk`, it has a container by its controller that many steps
+// from the source containers.
+function keep(capacity: number, creeps: Creep[], seats?: number, controllerWalk?: number): Room {
   const spawn = { id: "spawn1", spawning: null, pos: { x: 25, y: 25 } };
   const containers = ["c1", "c2"].map((id) => ({ id, pos: { x: 25, y: 15 }, store: { energy: 50 } }));
+  // Named for its walk, as the walks are cached by where they start.
+  const k = `k${controllerWalk}`;
+  if (controllerWalk !== undefined) containers.push({ id: k, pos: { x: 5, y: 5 }, store: { energy: 0 } });
   const source = { id: "s1", pos: { x: 24, y: 15 } };
   const around = [-1, 0, 1].flatMap((dx) => [-1, 0, 1].map((dy) => [24 + dx, 15 + dy])).filter(([x, y]) => x !== 24 || y !== 15);
   const open = new Set(around.slice(0, seats ?? 0).map(([x, y]) => `${x},${y}`));
@@ -39,7 +44,12 @@ function keep(capacity: number, creeps: Creep[], seats?: number): Room {
     name: ROOM,
     energyAvailable: capacity,
     energyCapacityAvailable: capacity,
-    memory: { spawnId: "spawn1", containerIds: ["c1", "c2"], minerContainerIds: ["c1", "c2"] },
+    memory: {
+      spawnId: "spawn1",
+      containerIds: containers.map((c) => c.id),
+      minerContainerIds: ["c1", "c2"],
+      upgradeContainerId: controllerWalk === undefined ? undefined : k,
+    },
     find: (type: number) => (type === g.FIND_MY_SPAWNS ? [spawn] : []),
     getTerrain: () => ({ get: (x: number, y: number) => (open.has(`${x},${y}`) ? 0 : 1) }),
   } as unknown as Room;
@@ -51,7 +61,12 @@ function keep(capacity: number, creeps: Creep[], seats?: number): Room {
       id === "spawn1" ? spawn : id === "s1" && seats !== undefined ? source : containers.find((c) => c.id === id) ?? null,
   };
   g.Memory = { creeps: {}, rooms: { [ROOM]: room.memory } };
-  g.PathFinder = { search: () => ({ incomplete: false, path: new Array(10).fill({ x: 0, y: 0 }) }) };
+  g.PathFinder = {
+    search: (from: { x: number }) => ({
+      incomplete: false,
+      path: new Array(from.x === 5 ? controllerWalk : 10).fill({ x: 0, y: 0 }),
+    }),
+  };
   return room;
 }
 
@@ -76,6 +91,19 @@ describe("porters for a young keep", () => {
       creep(ROLE_HAULER, 0, 4),
     ]);
     expect(shouldSpawnHauler(room)).toBe(true);
+  });
+
+  it("plans for the walk on to the controller's container before there is storage", () => {
+    const crew = () => [
+      creep(ROLE_MINER, 5, 0, "c1"),
+      creep(ROLE_MINER, 5, 0, "c2"),
+      creep(ROLE_HAULER, 0, 6),
+      creep(ROLE_HAULER, 0, 6),
+      creep(ROLE_HAULER, 0, 6),
+    ];
+    expect(shouldSpawnHauler(keep(550, crew()))).toBe(false);
+    expect(shouldSpawnHauler(keep(550, crew(), undefined, 8))).toBe(false);
+    expect(shouldSpawnHauler(keep(550, crew(), undefined, 30))).toBe(true);
   });
 });
 

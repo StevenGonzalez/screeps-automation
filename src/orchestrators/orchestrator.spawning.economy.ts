@@ -234,19 +234,20 @@ const containerDistanceCache: Record<
 
 function getContainerDistances(
   room: Room,
-  spawn: StructureSpawn,
+  from: StructureSpawn | StructureContainer,
   containers: StructureContainer[]
 ): Record<string, number> {
-  // Keyed on the container set as well as the room: callers pass different
-  // sets, and a container built or lost has to be measured straight away.
-  const key = `${room.name}:${containers.map((c) => c.id).sort().join(",")}`;
+  // Keyed on where the walk starts and the container set as well as the room:
+  // callers pass different sets, and a container built or lost has to be
+  // measured straight away.
+  const key = `${room.name}:${from.id}:${containers.map((c) => c.id).sort().join(",")}`;
   const cache = containerDistanceCache[key];
   if (cache && Game.time - cache.cachedAt < HAULER_SPAWN.DISTANCE_CACHE_TTL) {
     return cache.distances;
   }
   const distances: Record<string, number> = {};
   for (const c of containers) {
-    const result = PathFinder.search(spawn.pos, { pos: c.pos, range: 1 }, {
+    const result = PathFinder.search(from.pos, { pos: c.pos, range: 1 }, {
       plainCost: 2,
       swampCost: 10,
       maxOps: 2000,
@@ -284,6 +285,12 @@ interface HaulerPlan {
 // A source yields only what its miners dig. A young keep's two-WORK miners dig
 // 4 gold a tick of the source's 10, and planning for 10 asked a 350-capacity
 // keep for a fourth porter while its two containers held 100 gold between them.
+//
+// Before storage most of the gold goes on past the spawn to the controller's
+// container, which can be much further from a source. Grimford's far source
+// is 14 steps from its spawn and 32 from its controller; planned for the
+// spawn's walk alone, its porters left that source's container full and
+// spilling. The longer of the two walks is planned for.
 function getHaulerPlan(room: Room): HaulerPlan | null {
   const containerIds = room.memory.containerIds ?? [];
   if (containerIds.length === 0) return null;
@@ -301,12 +308,15 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
   let requiredCarry = 0;
   if (spawn) {
     const distances = getContainerDistances(room, spawn, minerContainers);
+    const upgradeId = room.storage ? undefined : room.memory.upgradeContainerId;
+    const upgrade = upgradeId ? Game.getObjectById(upgradeId) : null;
+    const onward = upgrade ? getContainerDistances(room, upgrade, minerContainers) : {};
     const dug = minerWorkByContainer(room);
     // A post with no miner yet, or a runt, is planned for the miner the room
     // would raise for it now.
     const workTarget = getMinerWorkTarget(room);
     for (const c of minerContainers) {
-      const dist = distances[c.id] ?? 0;
+      const dist = Math.max(distances[c.id] ?? 0, onward[c.id] ?? 0);
       const roundTrip = dist * 2;
       const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, dug[c.id] ?? 0));
       requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
