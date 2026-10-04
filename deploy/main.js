@@ -3292,17 +3292,19 @@ function getClosestContainerOrStorage(creep) {
         return closestByPath(creep.pos, nonUpgrade);
     return closestByPath(creep.pos, allTargets);
 }
-function findClosestMinerContainerWithEnergy(creep) {
-    const ids = getMinerContainerIds(creep.room);
-    if (!ids || ids.length === 0)
-        return null;
-    const containers = ids
-        .map((id) => Game.getObjectById(id))
-        .filter(Boolean);
-    const withEnergy = containers.filter((c) => c.store && c.store[RESOURCE_ENERGY] > 0);
-    if (withEnergy.length === 0)
-        return null;
-    return closestByPath(creep.pos, withEnergy) || null;
+function findFullestMinerContainer(creep, atLeast, range = Infinity) {
+    let fullest = null;
+    for (const id of getMinerContainerIds(creep.room)) {
+        const c = Game.getObjectById(id);
+        if (!c || c.store[RESOURCE_ENERGY] < atLeast)
+            continue;
+        if (fullest && c.store[RESOURCE_ENERGY] <= fullest.store[RESOURCE_ENERGY])
+            continue;
+        if (range !== Infinity && creep.pos.getRangeTo(c) > range)
+            continue;
+        fullest = c;
+    }
+    return fullest;
 }
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
 const UPGRADE_CONTAINER_FILLERS = 1;
@@ -4232,7 +4234,7 @@ function collectEnergy$1(creep, storageModel) {
             container = assigned;
     }
     if (!container)
-        container = findClosestMinerContainerWithEnergy(creep);
+        container = findFullestMinerContainer(creep, 100, nearbyOnly ? DIVERT_RANGE : Infinity);
     if (container &&
         container.store[RESOURCE_ENERGY] >= 100 &&
         (!nearbyOnly || creep.pos.getRangeTo(container) <= DIVERT_RANGE)) {
