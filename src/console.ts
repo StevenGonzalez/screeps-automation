@@ -15,7 +15,7 @@ import {
   getDrainOps,
 } from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity, isBlockaded } from "./services/services.combat";
-import { getCpuStats } from "./services/services.profiler";
+import { getCpuStats, getRoleStats } from "./services/services.profiler";
 import { castleName, chronicleDate, recentChronicle } from "./services/services.chronicle";
 import {
   launchSkOp,
@@ -866,6 +866,16 @@ export function setupConsole() {
         `[CPU] limit=${Game.cpu.limit} bucket=${Game.cpu.bucket} avgTotal=${total.toFixed(2)}`
       );
       for (const [name, s] of rows) {
+        console.log(
+          `  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`
+        );
+      }
+      // Roles are timed only while Memory.profileRoles is set: each creep costs
+      // two extra getUsed calls a tick.
+      const roles = Object.entries(getRoleStats()).sort((a, b) => b[1].ema - a[1].ema);
+      if (roles.length === 0) return;
+      console.log(`[CPU] per creep, by role${Memory.profileRoles ? "" : " (stale: Memory.profileRoles is off)"}`);
+      for (const [name, s] of roles) {
         console.log(
           `  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`
         );
