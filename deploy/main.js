@@ -3903,6 +3903,21 @@ function runBuilder(creep) {
     putSurplusEnergyToWork(creep);
 }
 
+const REPAIR_HOLD_TICKS = 10;
+function repairTarget(creep) {
+    const mem = creep.memory;
+    if (mem.repairUntil !== undefined && Game.time < mem.repairUntil) {
+        if (!mem.repairId)
+            return null;
+        const held = Game.getObjectById(mem.repairId);
+        if (held && held.hits < held.hitsMax)
+            return held;
+    }
+    const target = findMostCriticalRepairTarget(creep);
+    mem.repairId = target === null || target === void 0 ? void 0 : target.id;
+    mem.repairUntil = Game.time + REPAIR_HOLD_TICKS;
+    return target;
+}
 function runRepairer(creep) {
     if (creep.memory.working === undefined)
         creep.memory.working = false;
@@ -3931,7 +3946,7 @@ function runRepairer(creep) {
             harvestFromSource(creep, sources[0]);
         return;
     }
-    const target = findMostCriticalRepairTarget(creep);
+    const target = repairTarget(creep);
     if (target) {
         const res = repairStructure(creep, target);
         if (res === ERR_NOT_IN_RANGE)
