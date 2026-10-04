@@ -48,7 +48,7 @@ interface Gait {
 const gaits = new Map<string, Gait>();
 let pruned = 0;
 
-function walk(key: string, x: number, y: number, now: number, seed: number): Gait {
+export function walk(key: string, x: number, y: number, now: number, seed: number): Gait {
   let g = gaits.get(key);
   if (!g || now - g.seen > 3000 || Math.abs(x - g.x) + Math.abs(y - g.y) > 1.6) {
     g = { x, y, face: seed & 1 ? 1 : -1, back: false, phase: 0, stride: 0, seen: now };
@@ -63,7 +63,10 @@ function walk(key: string, x: number, y: number, now: number, seed: number): Gai
   const moving = d > 0.0005;
   if (moving) {
     if (Math.abs(dx) > 0.0005) g.face = dx > 0 ? 1 : -1;
-    g.back = dy < 0 && -dy > Math.abs(dx);
+    // Its back is turned only on a step well more north than sideways. On a
+    // diagonal step the two are even, and the rounding of its slide would
+    // turn it about from frame to frame, its face showing and gone.
+    g.back = dy < 0 && -dy > Math.abs(dx) * 1.2;
     g.phase += (d / STEP) * Math.PI;
   } else {
     // Coming to a stand: the feet brought together.

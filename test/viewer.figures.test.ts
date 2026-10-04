@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ROLE_TITLES } from "../src/config/config.roles";
+import { walk } from "../viewer/client/figures";
 import { creepTitle, lookOf, LOOKS } from "../viewer/client/figures-looks";
 import { INVADER, SOURCE_KEEPER } from "../viewer/shared/realm";
 
@@ -42,5 +43,24 @@ describe("viewer figures", () => {
     expect(ours.hover).toBe(true);
     expect(theirs.hover).toBe(true);
     expect(theirs.shirt).not.toBe(ours.shirt);
+  });
+
+  it("keeps a figure stepping diagonally north turned to the side, and one stepping north turned away", () => {
+    // A room far out on shard1, where world tiles are large numbers.
+    const ox = 97550;
+    const oy = 400;
+    const turns = (key: string, sx: number) => {
+      const seen = new Set<boolean>();
+      for (let step = 0; step < 4; step++) {
+        for (let ms = 0; ms <= 2700; ms += 1000 / 60) {
+          const t = ms / 2700;
+          const g = walk(key, ox + 10 + sx * (step + t), oy + 30 - (step + t), step * 3000 + ms, 1);
+          if (g.stride > 0) seen.add(g.back);
+        }
+      }
+      return [...seen];
+    };
+    expect(turns("diagonal", 1)).toEqual([false]);
+    expect(turns("north", 0)).toEqual([true]);
   });
 });
