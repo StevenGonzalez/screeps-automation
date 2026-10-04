@@ -1039,6 +1039,18 @@ function write(entry) {
 function chronicle(text) {
     write({ t: Game.time, text });
 }
+function annal(key, n) {
+    if (!Memory.annals)
+        Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
+    Memory.annals[key] += n;
+}
+function formatK(n) {
+    if (n >= 1000000)
+        return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000)
+        return `${(n / 1000).toFixed(1)}K`;
+    return String(n);
+}
 function tally(key, n, describe, window) {
     var _a, _b;
     const log = entries();
@@ -8303,8 +8315,19 @@ function heraldSeason() {
     Memory.heraldSeason = season;
     if (known === undefined || known === season)
         return;
+    const annals = Memory.annals;
+    Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
+    if (annals)
+        chronicle(annalsLine(known, annals));
     const feast = townFeast(Game.time);
     chronicle(feast ? `${SEASON_TIDINGS[season]} The ${feast} begins.` : SEASON_TIDINGS[season]);
+}
+function annalsLine(season, a) {
+    const whole = a.since <= Game.time - TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON;
+    const when = whole ? "This season" : "Since the scribes took up their pens";
+    const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
+    const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
+    return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold, ${slain} and ${fallen}.`;
 }
 const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
@@ -8400,6 +8423,7 @@ function whereIn(roomName) {
 }
 function chronicleKill(room) {
     const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
+    annal("slain", 1);
     tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}`, BATTLE_WINDOW);
 }
 let muster = new Map();
@@ -8427,6 +8451,7 @@ function heraldFallen() {
             continue;
         const foe = foeIn(last.room);
         const by = foe ? ` to ${foe}` : "";
+        annal("fallen", 1);
         tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
     }
     muster = next;
@@ -13361,6 +13386,7 @@ function closeBooks(room) {
         books.out[k] = blend(prev === null || prev === void 0 ? void 0 : prev.out[k], rate(k));
     books.trend = blend(prev === null || prev === void 0 ? void 0 : prev.trend, (storedGold(room) - w.stored) / ticks);
     Memory.exchequer[room.name] = books;
+    annal("gold", Math.round((rate("mines") + rate("vendors")) * ticks));
     delete windows[room.name];
     windowFor(room);
 }
@@ -18268,13 +18294,6 @@ function countCreepsByRole(room) {
         counts[role] = ((_a = counts[role]) !== null && _a !== void 0 ? _a : 0) + 1;
     }
     return counts;
-}
-function formatK(n) {
-    if (n >= 1000000)
-        return `${(n / 1000000).toFixed(1)}M`;
-    if (n >= 1000)
-        return `${(n / 1000).toFixed(1)}K`;
-    return String(n);
 }
 
 const ROLE_THEME = "darkfantasy";
