@@ -73,6 +73,25 @@ describe("findSmartEnergyFallbackTarget body-part awareness", () => {
     const creep = makeCreep([g.CARRY as string, g.CARRY as string, g.MOVE as string], room);
     expect(findSmartEnergyFallbackTarget(creep)).toBeNull();
   });
+
+  it("enchants rather than mend a road only a little decayed", () => {
+    const roomWithRoad = (hits: number) => {
+      const road = { id: "road", structureType: g.STRUCTURE_ROAD, hits, hitsMax: 5000, pos: { x: 20, y: 20 } };
+      g.Game = { time: clock++, getObjectById: () => null };
+      return {
+        name: `W1N1-${clock}`,
+        controller: { my: true, id: "controller", pos: { x: 9, y: 5 } } as unknown as StructureController,
+        memory: {} as RoomMemory,
+        find: (type: number) => (type === g.FIND_STRUCTURES ? [road] : []),
+      } as unknown as Room;
+    };
+    const kindAt = (hits: number) => {
+      const room = roomWithRoad(hits);
+      return findSmartEnergyFallbackTarget(makeCreep([g.WORK as string, g.CARRY as string, g.MOVE as string], room))?.kind;
+    };
+    expect(kindAt(4900)).toBe("upgrade");
+    expect(kindAt(3000)).toBe("repair");
+  });
 });
 
 import { runHauler } from "../src/roles/role.hauler";

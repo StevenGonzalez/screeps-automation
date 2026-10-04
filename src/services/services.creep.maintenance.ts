@@ -202,6 +202,12 @@ function isDamaged(s: AnyStructure): boolean {
   return s.hits < s.hitsMax;
 }
 
+// A road, container or the like is worth a trip to mend below this share of
+// its hits. Above it, a mason with nothing to build path-searched the keep
+// every tick for roads a tick of decay had touched, a hundred hits at a time,
+// and never got round to enchanting.
+const WORN_FRACTION = 0.8;
+
 // A room with a blueprint keeps up only the roads the plan wants; the rest
 // are left to decay. Rooms without one (remotes) keep every road.
 export function keptUp(room: Room): (s: AnyStructure) => boolean {
@@ -229,7 +235,7 @@ export function findClosestRepairTarget(creep: Creep): AnyStructure | null {
     (s): s is AnyStructure =>
       s.structureType !== STRUCTURE_WALL &&
       s.structureType !== STRUCTURE_RAMPART &&
-      isDamaged(s) &&
+      s.hits < s.hitsMax * WORN_FRACTION &&
       kept(s)
   );
   if (repairTargets.length === 0) return null;
@@ -365,7 +371,7 @@ function repairCandidates(room: Room): AnyStructure[] {
     (st): st is AnyStructure =>
       st.structureType !== STRUCTURE_WALL &&
       st.structureType !== STRUCTURE_RAMPART &&
-      st.hits < st.hitsMax * 0.8
+      st.hits < st.hitsMax * WORN_FRACTION
   );
   if (nonDefensive.length > 0) {
     // Each blacksmith takes the nearest. Chasing the most worn sent both across
