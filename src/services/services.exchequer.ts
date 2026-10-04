@@ -108,7 +108,10 @@ function readEvents(room: Room, w: LedgerWindow, isHome: boolean): void {
         if (isHome) add(w.sampled, "enchant", e.data.energySpent ?? 0);
         break;
       case EVENT_BUILD:
-        if (isHome || isMine(e.objectId)) add(w.sampled, "masonry", e.data.energySpent ?? 0);
+        // The server's build event carries no energySpent, whatever the typings
+        // say, so masonry always read nothing. Unboosted, a point of progress
+        // costs a point of gold.
+        if (isHome || isMine(e.objectId)) add(w.sampled, "masonry", e.data.energySpent ?? e.data.amount);
         break;
       case EVENT_REPAIR:
         // A tower pays a flat TOWER_ENERGY_COST a repair, whatever it mends.

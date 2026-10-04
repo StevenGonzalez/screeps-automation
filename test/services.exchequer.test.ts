@@ -67,7 +67,8 @@ describe("exchequer", () => {
     events[REMOTE] = [
       { event: 5, objectId: "peddler", data: { targetId: "src2", amount: 10 } },
       { event: 5, objectId: "stranger", data: { targetId: "src2", amount: 10 } },
-      { event: 4, objectId: "peddler", data: { targetId: "road", amount: 5, energySpent: 1 } },
+      // What the server sends: no energySpent on a build.
+      { event: 4, objectId: "peddler", data: { targetId: "road", amount: 5, structureType: "road", x: 1, y: 1, incomplete: true } },
     ];
     for (let t = 1000; t <= 1100; t++) {
       if (t === 1050) ex.recordSpend(HOME, "recruits", 1950);
@@ -83,11 +84,11 @@ describe("exchequer", () => {
     expect(books.out.enchant).toBe(15);
     expect(books.out.smithy).toBe(10);
     expect(books.out.towers).toBe(10);
-    expect(books.out.masonry).toBe(1);
+    expect(books.out.masonry).toBe(5);
     expect(books.out.recruits).toBe(19.5);
     expect(books.trend).toBe(5);
     expect(ex.totalIn(books)).toBe(20);
-    expect(ex.totalOut(books)).toBeCloseTo(55.5);
+    expect(ex.totalOut(books)).toBeCloseTo(59.5);
     // The season's annals count the window's gold whole, mines and vendors both.
     expect((g.Memory as Memory).annals?.gold).toBe(2000);
   });
