@@ -283,6 +283,7 @@ describe("herald", () => {
 
   it("names a fallen veteran's tally", () => {
     const veteran = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900, memory: { kills: 3 } };
+    (g.Memory as Memory).creeps = { "Dragon Knight Edric": veteran.memory as unknown as CreepMemory };
     tick++;
     g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Dragon Knight Edric": veteran } };
     heraldRooms();
@@ -296,8 +297,29 @@ describe("herald", () => {
     ]);
   });
 
+  it("counts the foe a creep slew on the tick before it fell", () => {
+    const knight = Object.assign(new FakeCreep("Dragon Knight Edric", { name: ROOM }), {
+      pos: { roomName: ROOM },
+      hits: 300,
+      hitsMax: 1000,
+      ticksToLive: 900,
+    });
+    (g.Memory as Memory).creeps = { [knight.name]: knight.memory };
+    setup(roomWith(killed("raider", ["knight"])), { knight });
+    (g.Game as { creeps: unknown }).creeps = { [knight.name]: knight };
+    heraldRooms();
+    setup(roomWith([]), {});
+    (g.Game as { creeps: unknown }).creeps = {};
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toContain(
+      "Dragon Knight Edric, who slew a foe, fell in the Gallows Forest."
+    );
+  });
+
   it("lays a veteran who outlived the fighting to rest", () => {
     const veteran = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 1, memory: { kills: 1 } };
+    (g.Memory as Memory).creeps = { "Dragon Knight Edric": veteran.memory as unknown as CreepMemory };
     tick++;
     g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Dragon Knight Edric": veteran } };
     heraldRooms();
@@ -315,6 +337,7 @@ describe("herald", () => {
   it("makes a song of each veteran who dies having slain more than any before", () => {
     const life = (name: string, kills: number, hits: number) => {
       const veteran = { pos: { roomName: ROOM }, hits, hitsMax: 1000, ticksToLive: hits < 1000 ? 900 : 1, memory: { kills } };
+      (g.Memory as Memory).creeps = { [name]: veteran.memory as unknown as CreepMemory };
       tick++;
       g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { [name]: veteran } };
       heraldRooms();
@@ -361,6 +384,7 @@ describe("herald", () => {
   it("chronicles a merchant who retires with the richest haul yet", () => {
     const life = (name: string, hauled: number) => {
       const merchant = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 1, memory: { hauled } };
+      (g.Memory as Memory).creeps = { [name]: merchant.memory as unknown as CreepMemory };
       tick++;
       g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { [name]: merchant } };
       heraldRooms();
