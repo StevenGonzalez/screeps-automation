@@ -7664,7 +7664,7 @@ function mourn(name) {
     return `† ${name.slice(name.lastIndexOf(" ") + 1)}`;
 }
 function heraldRooms() {
-    var _a;
+    var _a, _b, _c;
     freshCries();
     heraldFallen();
     heraldRenown();
@@ -7684,6 +7684,13 @@ function heraldRooms() {
             heraldVein(room);
         }
         heraldKills(room);
+    }
+    for (const castle of castles) {
+        for (const remote of (_b = castle.memory.remoteRooms) !== null && _b !== void 0 ? _b : []) {
+            const wilds = Game.rooms[remote.roomName];
+            if (wilds && !((_c = wilds.controller) === null || _c === void 0 ? void 0 : _c.my))
+                heraldWayfarers(wilds, remote);
+        }
     }
     heraldDragon(castles);
     heraldWolves(castles);
@@ -7817,6 +7824,32 @@ function heraldVisitors(room) {
             roomCries[room.name] = "To arms!";
             spreadWord("raiders!");
         }
+    }
+}
+const WAYFARER_WINDOW = 3000;
+const WAYFARERS = [
+    [CLAIM, "An envoy", "Envoys"],
+    [WORK, "A labourer", "Labourers"],
+    [CARRY, "A carter", "Carters"],
+    [undefined, "A scout", "Scouts"],
+];
+function heraldWayfarers(room, remote) {
+    const parties = new Map();
+    for (const c of room.find(FIND_HOSTILE_CREEPS)) {
+        if (!isPlayerCreep(c))
+            continue;
+        const party = parties.get(c.owner.username);
+        if (party)
+            party.push(c);
+        else
+            parties.set(c.owner.username, [c]);
+    }
+    for (const [who, party] of parties) {
+        if (party.some(isArmedHostile) || (remote.hostile && remote.rival === who))
+            continue;
+        const [, one, many] = WAYFARERS.find(([part]) => !part || party.some((c) => c.body.some((p) => p.type === part)));
+        const text = `${party.length === 1 ? one : many} of ${lordName(who)} passed through the ${wildsName(room.name)}.`;
+        tally(`wayfarers:${room.name}:${who}`, 0, () => text, WAYFARER_WINDOW);
     }
 }
 const WORKS_CHECK_PERIOD = 100;
