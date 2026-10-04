@@ -7455,6 +7455,7 @@ function heraldRooms() {
             heraldVisitors(room);
             heraldWorks(room);
             heraldRoads(room);
+            heraldVein(room);
         }
         heraldKills(room);
     }
@@ -7589,6 +7590,27 @@ function heraldRoads(room) {
         room.memory.heraldRoads = [...told, remote.roomName];
         spreadWord("new road!");
         chronicle(`The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`);
+    }
+}
+function heraldVein(room) {
+    var _a, _b;
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const mineral = room.find(FIND_MINERALS)[0];
+    if (!mineral)
+        return;
+    const dry = mineral.mineralAmount === 0;
+    const known = room.memory.heraldVeinDry;
+    room.memory.heraldVeinDry = dry;
+    if (known === undefined || known === dry)
+        return;
+    const vein = `The ${(_a = WARES[mineral.mineralType]) !== null && _a !== void 0 ? _a : mineral.mineralType} vein beneath ${castleName(room.name)}`;
+    if (dry) {
+        const days = Math.max(1, Math.round(((_b = mineral.ticksToRegeneration) !== null && _b !== void 0 ? _b : 0) / TOWN_DAY_LENGTH));
+        chronicle(`${vein} is dug dry. Its jewelers lay down their picks for ${days} days.`);
+    }
+    else {
+        chronicle(`${vein} runs full again. Its jewelers take up their picks.`);
     }
 }
 const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
@@ -14179,7 +14201,7 @@ function readEvents(room, w, isHome) {
                 break;
             case EVENT_BUILD:
                 if (isHome || isMine(e.objectId))
-                    add(w.sampled, "masonry", (_c = e.data.energySpent) !== null && _c !== void 0 ? _c : 0);
+                    add(w.sampled, "masonry", (_c = e.data.energySpent) !== null && _c !== void 0 ? _c : e.data.amount);
                 break;
             case EVENT_REPAIR:
                 if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
