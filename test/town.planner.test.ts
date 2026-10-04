@@ -31,9 +31,12 @@ function ringTiles(): string[] {
   return out;
 }
 
-// A plain room with exits on the top and bottom edges, a ring of built
-// ramparts 13 tiles out from the anchor, and road spokes running north and
-// south from the spawn.
+// The rampart doors where the spokes cross the ring.
+const DOORS = new Set(["25,12", "25,38"]);
+
+// A plain room with exits on the top and bottom edges, a built ring of walls
+// 13 tiles out from the anchor, and road spokes running north and south from
+// the spawn through rampart doors in the ring.
 function makeRoom(opts: { rcl: number; storage: number; ramparts?: boolean; barrier?: string }) {
   const ring = ringTiles();
   const structures: Struct[] = [
@@ -43,11 +46,12 @@ function makeRoom(opts: { rcl: number; storage: number; ramparts?: boolean; barr
   if (opts.ramparts !== false) {
     for (const k of ring) {
       const [x, y] = k.split(",").map(Number);
-      structures.push({ structureType: opts.barrier ?? "rampart", pos: { x, y } });
+      const type = opts.barrier ?? (DOORS.has(k) ? "rampart" : "constructedWall");
+      structures.push({ structureType: type, pos: { x, y } });
     }
   }
   const roads: string[] = [];
-  for (let y = 13; y <= 37; y++) if (y !== 25) roads.push(`25,${y}`);
+  for (let y = 12; y <= 38; y++) if (y !== 25) roads.push(`25,${y}`);
   const room = {
     name: "W1N1",
     controller: { my: true, level: opts.rcl, pos: { x: 5, y: 25 }, owner: { username: "me" } },
@@ -93,6 +97,31 @@ describe("planTown", () => {
     const room = makeRoom({ rcl: 6, storage: 500_000, barrier: "constructedWall" });
     planTown(room as unknown as Room);
     expect(room.memory.town).toBeDefined();
+  });
+
+  it("keeps the watch and the square off the tiles beside a door", () => {
+    const room = makeRoom({ rcl: 6, storage: 0 });
+    planTown(room as unknown as Room);
+    const town = room.memory.town!;
+    const besideDoor = (k: string) => {
+      const [x, y] = parse(k);
+      return [...DOORS].some((d) => {
+        const [dx, dy] = parse(d);
+        return Math.max(Math.abs(x - dx), Math.abs(y - dy)) <= 1;
+      });
+    };
+    expect(town.posts).toHaveLength(2 * TOWN.postsPerSide);
+    expect(town.posts.filter(besideDoor)).toEqual([]);
+    expect(town.square.filter(besideDoor)).toEqual([]);
+  });
+
+  it("moves a watch post planned beside a door before doors were kept clear", () => {
+    const room = makeRoom({ rcl: 6, storage: 0 });
+    planTown(room as unknown as Room);
+    room.memory.town!.posts[0] = "24,13";
+    planTown(room as unknown as Room);
+    expect(room.memory.town!.posts).not.toContain("24,13");
+    expect(room.memory.town!.posts).toHaveLength(2 * TOWN.postsPerSide);
   });
 
   it("raises watch posts and a square at RCL 4, but no cottage", () => {

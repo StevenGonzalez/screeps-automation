@@ -441,6 +441,24 @@ export function wantedCottages(room: Room): number {
   return TOWN.cottagesByRcl[rcl] ?? 0;
 }
 
+// Tiles beside a door in the ring: any ring tile that is not a wall. A creep
+// parked on one can seal the door for every creep that paths around standing
+// creeps, as a knight on watch beside the only door to an exit did.
+function besideDoors(room: Room, ring: string[]): Set<string> {
+  const mem = (room.memory.plannedStructures ?? {}) as Record<string, string[]>;
+  const walls = new Set<string>(mem[PLANNER_KEYS.STAMP_WALL_KEY] ?? []);
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_WALL) walls.add(tileKey(s.pos.x, s.pos.y));
+  }
+  const out = new Set<string>();
+  for (const k of ring) {
+    if (walls.has(k)) continue;
+    const { x, y } = parseTile(k);
+    for (const [dx, dy] of NEIGHBOURS) out.add(tileKey(x + dx, y + dy));
+  }
+  return out;
+}
+
 // Parking tiles lose their point once something is built on or beside them.
 function squareStillClear(room: Room, town: TownMemory): boolean {
   if (town.square.length === 0) return true;
@@ -475,7 +493,11 @@ export function planTown(room: Room): void {
   }
 
   const perimeterAt = room.memory.plannedStructuresMeta?.[PLANNER_KEYS.STAMP_RAMPART_KEY]?.createdAt;
-  const replanWatch = town.perimeterAt !== perimeterAt || !squareStillClear(room, town);
+  const nearDoors = besideDoors(room, ring);
+  const replanWatch =
+    town.perimeterAt !== perimeterAt ||
+    !squareStillClear(room, town) ||
+    town.posts.some((p) => nearDoors.has(p));
   const wantMore =
     town.cottages.length < wantedCottages(room) &&
     (town.failedAt === undefined || Game.time - town.failedAt >= TOWN.retryInterval);
@@ -513,7 +535,7 @@ export function planTown(room: Room): void {
     }
 
     if (replanWatch) {
-      const avoid = new Set<string>();
+      const avoid = new Set<string>(nearDoors);
       for (const c of town.cottages) {
         for (let dy = -1; dy <= 5; dy++) {
           for (let dx = -1; dx <= 5; dx++) avoid.add(tileKey(c.x + dx, c.y + dy));
