@@ -12867,6 +12867,143 @@ function loop$a() {
     Memory.empire = empire;
 }
 
+const METALS = [
+    { name: "or", hex: "#d4af37" },
+    { name: "argent", hex: "#e6e6e6" },
+];
+const COLOURS = [
+    { name: "gules", hex: "#a3202a" },
+    { name: "azure", hex: "#24489c" },
+    { name: "vert", hex: "#2f7a3a" },
+    { name: "sable", hex: "#1c1c1c" },
+    { name: "purpure", hex: "#6a2c8a" },
+];
+const DIVISIONS = ["plain", "plain", "per pale", "per fess", "per bend", "quarterly"];
+const CHARGES = ["a cross", "a saltire", "a chevron", "a fess", "a roundel"];
+function armsHash(roomName) {
+    let h = 0x811c9dc5 ^ 0x5eed;
+    for (let i = 0; i < roomName.length; i++)
+        h = Math.imul(h ^ roomName.charCodeAt(i), 0x01000193);
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return (h ^ (h >>> 16)) >>> 0;
+}
+function castleArmsOf(roomName) {
+    const h = armsHash(roomName);
+    const division = DIVISIONS[h % DIVISIONS.length];
+    const metal = METALS[(h >>> 4) % METALS.length];
+    const colour = COLOURS[(h >>> 8) % COLOURS.length];
+    if (division === "plain")
+        return { division, field: colour, other: metal, charge: CHARGES[(h >>> 12) % CHARGES.length] };
+    const metalFirst = (h >>> 16) & 1;
+    return { division, field: metalFirst ? metal : colour, other: metalFirst ? colour : metal };
+}
+function blazon(roomName) {
+    const a = castleArmsOf(roomName);
+    if (a.division === "plain")
+        return `${a.field.name}, ${a.charge} ${a.other.name}`;
+    return `${a.division} ${a.field.name} and ${a.other.name}`;
+}
+const SHIELD = (() => {
+    const pts = [[-1, -1.2], [1, -1.2]];
+    const c = -0.22;
+    const r = 1 - c;
+    const end = Math.atan2(1.2, -c);
+    const STEPS = 8;
+    for (let i = 0; i <= STEPS; i++) {
+        const a = (end * i) / STEPS;
+        pts.push([c + r * Math.cos(a), r * Math.sin(a)]);
+    }
+    for (let i = STEPS - 1; i >= 0; i--) {
+        const a = (end * i) / STEPS;
+        pts.push([-(c + r * Math.cos(a)), r * Math.sin(a)]);
+    }
+    return pts;
+})();
+const HEART_Y = -0.1;
+function clip(poly, a, b, c) {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+        const p = poly[i];
+        const q = poly[(i + 1) % poly.length];
+        const dp = a * p[0] + b * p[1] - c;
+        const dq = a * q[0] + b * q[1] - c;
+        if (dp <= 0)
+            out.push(p);
+        if (dp * dq < 0) {
+            const t = dp / (dp - dq);
+            out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+        }
+    }
+    return out;
+}
+function band(x0, y0, angle, w, shape = SHIELD) {
+    const nx = -Math.sin(angle);
+    const ny = Math.cos(angle);
+    const d = nx * x0 + ny * y0;
+    return clip(clip(shape, nx, ny, d + w), -nx, -ny, -d + w);
+}
+function chargePieces(charge) {
+    const BEND = Math.atan2(2.4, 2);
+    switch (charge) {
+        case "a cross":
+            return [band(0, 0, Math.PI / 2, 0.22), band(0, HEART_Y, 0, 0.22)];
+        case "a saltire":
+            return [band(0, HEART_Y, BEND, 0.2), band(0, HEART_Y, -BEND, 0.2)];
+        case "a fess":
+            return [band(0, HEART_Y, 0, 0.32)];
+        case "a chevron": {
+            const left = clip(SHIELD, 1, 0, 0);
+            const right = clip(SHIELD, -1, 0, 0);
+            return [band(0, -0.3, -0.75, 0.2, left), band(0, -0.3, 0.75, 0.2, right)];
+        }
+        case "a roundel": {
+            const pts = [];
+            for (let i = 0; i < 16; i++) {
+                const a = (2 * Math.PI * i) / 16;
+                pts.push([0.5 * Math.cos(a), HEART_Y + 0.5 * Math.sin(a)]);
+            }
+            return [pts];
+        }
+    }
+}
+const piecesCache = new Map();
+function armsPieces(roomName) {
+    let pieces = piecesCache.get(roomName);
+    if (!pieces) {
+        pieces = cutArms(castleArmsOf(roomName));
+        piecesCache.set(roomName, pieces);
+    }
+    return pieces;
+}
+function cutArms(a) {
+    const f = a.field.hex;
+    const o = a.other.hex;
+    switch (a.division) {
+        case "plain":
+            return [{ points: SHIELD, fill: f }, ...chargePieces(a.charge).map((points) => ({ points, fill: o }))];
+        case "per pale":
+            return [{ points: clip(SHIELD, 1, 0, 0), fill: f }, { points: clip(SHIELD, -1, 0, 0), fill: o }];
+        case "per fess":
+            return [{ points: clip(SHIELD, 0, 1, HEART_Y), fill: f }, { points: clip(SHIELD, 0, -1, -HEART_Y), fill: o }];
+        case "per bend":
+            return [{ points: clip(SHIELD, -1.2, 1, 0), fill: f }, { points: clip(SHIELD, 1.2, -1, 0), fill: o }];
+        case "quarterly": {
+            const top = clip(SHIELD, 0, 1, HEART_Y);
+            const base = clip(SHIELD, 0, -1, -HEART_Y);
+            return [
+                { points: clip(top, 1, 0, 0), fill: f },
+                { points: clip(top, -1, 0, 0), fill: o },
+                { points: clip(base, 1, 0, 0), fill: o },
+                { points: clip(base, -1, 0, 0), fill: f },
+            ];
+        }
+    }
+}
+function shieldOutline() {
+    return SHIELD;
+}
+
 const BOOTSTRAP_MIN_RCL = 3;
 const BOOTSTRAP_MIN_STORAGE_ENERGY = 10000;
 const BOOTSTRAP_INVASION_PAUSE = 200;
@@ -13392,7 +13529,7 @@ function manageActiveExpansion() {
                 exp.pausedUntil = undefined;
                 console.log(`[Expansion] ${exp.roomName} is self-sufficient (RCL ${child.controller.level}, ` +
                     `own spawn built) - established.`);
-                chronicle(`${castleName(exp.roomName)} stands on its own, with barracks of its own. The realm grows.`);
+                chronicle(`${castleName(exp.roomName)} stands on its own, with barracks of its own, and raises its arms: ${blazon(exp.roomName)}. The realm grows.`);
             }
         }
         return;
@@ -18204,6 +18341,7 @@ function drawRealmMap() {
             stroke: "#000000",
             strokeWidth: 0.6,
         });
+        drawArms((points, style) => mv.poly(points.map(([x, y]) => new RoomPosition(Math.round(x), Math.round(y), roomName)), style), roomName, 25, 16, 4);
         const gold = room.storage ? ` · ${formatK(room.storage.store[RESOURCE_ENERGY])} gold` : "";
         mv.text(`RCL ${room.controller.level}${gold}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
         for (const remote of (_c = room.memory.remoteRooms) !== null && _c !== void 0 ? _c : []) {
@@ -18433,8 +18571,17 @@ function drawLandmarks(room) {
         if (names)
             drawScaffold(v, site, names[0]);
     }
-    if (room.controller)
-        v.text("Throne", room.controller.pos.x, room.controller.pos.y + 0.95, LANDMARK_LABEL);
+    if (room.controller) {
+        const { x, y } = room.controller.pos;
+        v.text("Throne", x, y + 0.95, LANDMARK_LABEL);
+        drawArms((points, style) => v.poly(points, style), room.name, x, y - 1.75, 0.42);
+    }
+}
+function drawArms(poly, roomName, x, y, scale) {
+    const place = (pts) => pts.map(([px, py]) => [x + px * scale, y + py * scale]);
+    for (const piece of armsPieces(roomName))
+        poly(place(piece.points), { fill: piece.fill, stroke: "transparent", opacity: 0.9 });
+    poly(place(shieldOutline()), { fill: "transparent", stroke: "#8a6d1f", strokeWidth: 0.08 * scale, opacity: 0.9 });
 }
 const SCAFFOLD = { color: "#8b6b43", width: 0.06, opacity: 0.8 };
 const SCAFFOLD_STONE = "#9a9080";
