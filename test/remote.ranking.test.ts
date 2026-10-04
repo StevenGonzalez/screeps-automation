@@ -16,7 +16,10 @@ import {
   shouldSpawnRemoteHauler,
   spawnRemoteHauler,
 } from "../src/orchestrators/orchestrator.spawning.remote";
-import { shouldSpawnRemoteDefender } from "../src/orchestrators/orchestrator.spawning.military";
+import {
+  sendIdleRemoteKnights,
+  shouldSpawnRemoteDefender,
+} from "../src/orchestrators/orchestrator.spawning.military";
 import {
   ROLE_KNIGHT,
   ROLE_REMOTE_HAULER,
@@ -530,5 +533,31 @@ describe("remote knights", () => {
 
   it("is not raised by a castle below level 3, which sends no vendors out", () => {
     expect(shouldSpawnRemoteDefender(home({ remotes: [raided()], rcl: 2 }))).toBe(false);
+  });
+
+  const knight = (targetRoom: string, ticksToLive: number) =>
+    Object.assign(creep(ROLE_KNIGHT, 10, { targetRoom }), { ticksToLive });
+
+  it("sends a knight standing watch for a clear remote to one raiders hold, rather than raise another", () => {
+    const watch = knight("W6N5", 1000);
+    const room = home({ remotes: [remote("W6N5", [60]), raided()], creeps: [watch] });
+    sendIdleRemoteKnights(room);
+    expect(watch.memory.targetRoom).toBe("W4N5");
+    expect(shouldSpawnRemoteDefender(room)).toBe(false);
+  });
+
+  it("keeps a knight at its own remote while raiders hold that too", () => {
+    const guard = knight("W6N5", 1000);
+    const room = home({ remotes: [{ ...remote("W6N5", [60]), invaderUntil: clock + 500 }, raided()], creeps: [guard] });
+    sendIdleRemoteKnights(room);
+    expect(guard.memory.targetRoom).toBe("W6N5");
+  });
+
+  it("does not send a knight near its end", () => {
+    const old = knight("W6N5", 100);
+    const room = home({ remotes: [remote("W6N5", [60]), raided()], creeps: [old] });
+    sendIdleRemoteKnights(room);
+    expect(old.memory.targetRoom).toBe("W6N5");
+    expect(shouldSpawnRemoteDefender(room)).toBe(true);
   });
 });

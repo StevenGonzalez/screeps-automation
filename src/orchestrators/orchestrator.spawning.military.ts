@@ -608,6 +608,29 @@ function findRemoteInvaderTarget(room: Room): string | null {
   return null;
 }
 
+// A knight with less life than this left is not sent to a new remote: it
+// would die on the road and, counted as that remote's defender, hold back the
+// knight raised in its place.
+const REMOTE_KNIGHT_MIN_TTL = 150;
+
+// A remote knight standing watch at home, its own remote clear, rides out for
+// another remote its castle works that raiders hold. Each knight was tied to
+// the remote it was raised for, so a raid on another raised a second knight
+// while the first stood idle behind the walls for the rest of its life.
+export function sendIdleRemoteKnights(room: Room): void {
+  const remotes = room.memory.remoteRooms;
+  if (!remotes?.some((r) => (r.invaderUntil ?? 0) > Game.time)) return;
+  const raided = (name: string) => (remotes.find((r) => r.roomName === name)?.invaderUntil ?? 0) > Game.time;
+  for (const knight of getCreepsByRole(ROLE_KNIGHT)) {
+    const m = knight.memory;
+    if (m.homeRoom !== room.name || !m.targetRoom || m.offensiveTarget || m.defensiveTarget) continue;
+    if (raided(m.targetRoom) || (knight.ticksToLive ?? 0) < REMOTE_KNIGHT_MIN_TTL) continue;
+    const target = findRemoteInvaderTarget(room);
+    if (!target) return;
+    m.targetRoom = target;
+  }
+}
+
 const REMOTE_DEFENDER_BODY_WAIT = "remoteDefender";
 
 // Nothing at home is at stake, so the defender always waits for a full body.

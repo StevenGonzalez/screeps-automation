@@ -70,6 +70,7 @@ import {
   spawnNextDefender,
   shouldSpawnRemoteDefender,
   spawnRemoteDefender,
+  sendIdleRemoteKnights,
 } from "./orchestrator.spawning.military";
 import {
   shouldSpawnPowerCreep,
@@ -113,6 +114,7 @@ export function loop() {
     if (!room.controller?.my) continue;
     refreshBlockade(room);
     if (Game.time % STRAY_HAULER_INTERVAL === 0) reassignStrayHaulers(room);
+    sendIdleRemoteKnights(room);
     const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
     for (const spawn of spawns) {
       if (spawn.spawning) continue;
