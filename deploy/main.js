@@ -835,6 +835,7 @@ const TOWN = {
     cottageMaxRange: 14,
 };
 const TOWN_DAY_LENGTH = 1000;
+const TOWN_DAWN_HOUR = 5;
 const TOWN_PHASES = [
     { name: "dawn", start: 0 },
     { name: "day", start: 100 },
@@ -887,7 +888,7 @@ function townClock(time) {
             phase = p.name;
     return {
         phase,
-        hour: Math.floor((t * 24) / TOWN_DAY_LENGTH),
+        hour: (Math.floor((t * 24) / TOWN_DAY_LENGTH) + TOWN_DAWN_HOUR) % 24,
     };
 }
 function townSeason(time) {
