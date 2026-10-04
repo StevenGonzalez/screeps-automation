@@ -13,6 +13,9 @@ g.STRUCTURE_CONTAINER = "container";
 g.FIND_CONSTRUCTION_SITES = 111;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_MY_SPAWNS = 112;
+g.FIND_MY_STRUCTURES = 108;
+g.STRUCTURE_SPAWN = "spawn";
+g.STRUCTURE_EXTENSION = "extension";
 g.ERR_NO_PATH = -2;
 g.ERR_INVALID_ARGS = -10;
 g.RoomPosition = class {
@@ -109,6 +112,22 @@ describe("settler at work", () => {
     runSettler(c as unknown as Creep);
     expect(c.upgradeController).toHaveBeenCalledWith(ctrl);
     expect(c.build).not.toHaveBeenCalled();
+  });
+
+  it("fills the extensions as well as the barracks once nothing is left to build", () => {
+    const extension = { structureType: "extension", store: { getFreeCapacity: () => 50 } };
+    const full = { structureType: "spawn", store: { getFreeCapacity: () => 0 } };
+    const c = {
+      ...settlerBeside({ 108: [full, extension] }),
+      store: { energy: 300, getFreeCapacity: () => 0 },
+      transfer: vi.fn(() => 0),
+      upgradeController: vi.fn(() => 0),
+    };
+    c.memory.working = true;
+    Object.assign(c.room, { controller: { my: true, level: 2 }, memory: { lastSigned: 1 } });
+    runSettler(c as unknown as Creep);
+    expect(c.transfer).toHaveBeenCalledWith(extension, "energy");
+    expect(c.upgradeController).not.toHaveBeenCalled();
   });
 
   it("builds ahead of upgrading once the throne is level 2", () => {

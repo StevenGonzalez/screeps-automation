@@ -75,10 +75,16 @@ export function runSettler(creep: Creep) {
     return;
   }
 
-  const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
-  if (spawn && spawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-    if (creep.transfer(spawn, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(spawn, { reusePath: 20 });
+  // The extensions as well as the barracks: the keep sizes its own creeps by
+  // what both hold, and only the barracks refills by itself.
+  const store = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, {
+    filter: (s) =>
+      (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION) &&
+      s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+  });
+  if (store) {
+    if (creep.transfer(store, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(store, { reusePath: 20 });
     }
     return;
   }

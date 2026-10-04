@@ -79,7 +79,7 @@ shows the plan under the treasury line.
    queueing at the keep's sources, and when every source there is dry it builds
    with what it carries. Its work goes barracks first, then the throne to level
    2 (only 200 gold, and it opens the extensions), then the other construction
-   sites, then the barracks' gold, then the throne again. During this phase the
+   sites, then gold for the barracks and extensions, then the throne again. During this phase the
    orchestrator:
    - **Pauses** pilgrim spawning for ~200 ticks and flags `needsDefender` if the
      child room is invaded (pilgrims retreat; a home spawn rule raises a defender).
