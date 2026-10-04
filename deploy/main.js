@@ -7426,6 +7426,14 @@ function settleFlight(creep) {
     if (creep.memory.fled)
         delete creep.memory.fled;
 }
+function crySortie(creep, roomName) {
+    if (creep.memory.sortie === roomName)
+        return;
+    creep.memory.sortie = roomName;
+    freshCries();
+    creepCries[creep.name] = "Ride out!";
+    chronicle(`${creep.name} rides out against the raiders in the ${wildsName(roomName)}.`);
+}
 const GOSSIP_TICKS = 600;
 function spreadWord(line) {
     Memory.gossip = { line: line.slice(0, 10), until: Game.time + GOSSIP_TICKS };
@@ -9363,7 +9371,11 @@ function runKnight(creep) {
     }
     const target = creep.memory.targetRoom;
     const home = creep.memory.homeRoom;
-    if (target && creep.room.name !== target && isAssignedRemoteInvaded(creep)) {
+    const invaded = isAssignedRemoteInvaded(creep);
+    if (!invaded)
+        delete creep.memory.sortie;
+    if (target && creep.room.name !== target && invaded) {
+        crySortie(creep, target);
         creep.moveTo(new RoomPosition(25, 25, target), { reusePath: 20 });
         return;
     }
