@@ -519,8 +519,12 @@ function raiseWarband(roomName) {
         known.at = Game.time;
         return { name: known.name, raids: known.raids };
     }
-    const h = mixedHash(`${roomName}:${Game.time}`);
-    const name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
+    const taken = new Set(Object.values(bands).filter((b) => !b.broken).map((b) => b.name));
+    let name = "";
+    for (let i = 0; i < WARLORDS.length && (i === 0 || taken.has(name)); i++) {
+        const h = mixedHash(`${roomName}:${Game.time}${i ? `:${i}` : ""}`);
+        name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
+    }
     bands[roomName] = { name, at: Game.time, raids: 1 };
     return { name, raids: 1 };
 }
@@ -1631,12 +1635,14 @@ const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 let cryTick = -1;
 let creepCries = {};
 let roomCries = {};
+let riders = {};
 function freshCries() {
     if (cryTick === Game.time)
         return;
     cryTick = Game.time;
     creepCries = {};
     roomCries = {};
+    riders = {};
 }
 function cryFor(creep) {
     var _a;
@@ -1701,13 +1707,21 @@ function settleFlight(creep) {
         delete creep.memory.fled;
 }
 function crySortie(creep, roomName) {
+    var _a;
     if (creep.memory.sortie === roomName)
         return;
     creep.memory.sortie = roomName;
     freshCries();
     creepCries[creep.name] = "Ride out!";
+    const names = ((_a = riders[roomName]) !== null && _a !== void 0 ? _a : (riders[roomName] = []));
+    if (!names.includes(creep.name))
+        names.push(creep.name);
     const band = warbandIn(roomName);
-    chronicle(`${creep.name} rides out against ${band ? `${band}'s` : "the"} raiders in the ${wildsName(roomName)}.`);
+    const foe = `${band ? `${band}'s` : "the"} raiders in the ${wildsName(roomName)}`;
+    const line = () => names.length === 1
+        ? `${names[0]} rides out against ${foe}.`
+        : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} ride out together against ${foe}.`;
+    tally(`sortie:${roomName}`, 1, line, 0);
 }
 const GOSSIP_TICKS = 600;
 function spreadWord(line) {
