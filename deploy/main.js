@@ -459,6 +459,12 @@ function nameHash(roomName) {
     }
     return h;
 }
+function mixedHash(s) {
+    let h = nameHash(s);
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    return (h ^ (h >>> 16)) >>> 0;
+}
 function castleName(roomName) {
     var _a, _b;
     const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
@@ -489,11 +495,38 @@ const WILD_LANDS = [
     "Glen", "Weald", "Forest", "March", "Bog", "Reach", "Thicket", "Scar",
 ];
 function wildsName(roomName) {
-    let h = nameHash(roomName);
-    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
-    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
-    h = (h ^ (h >>> 16)) >>> 0;
+    const h = mixedHash(roomName);
     return `${WILD_HEADS[(h >>> 4) % WILD_HEADS.length]} ${WILD_LANDS[(h >>> 12) % WILD_LANDS.length]}`;
+}
+const WARLORDS = [
+    "Grask", "Mordrek", "Vulk", "Skarn", "Brakka", "Gorm", "Thrask", "Vilgrot",
+    "Krug", "Raznak", "Ulfgar", "Hask", "Dregga", "Orvik", "Odrik", "Zagra",
+];
+const WARLORD_EPITHETS = [
+    "the Flayer", "One-Eye", "the Gaunt", "Black-Tooth", "the Burner", "Red-Hand",
+    "the Unwashed", "Ironjaw", "the Hungry", "Crow-Feeder", "Half-Ear", "the Fen-Rat",
+];
+const WARBAND_LIFE = 1500;
+const WARBAND_MUSTER = 10;
+function raiseWarband(roomName) {
+    var _a, _b;
+    const known = (_a = Memory.warbands) === null || _a === void 0 ? void 0 : _a[roomName];
+    if (known && Game.time - known.at <= WARBAND_MUSTER)
+        return known.name;
+    const h = mixedHash(`${roomName}:${Game.time}`);
+    const name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
+    ((_b = Memory.warbands) !== null && _b !== void 0 ? _b : (Memory.warbands = {}))[roomName] = { name, at: Game.time };
+    return name;
+}
+function warbandIn(roomName) {
+    var _a;
+    const band = (_a = Memory.warbands) === null || _a === void 0 ? void 0 : _a[roomName];
+    if (!band)
+        return undefined;
+    if (Game.time - band.at <= WARBAND_LIFE)
+        return band.name;
+    delete Memory.warbands[roomName];
+    return undefined;
 }
 
 const METALS = [
@@ -3652,7 +3685,7 @@ function markRemoteInvader(entry, room) {
         return;
     const text = findInvaderCore(room)
         ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
-        : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`;
+        : `Raiders under ${raiseWarband(entry.roomName)} fell upon the vendors in the ${wildsName(entry.roomName)}.`;
     tally(`raid:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
 }
 function flagRemoteDamage(creep) {
@@ -3713,7 +3746,10 @@ function clearRemoteInvader(creep) {
 function clearRemoteInvaderEntry(entry) {
     if (entry.invaderUntil !== undefined) {
         if (entry.invaderUntil > Game.time) {
-            const text = `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
+            const band = warbandIn(entry.roomName);
+            const text = band
+                ? `The ${wildsName(entry.roomName)} is rid of ${band}'s raiders. The vendors take to the road.`
+                : `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
             tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
         }
         entry.invaderUntil = undefined;
@@ -7648,7 +7684,8 @@ function crySortie(creep, roomName) {
     creep.memory.sortie = roomName;
     freshCries();
     creepCries[creep.name] = "Ride out!";
-    chronicle(`${creep.name} rides out against the raiders in the ${wildsName(roomName)}.`);
+    const band = warbandIn(roomName);
+    chronicle(`${creep.name} rides out against ${band ? `${band}'s` : "the"} raiders in the ${wildsName(roomName)}.`);
 }
 const GOSSIP_TICKS = 600;
 function spreadWord(line) {
@@ -8078,7 +8115,10 @@ function chronicleKill(room, slayer) {
     annal("slain", 1);
     if (foe === "raider")
         spreadWord("victory!");
-    tally(`slain:${room.name}`, 1, (n) => (n === 1 ? `A ${foe} fell${slayer ? ` to ${slayer}` : ""}` : `${n} ${foe}s fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
+    const band = foe === "raider" ? warbandIn(room.name) : undefined;
+    const one = band ? `A raider of ${band}'s band` : `A ${foe}`;
+    const many = (n) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
+    tally(`slain:${room.name}`, 1, (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
 }
 let muster = new Map();
 function foeIn(roomName) {
@@ -8089,7 +8129,10 @@ function foeIn(roomName) {
         return `the men of ${lordName(player.owner.username)}`;
     if (hostiles.length === 0)
         return undefined;
-    return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
+    if (isSourceKeeperRoom(roomName))
+        return "a lair keeper";
+    const band = warbandIn(roomName);
+    return band ? `${band}'s raiders` : "raiders";
 }
 function heraldFallen() {
     var _a, _b, _c;
@@ -9564,6 +9607,7 @@ function runRemoteHauler(creep) {
         (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 ||
             (creep.store[RESOURCE_ENERGY] > 0 && ((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : Infinity) < 150))) {
         creep.memory.working = true;
+        delete creep.memory.haulFromId;
     }
     if (!creep.memory.working) {
         collectEnergy(creep, targetRoom);
@@ -9598,13 +9642,18 @@ function collectEnergy(creep, targetRoom) {
         moveToRoom$5(creep, targetRoom);
         return;
     }
-    const container = findBestContainer(creep);
+    const container = pickupContainer(creep);
     const dropped = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
         filter: (d) => d.resourceType === RESOURCE_ENERGY &&
             d.amount >= 50 &&
             (!container || d.pos.inRangeTo(container, 1)),
     });
     if (container && !dropped) {
+        if (container.store[RESOURCE_ENERGY] === 0) {
+            if (!creep.pos.isNearTo(container))
+                creep.moveTo(container, { range: 1, reusePath: 30 });
+            return;
+        }
         const res = creep.withdraw(container, RESOURCE_ENERGY);
         if (res === ERR_NOT_IN_RANGE)
             creep.moveTo(container, { reusePath: 30 });
@@ -9621,33 +9670,82 @@ function collectEnergy(creep, targetRoom) {
         creep.moveTo(source, { reusePath: 30 });
     }
 }
-function findBestContainer(creep) {
-    var _a;
+function pickupContainer(creep) {
+    const id = creep.memory.haulFromId;
+    const held = id ? Game.getObjectById(id) : null;
+    if (held &&
+        held.pos.roomName === creep.room.name &&
+        (held.store[RESOURCE_ENERGY] > 0 || minedContainers().has(held.id))) {
+        return held;
+    }
+    const chosen = chooseContainer(creep);
+    creep.memory.haulFromId = chosen === null || chosen === void 0 ? void 0 : chosen.id;
+    return chosen;
+}
+function minedContainers() {
+    const mined = new Set();
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (c.memory.role === ROLE_REMOTE_MINER && c.memory.assignedContainerId)
+            mined.add(c.memory.assignedContainerId);
+    }
+    return mined;
+}
+function chooseContainer(creep) {
+    var _a, _b;
+    const candidates = remoteContainers(creep);
+    if (candidates.length === 0)
+        return null;
+    const claimed = new Map();
+    for (const name in Game.creeps) {
+        const other = Game.creeps[name];
+        const id = other.memory.haulFromId;
+        if (!id || other.name === creep.name || other.memory.working)
+            continue;
+        claimed.set(id, ((_a = claimed.get(id)) !== null && _a !== void 0 ? _a : 0) + other.store.getFreeCapacity(RESOURCE_ENERGY));
+    }
+    const mined = minedContainers();
+    const piles = creep.room.find(FIND_DROPPED_RESOURCES, {
+        filter: (d) => d.resourceType === RESOURCE_ENERGY,
+    });
+    let best = null;
+    let bestLeft = -Infinity;
+    for (const c of candidates) {
+        let stock = c.store[RESOURCE_ENERGY];
+        for (const d of piles)
+            if (d.pos.inRangeTo(c, 1))
+                stock += d.amount;
+        if (stock === 0 && !mined.has(c.id))
+            continue;
+        const left = stock - ((_b = claimed.get(c.id)) !== null && _b !== void 0 ? _b : 0);
+        if (left > bestLeft || (left === bestLeft && best && creep.pos.getRangeTo(c) < creep.pos.getRangeTo(best))) {
+            best = c;
+            bestLeft = left;
+        }
+    }
+    return best;
+}
+function remoteContainers(creep) {
+    var _a, _b;
     const homeMemory = Memory.rooms[creep.memory.homeRoom];
     const remoteEntry = (_a = homeMemory === null || homeMemory === void 0 ? void 0 : homeMemory.remoteRooms) === null || _a === void 0 ? void 0 : _a.find((r) => r.roomName === creep.room.name);
-    if (remoteEntry) {
-        const candidates = [];
-        for (const sourceData of remoteEntry.sources) {
-            if (!sourceData.containerId)
-                continue;
-            const c = Game.getObjectById(sourceData.containerId);
-            if (c && c.store[RESOURCE_ENERGY] > 0)
-                candidates.push(c);
-        }
-        if (candidates.length > 0) {
-            return candidates.reduce((a, b) => a.store[RESOURCE_ENERGY] > b.store[RESOURCE_ENERGY] ? a : b);
-        }
+    const containers = [];
+    for (const sourceData of (_b = remoteEntry === null || remoteEntry === void 0 ? void 0 : remoteEntry.sources) !== null && _b !== void 0 ? _b : []) {
+        if (!sourceData.containerId)
+            continue;
+        const c = Game.getObjectById(sourceData.containerId);
+        if (c)
+            containers.push(c);
     }
-    const sources = creep.room.find(FIND_SOURCES);
-    for (const source of sources) {
-        const containers = source.pos.findInRange(FIND_STRUCTURES, 1, {
-            filter: (s) => s.structureType === STRUCTURE_CONTAINER &&
-                s.store[RESOURCE_ENERGY] > 0,
+    if (containers.length > 0)
+        return containers;
+    for (const source of creep.room.find(FIND_SOURCES)) {
+        const found = source.pos.findInRange(FIND_STRUCTURES, 1, {
+            filter: (s) => s.structureType === STRUCTURE_CONTAINER,
         });
-        if (containers.length > 0)
-            return containers[0];
+        containers.push(...found);
     }
-    return null;
+    return containers;
 }
 function depositEnergy(creep, homeRoom) {
     if (creep.room.name !== homeRoom) {
