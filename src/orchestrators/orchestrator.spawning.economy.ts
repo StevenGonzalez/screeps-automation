@@ -189,26 +189,38 @@ export function getUpgraderPopulationTarget(room: Room): number {
 
 let constructionSiteCacheTick = -1;
 
-const constructionSiteCountByRoom: Record<string, number> = {};
+const constructionByRoom: Record<string, { sites: number; left: number }> = {};
 
-function getConstructionSiteCount(room: Room): number {
+// The room's construction sites and the build progress they still need.
+function getConstruction(room: Room): { sites: number; left: number } {
   if (constructionSiteCacheTick !== Game.time) {
     constructionSiteCacheTick = Game.time;
-    for (const k of Object.keys(constructionSiteCountByRoom)) delete constructionSiteCountByRoom[k];
+    for (const k of Object.keys(constructionByRoom)) delete constructionByRoom[k];
   }
-  if (constructionSiteCountByRoom[room.name] === undefined) {
-    constructionSiteCountByRoom[room.name] = room.find(FIND_CONSTRUCTION_SITES).length;
+  if (constructionByRoom[room.name] === undefined) {
+    const sites = room.find(FIND_CONSTRUCTION_SITES);
+    let left = 0;
+    for (const s of sites) left += s.progressTotal - s.progress;
+    constructionByRoom[room.name] = { sites: sites.length, left };
   }
-  return constructionSiteCountByRoom[room.name];
+  return constructionByRoom[room.name];
 }
 
-function getBuilderPopulationTarget(room: Room): number {
+// Share of its life a mason spends building, rather than fetching gold and
+// walking to the site.
+const BUILDER_DUTY = 0.25;
+
+export function getBuilderPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
-  const siteCount = getConstructionSiteCount(room);
-  if (siteCount === 0) return 0;
+  const { sites, left } = getConstruction(room);
+  if (sites === 0) return 0;
   const phase = getRoomPhase(room);
-  if (phase === "bootstrap") return Math.min(3, siteCount);
-  const target = Math.ceil(siteCount / 5);
+  if (phase === "bootstrap") return Math.min(3, sites);
+  // Masons follow the work left, not the count of sites. One for every five
+  // sites sent Embercrag a second 33-part mason for eight road tiles, 2,400
+  // progress in all, which the first one lays in under fifty ticks of work.
+  const work = buildScaledBody(ROLE_BUILDER, bodyBudget(room, "capacity")).filter((p) => p === WORK).length;
+  const target = Math.ceil(left / (work * BUILD_POWER * CREEP_LIFE_TIME * BUILDER_DUTY));
   const buffer = room.storage?.store[RESOURCE_ENERGY] ?? 0;
   const cap = buffer > 30_000 ? 5 : 2;
   return Math.min(cap, Math.max(1, target));

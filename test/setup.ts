@@ -43,6 +43,7 @@ const GAME_CONSTANTS: Record<string, unknown> = {
     claim: 600,
   },
   CARRY_CAPACITY: 50,
+  BUILD_POWER: 5,
   CREEP_SPAWN_TIME: 3,
   CREEP_LIFE_TIME: 1500,
   CREEP_CLAIM_LIFE_TIME: 600,
