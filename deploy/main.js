@@ -16549,6 +16549,25 @@ function findRemoteInvaderTarget(room) {
     }
     return null;
 }
+const REMOTE_KNIGHT_MIN_TTL = 150;
+function sendIdleRemoteKnights(room) {
+    var _a;
+    const remotes = room.memory.remoteRooms;
+    if (!(remotes === null || remotes === void 0 ? void 0 : remotes.some((r) => { var _a; return ((_a = r.invaderUntil) !== null && _a !== void 0 ? _a : 0) > Game.time; })))
+        return;
+    const raided = (name) => { var _a, _b; return ((_b = (_a = remotes.find((r) => r.roomName === name)) === null || _a === void 0 ? void 0 : _a.invaderUntil) !== null && _b !== void 0 ? _b : 0) > Game.time; };
+    for (const knight of getCreepsByRole(ROLE_KNIGHT)) {
+        const m = knight.memory;
+        if (m.homeRoom !== room.name || !m.targetRoom || m.offensiveTarget || m.defensiveTarget)
+            continue;
+        if (raided(m.targetRoom) || ((_a = knight.ticksToLive) !== null && _a !== void 0 ? _a : 0) < REMOTE_KNIGHT_MIN_TTL)
+            continue;
+        const target = findRemoteInvaderTarget(room);
+        if (!target)
+            return;
+        m.targetRoom = target;
+    }
+}
 const REMOTE_DEFENDER_BODY_WAIT = "remoteDefender";
 function shouldSpawnRemoteDefender(room) {
     const needed = findRemoteInvaderTarget(room) !== null;
@@ -16815,6 +16834,7 @@ function loop$7() {
         refreshBlockade(room);
         if (Game.time % STRAY_HAULER_INTERVAL === 0)
             reassignStrayHaulers(room);
+        sendIdleRemoteKnights(room);
         const spawns = room.find(FIND_MY_SPAWNS);
         for (const spawn of spawns) {
             if (spawn.spawning)
