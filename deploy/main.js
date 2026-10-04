@@ -11313,6 +11313,28 @@ const SEASON_CALLS = {
 const STORM_CALLS = ["storm!", "bar doors", "rain again"];
 const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
 const FEAST_CHEER_PERIOD = 100;
+const NIGHT_WATCH_CRY_PERIOD = 100;
+let watchTick = -1;
+let watchmen = {};
+function nightWatchman(roomName) {
+    if (watchTick !== Game.time) {
+        watchTick = Game.time;
+        watchmen = {};
+    }
+    if (!(roomName in watchmen)) {
+        const names = [];
+        for (const name in Game.creeps) {
+            const c = Game.creeps[name];
+            const m = c.memory;
+            if (m.role === ROLE_TOWNSFOLK && m.job !== "lookout" && m.homeRoom === roomName && !c.spawning)
+                names.push(name);
+        }
+        names.sort();
+        const night = Math.floor(Game.time / TOWN_DAY_LENGTH);
+        watchmen[roomName] = names.length >= 2 ? names[night % names.length] : undefined;
+    }
+    return watchmen[roomName];
+}
 function runTownsfolk(creep) {
     if (creep.memory.job === "lookout")
         runLookout(creep);
@@ -11363,6 +11385,12 @@ function runMilitia(creep) {
     const clock = townClock(Game.time);
     callThePhase(creep);
     if (isNightfall(clock.phase)) {
+        if (nightWatchman(home) === creep.name) {
+            if (Game.time % NIGHT_WATCH_CRY_PERIOD === NIGHT_WATCH_CRY_PERIOD / 2)
+                creep.say("all's well", true);
+            if (parkIdle(creep, "watch"))
+                return;
+        }
         if (parkOn(creep, bedTiles(room.memory.town)))
             return;
         parkIdle(creep, "square");
@@ -18755,6 +18783,14 @@ function drawTown(room) {
             v.circle(x - 0.25, y - 0.45, { radius: 0.1 + 0.05 * flicker, fill: "#ffcc55", opacity: 0.6 + 0.3 * flicker });
         }
     });
+    const watchman = lit ? nightWatchman(room.name) : undefined;
+    const keeper = watchman ? Game.creeps[watchman] : undefined;
+    if (keeper && keeper.room.name === room.name) {
+        const { x, y } = keeper.pos;
+        const sway = 0.06 * Math.sin(Game.time * 0.9);
+        v.circle(x + 0.3 + sway, y - 0.25, { radius: 1.3, fill: "#ffb347", opacity: 0.1 });
+        v.circle(x + 0.3 + sway, y - 0.25, { radius: 0.13, fill: "#ffe39a", opacity: 0.9 });
+    }
     if (lit) {
         for (const s of room.find(FIND_MY_STRUCTURES)) {
             const { x, y } = s.pos;
