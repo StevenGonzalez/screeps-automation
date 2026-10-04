@@ -237,6 +237,25 @@ function heraldSky(): void {
   chronicle(AURORA_TIDINGS[Math.floor(Game.time / TOWN_DAY_LENGTH) % AURORA_TIDINGS.length]);
 }
 
+// What changed in another lord's hold since the realm last looked at the room:
+// a keep raised, taken, abandoned, or grown a level. The first look is not news.
+export function heraldRival(roomName: string, before: RoomIntelData | undefined, owner: string | undefined, rcl: number): void {
+  if (!before) return;
+  const was = before.owner;
+  const wilds = `the ${wildsName(roomName)}`;
+  if (owner && owner !== was) {
+    chronicle(
+      was
+        ? `${lordName(owner)} seizes ${wilds} from ${lordName(was)}.`
+        : `${lordName(owner)} raises a keep in ${wilds}.`
+    );
+  } else if (!owner && was) {
+    chronicle(`The keep of ${lordName(was)} in ${wilds} lies abandoned.`);
+  } else if (owner && before.rcl > 0 && rcl > before.rcl) {
+    chronicle(`The keep of ${lordName(owner)} in ${wilds} rises to level ${rcl}.`);
+  }
+}
+
 // The whole room cheers when the castle reaches a new controller level.
 function heraldRise(room: Room): void {
   const level = room.controller!.level;

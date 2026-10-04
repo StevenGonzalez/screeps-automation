@@ -1,4 +1,5 @@
 import { getThreatInfo, evaluateRoomThreatLevel } from "../services/services.combat";
+import { heraldRival } from "../services/services.herald";
 import { launchNukeFrom } from "./orchestrator.nuker";
 import {
   onTargetCooldown,
@@ -100,12 +101,16 @@ export function recordRoomIntel(room: Room): void {
     return total;
   };
 
+  const owner = room.controller?.owner?.username;
+  const rcl = room.controller?.level ?? 0;
+  heraldRival(rn, Memory.intel[rn], owner, rcl);
+
   Memory.intel[rn] = {
     roomName: rn,
     lastSeen: Game.time,
-    owner: room.controller?.owner?.username,
+    owner,
     reservedBy: room.controller?.reservation?.username,
-    rcl: room.controller?.level ?? 0,
+    rcl,
     towers: towerStructs.length,
     spawns: spawnStructs.length,
     hostileCreeps: hostiles.length,

@@ -15,8 +15,8 @@ class FakeCreep {
 }
 g.Creep = FakeCreep;
 
-import { cryFor, cryFlight, heraldRooms, settleFlight } from "../src/services/services.herald";
-import { annal, castleName } from "../src/services/services.chronicle";
+import { cryFor, cryFlight, heraldRival, heraldRooms, settleFlight } from "../src/services/services.herald";
+import { annal, castleName, lordName, wildsName } from "../src/services/services.chronicle";
 import { townAurora, townDragon } from "../src/services/services.town";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
@@ -349,6 +349,24 @@ describe("herald", () => {
     const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("Wolves"));
     expect(lines).toEqual([
       `Wolves howled beneath the full moon outside the walls of ${castleName(ROOM)} and ${castleName("W2N1")}.`,
+    ]);
+  });
+
+  it("tells of other lords' keeps raised, grown, taken and abandoned, but not of the first look", () => {
+    g.Game = { time: 500 };
+    const seen = (owner: string | undefined, rcl: number) => ({ owner, rcl }) as RoomIntelData;
+    const wilds = `the ${wildsName("W5N5")}`;
+    heraldRival("W5N5", undefined, "Jumpp", 3);
+    heraldRival("W5N5", seen(undefined, 0), "Jumpp", 1);
+    heraldRival("W5N5", seen("Jumpp", 1), "Jumpp", 2);
+    heraldRival("W5N5", seen("Jumpp", 2), "Jumpp", 2);
+    heraldRival("W5N5", seen("Jumpp", 2), "Tigga", 1);
+    heraldRival("W5N5", seen("Tigga", 1), undefined, 0);
+    expect(((g.Memory as Memory).chronicle ?? []).map((l) => l.text)).toEqual([
+      `${lordName("Jumpp")} raises a keep in ${wilds}.`,
+      `The keep of ${lordName("Jumpp")} in ${wilds} rises to level 2.`,
+      `${lordName("Tigga")} seizes ${wilds} from ${lordName("Jumpp")}.`,
+      `The keep of ${lordName("Tigga")} in ${wilds} lies abandoned.`,
     ]);
   });
 
