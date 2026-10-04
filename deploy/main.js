@@ -8091,6 +8091,72 @@ function markRoomUnreachable(homeRoomName, targetRoomName) {
     entry.hostileUntil = Game.time + UNREACHABLE_RETRY_TICKS;
 }
 
+const MAX_ENTRIES = 40;
+function entries() {
+    if (!Memory.chronicle)
+        Memory.chronicle = [];
+    if (Memory.chronicleEpoch === undefined)
+        Memory.chronicleEpoch = Game.time;
+    return Memory.chronicle;
+}
+function write(entry) {
+    const log = entries();
+    log.push(entry);
+    if (log.length > MAX_ENTRIES)
+        log.splice(0, log.length - MAX_ENTRIES);
+    console.log(`[Chronicle] ${entry.text}`);
+}
+function chronicle(text) {
+    write({ t: Game.time, text });
+}
+function tally(key, n, describe, window) {
+    var _a, _b;
+    const log = entries();
+    for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (e.key !== key)
+            continue;
+        if (Game.time - ((_a = e.last) !== null && _a !== void 0 ? _a : e.t) > window)
+            break;
+        e.n = ((_b = e.n) !== null && _b !== void 0 ? _b : 0) + n;
+        e.last = Game.time;
+        e.text = describe(e.n);
+        return;
+    }
+    write({ t: Game.time, text: describe(n), key, n, last: Game.time });
+}
+function chronicleDate(t) {
+    var _a;
+    const epoch = (_a = Memory.chronicleEpoch) !== null && _a !== void 0 ? _a : t;
+    const day = Math.floor((t - epoch) / TOWN_DAY_LENGTH) + 1;
+    return `Day ${day}, ${townClock(t).phase}`;
+}
+function recentChronicle(count) {
+    var _a;
+    return ((_a = Memory.chronicle) !== null && _a !== void 0 ? _a : []).slice(-count);
+}
+const NAME_HEADS = [
+    "Ash", "Raven", "Black", "Iron", "Grim", "Thorn", "Wolf", "Dusk",
+    "Storm", "Ember", "Hollow", "Frost", "Gloam", "Bramble", "Crow", "Stone",
+];
+const NAME_TAILS = ["hold", "moor", "keep", "spire", "fell", "gate", "watch", "barrow", "crag", "mere", "ford", "reach"];
+function castleName(roomName) {
+    var _a, _b;
+    const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
+    if (given)
+        return given;
+    let h = 2166136261;
+    for (let i = 0; i < roomName.length; i++) {
+        h ^= roomName.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+    }
+    const head = NAME_HEADS[h % NAME_HEADS.length];
+    let t = (h >>> 8) % NAME_TAILS.length;
+    if (NAME_TAILS[t][0] === head[head.length - 1])
+        t = (t + 1) % NAME_TAILS.length;
+    return head + NAME_TAILS[t];
+}
+
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 let cryTick = -1;
 let creepCries = {};
@@ -8136,7 +8202,14 @@ function heraldRise(room) {
     if (known === undefined || level <= known)
         return;
     roomCries[room.name] = "Long live!";
-    console.log(`[Herald] Hear ye! ${room.name} rises to level ${level}. Long live the Crown!`);
+    chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+}
+const BATTLE_WINDOW = 300;
+function chronicleKill(room) {
+    var _a;
+    const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
+    const where = ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) ? `before the walls of ${castleName(room.name)}` : `in the wilds of ${room.name}`;
+    tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${where}`, BATTLE_WINDOW);
 }
 function heraldKills(room) {
     const raw = room.getEventLog(true);
@@ -8152,6 +8225,7 @@ function heraldKills(room) {
             .filter((o) => !!o && o.my);
         if (ours.length === 0)
             continue;
+        chronicleKill(room);
         const creeps = ours.filter((o) => o instanceof Creep);
         if (creeps.length === 0) {
             roomCries[room.name] = "Huzzah!";
@@ -8772,6 +8846,7 @@ function runConqueror(creep) {
     else if (result === OK) {
         Memory.expansion.phase = "bootstrapping";
         console.log(`[Expansion] Claimed ${targetRoom}!`);
+        chronicle(`The Crown's banner rises over ${targetRoom}. The keep of ${castleName(targetRoom)} is founded.`);
         try {
             const sig = pickSignature(creep.room.name);
             const sres = creep.signController(controller, sig);
@@ -10713,11 +10788,11 @@ function townProtectedRects(room) {
     }));
 }
 function describeTown(room) {
-    var _a, _b, _c;
+    var _a, _b;
     const town = room.memory.town;
-    const name = (_a = room.memory.townName) !== null && _a !== void 0 ? _a : room.name;
+    const name = castleName(room.name);
     if (!town) {
-        const rcl = (_c = (_b = room.controller) === null || _b === void 0 ? void 0 : _b.level) !== null && _c !== void 0 ? _c : 0;
+        const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
         return [
             rcl < TOWN.watchRcl
                 ? `[Town] ${name}: no quarter yet - the watch is raised at RCL ${TOWN.watchRcl}`
@@ -12128,6 +12203,7 @@ function setAuto(roomName, enabled) {
     return null;
 }
 
+const PIXEL_TALLY_WINDOW = 5000;
 const PIXEL_REFILL_WINDOW = 5000;
 const PIXEL_REFILL_SLACK = 200;
 function loop$b() {
@@ -12152,6 +12228,7 @@ function processPixelGeneration() {
     if (Game.cpu.generatePixel() === OK) {
         Memory.lastPixelTick = Game.time;
         Memory.pixelRefillPeak = 0;
+        tally("pixels", 1, (n) => `The alchemists distilled ${n === 1 ? "a pixel" : `${n} pixels`} from the realm's idle thought.`, PIXEL_TALLY_WINDOW);
     }
 }
 function inPixelRefill() {
@@ -12732,6 +12809,7 @@ function manageActiveExpansion() {
                 if (!Memory.claimFailures)
                     Memory.claimFailures = {};
                 Memory.claimFailures[exp.roomName] = Game.time + CLAIM_FAILED_COOLDOWN;
+                chronicle(`The conqueror never reached the throne of ${exp.roomName}. The claim is abandoned.`);
                 clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
                 return;
             }
@@ -12741,6 +12819,7 @@ function manageActiveExpansion() {
         if (exp.bootstrapStartedAt === undefined)
             exp.bootstrapStartedAt = Game.time;
         if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
+            chronicle(`The settlers of ${castleName(exp.roomName)} could not make it stand. The keep is abandoned.`);
             if (((_b = child === null || child === void 0 ? void 0 : child.controller) === null || _b === void 0 ? void 0 : _b.my) && child.find(FIND_MY_SPAWNS).length === 0) {
                 child.controller.unclaim();
                 clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks - no spawn, unclaimed`);
@@ -12769,6 +12848,7 @@ function manageActiveExpansion() {
                 exp.pausedUntil = undefined;
                 console.log(`[Expansion] ${exp.roomName} is self-sufficient (RCL ${child.controller.level}, ` +
                     `own spawn built) - established.`);
+                chronicle(`${castleName(exp.roomName)} stands on its own, with a spawn of its own. The realm grows.`);
             }
         }
         return;
@@ -12851,7 +12931,7 @@ function planSavings() {
     if ((plan === null || plan === void 0 ? void 0 : plan.room) === home && plan.target === next.roomName)
         return;
     Memory.expansionSavings = { room: home, target: next.roomName };
-    console.log(`[Expansion] ${home} saves ${KEEP_FUND_FLOOR} gold to found a keep at ${next.roomName}`);
+    chronicle(`${castleName(home)} fills its coffers to found a keep at ${next.roomName}.`);
 }
 
 const BODY_PATTERNS = {
@@ -16618,6 +16698,8 @@ function notify(room, nukes) {
     const msg = `[Nuke] ${room.name}: ${nukes.length} inbound - first impact in ${earliest} ticks (tick ${land})`;
     console.log(msg);
     Game.notify(msg, 60);
+    const count = nukes.length === 1 ? "A nuke falls" : `${nukes.length} nukes fall`;
+    chronicle(`Doom from the sky! ${count} toward ${castleName(room.name)}, landing in ${earliest} ticks.`);
 }
 function reinforce(room, nukes) {
     const critical = room.find(FIND_MY_STRUCTURES, {
@@ -17438,6 +17520,7 @@ function loop$1() {
         if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
             continue;
         drawRoomHUD(room);
+        drawChronicle(room);
         drawTown(room);
         drawBlueprint(room);
     }
@@ -17492,7 +17575,7 @@ function drawRoomHUD(room) {
     const style = { font: 0.55, align: "left", color: "#e8e8e8", stroke: "#000000", strokeWidth: 0.08 };
     const dimStyle = { ...style, color: "#aaaaaa" };
     const warnStyle = { ...style, color: "#ff6644" };
-    v.text(`RCL ${rcl}  ${PHASE_LABEL[phase]}`, x, y, { ...style, font: 0.6, color: "#ffffff" });
+    v.text(`${castleName(room.name)}  ·  RCL ${rcl}  ${PHASE_LABEL[phase]}`, x, y, { ...style, font: 0.6, color: "#ffffff" });
     y += lineH;
     if (rcl < 8 && total > 0) {
         const pct = progress / total;
@@ -17585,10 +17668,24 @@ function describeKeepPlan(room, stored) {
     }
     return undefined;
 }
+const CHRONICLE_LINES = 4;
+function drawChronicle(room) {
+    const entries = recentChronicle(CHRONICLE_LINES);
+    if (entries.length === 0)
+        return;
+    const v = room.visual;
+    const style = { font: 0.45, align: "left", stroke: "#000000", strokeWidth: 0.06 };
+    let y = 48.6 - entries.length * 0.65;
+    v.text("Royal Chronicle", 0.5, y - 0.15, { ...style, font: 0.5, color: "#f2c14e" });
+    entries.forEach((e, i) => {
+        y += 0.65;
+        const fresh = i === entries.length - 1;
+        v.text(`${chronicleDate(e.t)}: ${e.text}`, 0.5, y, { ...style, color: fresh ? "#ffe9a8" : "#b8a88a" });
+    });
+}
 const PHASE_ICON = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
 const NIGHT_SHADE = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
 function drawTown(room) {
-    var _a;
     const town = room.memory.town;
     if (!town)
         return;
@@ -17620,8 +17717,7 @@ function drawTown(room) {
         const ripple = 0.3 + 0.1 * Math.sin(Game.time / 3);
         v.circle(x, y, { radius: ripple + 0.15, fill: "transparent", stroke: "#66ccff", strokeWidth: 0.05, opacity: 0.6 });
         v.circle(x, y, { radius: 0.25, fill: "#3399ff", opacity: 0.6 });
-        const name = (_a = room.memory.townName) !== null && _a !== void 0 ? _a : room.name;
-        v.text(`${name} Square`, x, y - 1.8, label);
+        v.text(`${castleName(room.name)} Square`, x, y - 1.8, label);
     }
     else {
         for (const k of town.square) {
@@ -18462,6 +18558,28 @@ function setupConsole() {
                 if (books.trend !== undefined)
                     console.log(`  treasury ${books.trend >= 0 ? "+" : ""}${books.trend}/t`);
             }
+        },
+        chronicle: (count = 20) => {
+            const entries = recentChronicle(count);
+            if (entries.length === 0) {
+                console.log("[Chronicle] Nothing worth writing down has happened yet");
+                return;
+            }
+            console.log("[Chronicle] The Royal Chronicle, newest last:");
+            for (const e of entries)
+                console.log(`  ${chronicleDate(e.t)}: ${e.text}`);
+        },
+        name: (roomName, name) => {
+            const mem = Memory.rooms[roomName];
+            if (!mem) {
+                console.log(`[ARCA] No memory for ${roomName}`);
+                return;
+            }
+            if (name)
+                mem.townName = name;
+            else
+                delete mem.townName;
+            console.log(`[ARCA] ${roomName} is now known as ${castleName(roomName)}`);
         },
         powercreeps: () => {
             var _a, _b, _c, _d;
