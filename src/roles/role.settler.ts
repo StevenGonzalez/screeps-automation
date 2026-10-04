@@ -1,5 +1,6 @@
 import { getThreatInfo } from "../services/services.combat";
 import { pickSignature } from "../config/signatures";
+import { getRoomBuildTarget } from "../services/services.creep.maintenance";
 
 const RETREAT_HOLD_TICKS = 50;
 
@@ -67,7 +68,10 @@ export function runSettler(creep: Creep) {
     return;
   }
 
-  const site = creep.pos.findClosestByRange(FIND_CONSTRUCTION_SITES);
+  // The site the keep needs most, the same for every pilgrim: extensions before
+  // containers, ramparts and roads, so the keep raises bigger creeps of its own
+  // sooner. The nearest site was often a 5,000-gold container.
+  const site = getRoomBuildTarget(creep.room);
   if (site) {
     if (creep.build(site) === ERR_NOT_IN_RANGE) {
       creep.moveTo(site, { reusePath: 10 });

@@ -14,6 +14,11 @@ g.FIND_CONSTRUCTION_SITES = 111;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_MY_SPAWNS = 112;
 g.FIND_MY_STRUCTURES = 108;
+g.FIND_HOSTILE_CREEPS = 103;
+g.STRUCTURE_KEEPER_LAIR = "keeperLair";
+g.STRUCTURE_RAMPART = "rampart";
+g.FIND_SOURCES = 105;
+g.FIND_MINERALS = 116;
 g.STRUCTURE_SPAWN = "spawn";
 g.STRUCTURE_EXTENSION = "extension";
 g.ERR_NO_PATH = -2;
@@ -87,24 +92,34 @@ describe("settler", () => {
 });
 
 describe("settler at work", () => {
+  // The room's build target is worked out once a tick, so each case is a new tick.
+  let time = 1_000;
   beforeEach(() => {
     g.Memory = { rooms: {}, expansion: { roomName: "W2N1", homeRoom: "W1N1", phase: "bootstrapping", startedAt: 0 } };
-    g.Game = { time: 100 };
+    g.Game = { time: time++, getObjectById: () => null };
   });
 
-  function laden(level: number) {
-    const site = { structureType: "container" };
+  function siteOf(id: string, structureType: string, progress = 0) {
+    return { id, structureType, progress, progressTotal: 3000, pos: { findInRange: () => [] } };
+  }
+
+  function laden(level: number, sites = [siteOf("c1", "container")]) {
     const ctrl = { my: true, level };
     const c = {
-      ...settlerBeside({ 111: [site] }),
+      ...settlerBeside({}),
       store: { energy: 300, getFreeCapacity: () => 0 },
       build: vi.fn(() => 0),
       upgradeController: vi.fn(() => 0),
     };
     c.memory.working = true;
     // Already signed, so the pilgrim goes straight to upgrading.
-    Object.assign(c.room, { controller: ctrl, memory: { lastSigned: 1 } });
-    return { c, site, ctrl };
+    Object.assign(c.room, {
+      controller: ctrl,
+      memory: { lastSigned: 1 },
+      find: (type: number) => (type === g.FIND_MY_CONSTRUCTION_SITES ? sites : []),
+    });
+    (g.Game as { getObjectById: (id: string) => unknown }).getObjectById = (id) => sites.find((s) => s.id === id) ?? null;
+    return { c, site: sites[0], ctrl };
   }
 
   it("raises a level-1 throne to level 2 before building anything else", () => {
@@ -135,6 +150,14 @@ describe("settler at work", () => {
     runSettler(c as unknown as Creep);
     expect(c.build).toHaveBeenCalledWith(site);
     expect(c.upgradeController).not.toHaveBeenCalled();
+  });
+
+  it("builds the extensions before a container or a rampart, the furthest along first", () => {
+    const extension = siteOf("e1", "extension", 100);
+    const started = siteOf("e2", "extension", 2000);
+    const { c } = laden(2, [siteOf("c1", "container", 2500), siteOf("r1", "rampart"), extension, started]);
+    runSettler(c as unknown as Creep);
+    expect(c.build).toHaveBeenCalledWith(started);
   });
 });
 
