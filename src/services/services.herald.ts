@@ -42,6 +42,7 @@ export function cryFlight(creep: Creep): void {
 // A merchant unloading at the treasury calls out what it brought home. A load
 // is at most a few thousand, so the line fits in what creep.say shows.
 export function cryHaul(creep: Creep, amount: number): void {
+  creep.memory.hauled = (creep.memory.hauled ?? 0) + amount;
   freshCries();
   creepCries[creep.name] = `+${amount} gold`;
 }
@@ -378,6 +379,7 @@ interface Muster {
   hurt: boolean;
   ttl: number;
   kills: number;
+  hauled: number;
 }
 let muster = new Map<string, Muster>();
 
@@ -397,7 +399,13 @@ function heraldFallen(): void {
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
     if (c.spawning) continue;
-    next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: c.ticksToLive ?? 0, kills: c.memory.kills ?? 0 });
+    next.set(name, {
+      room: c.pos.roomName,
+      hurt: c.hits < c.hitsMax,
+      ttl: c.ticksToLive ?? 0,
+      kills: c.memory.kills ?? 0,
+      hauled: c.memory.hauled ?? 0,
+    });
   }
   for (const [name, last] of muster) {
     if (next.has(name)) continue;
@@ -408,6 +416,7 @@ function heraldFallen(): void {
         spreadWord(mourn(name));
         chronicle(`${name}${slew} was laid to rest with honours.`);
       }
+      heraldRetired(name, last.hauled);
       continue;
     }
     const foe = foeIn(last.room);
@@ -422,6 +431,13 @@ function heraldFallen(): void {
     );
   }
   muster = next;
+}
+
+// A merchant who ends its days having brought home more gold than any before.
+function heraldRetired(name: string, hauled: number): void {
+  if (hauled <= (Memory.richestHaul ?? 0)) return;
+  Memory.richestHaul = hauled;
+  chronicle(`${name} retired from the road with ${formatK(hauled)} gold brought home, the most of any merchant yet.`);
 }
 
 // A hostile creep died last tick to something of ours. A creep that struck it

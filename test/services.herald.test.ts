@@ -18,7 +18,7 @@ class FakeCreep {
 }
 g.Creep = FakeCreep;
 
-import { cryFor, cryFlight, heraldRival, heraldRooms, settleFlight } from "../src/services/services.herald";
+import { cryFor, cryFlight, cryHaul, heraldRival, heraldRooms, settleFlight } from "../src/services/services.herald";
 import { annal, castleName, lordName, wildsName } from "../src/services/services.chronicle";
 import { townAurora, townDragon } from "../src/services/services.town";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
@@ -211,6 +211,34 @@ describe("herald", () => {
       `The road from ${castleName(ROOM)} to the ${wildsName("W2N1")} is paved. Its merchants travel light.`,
     ]);
     expect((g.Memory as Memory).gossip?.line).toBe("new road!");
+  });
+
+  it("chronicles a merchant who retires with the richest haul yet", () => {
+    const life = (name: string, hauled: number) => {
+      const merchant = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 1, memory: { hauled } };
+      tick++;
+      g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { [name]: merchant } };
+      heraldRooms();
+      tick++;
+      g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    life("Merchant Leofric", 31200);
+    life("Merchant Bran", 20000);
+    life("Merchant Ada", 40500);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Merchant Leofric retired from the road with 31.2K gold brought home, the most of any merchant yet.",
+      "Merchant Ada retired from the road with 40.5K gold brought home, the most of any merchant yet.",
+    ]);
+  });
+
+  it("adds each load a merchant brings home to its lifetime haul", () => {
+    const merchant = new FakeCreep("Merchant Leofric", { name: ROOM });
+    setup(roomWith([]), {});
+    cryHaul(merchant as unknown as Creep, 1200);
+    cryHaul(merchant as unknown as Creep, 800);
+    expect(merchant.memory.hauled).toBe(2000);
   });
 
   it("proclaims a new GCL once, not on the first look", () => {

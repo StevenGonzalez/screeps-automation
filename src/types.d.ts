@@ -213,6 +213,8 @@ declare global {
     role: string;
     // Foes this creep has helped strike down (services.herald).
     kills?: number;
+    // Gold a merchant has brought home over its life (services.herald).
+    hauled?: number;
     // Townsfolk: "militia" sleep in cottages and man the walls, "lookout"
     // stands in a neighbouring room.
     job?: "militia" | "lookout";
@@ -333,6 +335,8 @@ declare global {
   interface Memory {
     // GCL the herald last proclaimed (services.herald).
     heraldGcl?: number;
+    // Most gold any merchant has brought home in its life (services.herald).
+    richestHaul?: number;
     // News the realm's creeps repeat in their chatter until it goes stale
     // (services.herald).
     gossip?: { line: string; until: number };
