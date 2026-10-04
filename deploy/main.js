@@ -15366,6 +15366,8 @@ function processRoomSpawning(room, spawn) {
         if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn))
             return;
     }
+    if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn))
+        return;
     if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn))
         return;
     if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn))
@@ -15390,8 +15392,6 @@ function processRoomSpawning(room, spawn) {
     if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn))
         return;
     if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn))
-        return;
-    if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn))
         return;
     if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn))
         return;
