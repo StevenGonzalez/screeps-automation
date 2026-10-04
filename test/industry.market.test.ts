@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.OK = 0;
@@ -228,6 +228,19 @@ describe("raw resource sales", () => {
     const deals = setup({ terminal: { silicon: 4_000 }, storage: {} });
     loop();
     expect(deals).toEqual(["silicon:1000"]);
+  });
+
+  it("asks the market for one resource's orders at a time, never the whole book", () => {
+    const deals = setup({ terminal: { silicon: 4_000 }, storage: {} });
+    const market = (g.Game as { market: { getAllOrders: (filter?: unknown) => unknown[] } }).market;
+    const getAllOrders = vi.fn(market.getAllOrders);
+    market.getAllOrders = getAllOrders;
+    loop();
+    expect(deals).toEqual(["silicon:1000"]);
+    expect(getAllOrders).toHaveBeenCalled();
+    for (const [filter] of getAllOrders.mock.calls) {
+      expect(filter).toEqual({ resourceType: expect.any(String) });
+    }
   });
 
   it("keeps a factory's raw deposit and sells only above it", () => {
