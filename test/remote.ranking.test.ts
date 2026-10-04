@@ -287,6 +287,19 @@ describe("stray merchants", () => {
     expect(targets).toEqual(["W4N5", "W4N5"]);
   });
 
+  it("sends the merchants a remote can spare to one that has none", () => {
+    const room = home({
+      remotes: [remote("W4N5", [40]), remote("W5N4", [40])],
+      spawns: 2,
+      creeps: Array.from({ length: 4 }, () => creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W4N5" })),
+    });
+
+    // Each remote plans two merchants.
+    reassignStrayHaulers(room);
+    const targets = Object.values((g.Game as { creeps: Record<string, Creep> }).creeps).map((c) => c.memory.targetRoom);
+    expect(targets.sort()).toEqual(["W4N5", "W4N5", "W5N4", "W5N4"]);
+  });
+
   it("leaves a merchant at its post while its remote is only invaded", () => {
     const invaded = { ...remote("W5N4", [30]), invaderUntil: clock + 500 };
     const room = home({

@@ -504,12 +504,17 @@ function neediestRemote(
 // counted against the remotes that are: when a remote became a keep, its two
 // merchants kept the home's other remote from getting any. It is sent to the
 // neediest remote instead. One that is only fleeing invaders keeps its post.
+//
+// A remote holding more merchants than it plans for also gives the spare ones
+// to a remote short of its plan. Once rivals left the Witch Weald, Embercrag's
+// three merchants all served its other remote: the home's count still met its
+// total, so none was raised for the Weald, and its peddler's gold lay rotting
+// on the ground.
 export function reassignStrayHaulers(room: Room): void {
   const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name);
   if (haulers.length === 0) return;
   const worked = getPickedRemoteRoomNames(room);
   const strays = haulers.filter((c) => !worked.has(c.memory.targetRoom ?? ""));
-  if (strays.length === 0) return;
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return;
 
@@ -524,6 +529,18 @@ export function reassignStrayHaulers(room: Room): void {
     const target = neediestRemote(activeRooms, plans, haulersByRoom);
     c.memory.targetRoom = target;
     haulersByRoom[target] = (haulersByRoom[target] ?? 0) + 1;
+  }
+
+  for (const remote of activeRooms) {
+    const posted = haulers.filter((c) => c.memory.targetRoom === remote.roomName);
+    const spare = posted.length - (plans[remote.roomName]?.count ?? 0);
+    for (const c of posted.slice(0, Math.max(0, spare))) {
+      const target = neediestRemote(activeRooms, plans, haulersByRoom);
+      if ((plans[target]?.count ?? 0) - (haulersByRoom[target] ?? 0) <= 0) return;
+      c.memory.targetRoom = target;
+      haulersByRoom[remote.roomName]--;
+      haulersByRoom[target] = (haulersByRoom[target] ?? 0) + 1;
+    }
   }
 }
 
