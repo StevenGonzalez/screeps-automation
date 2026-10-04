@@ -1,5 +1,5 @@
 import { getThreatInfo } from "../services/services.combat";
-import { pickSignature } from "../config/signatures";
+import { keepSignature } from "../config/signatures";
 import { castleName, chronicle, wildsName } from "../services/services.chronicle";
 
 const RETREAT_HOLD_TICKS = 50;
@@ -75,7 +75,7 @@ export function runConqueror(creep: Creep) {
     console.log(`[Expansion] Claimed ${targetRoom}!`);
     chronicle(`The Crown's banner rises over the ${wildsName(targetRoom)}. The keep of ${castleName(targetRoom)} is founded.`);
     try {
-      const sig = pickSignature(creep.room.name);
+      const sig = keepSignature(creep.room.name);
       const sres = creep.signController(controller, sig);
       if (sres === OK) {
         if (!Memory.rooms) Memory.rooms = {} as any;

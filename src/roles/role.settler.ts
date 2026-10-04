@@ -1,5 +1,5 @@
 import { getThreatInfo } from "../services/services.combat";
-import { pickSignature } from "../config/signatures";
+import { keepSignature } from "../config/signatures";
 import { getRoomBuildTarget } from "../services/services.creep.maintenance";
 import { ROLE_MINER } from "../config/config.roles";
 
@@ -107,7 +107,7 @@ function tendThrone(creep: Creep, ctrl: StructureController): void {
     creep.room.memory.lastSigned === undefined;
   if (shouldSign) {
     try {
-      const sig = pickSignature(creep.room.name);
+      const sig = keepSignature(creep.room.name);
       const sres = creep.signController(ctrl, sig);
       if (sres === OK) {
         if (!Memory.rooms) Memory.rooms = {} as any;

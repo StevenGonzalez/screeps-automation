@@ -1,4 +1,4 @@
-import { pickSignature } from "../config/signatures";
+import { keepSignature, remoteSignature } from "../config/signatures";
 import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
 import { chronicle, lordName, tally, wildsName } from "./services.chronicle";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
@@ -73,7 +73,9 @@ export function signControllerIfNeeded(
   const lastSigned = creep.room.memory.lastSigned;
   if (lastSigned !== undefined && Game.time - lastSigned < SIGN_RECHECK_INTERVAL) return false;
 
-  const desiredSignature = pickSignature(creep.room.name);
+  const home = creep.memory.homeRoom;
+  const desiredSignature =
+    controller.my || !home ? keepSignature(creep.room.name) : remoteSignature(creep.room.name, home);
 
   const currentSign = controller.sign;
 
