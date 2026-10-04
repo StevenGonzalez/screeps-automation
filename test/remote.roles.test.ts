@@ -23,6 +23,7 @@ import { runReserver } from "../src/roles/role.reserver";
 import { runRemoteMiner } from "../src/roles/role.remote_miner";
 import { runSkHauler } from "../src/roles/role.sk_hauler";
 import { loop as skLoop } from "../src/orchestrators/orchestrator.sourcekeeper";
+import { cryFor } from "../src/services/services.herald";
 
 const HOME = "W1N1";
 const REMOTE = "W1N2";
@@ -233,7 +234,7 @@ describe("remote miner", () => {
       const container = { id: "c1", hits: 250_000, hitsMax: 250_000, store: { getFreeCapacity: () => free } };
       const source = { id: "src", pos: { findInRange: () => [] } };
       (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : id === "c1" ? container : null);
-      const creep = minerIn(REMOTE);
+      const creep = minerIn(REMOTE, { name: "Peddler Osric" });
       creep.memory._hp = 100;
       (creep.memory as CreepMemory).assignedContainerId = "c1" as Id<StructureContainer>;
       creep.pos = { ...creep.pos, lookFor: () => [{ resourceType: "energy", amount: lying }] } as any;
@@ -243,6 +244,12 @@ describe("remote miner", () => {
 
     it("rests while its container is full and a load and more lies beside it", () => {
       expect(minerOn(0, 1500).harvest).not.toHaveBeenCalled();
+    });
+
+    it("calls for a buyer now and then while it rests", () => {
+      tick = 2524;
+      expect(cryFor(minerOn(0, 1500) as unknown as Creep)).toBe("no buyers");
+      expect(cryFor(minerOn(0, 1500) as unknown as Creep)).toBeUndefined();
     });
 
     it("digs while the container has room or the merchants have taken the pile", () => {

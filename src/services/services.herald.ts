@@ -39,6 +39,16 @@ export function cryFlight(creep: Creep): void {
   creepCries[creep.name] = "Bandits!";
 }
 
+// A peddler resting on its full container, its gold piled up beside it, calls
+// for a buyer now and then, so a watcher can see why it is not digging.
+const GLUT_CRY_PERIOD = 25;
+
+export function cryGlut(creep: Creep): void {
+  if (Game.time % GLUT_CRY_PERIOD !== 0) return;
+  freshCries();
+  creepCries[creep.name] = "no buyers";
+}
+
 // A merchant unloading at the treasury calls out what it brought home. A load
 // is at most a few thousand, so the line fits in what creep.say shows.
 export function cryHaul(creep: Creep, amount: number): void {

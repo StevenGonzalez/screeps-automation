@@ -6,7 +6,7 @@ import {
   flagRemoteDamage,
   clearRemoteInvader,
 } from "../services/services.creep";
-import { cryFlight, heraldWaystation, settleFlight } from "../services/services.herald";
+import { cryFlight, cryGlut, heraldWaystation, settleFlight } from "../services/services.herald";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -79,7 +79,10 @@ export function runRemoteMiner(creep: Creep) {
       creep.repair(container);
       return;
     }
-    if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && pileAt(creep.pos) >= GLUT_PILE) return;
+    if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && pileAt(creep.pos) >= GLUT_PILE) {
+      cryGlut(creep);
+      return;
+    }
     harvest(creep, source);
   } else {
     // Nothing else builds in remotes, so the miner finishes its own container.
