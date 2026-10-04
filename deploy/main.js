@@ -18132,7 +18132,7 @@ function drawRealmMap() {
     const exp = Memory.expansion;
     const savings = Memory.expansionSavings;
     const keep = exp && exp.phase !== "established"
-        ? { from: exp.homeRoom, at: exp.roomName, label: `keep: ${exp.phase}` }
+        ? { from: exp.homeRoom, at: exp.roomName, label: keepLabel(exp) }
         : savings
             ? { from: savings.room, at: savings.target, label: "keep planned" }
             : undefined;
@@ -18143,6 +18143,18 @@ function drawRealmMap() {
         mv.circle(at, { radius: 8, fill: "transparent", stroke: MAP_KEEP, strokeWidth: 1, opacity: 0.8 });
         mv.text(keep.label, new RoomPosition(25, 12, keep.at), { color: MAP_KEEP, fontSize: 5 });
     }
+}
+function keepLabel(exp) {
+    var _a;
+    const room = Game.rooms[exp.roomName];
+    if (exp.phase === "claiming" || !((_a = room === null || room === void 0 ? void 0 : room.controller) === null || _a === void 0 ? void 0 : _a.my))
+        return "keep: claiming";
+    if (room.find(FIND_MY_SPAWNS).length > 0)
+        return `keep: growing, RCL ${room.controller.level}`;
+    const site = room.find(FIND_MY_CONSTRUCTION_SITES).find((s) => s.structureType === STRUCTURE_SPAWN);
+    if (!site)
+        return "keep: pilgrims at work";
+    return `keep: barracks ${Math.floor((site.progress * 100) / site.progressTotal)}%`;
 }
 const blueprintShownUntil = {};
 const BLUEPRINT_PREVIEW_TICKS = 50;
