@@ -98,7 +98,7 @@ export function drawRealmMap(): void {
   const savings = Memory.expansionSavings;
   const keep =
     exp && exp.phase !== "established"
-      ? { from: exp.homeRoom, at: exp.roomName, label: keepLabel(exp) }
+      ? { from: exp.homeRoom, at: exp.roomName, label: `keep: ${keepProgress(exp)}` }
       : savings
         ? { from: savings.room, at: savings.target, label: "keep planned" }
         : undefined;
@@ -112,13 +112,13 @@ export function drawRealmMap(): void {
 
 // How far a keep being founded has come: claimed, its barracks rising, or its
 // barracks standing while it grows.
-function keepLabel(exp: NonNullable<Memory["expansion"]>): string {
+function keepProgress(exp: NonNullable<Memory["expansion"]>): string {
   const room = Game.rooms[exp.roomName];
-  if (exp.phase === "claiming" || !room?.controller?.my) return "keep: claiming";
-  if (room.find(FIND_MY_SPAWNS).length > 0) return `keep: growing, RCL ${room.controller.level}`;
+  if (exp.phase === "claiming" || !room?.controller?.my) return "claiming";
+  if (room.find(FIND_MY_SPAWNS).length > 0) return `growing, RCL ${room.controller.level}`;
   const site = room.find(FIND_MY_CONSTRUCTION_SITES).find((s) => s.structureType === STRUCTURE_SPAWN);
-  if (!site) return "keep: pilgrims at work";
-  return `keep: barracks ${Math.floor((site.progress * 100) / site.progressTotal)}%`;
+  if (!site) return "pilgrims at work";
+  return `barracks ${Math.floor((site.progress * 100) / site.progressTotal)}%`;
 }
 
 // Rooms whose blueprint is on show, to the tick the preview ends. Kept on the
@@ -232,7 +232,7 @@ function drawRoomHUD(room: Room) {
 
   const hostiles = room.find(FIND_HOSTILE_CREEPS);
   if (hostiles.length > 0) {
-    v.text(`THREAT: ${hostiles.length} hostile creep${hostiles.length > 1 ? "s" : ""}`, x, y, warnStyle);
+    v.text(`RAIDERS: ${hostiles.length} about the castle`, x, y, warnStyle);
     y += lineH;
   }
 
@@ -253,7 +253,7 @@ function drawRoomHUD(room: Room) {
   const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) as StructureSpawn | null : null;
   if (spawn?.spawning) {
     const remaining = spawn.spawning.remainingTime;
-    v.text(`Spawning: ${spawn.spawning.name} (${remaining}t)`, x, y, dimStyle);
+    v.text(`Mustering: ${spawn.spawning.name} (${remaining}t)`, x, y, dimStyle);
   }
 }
 
@@ -261,13 +261,11 @@ function drawRoomHUD(room: Room) {
 function describeKeepPlan(room: Room, stored: number): string | undefined {
   const exp = Memory.expansion;
   if (exp?.homeRoom === room.name && exp.phase !== "established") {
-    const child = Game.rooms[exp.roomName]?.controller;
-    const level = child?.my ? ` (RCL ${child.level})` : "";
-    return `Founding a keep at ${exp.roomName}: ${exp.phase}${level}`;
+    return `Founding ${castleName(exp.roomName)} in the ${wildsName(exp.roomName)}: ${keepProgress(exp)}`;
   }
   const plan = Memory.expansionSavings;
   if (plan?.room === room.name) {
-    return `Saving for a keep at ${plan.target}: ${formatK(stored)}/${formatK(MIN_HOME_STORAGE_ENERGY)}`;
+    return `Saving for a keep in the ${wildsName(plan.target)}: ${formatK(stored)}/${formatK(MIN_HOME_STORAGE_ENERGY)}`;
   }
   return undefined;
 }
