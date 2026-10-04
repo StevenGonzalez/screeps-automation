@@ -271,7 +271,8 @@ are rarely mistaken for one another.
 Creeps also shout when something happens (`services/services.herald.ts`). A creep
 that lands the killing blow on a hostile shouts a kill cry and adds the kill to
 its tally (`memory.kills`), and a kill by towers alone has every creep in the
-room shout "Huzzah!". When a creep with kills to its name dies, the chronicle
+room shout "Huzzah!". A foe struck down by one creep alone is chronicled as its
+deed ("A raider fell to Dragon Knight Gervase in the Crow Glen."). When a creep with kills to its name dies, the chronicle
 names its tally, whether it fell in a fight or was laid to rest. When an owned room reaches a
 new controller level, every creep there shouts "Long live!" and the console logs a
 `[Herald]` proclamation. When a player's war party is first seen in a castle,

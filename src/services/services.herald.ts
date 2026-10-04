@@ -402,13 +402,20 @@ function whereIn(roomName: string): string {
     : `in the ${wildsName(roomName)}`;
 }
 
-function chronicleKill(room: Room): void {
+// `slayer` is the one creep of ours that struck the foe down, if one did it
+// alone; a lone kill is told as that creep's deed.
+function chronicleKill(room: Room, slayer?: string): void {
   const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
   annal("slain", 1);
   // Lair keepers fall every few hundred ticks where their lairs are farmed;
   // that is work, not news.
   if (foe === "raider") spreadWord("victory!");
-  tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}.`, BATTLE_WINDOW);
+  tally(
+    `slain:${room.name}`,
+    1,
+    (n) => (n === 1 ? `A ${foe} fell${slayer ? ` to ${slayer}` : ""}` : `${n} ${foe}s fell`) + ` ${whereIn(room.name)}.`,
+    BATTLE_WINDOW
+  );
 }
 
 // Each of our creeps as it stood at the start of last tick.
@@ -493,8 +500,9 @@ function heraldKills(room: Room): void {
       .map((a) => Game.getObjectById(a.objectId as Id<Creep | StructureTower>))
       .filter((o): o is Creep | StructureTower => !!o && o.my);
     if (ours.length === 0) continue;
-    chronicleKill(room);
     const creeps = [...new Set(ours.filter((o): o is Creep => o instanceof Creep))];
+    const alone = creeps.length === 1 && creeps.length === new Set(ours).size;
+    chronicleKill(room, alone ? creeps[0].name : undefined);
     if (creeps.length === 0) {
       roomCries[room.name] = "Huzzah!";
       continue;

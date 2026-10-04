@@ -71,6 +71,21 @@ describe("herald", () => {
     expect(cryFor(bystander as unknown as Creep)).toBeUndefined();
   });
 
+  it("tells a raider struck down by one creep alone as that creep's deed", () => {
+    const knight = new FakeCreep("Dragon Knight Edric", { name: ROOM });
+    setup(roomWith(killed("raider", ["knight", "knight"])), { knight });
+    heraldRooms();
+    expect((g.Memory as Memory).chronicle!.map((l) => l.text)).toEqual([
+      "A raider fell to Dragon Knight Edric in the Gallows Forest.",
+    ]);
+
+    g.Memory = {};
+    const tower = { my: true };
+    setup(roomWith(killed("raider", ["knight", "tower"])), { knight, tower });
+    heraldRooms();
+    expect((g.Memory as Memory).chronicle!.map((l) => l.text)).toEqual(["A raider fell in the Gallows Forest."]);
+  });
+
   it("has the whole room cheer a kill made by towers alone", () => {
     const tower = { my: true };
     const mason = new FakeCreep("Mason Aldric", { name: ROOM });
