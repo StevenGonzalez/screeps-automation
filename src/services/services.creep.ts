@@ -228,6 +228,12 @@ export function clearRemotePlayerHostile(entry: RemoteRoomData): void {
   entry.hostileUntil = strikes > 0 ? since : undefined;
 }
 
+// Invaders only: a remote a player made hostile is avoided, not fought over.
+export function isAssignedRemoteInvaded(creep: Creep): boolean {
+  const until = assignedRemoteEntry(creep)?.invaderUntil;
+  return until !== undefined && until > Game.time;
+}
+
 export function clearRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
   if (entry && entry.invaderUntil !== undefined) entry.invaderUntil = undefined;

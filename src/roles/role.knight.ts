@@ -1,6 +1,6 @@
 import { seekBoost, findInvaderCore } from "../services/services.combat";
 import { isAlly } from "../services/services.allies";
-import { clearRemoteInvader } from "../services/services.creep";
+import { clearRemoteInvader, isAssignedRemoteInvaded } from "../services/services.creep";
 import { ROLE_CLERIC } from "../config/config.roles";
 import { parkIdle } from "../services/services.town";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
@@ -36,8 +36,18 @@ export function runKnight(creep: Creep) {
     delete creep.memory.defensiveTarget;
   }
 
-  if (creep.memory.targetRoom && creep.room.name !== creep.memory.targetRoom) {
-    creep.moveTo(new RoomPosition(25, 25, creep.memory.targetRoom), { reusePath: 20 });
+  // A remote defender rides out while invaders hold its remote and stands
+  // watch at home otherwise, still counted as that remote's defender. Left in
+  // a cleared remote it stood on the exit tile it arrived by, and was carried
+  // back and forth across the border for the rest of its life.
+  const target = creep.memory.targetRoom;
+  const home = creep.memory.homeRoom;
+  if (target && creep.room.name !== target && isAssignedRemoteInvaded(creep)) {
+    creep.moveTo(new RoomPosition(25, 25, target), { reusePath: 20 });
+    return;
+  }
+  if (target && home && creep.room.name !== home && creep.room.name !== target) {
+    creep.moveTo(new RoomPosition(25, 25, home), { reusePath: 20 });
     return;
   }
 
@@ -72,7 +82,13 @@ export function runKnight(creep: Creep) {
     return;
   }
 
-  if (creep.memory.targetRoom === creep.room.name) clearRemoteInvader(creep);
+  if (target && target === creep.room.name) {
+    clearRemoteInvader(creep);
+    if (home && home !== target) {
+      creep.moveTo(new RoomPosition(25, 25, home), { reusePath: 20 });
+      return;
+    }
+  }
   // Idle at home: stand watch behind the walls rather than crowd the spawn.
   if (parkIdle(creep, "watch")) return;
   const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
