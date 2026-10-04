@@ -252,6 +252,23 @@ function heraldWorks(room: Room): void {
   }
 }
 
+// A peddler laying the last of the container at its source. Until then its
+// dig lies on the ground, where it rots before the merchants carry it home.
+// Told once per site, even if two peddlers finish it together.
+export function heraldWaystation(creep: Creep, site: ConstructionSite): void {
+  const home = creep.memory.homeRoom;
+  if (!home) return;
+  const fresh = tally(
+    `waystation:${site.id}`,
+    0,
+    () =>
+      `${creep.name} raised a waystation in the ${wildsName(site.pos.roomName)}. ` +
+      `No more of ${castleName(home)}'s gold rots in the mud.`,
+    CREEP_LIFE_TIME
+  );
+  if (fresh) spreadWord("waystation");
+}
+
 // The road out to a remote, told once when it is first mostly built.
 function heraldRoads(room: Room): void {
   if (Game.time % WORKS_CHECK_PERIOD !== 0) return;

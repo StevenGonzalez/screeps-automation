@@ -6,7 +6,7 @@ import {
   flagRemoteDamage,
   clearRemoteInvader,
 } from "../services/services.creep";
-import { cryFlight, settleFlight } from "../services/services.herald";
+import { cryFlight, heraldWaystation, settleFlight } from "../services/services.herald";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -92,7 +92,11 @@ export function runRemoteMiner(creep: Creep) {
       if (pile) creep.pickup(pile);
       const loaded = pile ? creep.store[RESOURCE_ENERGY] > 0 : creep.store.getFreeCapacity() === 0;
       if (loaded) {
-        if (creep.build(site) === ERR_NOT_IN_RANGE) creep.moveTo(site, { reusePath: 30 });
+        const res = creep.build(site);
+        if (res === ERR_NOT_IN_RANGE) creep.moveTo(site, { reusePath: 30 });
+        else if (res === OK && site.progressTotal - site.progress <= creep.getActiveBodyparts(WORK) * BUILD_POWER) {
+          heraldWaystation(creep, site);
+        }
         return;
       }
       if (pile) return;

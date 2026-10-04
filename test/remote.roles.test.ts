@@ -145,18 +145,20 @@ describe("remote miner", () => {
     const pile = { resourceType: "energy", amount: 3000 };
     let tick = 2000;
 
-    function builderBeside(piles: unknown[], carried: number) {
+    function builderBeside(piles: unknown[], carried: number, at: unknown = site) {
       // A fresh tick, so no threat cached by the tests above is read back.
       (g.Game as any).time = ++tick;
       const source = {
         id: "src",
-        pos: { findInRange: (type: number) => (type === g.FIND_MY_CONSTRUCTION_SITES ? [site] : []) },
+        pos: { findInRange: (type: number) => (type === g.FIND_MY_CONSTRUCTION_SITES ? [at] : []) },
       };
       (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
       const creep = minerIn(REMOTE, {
         store: { energy: carried, getFreeCapacity: () => 50 - carried },
         build: vi.fn(() => 0),
         pickup: vi.fn(() => 0),
+        name: "Peddler Edric",
+        getActiveBodyparts: () => 6,
       });
       creep.pos = { ...creep.pos, findInRange: () => piles } as any;
       creep.memory._hp = 100;
@@ -176,6 +178,17 @@ describe("remote miner", () => {
       expect(creep.harvest).toHaveBeenCalled();
       expect(creep.build).not.toHaveBeenCalled();
       expect(builderBeside([], 50).build).toHaveBeenCalledWith(site);
+    });
+
+    it("tells the chronicle once when it lays the last of the container", () => {
+      const last = { id: "c1", structureType: "container", progress: 4980, progressTotal: 5000, pos: { roomName: REMOTE } };
+      builderBeside([pile], 20, { ...last, progress: 4900 });
+      expect((g.Memory as any).chronicle ?? []).toHaveLength(0);
+      builderBeside([pile], 20, last);
+      builderBeside([pile], 20, last);
+      const lines = (g.Memory as any).chronicle;
+      expect(lines).toHaveLength(1);
+      expect(lines[0].text).toMatch(/^Peddler Edric raised a waystation in the /);
     });
   });
 });
