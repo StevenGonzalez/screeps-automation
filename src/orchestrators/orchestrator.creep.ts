@@ -154,6 +154,10 @@ const FIRST_WORDS = ["reporting!", "ready!", "first day!", "hail all!", "I live!
 const ELDER_TICKS = 150;
 const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
 
+// A creep left with less than half its hits talks of its wounds. With no tower
+// to mend it, a young keep's knight can limp about like that for its whole life.
+const WOUNDED_CHATTER = ["my wounds", "ow...", "bleeding!", "a healer?"];
+
 const SAY_PERIOD = 30;
 
 // A creep hailed by name answers on the next tick, so the two lines read as an
@@ -200,9 +204,16 @@ export function chatterLine(creep: Creep): string | undefined {
   // And as often, a greeting for a creep alongside.
   const hail = pick % WEATHER_EVERY === 1 ? greeting(creep, pick) : undefined;
   if (hail) return hail;
+  const wounded = creep.hits < creep.hitsMax / 2;
   const elder = (creep.ticksToLive ?? Infinity) <= ELDER_TICKS;
-  const lines = elder ? ELDER_CHATTER : (ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER);
-  return lines[pick % lines.length];
+  const lines = wounded
+    ? WOUNDED_CHATTER
+    : elder
+      ? ELDER_CHATTER
+      : (ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER);
+  // Indexed past the weather slot: by pick alone, a list of four never gave
+  // its first line, since every pick a multiple of four goes to the weather.
+  return lines[Math.floor(pick / WEATHER_EVERY) % lines.length];
 }
 
 // A creep hails a neighbour by its given name, the last word of its own.

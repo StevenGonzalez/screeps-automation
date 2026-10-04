@@ -76,9 +76,35 @@ describe("chatter", () => {
   it("talks of its end in its last ticks, and no more of its work", () => {
     const start = 23 * TOWN_DAY_LENGTH;
     const elder = linesFrom(start, undefined, 100);
-    expect(elder).toContain("farewell");
+    // Every line of the four, the first among them.
+    for (const l of ["old bones", "last days", "farewell", "rest soon"]) expect(elder).toContain(l);
     expect(elder).not.toContain("dig dig");
     expect(linesFrom(start, undefined, 1_000)).not.toContain("farewell");
+  });
+
+  it("talks of its wounds while badly hurt, and no more of its work", () => {
+    const linesAt = (hits: number) => {
+      const miner = {
+        name: "Miner Emma",
+        memory: { role: ROLE_MINER },
+        hits,
+        hitsMax: 800,
+        pos: { findInRange: () => [] },
+      } as unknown as Creep;
+      g.Memory = {};
+      const lines: string[] = [];
+      for (let t = 23 * TOWN_DAY_LENGTH; t < 23 * TOWN_DAY_LENGTH + 3_000; t++) {
+        g.Game = { time: t };
+        const line = chatterLine(miner);
+        if (line) lines.push(line);
+      }
+      return lines;
+    };
+    const wounded = linesAt(50);
+    for (const l of ["my wounds", "ow...", "bleeding!", "a healer?"]) expect(wounded).toContain(l);
+    expect(wounded).not.toContain("dig dig");
+    for (const l of wounded) expect(l.length).toBeLessThanOrEqual(10);
+    expect(linesAt(700)).not.toContain("my wounds");
   });
 
   it("speaks its first words as it leaves the spawn, and only then", () => {
