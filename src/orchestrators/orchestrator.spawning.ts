@@ -185,6 +185,11 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
     if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
   }
 
+  // A remote miner is the cheapest creep there is for what it brings in, and the
+  // merchants already walking its road earn nothing while its post stands empty.
+  // With one spawn, waiting behind a long repairer or builder body left a source
+  // idle for a couple of hundred ticks.
+  if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
@@ -203,7 +208,6 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!blockaded && !economyCritical && spawnUnclaimer(room, spawn)) return;
   if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
-  if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
   if (!blockaded && shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
 
