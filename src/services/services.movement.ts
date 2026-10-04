@@ -78,15 +78,22 @@ function structureCostCallback(roomName: string): CostMatrix {
   return getRoomCostMatrix(roomName);
 }
 
+const siteAwareCache: Record<string, CostMatrix> = {};
 const creepAwareCache: Record<string, CostMatrix> = {};
 let creepAwareTick = -1;
 
-function roadCostCallback(roomName: string): CostMatrix {
-  if (creepAwareTick !== Game.time) {
-    creepAwareTick = Game.time;
-    for (const k in creepAwareCache) delete creepAwareCache[k];
-  }
-  const cached = creepAwareCache[roomName];
+function freshCreepAware(): void {
+  if (creepAwareTick === Game.time) return;
+  creepAwareTick = Game.time;
+  for (const k in siteAwareCache) delete siteAwareCache[k];
+  for (const k in creepAwareCache) delete creepAwareCache[k];
+}
+
+// The structure matrix with our construction sites for walls and ramparts
+// walled off too.
+function siteCostMatrix(roomName: string): CostMatrix {
+  freshCreepAware();
+  const cached = siteAwareCache[roomName];
   if (cached) return cached;
 
   const base = getRoomCostMatrix(roomName);
@@ -99,19 +106,57 @@ function roadCostCallback(roomName: string): CostMatrix {
       cm.set(s.pos.x, s.pos.y, 0xff);
     }
   }
+  siteAwareCache[roomName] = cm;
+  return cm;
+}
+
+// Every creep in the room walled off, for a creep fleeing a few tiles.
+function roadCostCallback(roomName: string): CostMatrix {
+  freshCreepAware();
+  const cached = creepAwareCache[roomName];
+  if (cached) return cached;
+
+  const sites = siteCostMatrix(roomName);
+  const room = Game.rooms[roomName];
+  if (!room) return sites;
+
+  const cm = sites.clone();
   for (const c of room.find(FIND_CREEPS)) cm.set(c.pos.x, c.pos.y, 0xff);
   for (const pc of room.find(FIND_POWER_CREEPS)) cm.set(pc.pos.x, pc.pos.y, 0xff);
   creepAwareCache[roomName] = cm;
   return cm;
 }
 
-// Creeps are obstacles only in the room the mover stands in. One standing a
-// room or two ahead will likely have moved on by the time the mover gets
-// there, and counting it as a wall can leave no complete path at all: the
-// mover then walks a partial path that changes every tick, which the stuck
-// check (the same tile three ticks running) never sees.
-function creepAwareIn(here: string): (roomName: string) => CostMatrix {
-  return (roomName) => (roomName === here ? roadCostCallback(roomName) : getRoomCostMatrix(roomName));
+// A creep this close to the mover is an obstacle when its path is planned.
+// One further off will likely have moved on by the time the mover gets there.
+// Walling off every creep in the room sent Grimford's porters and merchants
+// out by the east gate, 25 tiles out of their way, whenever another creep
+// stood in the north gate. A creep that does stay put on the path is met by
+// the stuck check, which plans again with it close.
+const CREEP_OBSTACLE_RANGE = 3;
+
+// Creeps are obstacles only near the mover, and so only in the room it stands
+// in. One standing a room or two ahead will likely have moved on by the time
+// the mover gets there, and counting it as a wall can leave no complete path
+// at all: the mover then walks a partial path that changes every tick, which
+// the stuck check (the same tile three ticks running) never sees.
+function creepsNear(from: RoomPosition): (roomName: string) => CostMatrix {
+  return (roomName) => {
+    if (roomName !== from.roomName) return getRoomCostMatrix(roomName);
+    const sites = siteCostMatrix(roomName);
+    const room = Game.rooms[roomName];
+    if (!room) return sites;
+
+    let cm: CostMatrix | undefined;
+    const block = (pos: RoomPosition): void => {
+      if (Math.max(Math.abs(pos.x - from.x), Math.abs(pos.y - from.y)) > CREEP_OBSTACLE_RANGE) return;
+      cm ??= sites.clone();
+      cm.set(pos.x, pos.y, 0xff);
+    };
+    for (const c of room.find(FIND_CREEPS)) block(c.pos);
+    for (const pc of room.find(FIND_POWER_CREEPS)) block(pc.pos);
+    return cm ?? sites;
+  };
 }
 
 const ROUTE_TTL = 500;
@@ -241,7 +286,7 @@ function restrictToRoute(creep: Creep, tpos: RoomPosition, opts: MoveToOpts): vo
 
   const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...roomBound, ...(opts ?? {}) };
   if (!effectiveOpts.costCallback) {
-    effectiveOpts.costCallback = sameRoom ? roadCostCallback : creepAwareIn(this.pos.roomName);
+    effectiveOpts.costCallback = creepsNear(this.pos);
   }
   if (!sameRoom) restrictToRoute(this, tpos, effectiveOpts);
 
