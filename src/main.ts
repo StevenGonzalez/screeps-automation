@@ -23,6 +23,7 @@ import * as exchequer from "./services/services.exchequer";
 import { migrateRoleNames } from "./services/services.rebrand";
 import { setupConsole } from "./console";
 import { recordCpu } from "./services/services.profiler";
+import { drawAndKeep, replayKept } from "./services/services.visualreplay";
 import "./services/services.movement";
 
 const CPU_WARN_THRESHOLD = 0.85;
@@ -84,7 +85,9 @@ export function loop() {
 
   const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
   if (!bucketCritical && cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD) {
-    runSafe("visuals", () => visualsSystem.loop());
+    runSafe("visuals", () => drawAndKeep(() => visualsSystem.loop()));
+  } else {
+    runSafe("visual replay", () => replayKept());
   }
 
   const used = Game.cpu.getUsed() - tickStart;

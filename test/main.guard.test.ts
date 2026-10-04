@@ -36,6 +36,8 @@ vi.mock("../src/services/services.exchequer", () => ({ loop: vi.fn() }));
 vi.mock("../src/services/services.rebrand", () => ({ migrateRoleNames: vi.fn() }));
 vi.mock("../src/console", () => ({ setupConsole: vi.fn() }));
 vi.mock("../src/services/services.movement", () => ({}));
+const replay = vi.fn();
+vi.mock("../src/services/services.visualreplay", () => ({ drawAndKeep: (draw: () => void) => draw(), replayKept: () => replay() }));
 
 import { loop } from "../src/main";
 
@@ -50,6 +52,7 @@ function tick(bucket: number) {
 
 beforeEach(() => {
   for (const s of systems) loops[s].mockReset();
+  replay.mockReset();
   // The creeps use 80% of the limit, as the realm's do.
   loops.creep.mockImplementation(() => (used += 16));
 });
@@ -58,8 +61,16 @@ describe("CPU guard in main", () => {
   it("runs structures on a busy tick while the bucket is healthy", () => {
     tick(5000);
     expect(loops.structures).toHaveBeenCalled();
-    // Visuals still give way on a busy tick.
+    // Visuals still give way on a busy tick, and the last drawing is shown again.
     expect(loops.visuals).not.toHaveBeenCalled();
+    expect(replay).toHaveBeenCalled();
+  });
+
+  it("draws the visuals afresh on a quiet tick", () => {
+    loops.creep.mockImplementation(() => (used += 2));
+    tick(5000);
+    expect(loops.visuals).toHaveBeenCalled();
+    expect(replay).not.toHaveBeenCalled();
   });
 
   it("holds structures back when the bucket is critical", () => {
