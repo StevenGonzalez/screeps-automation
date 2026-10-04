@@ -545,6 +545,21 @@ export function drawTown(room: Room): void {
     }
   });
 
+  // After dark a brazier burns atop each watchtower and the barracks' hearth
+  // glows through its doors.
+  if (lit) {
+    for (const s of room.find(FIND_MY_STRUCTURES)) {
+      const { x, y } = s.pos;
+      if (s.structureType === STRUCTURE_TOWER) {
+        const flicker = 0.5 + 0.5 * Math.sin(Game.time * 2.1 + x * 1.3 + y);
+        v.circle(x, y - 0.1, { radius: 0.9, fill: "#ff7a22", opacity: 0.1 + 0.06 * flicker });
+        v.circle(x, y - 0.1, { radius: 0.16 + 0.06 * flicker, fill: "#ffd27a", opacity: 0.7 + 0.25 * flicker });
+      } else if (s.structureType === STRUCTURE_SPAWN) {
+        v.circle(x, y, { radius: 1.4, fill: "#ffb347", opacity: 0.12 });
+      }
+    }
+  }
+
   if (town.fountain) {
     const { x, y } = parseTile(town.fountain);
     const ripple = 0.3 + 0.1 * Math.sin(Game.time / 3);

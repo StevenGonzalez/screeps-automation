@@ -234,6 +234,8 @@ When room visuals are on, the town draws itself:
   every occupied bed;
 - a flag at each watch post, turned red when someone stands there, and a
   flickering torch on each post after dark;
+- after dark, a brazier burning atop each watchtower and the barracks' hearth
+  glowing;
 - rippling water in the fountain and a "... Square" sign;
 - the season: a faint green tint and drifting petals in spring, fireflies
   round the fountain on a summer night, an amber tint and falling leaves in

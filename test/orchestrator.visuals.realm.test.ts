@@ -6,6 +6,7 @@ g.FIND_MY_CREEPS = 102;
 g.FIND_MY_SPAWNS = 112;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.STRUCTURE_SPAWN = "spawn";
+g.STRUCTURE_TOWER = "tower";
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -193,12 +194,14 @@ describe("realm map", () => {
 });
 
 describe("town at night", () => {
-  it("lights a torch on every watch post after dark, and none by day", () => {
+  it("lights a torch on every watch post and a brazier on every tower after dark, and none by day", () => {
     const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const tower = { structureType: "tower", pos: { x: 20, y: 20 } };
     const room = {
       name: HOME,
       visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
       memory: { town: { posts: ["10,10", "12,10", "14,10"], square: [], cottages: [] } },
+      find: () => [tower],
     } as unknown as Room;
     const torches = (time: number) => {
       drawn = [];
@@ -208,7 +211,8 @@ describe("town at night", () => {
       return drawn.filter((d) => d.kind === "circle" && (d.args[0] as number) < 40).length;
     };
     expect(torches(3_300)).toBe(0);
-    expect(torches(3_800)).toBe(6);
+    // Two circles to a torch, and two to the brazier.
+    expect(torches(3_800)).toBe(8);
   });
 
   it("hangs the moon in the sky after dark, lit as it is tonight", () => {
@@ -244,6 +248,7 @@ describe("town at night", () => {
       name: HOME,
       visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
       memory: { town: { posts: [], square: [], cottages: [] } },
+      find: () => [],
     } as unknown as Room;
     const howls = (time: number) => {
       drawn = [];
