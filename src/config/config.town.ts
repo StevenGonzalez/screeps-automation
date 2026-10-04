@@ -78,6 +78,12 @@ export const TOWN_MOON_NAMES = [
 ];
 export const TOWN_HOWL_EVERY = 50;
 export const TOWN_HOWL_TICKS = 6;
+// About one winter night in this many the northern lights dance over the realm.
+export const TOWN_AURORA_ODDS = 3;
+// On a clear night a star falls in about one window of this many, each window
+// TOWN_STAR_TICKS long.
+export const TOWN_STAR_ODDS = 15;
+export const TOWN_STAR_TICKS = 8;
 export type TownSeason = "spring" | "summer" | "autumn" | "winter";
 export const TOWN_SEASONS: ReadonlyArray<TownSeason> = ["spring", "summer", "autumn", "winter"];
 // The first day of each season is a feast day.

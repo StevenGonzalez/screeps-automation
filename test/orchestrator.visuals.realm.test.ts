@@ -10,7 +10,17 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-import { describeCensus, drawDragon, drawGraves, drawLandmarks, drawMoon, drawRealmMap, drawSeason, drawTown } from "../src/orchestrators/orchestrator.visuals";
+import {
+  describeCensus,
+  drawAurora,
+  drawDragon,
+  drawGraves,
+  drawLandmarks,
+  drawMoon,
+  drawRealmMap,
+  drawSeason,
+  drawTown,
+} from "../src/orchestrators/orchestrator.visuals";
 import { townDragon } from "../src/services/services.town";
 import {
   ROLE_FILLER,
@@ -213,6 +223,19 @@ describe("town at night", () => {
     // The full moon glows.
     drawMoon(v, 4);
     expect(drawn.map((d) => d.kind)).toEqual(["circle", "poly", "circle"]);
+  });
+
+  it("draws the northern lights as three ribbons, faint at nightfall and bright later", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const v = { poly: record("poly") } as unknown as RoomVisual;
+    const opacities = (time: number) => {
+      drawn = [];
+      drawAurora(v, time);
+      return drawn.map((d) => (d.args[1] as PolyStyle).opacity);
+    };
+    expect(opacities(21_701)).toHaveLength(3);
+    expect(opacities(21_701)[0]).toBeLessThan(0.01);
+    expect(opacities(21_850)[0]).toBeCloseTo(0.16);
   });
 
   it("has a wolf howl out of the dark on a full-moon night", () => {

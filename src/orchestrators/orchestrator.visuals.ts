@@ -1,19 +1,29 @@
 import { ROLE_MINSTREL, ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
 import { currentVerse } from "../roles/role.minstrel";
 import {
+  NIGHT_START,
   cottageLayout,
   isNightfall,
   parseTile,
   spotHolder,
+  townAurora,
   townClock,
   townDragon,
+  townFallingStar,
   townFeast,
   townHowl,
   townMoon,
   townSeason,
   townStorm,
 } from "../services/services.town";
-import { TOWN_MOON_DAYS, TOWN_MOON_NAMES, TOWN_HOWL_TICKS, TownSeason } from "../config/config.town";
+import {
+  TOWN_DAY_LENGTH,
+  TOWN_HOWL_TICKS,
+  TOWN_MOON_DAYS,
+  TOWN_MOON_NAMES,
+  TOWN_STAR_TICKS,
+  TownSeason,
+} from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
@@ -262,7 +272,8 @@ function drawRoomHUD(room: Room) {
     const feast = townFeast(Game.time);
     const storm = townStorm(Game.time) ? ", storm" : "";
     const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
-    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}`;
+    const aurora = townAurora(Game.time) ? ", northern lights" : "";
+    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}${aurora}`;
     v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
     y += lineH;
   }
@@ -502,7 +513,9 @@ export function drawTown(room: Room): void {
 
   const label: TextStyle = { font: 0.45, color: "#ffe9a8", stroke: "#000000", strokeWidth: 0.06 };
   const lit = clock.phase === "dusk" || clock.phase === "night";
+  if (townAurora(Game.time)) drawAurora(v, Game.time);
   if (lit && !townStorm(Game.time)) drawMoon(v, townMoon(Game.time));
+  drawFallingStar(v, Game.time);
   drawHowl(v, Game.time);
 
   for (const c of town.cottages) {
@@ -575,6 +588,40 @@ export function drawMoon(v: RoomVisual, age: number): void {
   v.poly(lit, { fill: MOON_LIGHT, stroke: "transparent", opacity: 0.85 });
   // A full moon throws a glow about itself.
   if (age === TOWN_MOON_DAYS / 2) v.circle(MOON_X, MOON_Y, { radius: MOON_RADIUS * 2.2, fill: MOON_LIGHT, opacity: 0.07 });
+}
+
+const AURORA_COLOURS = ["#3ee08f", "#5fd3c6", "#9b6bff"];
+// How long the northern lights take to brighten after nightfall, and to fade
+// before dawn.
+const AURORA_FADE = 60;
+
+// The northern lights: three ribbons rippling slowly across the top of the
+// sky, each a wave over a wave so no two moments look the same.
+export function drawAurora(v: RoomVisual, time: number): void {
+  const t = time % TOWN_DAY_LENGTH;
+  const fade = Math.max(0, Math.min(1, (t - NIGHT_START) / AURORA_FADE, (TOWN_DAY_LENGTH - t) / AURORA_FADE));
+  AURORA_COLOURS.forEach((colour, i) => {
+    const top: Array<[number, number]> = [];
+    const bottom: Array<[number, number]> = [];
+    for (let x = -0.5; x <= 49.5; x += 2.5) {
+      const wave = Math.sin(x * 0.18 + time * 0.05 + i * 2.1) + 0.5 * Math.sin(x * 0.07 - time * 0.03 + i);
+      const y = 3 + i * 2.2 + 1.4 * wave;
+      top.push([x, y]);
+      bottom.push([x, y + 1.6 + 0.9 * Math.sin(x * 0.11 + time * 0.04 + i * 1.3)]);
+    }
+    v.poly([...top, ...bottom.reverse()], { fill: colour, stroke: "transparent", opacity: 0.16 * fade });
+  });
+}
+
+// A star falling across the night sky, its trail fading as it goes.
+function drawFallingStar(v: RoomVisual, time: number): void {
+  const star = townFallingStar(time);
+  if (!star) return;
+  const x = star.x - 1.6 * star.t;
+  const y = star.y + 0.9 * star.t;
+  const fade = 1 - star.t / TOWN_STAR_TICKS;
+  v.line(x + 2.4, y - 1.35, x, y, { color: "#fffbe8", width: 0.06, opacity: 0.7 * fade });
+  v.circle(x, y, { radius: 0.1, fill: "#ffffff", opacity: 0.9 * fade });
 }
 
 const HOWL_STYLE: TextStyle = { font: "italic 0.5 serif", color: "#a8b8d8", stroke: "#000000", strokeWidth: 0.05 };

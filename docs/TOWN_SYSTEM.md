@@ -213,9 +213,14 @@ dark beyond the walls every 50 ticks; the whole castle starts at each howl
 ("Wolves!", "Hark!", "Hear that?"), and the chronicle notes the first ("Wolves
 howled beneath the full moon outside the walls of Embercrag.").
 
+On about one winter night in three the northern lights hang over the realm,
+and on any clear night a star falls now and then. Both follow from the day's
+number and the tick alone, so every castle sees the same sky.
+
 The room HUD shows the part of the day, the hour, the season, any feast, any
-storm and, after dark, the moon: `Day, 10:00 in autumn, Harvest Home  8
-townsfolk`, or `Night, 20:00 in spring, full moon  8 townsfolk`.
+storm and, after dark, the moon and any northern lights: `Day, 10:00 in
+autumn, Harvest Home  8 townsfolk`, or `Night, 20:00 in winter, full moon,
+northern lights  8 townsfolk`.
 
 ---
 
@@ -240,6 +245,9 @@ When room visuals are on, the town draws itself:
 - from dusk to dawn, unless a storm hides it, the moon in the north-east
   corner, lit as it is tonight and glowing when full; on a full-moon night, a
   wolf's eyes at the room's west or east edge with its howl rising over them;
+- on a winter night with the northern lights, three ribbons of green, teal and
+  violet rippling across the top of the room, fading in at nightfall;
+- now and then on a clear night, a falling star streaking across the sky;
 - on a feast day, a ring of lanterns round the fountain with the feast's name,
   and while the minstrel is in the square, the couplet it sings over the
   square's sign and a note bobbing over its head.

@@ -1,4 +1,5 @@
 import {
+  TOWN_AURORA_ODDS,
   TOWN_DAY_LENGTH,
   TOWN_DAYS_PER_SEASON,
   TOWN_DRAGON_FLIGHT,
@@ -9,6 +10,8 @@ import {
   TOWN_MOON_DAYS,
   TOWN_PHASES,
   TOWN_SEASONS,
+  TOWN_STAR_ODDS,
+  TOWN_STAR_TICKS,
   TOWN_STORM_ODDS,
   TownPhase,
   TownSeason,
@@ -111,7 +114,7 @@ export interface Howl {
   y: number;
 }
 
-const NIGHT_START = TOWN_PHASES.find((p) => p.name === "night")!.start;
+export const NIGHT_START = TOWN_PHASES.find((p) => p.name === "night")!.start;
 
 /**
  * The wolves' howl at `time`, if one is sounding: on a full-moon night they
@@ -128,6 +131,29 @@ export function townHowl(time: number): Howl | undefined {
   const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
   // Below the HUD in the top-left corner and above the chronicle in the bottom-left.
   return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
+}
+
+/** Whether the northern lights are up: on about one winter night in TOWN_AURORA_ODDS. */
+export function townAurora(time: number): boolean {
+  if (townSeason(time) !== "winter" || townClock(time).phase !== "night") return false;
+  return dayHash(Math.floor(time / TOWN_DAY_LENGTH), 0x165667b1) % TOWN_AURORA_ODDS === 0;
+}
+
+export interface FallingStar {
+  // Ticks since it appeared.
+  t: number;
+  // Where it appeared, high in the sky.
+  x: number;
+  y: number;
+}
+
+/** The star falling at `time`, if one is: now and then on a clear night. */
+export function townFallingStar(time: number): FallingStar | undefined {
+  if (townClock(time).phase !== "night" || townStorm(time)) return undefined;
+  const window = Math.floor(time / TOWN_STAR_TICKS);
+  const h = dayHash(window, 0x2c1b3c6d);
+  if (h % TOWN_STAR_ODDS !== 0) return undefined;
+  return { t: time % TOWN_STAR_TICKS, x: 12 + ((h >>> 8) % 34), y: 2 + ((h >>> 16) % 10) };
 }
 
 export function isNightfall(phase: TownPhase): boolean {

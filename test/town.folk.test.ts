@@ -25,7 +25,19 @@ vi.mock("../src/services/services.combat", () => ({
 }));
 
 import { runTownsfolk, lookoutTargets } from "../src/roles/role.townsfolk";
-import { claimSpot, isFullMoon, townClock, townDragon, townFeast, townHowl, townMoon, townSeason, townStorm } from "../src/services/services.town";
+import {
+  claimSpot,
+  isFullMoon,
+  townAurora,
+  townClock,
+  townDragon,
+  townFallingStar,
+  townFeast,
+  townHowl,
+  townMoon,
+  townSeason,
+  townStorm,
+} from "../src/services/services.town";
 import { nextTownJob } from "../src/orchestrators/orchestrator.spawning.town";
 import { ROLE_TOWNSFOLK } from "../src/config/config.roles";
 import { TOWN, TOWN_DAY_LENGTH, TOWN_DRAGON_FLIGHT } from "../src/config/config.town";
@@ -237,6 +249,39 @@ describe("the moon and the wolves", () => {
     expect([2.5, 46.5]).toContain(x);
     expect(y).toBeGreaterThanOrEqual(14);
     expect(y).toBeLessThan(42);
+  });
+});
+
+describe("night skies", () => {
+  it("raises the northern lights on about one winter night in three, and only by night", () => {
+    // Winter is days 21 to 27 of each 28-day year.
+    let nights = 0;
+    let lit = 0;
+    for (let day = 0; day < 2_800; day++) {
+      const winter = day % 28 >= 21;
+      expect(townAurora(day * TOWN_DAY_LENGTH + 300)).toBe(false);
+      const aurora = townAurora(day * TOWN_DAY_LENGTH + 800);
+      if (!winter) expect(aurora).toBe(false);
+      else {
+        nights++;
+        if (aurora) lit++;
+      }
+    }
+    expect(lit / nights).toBeGreaterThan(0.25);
+    expect(lit / nights).toBeLessThan(0.42);
+  });
+
+  it("lets a star fall now and then on a clear night, never by day or in a storm", () => {
+    let falling = 0;
+    for (let t = 0; t < 1_000 * TOWN_DAY_LENGTH; t += 37) {
+      const star = townFallingStar(t);
+      if (!star) continue;
+      falling++;
+      expect(townClock(t).phase).toBe("night");
+      expect(townStorm(t)).toBe(false);
+      expect(star.y).toBeLessThan(12);
+    }
+    expect(falling).toBeGreaterThan(0);
   });
 });
 
