@@ -181,14 +181,15 @@ describe("remote picks look past invaders", () => {
       body: [],
       memory: { role: ROLE_REMOTE_MINER, homeRoom: "W5N5", remoteSourceId: "W6N5-s0" },
     } as unknown as Creep;
-    const remotes = [remote("W4N5", false), remote("W6N5", false)];
+    const remotes = () => [remote("W4N5", false), remote("W6N5", false)];
     let busy = 0;
     // Find a load where both fit only when the mined one needs no headroom.
-    // Each look is long after the last, so no recent pick holds a place.
+    // Each look is at new entries with no pick on record, so only the miner
+    // can hold a place.
     for (let n = 0; n < 160; n++) {
-      const fresh = getPickedRemoteRoomNames(home(remotes, upgraders(n)));
+      const fresh = getPickedRemoteRoomNames(home(remotes(), upgraders(n)));
       clock += 1_000;
-      const withMiner = getPickedRemoteRoomNames(home(remotes, [...upgraders(n), miner]));
+      const withMiner = getPickedRemoteRoomNames(home(remotes(), [...upgraders(n), miner]));
       clock += 1_000;
       if (withMiner.size > fresh.size) {
         busy = n;
