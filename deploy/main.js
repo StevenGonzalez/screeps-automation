@@ -9913,12 +9913,26 @@ function moveToRoom$5(creep, targetRoom) {
 }
 
 function runReserver(creep) {
-    var _a;
+    var _a, _b;
+    var _c;
     const { targetRoom, homeRoom } = creep.memory;
     if (!targetRoom || !homeRoom) {
         creep.suicide();
         return;
     }
+    const threats = creep.room.name === targetRoom ? remoteThreats(creep.room) : [];
+    if (threats.some(isInvaderCreep))
+        flagRemoteInvader(creep);
+    else if (threats.some(isPlayerCreep))
+        flagRemotePlayer(creep);
+    if (threats.length > 0 || isAssignedRemoteContested(creep)) {
+        cryFlight(creep);
+        (_a = (_c = creep.memory).walk) !== null && _a !== void 0 ? _a : (_c.walk = 0);
+        if (creep.room.name !== homeRoom)
+            moveToRoom$4(creep, homeRoom);
+        return;
+    }
+    settleFlight(creep);
     if (creep.room.name !== targetRoom) {
         moveToRoom$4(creep, targetRoom);
         return;
@@ -9928,7 +9942,7 @@ function runReserver(creep) {
         creep.suicide();
         return;
     }
-    const reservedBy = (_a = controller.reservation) === null || _a === void 0 ? void 0 : _a.username;
+    const reservedBy = (_b = controller.reservation) === null || _b === void 0 ? void 0 : _b.username;
     const result = reservedBy && reservedBy !== creep.owner.username
         ? creep.attackController(controller)
         : creep.reserveController(controller);
