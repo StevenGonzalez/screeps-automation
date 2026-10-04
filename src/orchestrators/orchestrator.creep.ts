@@ -147,6 +147,9 @@ const STORM_CHATTER = ["rain!", "soaked!", "thunder!"];
 const NIGHT_CHATTER = ["yawn...", "torches!", "so dark", "owls hoot"];
 const WEATHER_EVERY = 4;
 
+// A creep just out of the spawn speaks its first words.
+const FIRST_WORDS = ["reporting!", "ready!", "first day!", "hail all!", "I live!"];
+
 // In its last ticks a creep talks of little but its end.
 const ELDER_TICKS = 150;
 const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
@@ -167,14 +170,17 @@ function turnReplies(): void {
 }
 
 // What a creep says this tick unprompted, if anything: its answer to a hail,
-// or a line every SAY_PERIOD ticks, staggered by name so the room does not
-// speak at once.
+// its first words, or a line every SAY_PERIOD ticks, staggered by name so the
+// room does not speak at once.
 export function chatterLine(creep: Creep): string | undefined {
   turnReplies();
   const reply = repliesDue[creep.name];
   if (reply) return reply;
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
+  // On its first tick out of the spawn a creep has 1500 or 1499 ticks to
+  // live, so its first words are said once or held for two ticks.
+  if ((creep.ticksToLive ?? 0) >= CREEP_LIFE_TIME - 1) return FIRST_WORDS[hash % FIRST_WORDS.length];
   if ((Game.time + hash) % SAY_PERIOD !== 0) return undefined;
   const eventNo = (Game.time + hash) / SAY_PERIOD;
   const pick = Math.abs(eventNo + hash);

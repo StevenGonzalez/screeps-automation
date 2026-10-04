@@ -6,6 +6,7 @@ const g = vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;
   for (const name of ["Creep", "PowerCreep", "Room", "RoomPosition", "Structure"]) g[name] = class {};
   g.FIND_MY_CREEPS = 102;
+  g.CREEP_LIFE_TIME = 1500;
   return g;
 });
 
@@ -78,6 +79,26 @@ describe("chatter", () => {
     expect(elder).toContain("farewell");
     expect(elder).not.toContain("dig dig");
     expect(linesFrom(start, undefined, 1_000)).not.toContain("farewell");
+  });
+
+  it("speaks its first words as it leaves the spawn, and only then", () => {
+    const at = (ticksToLive: number) => {
+      const mason = { name: "Mason Odo", memory: { role: ROLE_MINER }, ticksToLive, pos: { findInRange: () => [] } } as unknown as Creep;
+      g.Memory = {};
+      const lines: (string | undefined)[] = [];
+      for (let t = 23 * TOWN_DAY_LENGTH; t < 23 * TOWN_DAY_LENGTH + 30; t++) {
+        g.Game = { time: t };
+        lines.push(chatterLine(mason));
+      }
+      return lines;
+    };
+    for (const ttl of [1500, 1499]) {
+      const lines = at(ttl);
+      expect(new Set(lines).size).toBe(1);
+      expect(["reporting!", "ready!", "first day!", "hail all!", "I live!"]).toContain(lines[0]);
+    }
+    expect(at(1498).filter(Boolean)).toHaveLength(1);
+    expect(at(1498)).not.toContain(at(1500)[0]);
   });
 
   it("hails a creep alongside by its given name, when that fits", () => {

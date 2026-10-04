@@ -288,7 +288,8 @@ runs full again (`memory.heraldVeinDry`).
 News outlives its cry. For 600 ticks after a level, new renown, a keep's
 firstborn, a war party at the walls, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the
 wolves or the wisps, every creep in the realm now and then repeats it in its idle
-chatter (`Memory.gossip`). Newer news replaces older. In its last 150 ticks a
+chatter (`Memory.gossip`). Newer news replaces older. A creep just out of the
+spawn speaks its first words ("reporting!", "first day!"). In its last 150 ticks a
 creep talks of its end instead of its work ("old bones", "farewell"), and after
 dark its talk of the weather turns to the night ("torches!", "owls hoot"). Now
 and then a creep hails another standing beside it by its given name ("hail
