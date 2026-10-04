@@ -2794,6 +2794,30 @@ function meetIncomingHandoff(creep) {
     return true;
 }
 
+const UPGRADER_STORAGE_FLOOR = 10000;
+const KEEP_FUND_FLOOR = 45000;
+const UPGRADER_DOWNGRADE_GUARD = 5000;
+function nearDowngrade(room) {
+    const ctrl = room.controller;
+    return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
+}
+function savingForKeep(room) {
+    var _a;
+    const exp = Memory.expansion;
+    if (exp && exp.homeRoom === room.name && exp.phase !== "established")
+        return true;
+    return ((_a = Memory.expansionSavings) === null || _a === void 0 ? void 0 : _a.room) === room.name;
+}
+function upgraderStorageFloor(room) {
+    return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
+}
+function upgradingFunded(room) {
+    const storage = room.storage;
+    if (!storage)
+        return true;
+    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) || nearDowngrade(room);
+}
+
 function findEnergyDepositTarget(creep, role) {
     const priorityList = ENERGY_DEPOSIT_PRIORITY[role] || [];
     if (priorityList.length === 0)
@@ -3016,6 +3040,7 @@ function findDepositTargetExcludingMiner(creep) {
     const coreFull = creep.room.energyAvailable >= creep.room.energyCapacityAvailable;
     if (upgradeIsDropTarget &&
         coreFull &&
+        upgradingFunded(creep.room) &&
         ((_a = upgradeCont.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0) < UPGRADE_CONTAINER_REFILL_BELOW &&
         getUpgradeContainerFillerIds(creep.room).has(creep.id)) {
         return upgradeCont;
@@ -3260,18 +3285,6 @@ function runHarvester(creep) {
     harvestFromSource(creep, current);
 }
 
-const UPGRADER_STORAGE_FLOOR = 10000;
-const UPGRADER_DOWNGRADE_GUARD = 5000;
-function nearDowngrade(room) {
-    const ctrl = room.controller;
-    return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
-}
-function upgradingFunded(room) {
-    const storage = room.storage;
-    if (!storage)
-        return true;
-    return storage.store[RESOURCE_ENERGY] > UPGRADER_STORAGE_FLOOR || nearDowngrade(room);
-}
 function runUpgrader(creep) {
     var _a;
     if (creep.memory.working === undefined)
@@ -12262,8 +12275,9 @@ const MAX_INTEL_CANDIDATES = 25;
 const MAX_CLAIM_ROUTE = 10;
 const AUTO_EXPAND_CHECK_INTERVAL = 50;
 const MIN_HOME_RCL = 4;
-const MIN_HOME_STORAGE_ENERGY = 50000;
+const MIN_HOME_STORAGE_ENERGY = KEEP_FUND_FLOOR - 5000;
 const MIN_BUCKET = 5000;
+const MAX_CPU_SHARE_TO_EXPAND = 0.55;
 function rankExpansionCandidates() {
     var _a, _b, _c, _d, _e, _f, _g, _h;
     const ownedMinerals = scanOwnedMinerals();
@@ -12299,7 +12313,7 @@ function rankExpansionCandidates() {
     }
     const homeNames = [];
     for (const rn in Game.rooms) {
-        if (isHomeRoomHealthy(Game.rooms[rn]))
+        if (canFundKeeps(Game.rooms[rn]))
             homeNames.push(rn);
     }
     if (homeNames.length > 0 && Memory.intel) {
@@ -12558,17 +12572,18 @@ function findRemoteRecord(roomName) {
     }
     return undefined;
 }
-function isHomeRoomHealthy(room) {
-    var _a, _b, _c, _d;
+function canFundKeeps(room) {
+    var _a, _b;
     if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
         return false;
     if (((_b = room.controller.level) !== null && _b !== void 0 ? _b : 0) < MIN_HOME_RCL)
         return false;
-    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < MIN_HOME_STORAGE_ENERGY)
+    if (!room.storage)
         return false;
-    if (getThreatInfo(room).score > 0)
-        return false;
-    return true;
+    return getThreatInfo(room).score === 0;
+}
+function isHomeRoomHealthy(room) {
+    return canFundKeeps(room) && room.storage.store[RESOURCE_ENERGY] >= MIN_HOME_STORAGE_ENERGY;
 }
 function isChildSelfSufficient(child) {
     var _a, _b, _c, _d;
@@ -12624,7 +12639,7 @@ function advanceExpansionQueue() {
         }
         const home = resolveFundingHome(next.roomName, next.homeRoom);
         if (!home) {
-            queue.push(next);
+            queue.unshift(next);
             return;
         }
         Memory.expansion = {
@@ -12638,17 +12653,17 @@ function advanceExpansionQueue() {
         return;
     }
 }
-function resolveFundingHome(roomName, preferred) {
+function resolveFundingHome(roomName, preferred, eligible = isHomeRoomHealthy) {
     if (preferred) {
         const room = Game.rooms[preferred];
-        if (room && isHomeRoomHealthy(room))
+        if (room && eligible(room))
             return preferred;
     }
     let best;
     let bestDist = Infinity;
     for (const rn in Game.rooms) {
         const room = Game.rooms[rn];
-        if (!isHomeRoomHealthy(room))
+        if (!eligible(room))
             continue;
         const d = Game.map.getRoomLinearDistance(rn, roomName);
         if (d < bestDist) {
@@ -12772,17 +12787,27 @@ function isExpansionPostureAllowed() {
     return posture === "EXPAND";
 }
 function loop$9() {
-    var _a, _b, _c;
     manageActiveExpansion();
     if (!Memory.expansion)
         advanceExpansionQueue();
-    if (Memory.autoExpand !== true)
-        return;
-    if (!isExpansionPostureAllowed())
-        return;
     if (Game.time % AUTO_EXPAND_CHECK_INTERVAL !== 0)
         return;
+    if (Memory.autoExpand !== false && isExpansionPostureAllowed())
+        autoQueue();
+    planSavings();
+}
+function cpuShareUsed() {
+    let total = 0;
+    const stats = getCpuStats();
+    for (const name in stats)
+        total += stats[name].ema;
+    return Game.cpu.limit ? total / Game.cpu.limit : 0;
+}
+function autoQueue() {
+    var _a, _b, _c;
     if (Game.cpu.bucket < MIN_BUCKET)
+        return;
+    if (cpuShareUsed() > MAX_CPU_SHARE_TO_EXPAND)
         return;
     const ownedRooms = Object.values(Game.rooms).filter((r) => { var _a; return (_a = r.controller) === null || _a === void 0 ? void 0 : _a.my; });
     const activeCount = Memory.expansion ? 1 : 0;
@@ -12804,7 +12829,7 @@ function loop$9() {
         if (Memory.expansionQueue.some((q) => q.roomName === cand.room))
             continue;
         const home = Game.rooms[cand.homeRoom];
-        if (!home || !isHomeRoomHealthy(home))
+        if (!home || !canFundKeeps(home))
             continue;
         Memory.expansionQueue.push({ roomName: cand.room, homeRoom: cand.homeRoom, queuedAt: Game.time });
         enqueued++;
@@ -12813,6 +12838,20 @@ function loop$9() {
     }
     if (enqueued > 0 && !Memory.expansion)
         advanceExpansionQueue();
+}
+function planSavings() {
+    var _a;
+    const next = (_a = Memory.expansionQueue) === null || _a === void 0 ? void 0 : _a[0];
+    const home = next ? resolveFundingHome(next.roomName, next.homeRoom, canFundKeeps) : undefined;
+    if (!next || !home) {
+        delete Memory.expansionSavings;
+        return;
+    }
+    const plan = Memory.expansionSavings;
+    if ((plan === null || plan === void 0 ? void 0 : plan.room) === home && plan.target === next.roomName)
+        return;
+    Memory.expansionSavings = { room: home, target: next.roomName };
+    console.log(`[Expansion] ${home} saves ${KEEP_FUND_FLOOR} gold to found a keep at ${next.roomName}`);
 }
 
 const BODY_PATTERNS = {
@@ -13859,7 +13898,9 @@ function getUpgraderPopulationTarget(room) {
         return Math.min(NO_STORAGE_MAX_UPGRADERS, base + extra);
     }
     const cap = phase === "powerhouse" ? 4 : 3;
-    const spare = Math.max(0, storage.store[RESOURCE_ENERGY] - UPGRADER_STORAGE_FLOOR);
+    const spare = storage.store[RESOURCE_ENERGY] - upgraderStorageFloor(room);
+    if (spare <= 0)
+        return 0;
     return Math.min(cap, 1 + Math.floor(spare / STORAGE_ENERGY_PER_UPGRADER));
 }
 let constructionSiteCacheTick = -1;
@@ -17474,6 +17515,11 @@ function drawRoomHUD(room) {
         const trendText = trend === undefined ? "" : `  (${trend >= 0 ? "+" : ""}${trend.toFixed(1)}/t)`;
         v.text(`Treasury: ${formatK(stored)}${trendText}`, x, y, dimStyle);
         y += lineH;
+        const keep = describeKeepPlan(room, stored);
+        if (keep) {
+            v.text(keep, x, y, { ...style, color: "#f2c14e" });
+            y += lineH;
+        }
     }
     if (books) {
         const [headline, income, spend] = describeBooks(books);
@@ -17524,6 +17570,20 @@ function drawRoomHUD(room) {
         const remaining = spawn.spawning.remainingTime;
         v.text(`Spawning: ${spawn.spawning.name} (${remaining}t)`, x, y, dimStyle);
     }
+}
+function describeKeepPlan(room, stored) {
+    var _a;
+    const exp = Memory.expansion;
+    if ((exp === null || exp === void 0 ? void 0 : exp.homeRoom) === room.name && exp.phase !== "established") {
+        const child = (_a = Game.rooms[exp.roomName]) === null || _a === void 0 ? void 0 : _a.controller;
+        const level = (child === null || child === void 0 ? void 0 : child.my) ? ` (RCL ${child.level})` : "";
+        return `Founding a keep at ${exp.roomName}: ${exp.phase}${level}`;
+    }
+    const plan = Memory.expansionSavings;
+    if ((plan === null || plan === void 0 ? void 0 : plan.room) === room.name) {
+        return `Saving for a keep at ${plan.target}: ${formatK(stored)}/${formatK(MIN_HOME_STORAGE_ENERGY)}`;
+    }
+    return undefined;
 }
 const PHASE_ICON = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
 const NIGHT_SHADE = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
@@ -17692,7 +17752,7 @@ function setupConsole() {
         },
         autoexpand: (enabled) => {
             if (enabled === undefined) {
-                console.log(`[AutoExpand] ${Memory.autoExpand ? "ON" : "OFF"}`);
+                console.log(`[AutoExpand] ${Memory.autoExpand !== false ? "ON" : "OFF"}`);
                 return;
             }
             Memory.autoExpand = enabled;
@@ -17726,7 +17786,7 @@ function setupConsole() {
             }
             const homeRoom = resolveFundingHome(roomName);
             if (!homeRoom) {
-                console.log("[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, 50k gold in the treasury, no threats)");
+                console.log(`[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, ${MIN_HOME_STORAGE_ENERGY / 1000}k gold in the treasury, no threats)`);
                 return;
             }
             Memory.expansion = {
