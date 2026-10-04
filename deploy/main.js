@@ -2585,6 +2585,23 @@ function findContainersForSource(room, source) {
     const containers = getRoomContainers(room);
     return containers.filter((container) => container.pos.getRangeTo(source.pos) <= 1);
 }
+function countOpenTilesAround(room, pos) {
+    const terrain = room.getTerrain();
+    let open = 0;
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            if (dx === 0 && dy === 0)
+                continue;
+            const x = pos.x + dx;
+            const y = pos.y + dy;
+            if (x < 0 || x > 49 || y < 0 || y > 49)
+                continue;
+            if (terrain.get(x, y) !== TERRAIN_MASK_WALL)
+                open++;
+        }
+    }
+    return open;
+}
 function findUnclaimedMinerAssignment(room) {
     const sources = getSafeSources(room);
     const takenContainerIds = getAssignedContainerIdsByRole(room, ROLE_MINER);
@@ -2597,7 +2614,36 @@ function findUnclaimedMinerAssignment(room) {
             }
         }
     }
-    return null;
+    return findSharedMinerPost(room, sources);
+}
+function findSharedMinerPost(room, sources) {
+    var _a, _b, _c, _d;
+    const workAt = {};
+    const minersAt = {};
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        if (creep.room.name !== room.name || creep.memory.role !== ROLE_MINER)
+            continue;
+        const post = creep.memory.assignedContainerId;
+        if (!post)
+            continue;
+        workAt[post] = ((_a = workAt[post]) !== null && _a !== void 0 ? _a : 0) + creep.body.filter((p) => p.type === WORK).length;
+        minersAt[post] = ((_b = minersAt[post]) !== null && _b !== void 0 ? _b : 0) + 1;
+    }
+    let best = null;
+    let least = Infinity;
+    for (const source of sources) {
+        const full = Math.ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER);
+        const seats = countOpenTilesAround(room, source.pos);
+        for (const container of findContainersForSource(room, source)) {
+            const work = (_c = workAt[container.id]) !== null && _c !== void 0 ? _c : 0;
+            if (work >= full || ((_d = minersAt[container.id]) !== null && _d !== void 0 ? _d : 0) >= seats || work >= least)
+                continue;
+            least = work;
+            best = { source, container };
+        }
+    }
+    return best;
 }
 function findUnclaimedHaulerAssignment(room) {
     const minerIds = new Set(getMinerContainerIds(room).map((id) => id.toString()));
@@ -3904,7 +3950,8 @@ function runMiner(creep) {
         }
         if (source && container) {
             if (!creep.pos.isEqualTo(container.pos)) {
-                creep.moveTo(container.pos, { reusePath: 50 });
+                const held = !creep.pos.isNearTo(source) && container.pos.lookFor(LOOK_CREEPS).length > 0;
+                creep.moveTo((held && freeSeat(source, container)) || container.pos, { reusePath: 50 });
                 if (creep.pos.isNearTo(source)) {
                     const dug = creep.getActiveBodyparts(WORK) * HARVEST_POWER;
                     const full = creep.store[RESOURCE_ENERGY] > 0 && creep.store.getFreeCapacity() < dug;
@@ -3952,6 +3999,30 @@ function runMiner(creep) {
         const source = (_a = creep.pos.findClosestByRange(sources)) !== null && _a !== void 0 ? _a : sources[0];
         harvestFromSource(creep, source);
     }
+}
+function freeSeat(source, container) {
+    const terrain = source.room.getTerrain();
+    let seat = null;
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            const x = source.pos.x + dx;
+            const y = source.pos.y + dy;
+            if ((dx === 0 && dy === 0) || terrain.get(x, y) === TERRAIN_MASK_WALL)
+                continue;
+            const pos = new RoomPosition(x, y, source.room.name);
+            if (pos.isEqualTo(container.pos) || pos.lookFor(LOOK_CREEPS).length > 0)
+                continue;
+            const blocked = pos
+                .lookFor(LOOK_STRUCTURES)
+                .some((s) => OBSTACLE_OBJECT_TYPES.includes(s.structureType));
+            if (blocked)
+                continue;
+            if (pos.isNearTo(container.pos))
+                return pos;
+            seat = seat !== null && seat !== void 0 ? seat : pos;
+        }
+    }
+    return seat;
 }
 function findAdjacentLink(creep) {
     const links = creep.pos.findInRange(FIND_MY_STRUCTURES, 1, {
@@ -14311,6 +14382,29 @@ function getRemoteSourcePathLength(home, remote, src) {
     }
     return src.pathLength;
 }
+function remoteRoadCoverage(remote) {
+    const room = Game.rooms[remote.roomName];
+    if (!room)
+        return 0;
+    const tiles = new Set();
+    for (const src of remote.sources) {
+        if (!src.containerId || !src.roadTiles)
+            continue;
+        for (const tile of src.roadTiles.split(";")) {
+            const [x, y] = tile.split(",").map(Number);
+            if (x > 0 && y > 0 && x < 49 && y < 49)
+                tiles.add(tile);
+        }
+    }
+    if (tiles.size === 0)
+        return 0;
+    let built = 0;
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_ROAD && tiles.has(`${s.pos.x},${s.pos.y}`))
+            built++;
+    }
+    return built / tiles.size;
+}
 
 function isRemoteCreepRetiring(home, creep) {
     const target = creep.memory.targetRoom;
@@ -14578,18 +14672,25 @@ function estimateRemoteDistance(homeRoom, remoteRoomName) {
 const MAX_REMOTE_HAULERS_PER_ROOM = 6;
 const REMOTE_HAUL_MARGIN = 1.2;
 const MIN_REMOTE_HAULER_CARRY = 4;
+const PAVED_ROAD_COVERAGE = 0.9;
 function getRemoteHaulPlans(room) {
-    const carryPerHauler = Math.max(1, buildRemoteHaulerBody(bodyBudget(room, "capacity"), remoteRoadsEnabled(room)).filter((p) => p === CARRY).length);
+    const roads = remoteRoadsEnabled(room);
+    const budget = bodyBudget(room, "capacity");
+    const carryOf = (paved) => Math.max(1, buildRemoteHaulerBody(budget, roads, paved).filter((p) => p === CARRY).length);
+    const carryOnFoot = carryOf(false);
+    const carryPaved = carryOf(true);
     const output = remoteSourceOutput(room);
     const plans = {};
     for (const remote of getActiveRemoteRooms(room)) {
+        const paved = roads && remoteRoadCoverage(remote) >= PAVED_ROAD_COVERAGE;
+        const carryPerHauler = paved ? carryPaved : carryOnFoot;
         let requiredCarry = 0;
         for (const src of remote.sources) {
             requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
         }
         const count = Math.min(MAX_REMOTE_HAULERS_PER_ROOM, Math.max(1, Math.ceil(requiredCarry / carryPerHauler)));
         const carryEach = Math.min(carryPerHauler, Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil((requiredCarry * REMOTE_HAUL_MARGIN) / count)));
-        plans[remote.roomName] = { count, carryEach };
+        plans[remote.roomName] = { count, carryEach, paved };
     }
     return plans;
 }
@@ -14662,13 +14763,16 @@ function spawnRemoteHauler(room, spawn) {
     const plans = getRemoteHaulPlans(room);
     const targetRoomName = neediestRemote(activeRooms, plans, haulersByRoom);
     const roads = remoteRoadsEnabled(room);
-    const carryEach = (_c = plans[targetRoomName]) === null || _c === void 0 ? void 0 : _c.carryEach;
-    const planEnergy = carryEach === undefined
+    const plan = plans[targetRoomName];
+    const paved = (_c = plan === null || plan === void 0 ? void 0 : plan.paved) !== null && _c !== void 0 ? _c : false;
+    const planEnergy = plan === undefined
         ? Infinity
         : (roads ? BODYPART_COST[WORK] + BODYPART_COST[MOVE] : 0) +
-            carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]);
+            (paved
+                ? Math.ceil(plan.carryEach / 2) * (2 * BODYPART_COST[CARRY] + BODYPART_COST[MOVE])
+                : plan.carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]));
     const allowedEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
-    const body = buildRemoteHaulerBody(allowedEnergy, roads);
+    const body = buildRemoteHaulerBody(allowedEnergy, roads, paved);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
     const res = trackedSpawn(room, spawn, body, {
@@ -14697,9 +14801,9 @@ function buildRemoteMinerBody(availableEnergy) {
         body.push(CARRY);
     return body;
 }
-function buildRemoteHaulerBody(availableEnergy, withWork = false) {
+function buildRemoteHaulerBody(availableEnergy, withWork = false, paved = false) {
     const head = withWork ? [WORK, MOVE] : [];
-    const pattern = [CARRY, MOVE];
+    const pattern = paved ? [CARRY, CARRY, MOVE] : [CARRY, MOVE];
     const patternCost = calculateBodyPartCost(pattern);
     const maxByParts = Math.floor((MAX_BODY_PART_COUNT - head.length) / pattern.length);
     const maxByEnergy = Math.floor((availableEnergy - calculateBodyPartCost(head)) / patternCost);
@@ -14887,23 +14991,6 @@ function hasCoreRefiller(room) {
         countByRoleInRoom(ROLE_HARVESTER, room) > 0);
 }
 const SOURCE_WORK_TO_DRAIN = 5;
-function countOpenTilesAround(room, pos) {
-    const terrain = room.getTerrain();
-    let open = 0;
-    for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-            if (dx === 0 && dy === 0)
-                continue;
-            const x = pos.x + dx;
-            const y = pos.y + dy;
-            if (x < 0 || x > 49 || y < 0 || y > 49)
-                continue;
-            if (terrain.get(x, y) !== TERRAIN_MASK_WALL)
-                open++;
-        }
-    }
-    return open;
-}
 function getHarvesterCrewTarget(room, minerCount) {
     const sources = getSources(room);
     const uncovered = Math.max(0, sources.length - minerCount);
@@ -15117,24 +15204,34 @@ function getMinerWorkTarget(room) {
     return buildMinerBody(allowed).filter((p) => p === WORK).length;
 }
 function shouldSpawnMiner(room) {
-    var _a, _b;
+    var _a, _b, _c;
     const workTarget = getMinerWorkTarget(room);
     const lead = getMinerReplacementLead(room);
     const workAt = {};
+    const minersAt = {};
+    const sourceAt = {};
     let unposted = 0;
     for (const c of getCreepsByRoleInRoom(ROLE_MINER, room)) {
         if (c.spawning || isRetiring(c, lead))
             continue;
         const work = c.body.filter((p) => p.type === WORK).length;
         const post = c.memory.assignedContainerId;
-        if (post)
+        if (post) {
             workAt[post] = ((_a = workAt[post]) !== null && _a !== void 0 ? _a : 0) + work;
+            minersAt[post] = ((_b = minersAt[post]) !== null && _b !== void 0 ? _b : 0) + 1;
+            if (c.memory.assignedSourceId)
+                sourceAt[post] = c.memory.assignedSourceId;
+        }
         else if (work >= workTarget)
             unposted++;
     }
-    const posts = (_b = room.memory.minerContainerIds) !== null && _b !== void 0 ? _b : [];
-    const manned = posts.filter((id) => { var _a; return ((_a = workAt[id]) !== null && _a !== void 0 ? _a : 0) >= workTarget; }).length;
+    const posts = (_c = room.memory.minerContainerIds) !== null && _c !== void 0 ? _c : [];
+    const manned = posts.filter((id) => { var _a, _b; return ((_a = workAt[id]) !== null && _a !== void 0 ? _a : 0) >= workTarget || ((_b = minersAt[id]) !== null && _b !== void 0 ? _b : 0) >= sourceSeats(room, sourceAt[id]); }).length;
     return manned + unposted + getRoomSpawningCount(room, ROLE_MINER) < posts.length;
+}
+function sourceSeats(room, sourceId) {
+    const source = sourceId && Game.getObjectById(sourceId);
+    return source ? countOpenTilesAround(room, source.pos) : Infinity;
 }
 function shouldSpawnHarvester(room) {
     const count = countByRoleInRoom(ROLE_HARVESTER, room);
