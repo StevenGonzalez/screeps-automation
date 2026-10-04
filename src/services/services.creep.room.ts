@@ -219,6 +219,21 @@ export function findContainersForSource(
   return containers.filter((container) => container.pos.getRangeTo(source.pos) <= 1);
 }
 
+export function countOpenTilesAround(room: Room, pos: RoomPosition): number {
+  const terrain = room.getTerrain();
+  let open = 0;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const x = pos.x + dx;
+      const y = pos.y + dy;
+      if (x < 0 || x > 49 || y < 0 || y > 49) continue;
+      if (terrain.get(x, y) !== TERRAIN_MASK_WALL) open++;
+    }
+  }
+  return open;
+}
+
 export function findUnclaimedMinerAssignment(
   room: Room
 ): { source: Source; container: StructureContainer } | null {
@@ -233,7 +248,40 @@ export function findUnclaimedMinerAssignment(
       }
     }
   }
-  return null;
+  return findSharedMinerPost(room, sources);
+}
+
+// With every post taken, a miner joins the one whose miners dig least, so long
+// as they dig less than its source gives and leave it a tile to dig from. A
+// young keep's first miners are small, and one raised to help them found every
+// post taken and stood idle behind them.
+function findSharedMinerPost(
+  room: Room,
+  sources: Source[]
+): { source: Source; container: StructureContainer } | null {
+  const workAt: Record<string, number> = {};
+  const minersAt: Record<string, number> = {};
+  for (const name in Game.creeps) {
+    const creep = Game.creeps[name];
+    if (creep.room.name !== room.name || creep.memory.role !== ROLE_MINER) continue;
+    const post = creep.memory.assignedContainerId;
+    if (!post) continue;
+    workAt[post] = (workAt[post] ?? 0) + creep.body.filter((p) => p.type === WORK).length;
+    minersAt[post] = (minersAt[post] ?? 0) + 1;
+  }
+  let best: { source: Source; container: StructureContainer } | null = null;
+  let least = Infinity;
+  for (const source of sources) {
+    const full = Math.ceil(source.energyCapacity / ENERGY_REGEN_TIME / HARVEST_POWER);
+    const seats = countOpenTilesAround(room, source.pos);
+    for (const container of findContainersForSource(room, source)) {
+      const work = workAt[container.id] ?? 0;
+      if (work >= full || (minersAt[container.id] ?? 0) >= seats || work >= least) continue;
+      least = work;
+      best = { source, container };
+    }
+  }
+  return best;
 }
 
 export function findUnclaimedHaulerAssignment(

@@ -17,6 +17,7 @@ export {
   findContainersForSource,
   findUnclaimedMinerAssignment,
   findUnclaimedHaulerAssignment,
+  countOpenTilesAround,
 } from "./services.creep.room";
 export {
   findEnergyDepositTarget,

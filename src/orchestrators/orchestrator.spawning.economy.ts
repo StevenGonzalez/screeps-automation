@@ -12,7 +12,7 @@ import {
 import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services.creep";
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
-import { getSources } from "../services/services.creep";
+import { countOpenTilesAround, getSources } from "../services/services.creep";
 import { upgraderStorageFloor } from "../services/services.treasury";
 import {
   buildScaledBody,
@@ -97,21 +97,6 @@ function hasCoreRefiller(room: Room): boolean {
 // that fills the spawn. Crew each source no miner has taken yet up to five
 // WORK, but with no more harvesters than the tiles around it can hold.
 const SOURCE_WORK_TO_DRAIN = 5;
-
-function countOpenTilesAround(room: Room, pos: RoomPosition): number {
-  const terrain = room.getTerrain();
-  let open = 0;
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      if (dx === 0 && dy === 0) continue;
-      const x = pos.x + dx;
-      const y = pos.y + dy;
-      if (x < 0 || x > 49 || y < 0 || y > 49) continue;
-      if (terrain.get(x, y) !== TERRAIN_MASK_WALL) open++;
-    }
-  }
-  return open;
-}
 
 function getHarvesterCrewTarget(room: Room, minerCount: number): number {
   const sources = getSources(room);
@@ -416,20 +401,35 @@ export function shouldSpawnMiner(room: Room): boolean {
   // needs another once we can afford better. Judging each miner on its own
   // replaced a young keep's two-WORK pair at a post as well, every time an
   // extension went up, though together they already outdug the replacement.
+  // A post whose miners fill every tile its source can be dug from is manned
+  // too, since one more would have nowhere to stand.
   const workTarget = getMinerWorkTarget(room);
   const lead = getMinerReplacementLead(room);
   const workAt: Record<string, number> = {};
+  const minersAt: Record<string, number> = {};
+  const sourceAt: Record<string, Id<Source>> = {};
   let unposted = 0;
   for (const c of getCreepsByRoleInRoom(ROLE_MINER, room)) {
     if (c.spawning || isRetiring(c, lead)) continue;
     const work = c.body.filter((p) => p.type === WORK).length;
     const post = c.memory.assignedContainerId;
-    if (post) workAt[post] = (workAt[post] ?? 0) + work;
-    else if (work >= workTarget) unposted++;
+    if (post) {
+      workAt[post] = (workAt[post] ?? 0) + work;
+      minersAt[post] = (minersAt[post] ?? 0) + 1;
+      if (c.memory.assignedSourceId) sourceAt[post] = c.memory.assignedSourceId;
+    } else if (work >= workTarget) unposted++;
   }
   const posts = room.memory.minerContainerIds ?? [];
-  const manned = posts.filter((id) => (workAt[id] ?? 0) >= workTarget).length;
+  const manned = posts.filter(
+    (id) => (workAt[id] ?? 0) >= workTarget || (minersAt[id] ?? 0) >= sourceSeats(room, sourceAt[id])
+  ).length;
   return manned + unposted + getRoomSpawningCount(room, ROLE_MINER) < posts.length;
+}
+
+// Tiles a miner post's source can be dug from.
+function sourceSeats(room: Room, sourceId: Id<Source> | undefined): number {
+  const source = sourceId && Game.getObjectById(sourceId);
+  return source ? countOpenTilesAround(room, source.pos) : Infinity;
 }
 
 // The first harvester goes out on whatever the core holds. The rest wait for a

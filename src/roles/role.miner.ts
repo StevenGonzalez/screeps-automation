@@ -37,7 +37,11 @@ export function runMiner(creep: Creep) {
 
     if (source && container) {
       if (!creep.pos.isEqualTo(container.pos)) {
-        creep.moveTo(container.pos, { reusePath: 50 });
+        // A miner sharing a post digs from another tile beside the source while
+        // the container's tile is held. Walking at the container, it stopped
+        // short beside it, out of the source's reach.
+        const held = !creep.pos.isNearTo(source) && container.pos.lookFor(LOOK_CREEPS).length > 0;
+        creep.moveTo((held && freeSeat(source, container)) || container.pos, { reusePath: 50 });
         // Moving and harvesting are separate intents, so the walk out costs the
         // room nothing once the creep is already beside the source. This matters
         // while a replacement overlaps the miner it relieves and cannot reach
@@ -104,6 +108,29 @@ export function runMiner(creep: Creep) {
     const source = creep.pos.findClosestByRange(sources) ?? sources[0];
     harvestFromSource(creep, source);
   }
+}
+
+// An open tile beside the source with no creep or obstacle on it, one beside
+// the container too if there is one, so its gold can go in.
+function freeSeat(source: Source, container: StructureContainer): RoomPosition | null {
+  const terrain = source.room.getTerrain();
+  let seat: RoomPosition | null = null;
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const x = source.pos.x + dx;
+      const y = source.pos.y + dy;
+      if ((dx === 0 && dy === 0) || terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      const pos = new RoomPosition(x, y, source.room.name);
+      if (pos.isEqualTo(container.pos) || pos.lookFor(LOOK_CREEPS).length > 0) continue;
+      const blocked = pos
+        .lookFor(LOOK_STRUCTURES)
+        .some((s) => (OBSTACLE_OBJECT_TYPES as string[]).includes(s.structureType));
+      if (blocked) continue;
+      if (pos.isNearTo(container.pos)) return pos;
+      seat = seat ?? pos;
+    }
+  }
+  return seat;
 }
 
 function findAdjacentLink(creep: Creep): StructureLink | null {
