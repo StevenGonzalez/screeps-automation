@@ -56,6 +56,8 @@ export type TownPhase = "dawn" | "day" | "dusk" | "night";
 
 // Seven days to a season and four seasons to the year, the same for every castle.
 export const TOWN_DAYS_PER_SEASON = 7;
+// About one day in this many is a storm day, feast days and winter aside.
+export const TOWN_STORM_ODDS = 5;
 export type TownSeason = "spring" | "summer" | "autumn" | "winter";
 export const TOWN_SEASONS: ReadonlyArray<TownSeason> = ["spring", "summer", "autumn", "winter"];
 // The first day of each season is a feast day.

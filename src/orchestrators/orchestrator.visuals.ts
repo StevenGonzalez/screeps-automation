@@ -1,5 +1,5 @@
 import { ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
-import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townFeast, townSeason } from "../services/services.town";
+import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townFeast, townSeason, townStorm } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 import { readBlueprint } from "../planning/planner.blueprint";
@@ -231,7 +231,8 @@ function drawRoomHUD(room: Room) {
     const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
     const season = townSeason(Game.time);
     const feast = townFeast(Game.time);
-    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}`;
+    const storm = townStorm(Game.time) ? ", storm" : "";
+    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}`;
     v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
     y += lineH;
   }
@@ -338,6 +339,12 @@ const SEASON_DRIFT: Partial<Record<TownSeason, Drift>> = {
   winter: { count: 30, colours: ["#ffffff"], radius: 0.08, fall: 0.25 },
 };
 
+const RAINDROPS = 40;
+// Tiles a raindrop falls each tick.
+const RAIN_FALL = 1.4;
+// Lightning strikes on one tick in this many of a storm.
+const LIGHTNING_EVERY = 37;
+
 const FIREFLIES = 8;
 const LANTERNS = 12;
 const LANTERN_COLOURS = ["#ff6b4a", "#ffd27f", "#7fd4ff"];
@@ -362,6 +369,11 @@ export function drawSeason(room: Room, time = Game.time): void {
       });
     }
     v.text(feast, x, y + 3.2, { font: 0.5, color: "#ffd27f", stroke: "#000000", strokeWidth: 0.06 });
+  }
+
+  if (townStorm(time)) {
+    drawStorm(v, time);
+    return;
   }
 
   const tint = SEASON_TINT[season];
@@ -391,6 +403,26 @@ export function drawSeason(room: Room, time = Game.time): void {
       opacity: 0.2 + 0.7 * glow,
     });
   }
+}
+
+// A storm: grey sky, slanting rain, and now and then a bolt of lightning with
+// the whole room lit white for a tick.
+function drawStorm(v: RoomVisual, time: number): void {
+  v.rect(-0.5, -0.5, 50, 50, { fill: "#334455", opacity: 0.12 });
+  for (let i = 0; i < RAINDROPS; i++) {
+    const x = ((i * 0.7548776662) % 1) * 49 + 0.5;
+    const y = ((time * RAIN_FALL + ((i * 0.5698402910) % 1) * 52) % 52) - 1;
+    v.line(x, y, x - 0.25, y + 0.7, { color: "#9fb8d0", width: 0.04, opacity: 0.5 });
+  }
+  if (time % LIGHTNING_EVERY !== 0) return;
+  v.rect(-0.5, -0.5, 50, 50, { fill: "#ffffff", opacity: 0.15 });
+  let x = 5 + ((time * 7) % 40);
+  const bolt: Array<[number, number]> = [[x, -0.5]];
+  for (let y = 4; y <= 20; y += 4) {
+    x += ((time + y) % 3) - 1;
+    bolt.push([x, y]);
+  }
+  v.poly(bolt, { stroke: "#fffbe0", strokeWidth: 0.15, opacity: 0.9 });
 }
 
 export function drawTown(room: Room): void {

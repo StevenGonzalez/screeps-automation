@@ -115,7 +115,8 @@ In peace it follows the town clock:
   bed is taken.
 - On the first tick of each phase the whole town calls it out ("cock-a-doo!",
   "lamps lit", "zzz"). At daybreak the talk is of the season ("blossoms!",
-  "hay to cut", "cider time", "snow again"). On a feast day the square
+  "hay to cut", "cider time", "snow again"), or of the storm on a storm day
+  ("storm!", "bar doors"). On a feast day the square
   cheers every hundred ticks while the sun is up ("Huzzah!", "ale!").
 
 When raiders are in the room and safe mode is off:
@@ -177,8 +178,13 @@ shows, summed over the season.
 The first day of each season is a feast day: the Sowing Feast, the Midsummer
 Fair, Harvest Home and the Yule Feast.
 
-The room HUD shows the part of the day, the hour, the season and any feast:
-`Day, 10:00 in autumn, Harvest Home  8 townsfolk`.
+About one other day in five is a storm day, except in winter, when it snows
+instead. Which days are stormy follows from the day's number alone, so every
+castle has the same weather.
+
+The room HUD shows the part of the day, the hour, the season, any feast and
+any storm: `Day, 10:00 in autumn, Harvest Home  8 townsfolk`, or
+`Dusk, 15:00 in spring, storm  8 townsfolk`.
 
 ---
 
@@ -195,6 +201,9 @@ When room visuals are on, the town draws itself:
 - the season: a faint green tint and drifting petals in spring, fireflies
   round the fountain on a summer night, an amber tint and falling leaves in
   autumn, and a pale tint and falling snow in winter;
+- on a storm day, a grey sky and slanting rain in place of the season's
+  drift, and every so often a bolt of lightning that lights the room white
+  for a tick;
 - on a feast day, a ring of lanterns round the fountain with the feast's name.
 
 ---

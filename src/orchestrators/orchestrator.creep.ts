@@ -65,7 +65,7 @@ import { runTownsfolk } from "../roles/role.townsfolk";
 import { resolveTraffic, shelterFromHostiles } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 import { cryFor, heraldRooms } from "../services/services.herald";
-import { townFeast, townSeason } from "../services/services.town";
+import { townFeast, townSeason, townStorm } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
 
 const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
@@ -136,6 +136,7 @@ const SEASON_CHATTER: Record<TownSeason, string[]> = {
   winter: ["brr!", "cold feet", "snow!"],
 };
 const FEAST_CHATTER = ["feast!", "ale!", "fair day!"];
+const STORM_CHATTER = ["rain!", "soaked!", "thunder!"];
 const WEATHER_EVERY = 4;
 
 const SAY_PERIOD = 30;
@@ -149,7 +150,11 @@ export function chatterLine(creep: Creep): string | undefined {
   const eventNo = (Game.time + hash) / SAY_PERIOD;
   const pick = Math.abs(eventNo + hash);
   if (pick % WEATHER_EVERY === 0) {
-    const weather = townFeast(Game.time) ? FEAST_CHATTER : SEASON_CHATTER[townSeason(Game.time)];
+    const weather = townFeast(Game.time)
+      ? FEAST_CHATTER
+      : townStorm(Game.time)
+        ? STORM_CHATTER
+        : SEASON_CHATTER[townSeason(Game.time)];
     return weather[(pick / WEATHER_EVERY) % weather.length];
   }
   const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;

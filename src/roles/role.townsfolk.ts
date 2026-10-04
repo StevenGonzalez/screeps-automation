@@ -10,6 +10,7 @@ import {
   townClock,
   townFeast,
   townSeason,
+  townStorm,
 } from "../services/services.town";
 import { floodInterior } from "../planning/planner.town";
 
@@ -49,6 +50,8 @@ const SEASON_CALLS: Record<TownSeason, string[]> = {
 };
 
 // On a feast day the square cheers every hundred ticks while the sun is up.
+const STORM_CALLS = ["storm!", "bar doors", "rain again"];
+
 const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
 const FEAST_CHEER_PERIOD = 100;
 
@@ -124,7 +127,8 @@ function callThePhase(creep: Creep): void {
   let lines: string[];
   if (feasting && t % FEAST_CHEER_PERIOD === 0) lines = FEAST_CALLS;
   else if (!phase) return;
-  else lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
+  else if (phase.name !== "day") lines = PHASE_CALLS[phase.name];
+  else lines = townStorm(Game.time) ? STORM_CALLS : SEASON_CALLS[townSeason(Game.time)];
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
   creep.say(lines[Math.abs(hash) % lines.length], true);

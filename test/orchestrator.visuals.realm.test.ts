@@ -239,9 +239,41 @@ describe("seasons", () => {
       line: (...args: unknown[]) => drawn.push({ kind: "line", args }),
       rect: (...args: unknown[]) => drawn.push({ kind: "rect", args }),
       circle: (...args: unknown[]) => drawn.push({ kind: "circle", args }),
+      poly: (...args: unknown[]) => drawn.push({ kind: "poly", args }),
     };
     return { name: HOME, visual, memory: { town: { fountain: "25,25" } } } as unknown as Room;
   }
+
+  it("brings rain on a storm day in place of the season's drift, and lightning now and then", () => {
+    // Day 2 is a storm day in spring; day 3 is a fair one.
+    drawSeason(townRoom(), 3_500);
+    expect(drawn.filter((d) => d.kind === "line")).toHaveLength(0);
+    expect(drawn.filter((d) => d.kind === "circle").length).toBeGreaterThan(0);
+
+    drawn = [];
+    drawSeason(townRoom(), 2_500);
+    const rain = drawn.filter((d) => d.kind === "line");
+    expect(rain.length).toBeGreaterThan(20);
+    for (const r of rain) {
+      const [x, y] = r.args as number[];
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThan(50);
+      expect(y).toBeGreaterThanOrEqual(-1);
+      expect(y).toBeLessThan(51);
+    }
+    expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(0);
+    expect(drawn.filter((d) => d.kind === "poly")).toHaveLength(0);
+
+    // Lightning strikes on some ticks of a storm day.
+    let strikes = 0;
+    for (let t = 2_000; t < 3_000; t++) {
+      drawn = [];
+      drawSeason(townRoom(), t);
+      if (drawn.some((d) => d.kind === "poly")) strikes++;
+    }
+    expect(strikes).toBeGreaterThan(10);
+    expect(strikes).toBeLessThan(60);
+  });
 
   it("lets snow fall over the castle in winter, inside the room", () => {
     drawSeason(townRoom(), 21_500);

@@ -4,6 +4,7 @@ import {
   TOWN_FEASTS,
   TOWN_PHASES,
   TOWN_SEASONS,
+  TOWN_STORM_ODDS,
   TownPhase,
   TownSeason,
 } from "../config/config.town";
@@ -33,6 +34,16 @@ export function townSeason(time: number): TownSeason {
 export function townFeast(time: number): string | undefined {
   const day = Math.floor(time / TOWN_DAY_LENGTH);
   return day % TOWN_DAYS_PER_SEASON === 0 ? TOWN_FEASTS[townSeason(time)] : undefined;
+}
+
+/**
+ * Whether a storm blows over the realm today. Never on a feast day, nor in
+ * winter, when it snows instead.
+ */
+export function townStorm(time: number): boolean {
+  if (townFeast(time) || townSeason(time) === "winter") return false;
+  const day = Math.floor(time / TOWN_DAY_LENGTH);
+  return (Math.imul(day, 2654435761) >>> 16) % TOWN_STORM_ODDS === 0;
 }
 
 export function isNightfall(phase: TownPhase): boolean {

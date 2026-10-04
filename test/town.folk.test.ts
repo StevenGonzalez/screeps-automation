@@ -25,7 +25,7 @@ vi.mock("../src/services/services.combat", () => ({
 }));
 
 import { runTownsfolk, lookoutTargets } from "../src/roles/role.townsfolk";
-import { claimSpot, townClock, townFeast, townSeason } from "../src/services/services.town";
+import { claimSpot, townClock, townFeast, townSeason, townStorm } from "../src/services/services.town";
 import { nextTownJob } from "../src/orchestrators/orchestrator.spawning.town";
 import { ROLE_TOWNSFOLK } from "../src/config/config.roles";
 import { TOWN, TOWN_DAY_LENGTH } from "../src/config/config.town";
@@ -139,6 +139,34 @@ describe("the town's calls", () => {
     expect(winter).toBeTruthy();
     expect(spring).not.toBe(winter);
     expect(said(24 * TOWN_DAY_LENGTH + 101)).toBeUndefined();
+  });
+
+  it("greets a storm day with talk of the storm", () => {
+    (g.Game as { time: number }).time = 2 * TOWN_DAY_LENGTH + 100;
+    const c = folk("Yeoman Storm", 40, 40);
+    runTownsfolk(c as unknown as Creep);
+    expect(["storm!", "bar doors", "rain again"]).toContain(c.say.mock.calls[0]?.[0]);
+  });
+});
+
+describe("townStorm", () => {
+  it("blows on about one ordinary day in five, never on a feast day or in winter", () => {
+    // Day 2 is a storm day; day 3 is not.
+    expect(townStorm(2_500)).toBe(true);
+    expect(townStorm(3_500)).toBe(false);
+    let storms = 0;
+    let days = 0;
+    for (let day = 0; day < 28_000; day++) {
+      const t = day * TOWN_DAY_LENGTH;
+      if (townFeast(t) || townSeason(t) === "winter") {
+        expect(townStorm(t)).toBe(false);
+        continue;
+      }
+      days++;
+      if (townStorm(t)) storms++;
+    }
+    expect(storms / days).toBeGreaterThan(0.15);
+    expect(storms / days).toBeLessThan(0.25);
   });
 });
 

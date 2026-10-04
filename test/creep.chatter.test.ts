@@ -35,6 +35,12 @@ describe("chatter", () => {
     for (const l of [...winter, ...summer]) expect(l.length).toBeLessThanOrEqual(10);
   });
 
+  it("talks of the storm on a storm day", () => {
+    // Day 19 is a storm day in autumn; its first 33 lines fall on it.
+    const storm = linesFrom(19 * TOWN_DAY_LENGTH).slice(0, 33);
+    expect(storm.some((l) => ["rain!", "soaked!", "thunder!"].includes(l))).toBe(true);
+  });
+
   it("talks of the feast on a feast day", () => {
     const feast = linesFrom(21 * TOWN_DAY_LENGTH).slice(0, 30);
     const winter = linesFrom(23 * TOWN_DAY_LENGTH);
