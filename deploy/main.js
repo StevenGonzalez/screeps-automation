@@ -7882,8 +7882,11 @@ function heraldWaystation(creep, site) {
     const home = creep.memory.homeRoom;
     if (!home)
         return;
-    const fresh = tally(`waystation:${site.id}`, 0, () => `${creep.name} raised a waystation in the ${wildsName(site.pos.roomName)}. ` +
-        `No more of ${castleName(home)}'s gold rots in the mud.`, CREEP_LIFE_TIME);
+    const wilds = wildsName(site.pos.roomName);
+    const second = creep.room.find(FIND_STRUCTURES).some((s) => s.structureType === STRUCTURE_CONTAINER);
+    const fresh = tally(`waystation:${site.id}`, 0, () => second
+        ? `${creep.name} raised a second waystation in the ${wilds}, so the merchants of ${castleName(home)} load at both its diggings.`
+        : `${creep.name} raised a waystation in the ${wilds}. No more of ${castleName(home)}'s gold rots in the mud.`, CREEP_LIFE_TIME);
     if (fresh)
         spreadWord("waystation");
 }
@@ -15072,8 +15075,9 @@ function getRemoteHaulPlans(room) {
         for (const src of remote.sources) {
             requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
         }
-        const count = Math.min(Math.ceil((MAX_REMOTE_HAULERS_PER_ROOM * fullSizeCarry(paved)) / carryPerHauler), Math.max(1, Math.ceil(requiredCarry / carryPerHauler)));
-        const carryEach = Math.min(carryPerHauler, Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil((requiredCarry * REMOTE_HAUL_MARGIN) / count)));
+        const carry = requiredCarry * REMOTE_HAUL_MARGIN;
+        const count = Math.min(Math.ceil((MAX_REMOTE_HAULERS_PER_ROOM * fullSizeCarry(paved)) / carryPerHauler), Math.max(1, Math.ceil(carry / carryPerHauler)));
+        const carryEach = Math.min(carryPerHauler, Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil(carry / count)));
         plans[remote.roomName] = { count, carryEach, paved };
     }
     return plans;
