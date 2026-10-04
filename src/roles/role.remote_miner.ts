@@ -10,6 +10,13 @@ import { cryFlight, heraldWaystation, settleFlight } from "../services/services.
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
+// Gold the merchants have not yet come for piles up beside a full container,
+// where it rots. With this much lying there a peddler stops digging until the
+// merchants have taken some: each dig costs an intent's CPU and only feeds the
+// rot. Four peddlers in the Crow Glen and the Bleak Vale dug onto piles of
+// thousands while the realm ran short of CPU.
+const GLUT_PILE = 1000;
+
 export function runRemoteMiner(creep: Creep) {
   const { targetRoom, homeRoom, remoteSourceId } = creep.memory;
 
@@ -72,6 +79,7 @@ export function runRemoteMiner(creep: Creep) {
       creep.repair(container);
       return;
     }
+    if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && pileAt(creep.pos) >= GLUT_PILE) return;
     harvest(creep, source);
   } else {
     // Nothing else builds in remotes, so the miner finishes its own container.
@@ -122,6 +130,12 @@ function harvest(creep: Creep, source: Source): ScreepsReturnCode {
 
 function moveToRoom(creep: Creep, targetRoom: string) {
   creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
+}
+
+function pileAt(pos: RoomPosition): number {
+  let gold = 0;
+  for (const r of pos.lookFor(LOOK_RESOURCES)) if (r.resourceType === RESOURCE_ENERGY) gold += r.amount;
+  return gold;
 }
 
 function findOrUpdateContainer(

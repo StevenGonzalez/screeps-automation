@@ -13,6 +13,8 @@ g.FIND_SOURCES = 105;
 g.FIND_STRUCTURES = 107;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_HOSTILE_STRUCTURES = 109;
+g.LOOK_RESOURCES = "resource";
+g.RESOURCE_ENERGY = "energy";
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -219,6 +221,33 @@ describe("remote miner", () => {
       const lines = (g.Memory as any).chronicle;
       expect(lines).toHaveLength(1);
       expect(lines[0].text).toMatch(/^Peddler Lucan raised a second waystation in the .*, so the merchants of .* load at both its diggings\.$/);
+    });
+  });
+
+  describe("on its container", () => {
+    let tick = 2500;
+
+    function minerOn(free: number, lying: number) {
+      // A fresh tick, so no threat cached by another test is read back.
+      (g.Game as any).time = ++tick;
+      const container = { id: "c1", hits: 250_000, hitsMax: 250_000, store: { getFreeCapacity: () => free } };
+      const source = { id: "src", pos: { findInRange: () => [] } };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : id === "c1" ? container : null);
+      const creep = minerIn(REMOTE);
+      creep.memory._hp = 100;
+      (creep.memory as CreepMemory).assignedContainerId = "c1" as Id<StructureContainer>;
+      creep.pos = { ...creep.pos, lookFor: () => [{ resourceType: "energy", amount: lying }] } as any;
+      runRemoteMiner(creep as unknown as Creep);
+      return creep;
+    }
+
+    it("rests while its container is full and a load and more lies beside it", () => {
+      expect(minerOn(0, 1500).harvest).not.toHaveBeenCalled();
+    });
+
+    it("digs while the container has room or the merchants have taken the pile", () => {
+      expect(minerOn(100, 1500).harvest).toHaveBeenCalled();
+      expect(minerOn(0, 400).harvest).toHaveBeenCalled();
     });
   });
 
