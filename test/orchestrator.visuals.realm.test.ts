@@ -6,7 +6,7 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-import { describeCensus, drawGraves, drawLandmarks, drawRealmMap, drawSeason } from "../src/orchestrators/orchestrator.visuals";
+import { describeCensus, drawGraves, drawLandmarks, drawRealmMap, drawSeason, drawTown } from "../src/orchestrators/orchestrator.visuals";
 import {
   ROLE_FILLER,
   ROLE_HAULER,
@@ -136,6 +136,25 @@ describe("realm map", () => {
     expect(texts).toContain("Shadow March");
     expect(texts).toContain("keep planned");
     expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(1);
+  });
+});
+
+describe("town at night", () => {
+  it("lights a torch on every watch post after dark, and none by day", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const room = {
+      name: HOME,
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
+      memory: { town: { posts: ["10,10", "12,10", "14,10"], square: [], cottages: [] } },
+    } as unknown as Room;
+    const torches = (time: number) => {
+      drawn = [];
+      g.Game = { time, creeps: {}, rooms: {} };
+      drawTown(room);
+      return drawn.filter((d) => d.kind === "circle").length;
+    };
+    expect(torches(3_300)).toBe(0);
+    expect(torches(3_800)).toBe(6);
   });
 });
 

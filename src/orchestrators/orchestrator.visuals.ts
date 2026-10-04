@@ -391,7 +391,7 @@ export function drawSeason(room: Room, time = Game.time): void {
   }
 }
 
-function drawTown(room: Room): void {
+export function drawTown(room: Room): void {
   const town = room.memory.town;
   if (!town) return;
   const v = room.visual;
@@ -415,14 +415,20 @@ function drawTown(room: Room): void {
     v.text(`House of ${c.name}`, c.x + 2, c.y - 0.3, label);
   }
 
-  for (const p of town.posts) {
+  town.posts.forEach((p, i) => {
     const { x, y } = parseTile(p);
     const manned = spotHolder(room.name, p) !== undefined;
     v.poly(
       [[x, y + 0.35], [x, y - 0.4], [x + 0.35, y - 0.25], [x, y - 0.1]],
       { stroke: manned ? "#ff5544" : "#aa6655", strokeWidth: 0.06, fill: manned ? "#ff5544" : "transparent", opacity: 0.8 }
     );
-  }
+    // A torch burns on every post after dark, flickering on its own beat.
+    if (lit) {
+      const flicker = 0.5 + 0.5 * Math.sin(Game.time * 1.7 + i * 2.3);
+      v.circle(x - 0.25, y - 0.45, { radius: 0.55, fill: "#ff9933", opacity: 0.08 + 0.06 * flicker });
+      v.circle(x - 0.25, y - 0.45, { radius: 0.1 + 0.05 * flicker, fill: "#ffcc55", opacity: 0.6 + 0.3 * flicker });
+    }
+  });
 
   if (town.fountain) {
     const { x, y } = parseTile(town.fountain);
