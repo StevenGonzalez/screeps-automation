@@ -3156,8 +3156,10 @@ function acquireEnergy(creep, opts) {
                 creep.moveTo(cached, { reusePath: 50 });
                 return true;
             }
-            if (res === OK)
+            if (res === OK) {
+                creep.memory.energySourceId = undefined;
                 return true;
+            }
         }
         creep.memory.energySourceId = undefined;
     }
@@ -3190,9 +3192,9 @@ function acquireEnergy(creep, opts) {
             ? closestByPath(creep.pos, storeTargets)
             : null;
     if (storeTarget) {
-        creep.memory.energySourceId = storeTarget.id;
         const res = creep.withdraw(storeTarget, RESOURCE_ENERGY);
         if (res === ERR_NOT_IN_RANGE) {
+            creep.memory.energySourceId = storeTarget.id;
             creep.moveTo(storeTarget, { reusePath: 50 });
             return true;
         }
@@ -3205,9 +3207,9 @@ function acquireEnergy(creep, opts) {
     if (links.length > 0) {
         const link = closestByPath(creep.pos, links);
         if (link) {
-            creep.memory.energySourceId = link.id;
             const res = creep.withdraw(link, RESOURCE_ENERGY);
             if (res === ERR_NOT_IN_RANGE) {
+                creep.memory.energySourceId = link.id;
                 creep.moveTo(link, { reusePath: 50 });
                 return true;
             }
