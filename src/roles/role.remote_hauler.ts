@@ -8,6 +8,7 @@ import {
 } from "../services/services.creep";
 import { cryFlight, cryHaul, settleFlight } from "../services/services.herald";
 import { remoteThreats, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
+import { ROLE_REMOTE_MINER } from "../config/config.roles";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -114,8 +115,8 @@ function collectEnergy(creep: Creep, targetRoom: string) {
       (!container || d.pos.inRangeTo(container, 1)),
   }) as Resource | null;
   if (container && !dropped) {
-    // An empty container is waited at: its miner fills it faster than a
-    // merchant can walk to the next one.
+    // An empty container is waited at while its miner digs: it fills faster
+    // than a merchant can walk to the next one.
     if (container.store[RESOURCE_ENERGY] === 0) {
       if (!creep.pos.isNearTo(container)) creep.moveTo(container, { range: 1, reusePath: 30 });
       return;
@@ -142,13 +143,30 @@ function collectEnergy(creep: Creep, targetRoom: string) {
 // in the Bleak Vale back and forth across the room: its two containers stand
 // on either side of a great rock, and each load one merchant took tipped the
 // rest toward the other. They brought home one load in some 650 ticks.
+// An emptied container is kept only while a peddler digs at it: one left
+// over from a source no longer worked would hold its merchant forever.
 function pickupContainer(creep: Creep): StructureContainer | null {
   const id = creep.memory.haulFromId;
   const held = id ? Game.getObjectById(id) : null;
-  if (held && held.pos.roomName === creep.room.name) return held;
+  if (
+    held &&
+    held.pos.roomName === creep.room.name &&
+    (held.store[RESOURCE_ENERGY] > 0 || minedContainers().has(held.id))
+  ) {
+    return held;
+  }
   const chosen = chooseContainer(creep);
   creep.memory.haulFromId = chosen?.id;
   return chosen;
+}
+
+function minedContainers(): Set<string> {
+  const mined = new Set<string>();
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.memory.role === ROLE_REMOTE_MINER && c.memory.assignedContainerId) mined.add(c.memory.assignedContainerId);
+  }
+  return mined;
 }
 
 // The container with the most gold left once the merchants already bound for
@@ -164,6 +182,7 @@ function chooseContainer(creep: Creep): StructureContainer | null {
     if (!id || other.name === creep.name || other.memory.working) continue;
     claimed.set(id, (claimed.get(id) ?? 0) + other.store.getFreeCapacity(RESOURCE_ENERGY));
   }
+  const mined = minedContainers();
   const piles = creep.room.find(FIND_DROPPED_RESOURCES, {
     filter: (d) => d.resourceType === RESOURCE_ENERGY,
   });
@@ -171,8 +190,10 @@ function chooseContainer(creep: Creep): StructureContainer | null {
   let best: StructureContainer | null = null;
   let bestLeft = -Infinity;
   for (const c of candidates) {
-    let left = c.store[RESOURCE_ENERGY] - (claimed.get(c.id) ?? 0);
-    for (const d of piles) if (d.pos.inRangeTo(c, 1)) left += d.amount;
+    let stock = c.store[RESOURCE_ENERGY];
+    for (const d of piles) if (d.pos.inRangeTo(c, 1)) stock += d.amount;
+    if (stock === 0 && !mined.has(c.id)) continue;
+    const left = stock - (claimed.get(c.id) ?? 0);
     if (left > bestLeft || (left === bestLeft && best && creep.pos.getRangeTo(c) < creep.pos.getRangeTo(best))) {
       best = c;
       bestLeft = left;
