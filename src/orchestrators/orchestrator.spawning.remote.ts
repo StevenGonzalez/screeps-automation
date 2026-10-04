@@ -597,13 +597,21 @@ export function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[
   const maxGroups = Math.max(1, Math.floor(availableEnergy / groupCost));
   const groups = Math.min(maxGroups, Math.ceil(maxWork / 2));
   let work = Math.min(maxWork, groups * 2);
-  const move = groups;
+  let move = groups;
   const cost = () => work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
   // One CARRY so the miner can build and repair its own container. Surplus
   // harvest still overflows into the container it stands on, so steady-state
   // mining is unchanged. The sixth WORK is the spare, and gives way to the
   // CARRY when the energy runs short of both.
   if (work === maxWork && availableEnergy < cost() + BODYPART_COST[CARRY]) work--;
+  // Gold short of another pair still buys a fifth WORK, with a MOVE to keep
+  // its pace when there is enough. A young keep spawning on 720 sent miners
+  // with four, which dig a reserved source only eight tenths dry.
+  const spare = availableEnergy - cost() - BODYPART_COST[CARRY];
+  if (work < maxWork && spare >= BODYPART_COST[WORK]) {
+    work++;
+    if (spare >= BODYPART_COST[WORK] + BODYPART_COST[MOVE]) move++;
+  }
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < work; i++) body.push(WORK);
   for (let i = 0; i < move; i++) body.push(MOVE);

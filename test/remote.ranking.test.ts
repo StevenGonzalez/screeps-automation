@@ -315,4 +315,20 @@ describe("remote miner body", () => {
     expect(tally(buildRemoteMinerBody(800))).toBe("6W1C");
     expect(tally(buildRemoteMinerBody(760))).toBe("5W1C");
   });
+
+  it("buys a fifth WORK with gold short of a third pair", () => {
+    const count = (body: BodyPartConstant[], part: BodyPartConstant) => body.filter((p) => p === part).length;
+    for (const [gold, work, move] of [[650, 5, 2], [720, 5, 3]]) {
+      const body = buildRemoteMinerBody(gold);
+      expect([count(body, WORK), count(body, MOVE), count(body, CARRY)]).toEqual([work, move, 1]);
+    }
+  });
+
+  it("never costs more than the gold it is built from", () => {
+    const cost = { work: 100, move: 50, carry: 50 } as Record<string, number>;
+    for (let gold = 300; gold <= 2300; gold += 10) {
+      const body = buildRemoteMinerBody(gold);
+      expect(body.reduce((n, p) => n + cost[p], 0)).toBeLessThanOrEqual(gold);
+    }
+  });
 });
