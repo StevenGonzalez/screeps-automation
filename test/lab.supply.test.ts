@@ -309,7 +309,7 @@ describe("brews in the chronicle", () => {
   const REACTION_INPUTS: Record<string, [string, string]> = { OH: ["O", "H"], UH2O: ["UH", "OH"] };
 
   it("names each brew for what it does", () => {
-    expect(brewName("OH")).toBe("hydroxide");
+    expect(brewName("OH")).toBe("cinnabar");
     expect(brewName("KO")).toBe("draughts of the far shot");
     expect(brewName("UH2O")).toBe("elixirs of strength");
     expect(brewName("GHO2")).toBe("elixirs of iron skin");
@@ -319,12 +319,12 @@ describe("brews in the chronicle", () => {
   it("tells of a chain that finishes what it was planned for", () => {
     const lines = brewing([{ compound: "OH", amount: 3000, auto: true }], "OH", 3000, 2990, 600);
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatch(/^The goblin of \w+'s labs brewed 3\.0K hydroxide\.$/);
+    expect(lines[0]).toMatch(/^The goblin of \w+'s labs brewed 3\.0K cinnabar\.$/);
   });
 
   it("tells what a chain made before it ran short", () => {
     const lines = brewing([{ compound: "OH", amount: 7000, auto: true }], "OH", 1490, 1490, 700, 500);
-    expect(lines).toEqual([expect.stringMatching(/brewed 1\.5K hydroxide\.$/)]);
+    expect(lines).toEqual([expect.stringMatching(/brewed 1\.5K cinnabar\.$/)]);
   });
 
   it("says nothing of a step that only feeds the next", () => {

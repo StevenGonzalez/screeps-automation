@@ -195,15 +195,17 @@ function annalsLine(season: string, a: Annals): string {
 // ticks. A partner taking an order in several bites makes one line.
 const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
+// The two common minerals go by the alchemists' names, which a jeweler could
+// dig: hydrogen and oxygen read like a modern laboratory's stock.
 const WARES: Record<string, string> = {
   energy: "gold",
-  H: "hydrogen",
-  O: "oxygen",
+  H: "brimstone",
+  O: "quicksilver",
   U: "utrium",
   L: "lemergium",
   K: "keanium",
   Z: "zynthium",
-  X: "catalyst",
+  X: "philosopher's salt",
 };
 
 function heraldTrade(): void {
@@ -250,8 +252,9 @@ const BREW_VIRTUES: Record<string, string> = {
   GH: "the crown",
   GO: "iron skin",
 };
+// Brimstone and quicksilver together make cinnabar, as in the old alchemy.
 const REAGENTS: Record<string, string> = {
-  OH: "hydroxide",
+  OH: "cinnabar",
   ZK: "zynthium keanite",
   UL: "utrium lemergite",
   G: "ghodium",

@@ -463,12 +463,12 @@ describe("herald", () => {
     at(150);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Ravenhold sold 1294 oxygen to the merchants of Jumpp the Elder.",
+      "Ravenhold sold 1294 quicksilver to the merchants of Jumpp the Elder.",
       "Ravenhold sold 7 gold to the free markets.",
-      "Ravenhold bought 4500 hydrogen from the merchants of Oleksii the Grey.",
+      "Ravenhold bought 4500 brimstone from the merchants of Oleksii the Grey.",
     ]);
     at(175);
-    expect((g.Memory as Memory).chronicle?.[0].text).toBe("Ravenhold sold 1300 oxygen to the merchants of Jumpp the Elder.");
+    expect((g.Memory as Memory).chronicle?.[0].text).toBe("Ravenhold sold 1300 quicksilver to the merchants of Jumpp the Elder.");
   });
 
   it("tells of the masons' new works once they stand, and not what stood at the first look", () => {
@@ -545,8 +545,8 @@ describe("herald", () => {
     at(1400);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "The oxygen vein beneath Ravenhold runs full again. Its jewelers take up their picks.",
-      "The oxygen vein beneath Ravenhold is dug dry. Its jewelers lay down their picks for 50 days.",
+      "The quicksilver vein beneath Ravenhold runs full again. Its jewelers take up their picks.",
+      "The quicksilver vein beneath Ravenhold is dug dry. Its jewelers lay down their picks for 50 days.",
     ]);
   });
 
