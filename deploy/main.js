@@ -843,6 +843,8 @@ const TOWN_PHASES = [
 ];
 const TOWN_DAYS_PER_SEASON = 7;
 const TOWN_STORM_ODDS = 5;
+const TOWN_DRAGON_ODDS = 6;
+const TOWN_DRAGON_FLIGHT = 48;
 const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
 const TOWN_FEASTS = {
     spring: "Sowing Feast",
@@ -885,6 +887,30 @@ function townStorm(time) {
         return false;
     const day = Math.floor(time / TOWN_DAY_LENGTH);
     return (Math.imul(day, 2654435761) >>> 16) % TOWN_STORM_ODDS === 0;
+}
+function dayHash(day, salt) {
+    let h = Math.imul(day ^ salt, 0x9e3779b1);
+    h ^= h >>> 15;
+    h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13;
+    return h >>> 0;
+}
+function townDragon(time) {
+    if (townFeast(time))
+        return undefined;
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    const h = dayHash(day, 0x5bd1e995);
+    if (h % TOWN_DRAGON_ODDS !== 0)
+        return undefined;
+    const start = 100 + ((h >>> 8) % 550);
+    const t = (time % TOWN_DAY_LENGTH) - start;
+    if (t < 0 || t >= TOWN_DRAGON_FLIGHT)
+        return undefined;
+    const dir = (h >>> 4) & 1 ? 1 : -1;
+    const fromY = 8 + ((h >>> 18) % 34);
+    const toY = 8 + ((h >>> 24) % 34);
+    const f = t / (TOWN_DRAGON_FLIGHT - 1);
+    return { t, x: dir === 1 ? -6 + 62 * f : 55 - 62 * f, y: fromY + (toY - fromY) * f, dir, day };
 }
 function isNightfall(phase) {
     return phase === "dusk" || phase === "night";
@@ -8298,6 +8324,7 @@ function heraldRooms() {
         const room = Game.rooms[roomName];
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
             heraldRise(room);
+            heraldDragon(room);
             heraldVisitors(room);
             heraldWorks(room);
         }
@@ -8413,6 +8440,21 @@ function heraldWorks(room) {
         const a = /^[aeiou]/.test(one) ? "an" : "a";
         tally(`works:${room.name}:${type}`, gained, (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
     }
+}
+const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
+const DRAGON_CRY_PERIOD = 8;
+const DRAGON_TIDINGS = [
+    (c) => `A dragon passed over ${c}, black against the sky.`,
+    (c) => `A dragon crossed the skies of ${c} and was gone.`,
+    (c) => `The shadow of a dragon fell across ${c}.`,
+];
+function heraldDragon(room) {
+    const dragon = townDragon(Game.time);
+    if (!dragon || dragon.t % DRAGON_CRY_PERIOD !== 0)
+        return;
+    roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
+    if (dragon.t === 0)
+        chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleName(room.name)));
 }
 function heraldRise(room) {
     const level = room.controller.level;
@@ -18027,6 +18069,7 @@ function loop$1() {
         drawSeason(room);
         drawLandmarks(room);
         drawTown(room);
+        drawDragon(room);
         drawBlueprint(room);
     }
     drawRealmMap();
@@ -18415,6 +18458,24 @@ function drawTown(room) {
             v.circle(x, y, { radius: 0.12, fill: "#ffe9a8", opacity: 0.3 });
         }
     }
+}
+const DRAGON = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.9 };
+function drawDragon(room, time = Game.time) {
+    const d = townDragon(time);
+    if (!d)
+        return;
+    const v = room.visual;
+    const at = (dx, dy) => [d.x + dx * d.dir, d.y + dy];
+    v.circle(d.x - 1.5 * d.dir, d.y + 3, { radius: 1.8, fill: "#000000", opacity: 0.25 });
+    const span = 1.2 + 2.4 * Math.abs(Math.sin(time * 0.9));
+    v.poly([at(-1, -0.3), at(1.2, -0.3), at(-0.6, -span)], DRAGON);
+    v.poly([at(-1, 0.3), at(1.2, 0.3), at(-0.6, span)], DRAGON);
+    v.poly([at(-2.5, 0), at(-1.2, -0.45), at(1.4, -0.4), at(2.3, -0.25), at(3, 0), at(2.3, 0.25), at(1.4, 0.4), at(-1.2, 0.45), at(-2.5, 0)], DRAGON);
+    const [tx, ty] = at(-2.5, 0);
+    const [ex, ey] = at(-4.4, 0.4 * Math.sin(time * 0.5));
+    v.line(tx, ty, ex, ey, { color: "#160a0a", width: 0.2, opacity: 0.9 });
+    const [eyeX, eyeY] = at(2.5, -0.1);
+    v.circle(eyeX, eyeY, { radius: 0.1, fill: "#ff5522", opacity: 1 });
 }
 const SONG = { font: "italic 0.45 serif", color: "#f5e6a8", stroke: "#000000", strokeWidth: 0.05 };
 function drawSong(room, x, y) {
