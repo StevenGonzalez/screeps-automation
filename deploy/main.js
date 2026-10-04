@@ -14746,13 +14746,14 @@ function planRemoteSource(room, remote, src) {
     const haulerPartsPerCarry = hauler.length / haulerCarry;
     const reserver = buildReserverBody(capacity);
     const reserverShare = 1 / remote.sources.length;
-    const reserverRespawns = CREEP_LIFE_TIME / CREEP_CLAIM_LIFE_TIME;
+    const claims = reserver.filter((p) => p === CLAIM).length;
+    const reserverRespawns = CREEP_LIFE_TIME / (claims * Math.max(1, CREEP_CLAIM_LIFE_TIME - dist));
     const roadTiles = src.roadTiles ? src.roadTiles.split(";").length : dist;
     const decay = (CONTAINER_DECAY / CONTAINER_DECAY_TIME) * REPAIR_COST +
         (roads ? (roadTiles * ROAD_DECAY_AMOUNT * REPAIR_COST) / ROAD_DECAY_TIME : 0);
     const upkeep = calculateBodyPartCost(miner) / CREEP_LIFE_TIME +
         (carry * haulerCostPerCarry) / CREEP_LIFE_TIME +
-        (calculateBodyPartCost(reserver) * reserverShare) / CREEP_CLAIM_LIFE_TIME +
+        (calculateBodyPartCost(reserver) * reserverShare * reserverRespawns) / CREEP_LIFE_TIME +
         decay;
     const parts = miner.length + carry * haulerPartsPerCarry + reserver.length * reserverShare * reserverRespawns;
     return { profit: output - upkeep, spawnTime: parts * CREEP_SPAWN_TIME };
