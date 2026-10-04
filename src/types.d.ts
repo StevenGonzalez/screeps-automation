@@ -211,6 +211,8 @@ declare global {
 
   interface CreepMemory {
     role: string;
+    // Foes this creep has helped strike down (services.herald).
+    kills?: number;
     // Townsfolk: "militia" sleep in cottages and man the walls, "lookout"
     // stands in a neighbouring room.
     job?: "militia" | "lookout";

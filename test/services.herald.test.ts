@@ -120,7 +120,7 @@ describe("herald", () => {
 
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
     const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
-    const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900 };
+    const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900, memory: {} };
     tick++;
     g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Merchant Leofric": merchant } };
     heraldRooms();
@@ -135,8 +135,8 @@ describe("herald", () => {
   });
 
   it("does not mourn a creep that died of age or unhurt", () => {
-    const old = { pos: { roomName: ROOM }, hits: 300, hitsMax: 1000, ticksToLive: 1 };
-    const recycled = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 600 };
+    const old = { pos: { roomName: ROOM }, hits: 300, hitsMax: 1000, ticksToLive: 1, memory: {} };
+    const recycled = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 600, memory: {} };
     tick++;
     g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Porter Ada": old, "Reeve Bran": recycled } };
     heraldRooms();
@@ -145,6 +145,43 @@ describe("herald", () => {
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle).toBeUndefined();
+  });
+
+  it("keeps a tally of the foes each creep strikes down", () => {
+    const knight = new FakeCreep("Dragon Knight Edric", { name: ROOM });
+    const raid = [...killed("raider1", ["knight"]), ...killed("raider2", ["knight", "knight"])];
+    setup(roomWith(raid), { knight });
+    heraldRooms();
+    expect(knight.memory.kills).toBe(2);
+  });
+
+  it("names a fallen veteran's tally", () => {
+    const veteran = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900, memory: { kills: 3 } };
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Dragon Knight Edric": veteran } };
+    heraldRooms();
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Dragon Knight Edric, who slew 3, fell in the Shadow March.",
+    ]);
+  });
+
+  it("lays a veteran who outlived the fighting to rest", () => {
+    const veteran = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 1, memory: { kills: 2 } };
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Dragon Knight Edric": veteran } };
+    heraldRooms();
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Dragon Knight Edric, who slew 2, was laid to rest with honours.",
+    ]);
+    expect((g.Memory as Memory).annals?.fallen).toBeUndefined();
   });
 
   it("proclaims a new GCL once, not on the first look", () => {

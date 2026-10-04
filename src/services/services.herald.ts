@@ -320,6 +320,7 @@ interface Muster {
   room: string;
   hurt: boolean;
   ttl: number;
+  kills: number;
 }
 let muster = new Map<string, Muster>();
 
@@ -339,17 +340,23 @@ function heraldFallen(): void {
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
     if (c.spawning) continue;
-    next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: c.ticksToLive ?? 0 });
+    next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: c.ticksToLive ?? 0, kills: c.memory.kills ?? 0 });
   }
   for (const [name, last] of muster) {
-    if (next.has(name) || !last.hurt || last.ttl <= 1) continue;
+    if (next.has(name)) continue;
+    const slew = last.kills > 0 ? `, who slew ${last.kills},` : "";
+    if (!last.hurt || last.ttl <= 1) {
+      // Age or an unhurt end is no news, unless it was a creep that fought.
+      if (slew) chronicle(`${name}${slew} was laid to rest with honours.`);
+      continue;
+    }
     const foe = foeIn(last.room);
     const by = foe ? ` to ${foe}` : "";
     annal("fallen", 1);
     tally(
       `fallen:${last.room}`,
       1,
-      (n) => `${n === 1 ? name : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`,
+      (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`,
       BATTLE_WINDOW
     );
   }
@@ -371,11 +378,18 @@ function heraldKills(room: Room): void {
       .filter((o): o is Creep | StructureTower => !!o && o.my);
     if (ours.length === 0) continue;
     chronicleKill(room);
-    const creeps = ours.filter((o): o is Creep => o instanceof Creep);
+    const creeps = [...new Set(ours.filter((o): o is Creep => o instanceof Creep))];
     if (creeps.length === 0) {
       roomCries[room.name] = "Huzzah!";
       continue;
     }
-    for (const c of creeps) creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
+    for (const c of creeps) {
+      creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
+      c.memory.kills = (c.memory.kills ?? 0) + 1;
+      // The roll call was taken earlier this tick; it should know of this kill
+      // too should the creep fall before the next.
+      const m = muster.get(c.name);
+      if (m) m.kills = c.memory.kills;
+    }
   }
 }
