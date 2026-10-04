@@ -13197,7 +13197,7 @@ function manageActiveExpansion() {
                 exp.pausedUntil = undefined;
                 console.log(`[Expansion] ${exp.roomName} is self-sufficient (RCL ${child.controller.level}, ` +
                     `own spawn built) - established.`);
-                chronicle(`${castleName(exp.roomName)} stands on its own, with a spawn of its own. The realm grows.`);
+                chronicle(`${castleName(exp.roomName)} stands on its own, with barracks of its own. The realm grows.`);
             }
         }
         return;
