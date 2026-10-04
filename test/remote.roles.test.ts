@@ -15,6 +15,8 @@ g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_HOSTILE_STRUCTURES = 109;
 g.LOOK_RESOURCES = "resource";
 g.RESOURCE_ENERGY = "energy";
+g.CREEP_LIFE_TIME = 1500;
+g.CREEP_CLAIM_LIFE_TIME = 600;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -86,6 +88,12 @@ describe("reserver", () => {
     runReserver(c as unknown as Creep);
     expect(c.suicide).toHaveBeenCalled();
     expect(c.attackController).not.toHaveBeenCalled();
+  });
+
+  it("notes how long its walk out took once it reaches the controller", () => {
+    const c = Object.assign(reserverIn({ reservation: { username: ME } }), { ticksToLive: 520 });
+    runReserver(c as unknown as Creep);
+    expect((c.memory as CreepMemory).walk).toBe(80);
   });
 
   it("stands down once the remote has become one of our own keeps", () => {
@@ -286,6 +294,34 @@ describe("remote miner", () => {
       const creep = minerAmong("ranged_attack", "move");
       expect(remote.hostile).toBe(true);
       expect(creep.harvest).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("walking out to its source", () => {
+    function minerArriving(near: boolean) {
+      (g.Game as any).time = 4000;
+      const source = { id: "src", pos: { findInRange: () => [] } };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
+      const creep = minerIn(REMOTE, { ticksToLive: 1330 });
+      creep.memory._hp = 100;
+      creep.pos = { ...creep.pos, isNearTo: () => near };
+      runRemoteMiner(creep as unknown as Creep);
+      return creep.memory as CreepMemory;
+    }
+
+    it("notes how long the walk took once it stands by the source", () => {
+      expect(minerArriving(false).walk).toBeUndefined();
+      expect(minerArriving(true).walk).toBe(170);
+    });
+
+    it("does not count a walk it broke off to flee", () => {
+      const creep = minerIn(REMOTE, { ticksToLive: 1330 });
+      creep.memory._hp = 100;
+      (g.Game as any).time = 4001;
+      creep.room.find = ((type: number) =>
+        type === g.FIND_HOSTILE_CREEPS ? [{ owner: { username: "Stranger" }, body: [{ type: "attack", hits: 100 }] }] : []) as any;
+      runRemoteMiner(creep as unknown as Creep);
+      expect((creep.memory as CreepMemory).walk).toBe(0);
     });
   });
 });

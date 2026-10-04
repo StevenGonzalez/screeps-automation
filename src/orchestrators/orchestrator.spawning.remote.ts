@@ -40,12 +40,14 @@ import {
 
 // A remote post is a long walk from the spawn, so its replacement has to be
 // ordered that much earlier. The outgoing creep's own body is a good stand-in
-// for the size of the one that relieves it.
+// for the size of the one that relieves it, and its own walk out, once it has
+// made one, for the time the relief takes on the road: a path counts tiles, not
+// the ticks a heavy body spends on each.
 function isRemoteCreepRetiring(home: Room, creep: Creep): boolean {
   const target = creep.memory.targetRoom;
   if (!target) return false;
-  const lead = spawnLeadTicks(creep.body.length, remoteTravelTicks(home, target, creep.memory.remoteSourceId));
-  return isRetiring(creep, lead);
+  const travel = Math.max(remoteTravelTicks(home, target, creep.memory.remoteSourceId), creep.memory.walk ?? 0);
+  return isRetiring(creep, spawnLeadTicks(creep.body.length, travel));
 }
 
 // Walk time out to a remote post: the measured path to the creep's own source,

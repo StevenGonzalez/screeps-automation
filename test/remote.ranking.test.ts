@@ -14,6 +14,7 @@ import {
   buildRemoteMinerBody,
   reassignStrayHaulers,
   shouldSpawnRemoteHauler,
+  shouldSpawnRemoteMiner,
   spawnRemoteHauler,
 } from "../src/orchestrators/orchestrator.spawning.remote";
 import {
@@ -521,6 +522,27 @@ describe("remote miner body", () => {
       const body = buildRemoteMinerBody(gold);
       expect(body.reduce((n, p) => n + cost[p], 0)).toBeLessThanOrEqual(gold);
     }
+  });
+});
+
+describe("relieving a peddler", () => {
+  // A ten-part peddler on a 96-tile path: 30 ticks to raise its relief and 96
+  // to walk it out, by the path alone.
+  const peddler = (ticksToLive: number, walk?: number) =>
+    Object.assign(creep(ROLE_REMOTE_MINER, 10, { targetRoom: "W4N5", remoteSourceId: "W4N5-s0" as Id<Source>, walk }), {
+      ticksToLive,
+    });
+
+  it("orders the relief by the path while the peddler has yet to reach its post", () => {
+    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(150)] }))).toBe(false);
+  });
+
+  it("orders it as far ahead as the peddler's own walk out took", () => {
+    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(150, 170)] }))).toBe(true);
+  });
+
+  it("never orders it later than the path says", () => {
+    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(126, 0)] }))).toBe(true);
   });
 });
 

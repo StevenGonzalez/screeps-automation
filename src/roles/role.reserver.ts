@@ -1,4 +1,4 @@
-import { signControllerIfNeeded } from "../services/services.creep";
+import { noteWalk, signControllerIfNeeded } from "../services/services.creep";
 
 export function runReserver(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
@@ -32,6 +32,7 @@ export function runReserver(creep: Creep) {
     creep.moveTo(controller, { reusePath: 30 });
     return;
   }
+  noteWalk(creep, CREEP_CLAIM_LIFE_TIME);
   // Already beside the controller, so the proclamation costs nothing extra.
   signControllerIfNeeded(creep, controller);
 }

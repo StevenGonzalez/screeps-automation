@@ -182,6 +182,18 @@ function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
   return Memory.rooms[home]?.remoteRooms?.find((r) => r.roomName === target);
 }
 
+// How long a remote creep took to reach its post, as the ticks of its life it
+// spent on the walk. Its relief is ordered that much ahead of its death
+// (orchestrator.spawning.remote), since a path counts tiles and not the ticks a
+// body takes over them: a peddler with fewer MOVE than other parts takes two
+// ticks a tile off the road and ten in a swamp. Grimford's peddlers reached the
+// Bleak Vale some seventy ticks after their path said, and the source they
+// relieved lay idle meanwhile.
+export function noteWalk(creep: Creep, lifeTime: number): void {
+  if (creep.memory.walk !== undefined || creep.ticksToLive === undefined) return;
+  creep.memory.walk = lifeTime - creep.ticksToLive;
+}
+
 export function isAssignedRemoteContested(creep: Creep): boolean {
   const entry = assignedRemoteEntry(creep);
   if (!entry) return false;

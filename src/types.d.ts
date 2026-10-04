@@ -240,6 +240,9 @@ declare global {
     remoteSourceId?: Id<Source>;
     _hp?: number;
     remoteBackoffUntil?: number;
+    // Ticks a remote creep took to walk out to its post, or 0 when it turned
+    // back on the way and the walk was not measured (services.creep noteWalk).
+    walk?: number;
     // Set once a remote creep has cried out and turned for home; cleared when the remote is safe.
     fled?: boolean;
     // The remote a knight has ridden out to defend; cleared once it is safe.
