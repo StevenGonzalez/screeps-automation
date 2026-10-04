@@ -58,6 +58,15 @@ export function runSettler(creep: Creep) {
     return;
   }
 
+  // Level 2 is only CONTROLLER_LEVELS[1] gold away and opens the extensions, so
+  // it comes before the containers and roads. Grimford's pilgrims built a
+  // 5,000-gold container first, with the barracks held to 300 gold meanwhile.
+  const ctrl = creep.room.controller;
+  if (ctrl?.my && ctrl.level === 1) {
+    tendThrone(creep, ctrl);
+    return;
+  }
+
   const site = creep.pos.findClosestByRange(FIND_CONSTRUCTION_SITES);
   if (site) {
     if (creep.build(site) === ERR_NOT_IN_RANGE) {
@@ -74,28 +83,30 @@ export function runSettler(creep: Creep) {
     return;
   }
 
-  const ctrl = creep.room.controller;
-  if (ctrl) {
-    const exp = Memory.expansion;
-    const shouldSign =
-      exp &&
-      exp.roomName === creep.room.name &&
-      exp.phase === "bootstrapping" &&
-      creep.room.memory.lastSigned === undefined;
-    if (shouldSign) {
-      try {
-        const sig = pickSignature(creep.room.name);
-        const sres = creep.signController(ctrl, sig);
-        if (sres === OK) {
-          if (!Memory.rooms) Memory.rooms = {} as any;
-          if (!Memory.rooms[creep.room.name]) Memory.rooms[creep.room.name] = {} as any;
-          Memory.rooms[creep.room.name].lastSigned = Game.time;
-        }
-      } catch (e) {}
-    }
-    if (creep.upgradeController(ctrl) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(ctrl, { reusePath: 20 });
-    }
+  if (ctrl) tendThrone(creep, ctrl);
+}
+
+// Sign the new keep's throne once, then upgrade it.
+function tendThrone(creep: Creep, ctrl: StructureController): void {
+  const exp = Memory.expansion;
+  const shouldSign =
+    exp &&
+    exp.roomName === creep.room.name &&
+    exp.phase === "bootstrapping" &&
+    creep.room.memory.lastSigned === undefined;
+  if (shouldSign) {
+    try {
+      const sig = pickSignature(creep.room.name);
+      const sres = creep.signController(ctrl, sig);
+      if (sres === OK) {
+        if (!Memory.rooms) Memory.rooms = {} as any;
+        if (!Memory.rooms[creep.room.name]) Memory.rooms[creep.room.name] = {} as any;
+        Memory.rooms[creep.room.name].lastSigned = Game.time;
+      }
+    } catch (e) {}
+  }
+  if (creep.upgradeController(ctrl) === ERR_NOT_IN_RANGE) {
+    creep.moveTo(ctrl, { reusePath: 20 });
   }
 }
 

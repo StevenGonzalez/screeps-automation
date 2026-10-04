@@ -77,7 +77,10 @@ shows the plan under the treasury line.
    fills its packs from the funding castle's treasury before setting out (while
    it holds 30,000 or more), so it starts building on arrival instead of
    queueing at the keep's sources, and when every source there is dry it builds
-   with what it carries. During this phase the orchestrator:
+   with what it carries. Its work goes barracks first, then the throne to level
+   2 (only 200 gold, and it opens the extensions), then the other construction
+   sites, then the barracks' gold, then the throne again. During this phase the
+   orchestrator:
    - **Pauses** pilgrim spawning for ~200 ticks and flags `needsDefender` if the
      child room is invaded (pilgrims retreat; a home spawn rule raises a defender).
    - **Times out** after 6,000 ticks if the bootstrap never completes.

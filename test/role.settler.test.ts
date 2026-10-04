@@ -10,6 +10,9 @@ g.FIND_SOURCES_ACTIVE = 104;
 g.FIND_DROPPED_RESOURCES = 106;
 g.FIND_STRUCTURES = 107;
 g.STRUCTURE_CONTAINER = "container";
+g.FIND_CONSTRUCTION_SITES = 111;
+g.FIND_MY_CONSTRUCTION_SITES = 114;
+g.FIND_MY_SPAWNS = 112;
 g.ERR_NO_PATH = -2;
 g.ERR_INVALID_ARGS = -10;
 g.RoomPosition = class {
@@ -77,6 +80,42 @@ describe("settler", () => {
     runSettler(c as unknown as Creep);
     expect(c.memory.working).toBe(true);
     expect(c.moveTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("settler at work", () => {
+  beforeEach(() => {
+    g.Memory = { rooms: {}, expansion: { roomName: "W2N1", homeRoom: "W1N1", phase: "bootstrapping", startedAt: 0 } };
+    g.Game = { time: 100 };
+  });
+
+  function laden(level: number) {
+    const site = { structureType: "container" };
+    const ctrl = { my: true, level };
+    const c = {
+      ...settlerBeside({ 111: [site] }),
+      store: { energy: 300, getFreeCapacity: () => 0 },
+      build: vi.fn(() => 0),
+      upgradeController: vi.fn(() => 0),
+    };
+    c.memory.working = true;
+    // Already signed, so the pilgrim goes straight to upgrading.
+    Object.assign(c.room, { controller: ctrl, memory: { lastSigned: 1 } });
+    return { c, site, ctrl };
+  }
+
+  it("raises a level-1 throne to level 2 before building anything else", () => {
+    const { c, ctrl } = laden(1);
+    runSettler(c as unknown as Creep);
+    expect(c.upgradeController).toHaveBeenCalledWith(ctrl);
+    expect(c.build).not.toHaveBeenCalled();
+  });
+
+  it("builds ahead of upgrading once the throne is level 2", () => {
+    const { c, site } = laden(2);
+    runSettler(c as unknown as Creep);
+    expect(c.build).toHaveBeenCalledWith(site);
+    expect(c.upgradeController).not.toHaveBeenCalled();
   });
 });
 
