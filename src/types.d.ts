@@ -272,6 +272,8 @@ declare global {
     townName?: string;
     // Controller level the herald last proclaimed (services.herald).
     heraldLevel?: number;
+    // Level the herald last told was near (services.herald).
+    heraldStirred?: number;
     // Count of each notable structure type the herald last saw (services.herald).
     heraldWorks?: Record<string, number>;
     // Remotes whose paved road the herald has told of (services.herald).

@@ -98,6 +98,7 @@ export function heraldRooms(): void {
     if (room.controller?.my) {
       castles.push(room);
       heraldRise(room);
+      heraldStir(room);
       heraldFirstBorn(room);
       heraldVisitors(room);
       heraldWorks(room);
@@ -476,6 +477,20 @@ function heraldRise(room: Room): void {
   roomCries[room.name] = "Long live!";
   spreadWord(`level ${level}!`);
   chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+}
+
+// The throne nearing its next level, told once per level. A castle's climb
+// past level 5 takes tens of thousands of ticks, and this is the sign the
+// next proclamation is close. Level 1 lasts too short a time to tell.
+const STIR_SHARE = 0.9;
+function heraldStir(room: Room): void {
+  if (Game.time % WORKS_CHECK_PERIOD !== 0) return;
+  const { level, progress, progressTotal } = room.controller!;
+  if (level < 2 || !progressTotal || progress < progressTotal * STIR_SHARE) return;
+  const next = level + 1;
+  if (room.memory.heraldStirred === next) return;
+  room.memory.heraldStirred = next;
+  chronicle(`The enchanters of ${castleName(room.name)} feel the throne stir. Level ${next} is near.`);
 }
 
 // Until a new keep's barracks raises a creep of its own, everyone in it was sent

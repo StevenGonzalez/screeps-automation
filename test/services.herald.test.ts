@@ -126,6 +126,39 @@ describe("herald", () => {
     expect((g.Memory as Memory).gossip).toEqual({ line: "level 7!", until: tick - 1 + 600 });
   });
 
+  it("tells once per level that the throne nears its next level", () => {
+    const room = roomWith([], { my: true, level: 6, progress: 80, progressTotal: 100 });
+    const check = (controller: unknown) => {
+      room.controller = controller;
+      tick = Math.ceil((tick + 1) / 100) * 100 - 1;
+      setup(room, {});
+      heraldRooms();
+    };
+    const lines = () => ((g.Memory as Memory).chronicle ?? []).map((l) => l.text);
+    check({ my: true, level: 6, progress: 80, progressTotal: 100 });
+    check({ my: true, level: 6, progress: 91, progressTotal: 100 });
+    check({ my: true, level: 6, progress: 95, progressTotal: 100 });
+    expect(lines()).toEqual([`The enchanters of ${castleName(ROOM)} feel the throne stir. Level 7 is near.`]);
+
+    check({ my: true, level: 7, progress: 95, progressTotal: 100 });
+    check({ my: true, level: 8, progress: 0 });
+    expect(lines()).toHaveLength(4);
+    expect(lines()[1]).toContain("rises to level 7");
+    expect(lines()[2]).toContain("Level 8 is near");
+    expect(lines()[3]).toContain("rises to level 8");
+  });
+
+  it("does not tell of a throne stirring at level 1 or between checks", () => {
+    const room = roomWith([], { my: true, level: 1, progress: 199, progressTotal: 200 });
+    tick = Math.ceil((tick + 1) / 100) * 100 - 1;
+    setup(room, {});
+    heraldRooms();
+    room.controller = { my: true, level: 2, progress: 44000, progressTotal: 45000 };
+    setup(room, {});
+    heraldRooms();
+    expect(((g.Memory as Memory).chronicle ?? []).filter((l) => l.text.includes("stir"))).toEqual([]);
+  });
+
   it("gathers a fight's kills into one chronicle line", () => {
     const tower = { my: true };
     setup(roomWith(killed("raider1", ["tower"])), { tower });
