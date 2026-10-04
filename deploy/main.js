@@ -3692,6 +3692,10 @@ function markRemotePlayerHostile(entry, who) {
 }
 function clearRemotePlayerHostile(entry) {
     var _a, _b;
+    if (entry.hostile && entry.rival) {
+        const text = `The men of ${lordName(entry.rival)} have left the ${wildsName(entry.roomName)}. The vendors take to the road again.`;
+        tally(`rival:${entry.roomName}`, 0, () => text, RIVAL_CHRONICLE_WINDOW);
+    }
     entry.hostile = false;
     delete entry.rival;
     let strikes = (_a = entry.hostileStrikes) !== null && _a !== void 0 ? _a : 0;
