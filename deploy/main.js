@@ -14906,6 +14906,7 @@ function remoteShedSources() {
             (rise >= REMOTE_CPU_RESTORE_RISE || (bucket >= REMOTE_CPU_RESTORE_BUCKET && rise >= 0))) {
             const back = state.ids.pop();
             chronicle(`The scribes have caught up with their ledgers. ${castleName(back.home)}'s vendors return to a digging in the ${wildsName(back.room)}.`);
+            spreadWord("road open");
         }
     }
     return new Set(state.ids.map((s) => s.id));
@@ -14932,6 +14933,7 @@ function shedWorstRemoteSource(shed) {
         return;
     shed.push({ id: worst.id, home: worst.home, room: worst.room });
     chronicle(`The Crown's scribes cannot keep the ledgers of so many roads. ${castleName(worst.home)}'s vendors give up a digging in the ${wildsName(worst.room)}.`);
+    spreadWord("road shut");
 }
 const REMOTE_ECONOMY_ROLES = new Set([
     ROLE_REMOTE_MINER,
