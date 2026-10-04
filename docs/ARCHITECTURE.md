@@ -291,7 +291,7 @@ chatter (`Memory.gossip`). Newer news replaces older. In its last 150 ticks a
 creep talks of its end instead of its work ("old bones", "farewell"), and after
 dark its talk of the weather turns to the night ("torches!", "owls hoot"). Now
 and then a creep hails another standing beside it by its given name ("hail
-Edith").
+Edith"), and the creep it hails answers on the next tick ("aye Bran!").
 
 Controller signs are dark-fantasy proclamations (`config/signatures.ts`), and
 envoys sign the remote controllers they reserve.

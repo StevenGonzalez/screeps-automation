@@ -153,9 +153,26 @@ const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
 
 const SAY_PERIOD = 30;
 
-// What a creep says this tick unprompted, if anything: a line every
-// SAY_PERIOD ticks, staggered by name so the room does not speak at once.
+// A creep hailed by name answers on the next tick, so the two lines read as an
+// exchange. Kept on the heap; a reply lost to a global reset is no loss.
+let replyTick = -1;
+let repliesDue: Record<string, string> = {};
+let repliesQueued: Record<string, string> = {};
+
+function turnReplies(): void {
+  if (replyTick === Game.time) return;
+  repliesDue = replyTick === Game.time - 1 ? repliesQueued : {};
+  repliesQueued = {};
+  replyTick = Game.time;
+}
+
+// What a creep says this tick unprompted, if anything: its answer to a hail,
+// or a line every SAY_PERIOD ticks, staggered by name so the room does not
+// speak at once.
 export function chatterLine(creep: Creep): string | undefined {
+  turnReplies();
+  const reply = repliesDue[creep.name];
+  if (reply) return reply;
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
   if ((Game.time + hash) % SAY_PERIOD !== 0) return undefined;
@@ -186,9 +203,13 @@ export function chatterLine(creep: Creep): string | undefined {
 function greeting(creep: Creep, pick: number): string | undefined {
   const other = creep.pos.findInRange(FIND_MY_CREEPS, 1).find((c) => c.name !== creep.name);
   const given = other?.name.split(" ").pop();
-  if (!given) return undefined;
+  if (!other || !given) return undefined;
   const lines = [`hail ${given}`, `ho ${given}!`, `${given}!`].filter((l) => l.length <= 10);
-  return lines.length > 0 ? lines[(pick >> 2) % lines.length] : undefined;
+  if (lines.length === 0) return undefined;
+  const own = creep.name.split(" ").pop();
+  const answers = [`aye ${own}!`, `ho ${own}!`, "well met!"].filter((l) => l.length <= 10);
+  repliesQueued[other.name] = answers[(pick >> 3) % answers.length];
+  return lines[(pick >> 2) % lines.length];
 }
 
 function maybeChatter(creep: Creep): void {

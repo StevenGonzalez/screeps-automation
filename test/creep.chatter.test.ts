@@ -91,6 +91,28 @@ describe("chatter", () => {
     for (const l of [...lines, ...long]) expect(l.length).toBeLessThanOrEqual(10);
   });
 
+  it("is answered on the next tick by the creep it hails, and only then", () => {
+    const bran = {
+      name: "Miner Bran",
+      memory: { role: ROLE_MINER },
+      pos: { findInRange: () => [{ name: "Miner Bran" }, { name: "Pilgrim Edith" }] },
+    } as unknown as Creep;
+    const edith = { name: "Pilgrim Edith", memory: { role: ROLE_MINER }, pos: { findInRange: () => [] } } as unknown as Creep;
+    g.Memory = {};
+    const answers: string[] = [];
+    for (let t = 23 * TOWN_DAY_LENGTH; answers.length < 6; t++) {
+      g.Game = { time: t };
+      if (!chatterLine(bran)?.includes("Edith")) continue;
+      g.Game = { time: ++t };
+      const answer = chatterLine(edith);
+      answers.push(answer!);
+      g.Game = { time: ++t };
+      expect(chatterLine(edith)).not.toBe(answer);
+    }
+    expect(answers).toContain("aye Bran!");
+    expect(answers).toContain("well met!");
+  });
+
   it("gives the goblin of the labs talk of its own brews", () => {
     const goblin = { name: "Goblin Snik", memory: { role: ROLE_APOTHECARY }, pos: { findInRange: () => [] } } as unknown as Creep;
     g.Memory = {};
