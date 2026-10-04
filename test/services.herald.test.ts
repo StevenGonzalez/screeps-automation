@@ -186,12 +186,12 @@ describe("herald", () => {
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Dragon Knight Edric, who slew 3, fell in the Shadow March.",
+      "Dragon Knight Edric, who slew 3 foes, fell in the Shadow March.",
     ]);
   });
 
   it("lays a veteran who outlived the fighting to rest", () => {
-    const veteran = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 1, memory: { kills: 2 } };
+    const veteran = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 1, memory: { kills: 1 } };
     tick++;
     g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Dragon Knight Edric": veteran } };
     heraldRooms();
@@ -200,7 +200,7 @@ describe("herald", () => {
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Dragon Knight Edric, who slew 2, was laid to rest with honours.",
+      "Dragon Knight Edric, who slew a foe, was laid to rest with honours.",
     ]);
     expect((g.Memory as Memory).annals?.fallen).toBeUndefined();
   });
@@ -607,7 +607,7 @@ describe("herald", () => {
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      `Villager Aldric, the first born in the barracks of ${castleName(ROOM)}, has died of old age. Its bells ring once more.`,
+      `Villager Aldric, the first born in the barracks of ${castleName(ROOM)}, has died of old age. The keep's bells ring once more.`,
     ]);
     expect((g.Memory as Memory).rooms[ROOM].firstBorn).toBeUndefined();
     expect((g.Memory as Memory).gossip?.line).toBe("† Aldric");
