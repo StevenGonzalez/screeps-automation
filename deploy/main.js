@@ -7789,6 +7789,15 @@ function heraldWorks(room) {
         tally(`works:${room.name}:${type}`, gained, (n) => `The ${builders} of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
     }
 }
+function heraldWaystation(creep, site) {
+    const home = creep.memory.homeRoom;
+    if (!home)
+        return;
+    const fresh = tally(`waystation:${site.id}`, 0, () => `${creep.name} raised a waystation in the ${wildsName(site.pos.roomName)}. ` +
+        `No more of ${castleName(home)}'s gold rots in the mud.`, CREEP_LIFE_TIME);
+    if (fresh)
+        spreadWord("waystation");
+}
 function heraldRoads(room) {
     var _a, _b;
     if (Game.time % WORKS_CHECK_PERIOD !== 0)
@@ -9275,8 +9284,12 @@ function runRemoteMiner(creep) {
                 creep.pickup(pile);
             const loaded = pile ? creep.store[RESOURCE_ENERGY] > 0 : creep.store.getFreeCapacity() === 0;
             if (loaded) {
-                if (creep.build(site) === ERR_NOT_IN_RANGE)
+                const res = creep.build(site);
+                if (res === ERR_NOT_IN_RANGE)
                     creep.moveTo(site, { reusePath: 30 });
+                else if (res === OK && site.progressTotal - site.progress <= creep.getActiveBodyparts(WORK) * BUILD_POWER) {
+                    heraldWaystation(creep, site);
+                }
                 return;
             }
             if (pile)
