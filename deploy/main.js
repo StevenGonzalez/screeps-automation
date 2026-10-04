@@ -7672,6 +7672,7 @@ function heraldRooms() {
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
             castles.push(room);
             heraldRise(room);
+            heraldStir(room);
             heraldFirstBorn(room);
             heraldVisitors(room);
             heraldWorks(room);
@@ -7999,6 +8000,19 @@ function heraldRise(room) {
     roomCries[room.name] = "Long live!";
     spreadWord(`level ${level}!`);
     chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+}
+const STIR_SHARE = 0.9;
+function heraldStir(room) {
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const { level, progress, progressTotal } = room.controller;
+    if (level < 2 || !progressTotal || progress < progressTotal * STIR_SHARE)
+        return;
+    const next = level + 1;
+    if (room.memory.heraldStirred === next)
+        return;
+    room.memory.heraldStirred = next;
+    chronicle(`The enchanters of ${castleName(room.name)} feel the throne stir. Level ${next} is near.`);
 }
 function heraldFirstBorn(room) {
     var _a, _b;
