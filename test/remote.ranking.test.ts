@@ -9,6 +9,7 @@ import {
   buildRemoteHaulerBody,
   planRemoteSource,
 } from "../src/orchestrators/orchestrator.spawning";
+import { spawnRemoteHauler } from "../src/orchestrators/orchestrator.spawning.remote";
 import { ROLE_REMOTE_MINER, ROLE_UPGRADER } from "../src/config/config.roles";
 
 const HOME = "W5N5";
@@ -142,5 +143,27 @@ describe("remote hauler body", () => {
 
   it("stays within 50 parts at any energy", () => {
     expect(buildRemoteHaulerBody(12_900, true).length).toBeLessThanOrEqual(50);
+  });
+});
+
+describe("remote hauler sizing", () => {
+  it("splits a remote's carry evenly instead of sending full-size haulers", () => {
+    // 40 steps out at 10 gold a tick is 16 CARRY. A 1300-gold hauler holds
+    // 13, so the remote gets two, each with half the 16 and a fifth on top.
+    const room = home({ remotes: [remote("W4N5", [40])], spawns: 2 });
+    const bodies: string[][] = [];
+    const spawn = {
+      name: "Spawn1",
+      spawning: null,
+      spawnCreep(body: string[]) {
+        bodies.push(body);
+        return g.OK;
+      },
+    } as unknown as StructureSpawn;
+
+    spawnRemoteHauler(room, spawn);
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].filter((p) => p === "carry")).toHaveLength(10);
   });
 });

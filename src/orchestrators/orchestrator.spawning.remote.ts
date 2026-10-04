@@ -147,7 +147,7 @@ function getRemoteSourceDistance(
 
 // Net energy per tick a remote source earns, and the spawn time per creep
 // lifetime it takes to keep it worked. Upkeep is the miner, the hauler carry
-// for its round trip, its share of the room's reserver, and decay on its
+// for its round trip (with REMOTE_HAUL_MARGIN), its share of the room's reserver, and decay on its
 // container and (once roads are laid) the road out to it.
 export function planRemoteSource(
   room: Room,
@@ -162,7 +162,7 @@ export function planRemoteSource(
   const miner = buildRemoteMinerBody(capacity);
   const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads);
   const haulerCarry = Math.max(1, hauler.filter((p) => p === CARRY).length);
-  const carry = remoteHaulCarry(output, dist);
+  const carry = remoteHaulCarry(output, dist) * REMOTE_HAUL_MARGIN;
   const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
   const haulerPartsPerCarry = hauler.length / haulerCarry;
   // A reserver lives CREEP_CLAIM_LIFE_TIME, so it is bought that much more
@@ -382,8 +382,24 @@ function estimateRemoteDistance(homeRoom: Room, remoteRoomName: string): number 
 // rooms out need about this many full-size haulers.
 const MAX_REMOTE_HAULERS_PER_ROOM = 6;
 
-// Haulers each active remote needs, sized per source from its path distance.
-function getRemoteHaulerTargets(room: Room): Record<string, number> {
+// Remote haulers carry this much more than their sources' output strictly
+// needs, for loading, road repairs and the walk across the home room.
+const REMOTE_HAUL_MARGIN = 1.2;
+
+// No remote hauler is planned smaller than this many CARRY parts.
+const MIN_REMOTE_HAULER_CARRY = 4;
+
+interface RemoteHaulPlan {
+  count: number;
+  // CARRY parts in each hauler's body.
+  carryEach: number;
+}
+
+// Haulers each active remote needs and how big, from its sources' path
+// distances. The count is what full-size haulers would take; the CARRY is then
+// split evenly between them with REMOTE_HAUL_MARGIN on top. Every hauler used
+// to be full size, so a remote needing 24 CARRY got two 19-CARRY haulers.
+function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
   // Ask the body builder how much CARRY a hauler actually gets rather than
   // re-deriving it here. The copy this replaces divided by 200 while the body
   // pattern costs 150, so every remote was credited a quarter less carry than it
@@ -396,22 +412,27 @@ function getRemoteHaulerTargets(room: Room): Record<string, number> {
   );
   const output = remoteSourceOutput(room);
 
-  const targets: Record<string, number> = {};
+  const plans: Record<string, RemoteHaulPlan> = {};
   for (const remote of getActiveRemoteRooms(room)) {
     let requiredCarry = 0;
     for (const src of remote.sources) {
       requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
     }
-    targets[remote.roomName] = Math.min(
+    const count = Math.min(
       MAX_REMOTE_HAULERS_PER_ROOM,
       Math.max(1, Math.ceil(requiredCarry / carryPerHauler))
     );
+    const carryEach = Math.min(
+      carryPerHauler,
+      Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil((requiredCarry * REMOTE_HAUL_MARGIN) / count))
+    );
+    plans[remote.roomName] = { count, carryEach };
   }
-  return targets;
+  return plans;
 }
 
 function getRemoteHaulerTarget(room: Room): number {
-  return Object.values(getRemoteHaulerTargets(room)).reduce((a, b) => a + b, 0);
+  return Object.values(getRemoteHaulPlans(room)).reduce((a, p) => a + p.count, 0);
 }
 
 export function shouldSpawnRemoteHauler(room: Room): boolean {
@@ -443,11 +464,11 @@ export function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
 
   // Send it where the shortfall against that room's target is biggest, so a
   // far remote is not held to the same count as a near one.
-  const targets = getRemoteHaulerTargets(room);
+  const plans = getRemoteHaulPlans(room);
   let targetRoomName = activeRooms[0].roomName;
   let maxShortfall = -Infinity;
   for (const remote of activeRooms) {
-    const shortfall = (targets[remote.roomName] ?? 0) - (haulersByRoom[remote.roomName] ?? 0);
+    const shortfall = (plans[remote.roomName]?.count ?? 0) - (haulersByRoom[remote.roomName] ?? 0);
     if (shortfall > maxShortfall) {
       maxShortfall = shortfall;
       targetRoomName = remote.roomName;
@@ -457,8 +478,15 @@ export function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
   // Remotes have no roads until the home can lay them, so the body keeps one
   // MOVE per CARRY; once roads are going in it also carries a WORK to build
   // and repair them on the way home.
-  const allowedEnergy = bodyBudget(room, "available");
-  const body = buildRemoteHaulerBody(allowedEnergy, remoteRoadsEnabled(room));
+  const roads = remoteRoadsEnabled(room);
+  const carryEach = plans[targetRoomName]?.carryEach;
+  const planEnergy =
+    carryEach === undefined
+      ? Infinity
+      : (roads ? BODYPART_COST[WORK] + BODYPART_COST[MOVE] : 0) +
+        carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]);
+  const allowedEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
+  const body = buildRemoteHaulerBody(allowedEnergy, roads);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const res = trackedSpawn(room, spawn, body, {

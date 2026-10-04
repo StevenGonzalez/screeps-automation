@@ -135,12 +135,13 @@ describe("remote picks look past invaders", () => {
   });
 
   it("keeps a mined source that a new one of equal worth would only just fit beside", () => {
-    // Fill the home until the second source only fits without headroom.
+    // Fill the home until the second source only fits without headroom. Each
+    // upgrader takes 12 ticks of spawn time, finer than the headroom window.
     const upgraders = (n: number) =>
       Array.from({ length: n }, (_, i) => ({
         name: `u${i}`,
         room: { name: "W5N5" },
-        body: Array(16).fill({ type: "work", hits: 100 }),
+        body: Array(4).fill({ type: "work", hits: 100 }),
         memory: { role: ROLE_UPGRADER, homeRoom: "W5N5" },
       })) as unknown as Creep[];
     const miner = {
@@ -152,7 +153,7 @@ describe("remote picks look past invaders", () => {
     const remotes = [remote("W4N5", false), remote("W6N5", false)];
     let busy = 0;
     // Find a load where both fit only when the mined one needs no headroom.
-    for (let n = 0; n < 40; n++) {
+    for (let n = 0; n < 160; n++) {
       const fresh = getPickedRemoteRoomNames(home(remotes, upgraders(n)));
       clock += 1;
       const withMiner = getPickedRemoteRoomNames(home(remotes, [...upgraders(n), miner]));
