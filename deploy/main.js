@@ -1005,6 +1005,72 @@ function parkIdle(creep, kind) {
     return parkOn(creep, town.square);
 }
 
+const MAX_ENTRIES = 40;
+function entries() {
+    if (!Memory.chronicle)
+        Memory.chronicle = [];
+    if (Memory.chronicleEpoch === undefined)
+        Memory.chronicleEpoch = Game.time;
+    return Memory.chronicle;
+}
+function write(entry) {
+    const log = entries();
+    log.push(entry);
+    if (log.length > MAX_ENTRIES)
+        log.splice(0, log.length - MAX_ENTRIES);
+    console.log(`[Chronicle] ${entry.text}`);
+}
+function chronicle(text) {
+    write({ t: Game.time, text });
+}
+function tally(key, n, describe, window) {
+    var _a, _b;
+    const log = entries();
+    for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (e.key !== key)
+            continue;
+        if (Game.time - ((_a = e.last) !== null && _a !== void 0 ? _a : e.t) > window)
+            break;
+        e.n = ((_b = e.n) !== null && _b !== void 0 ? _b : 0) + n;
+        e.last = Game.time;
+        e.text = describe(e.n);
+        return;
+    }
+    write({ t: Game.time, text: describe(n), key, n, last: Game.time });
+}
+function chronicleDate(t) {
+    var _a;
+    const epoch = (_a = Memory.chronicleEpoch) !== null && _a !== void 0 ? _a : t;
+    const day = Math.floor((t - epoch) / TOWN_DAY_LENGTH) + 1;
+    return `Day ${day}, ${townClock(t).phase}`;
+}
+function recentChronicle(count) {
+    var _a;
+    return ((_a = Memory.chronicle) !== null && _a !== void 0 ? _a : []).slice(-count);
+}
+const NAME_HEADS = [
+    "Ash", "Raven", "Black", "Iron", "Grim", "Thorn", "Wolf", "Dusk",
+    "Storm", "Ember", "Hollow", "Frost", "Gloam", "Bramble", "Crow", "Stone",
+];
+const NAME_TAILS = ["hold", "moor", "keep", "spire", "fell", "gate", "watch", "barrow", "crag", "mere", "ford", "reach"];
+function castleName(roomName) {
+    var _a, _b;
+    const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
+    if (given)
+        return given;
+    let h = 2166136261;
+    for (let i = 0; i < roomName.length; i++) {
+        h ^= roomName.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+    }
+    const head = NAME_HEADS[h % NAME_HEADS.length];
+    let t = (h >>> 8) % NAME_TAILS.length;
+    if (NAME_TAILS[t][0] === head[head.length - 1])
+        t = (t + 1) % NAME_TAILS.length;
+    return head + NAME_TAILS[t];
+}
+
 const TOWN_NAMES = [
     "Ravenhold", "Blackmoor", "Ashfall", "Grimward", "Thornkeep", "Duskmere",
     "Ironvale", "Wolfsbane", "Hollowmere", "Cinderfell", "Stormwatch", "Gallowgate",
@@ -3164,6 +3230,7 @@ function putSurplusEnergyToWork(creep) {
 const REMOTE_INVADER_WINDOW = 1500;
 const REMOTE_PLAYER_WINDOW = 2000;
 const REMOTE_PLAYER_WINDOW_MAX = 20000;
+const RIVAL_CHRONICLE_WINDOW = 5000;
 function assignedRemoteEntry(creep) {
     var _a, _b;
     const home = creep.memory.homeRoom;
@@ -3186,8 +3253,14 @@ function flagRemoteInvader(creep) {
         markRemoteInvader(entry, creep.room);
 }
 function markRemoteInvader(entry, room) {
+    const fresh = entry.invaderUntil === undefined || entry.invaderUntil <= Game.time;
     entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
     entry.invaderStrength = invaderStrength(room);
+    if (!fresh)
+        return;
+    chronicle(findInvaderCore(room)
+        ? `Invaders raised a stronghold in the wilds of ${room.name}. The vendors flee the road.`
+        : `Raiders fell upon the vendors in the wilds of ${room.name}.`);
 }
 function flagRemoteDamage(creep) {
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
@@ -3198,14 +3271,19 @@ function flagRemoteDamage(creep) {
 }
 function flagRemotePlayer(creep) {
     const entry = assignedRemoteEntry(creep);
-    if (entry)
-        markRemotePlayerHostile(entry);
+    if (!entry)
+        return;
+    const player = creep.room.find(FIND_HOSTILE_CREEPS).find(isPlayerCreep);
+    markRemotePlayerHostile(entry, player === null || player === void 0 ? void 0 : player.owner.username);
 }
-function markRemotePlayerHostile(entry) {
+function markRemotePlayerHostile(entry, who) {
     var _a, _b;
     const avoided = entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
-    if (!avoided)
+    if (!avoided) {
         entry.hostileStrikes = ((_a = entry.hostileStrikes) !== null && _a !== void 0 ? _a : 0) + 1;
+        const text = `${who ? `The men of ${who}` : "Strangers"} hold the wilds of ${entry.roomName}. The vendors keep away.`;
+        tally(`rival:${entry.roomName}`, 1, () => text, RIVAL_CHRONICLE_WINDOW);
+    }
     const window = Math.min(REMOTE_PLAYER_WINDOW * 2 ** (((_b = entry.hostileStrikes) !== null && _b !== void 0 ? _b : 1) - 1), REMOTE_PLAYER_WINDOW_MAX);
     entry.hostile = true;
     entry.hostileUntil = Game.time + window;
@@ -3229,10 +3307,15 @@ function isAssignedRemoteInvaded(creep) {
 }
 function clearRemoteInvader(creep) {
     const entry = assignedRemoteEntry(creep);
-    if (entry && entry.invaderUntil !== undefined)
+    if (!entry)
+        return;
+    if (entry.invaderUntil !== undefined) {
+        if (entry.invaderUntil > Game.time) {
+            chronicle(`The wilds of ${entry.roomName} are safe again. The vendors take to the road.`);
+        }
         entry.invaderUntil = undefined;
-    if (entry)
-        delete entry.invaderStrength;
+    }
+    delete entry.invaderStrength;
 }
 
 function hasMiner(source) {
@@ -7794,7 +7877,7 @@ function applyRemoteControllerStatus(entry, controller, me) {
     const reserver = (_a = controller.reservation) === null || _a === void 0 ? void 0 : _a.username;
     if (!reserver || reserver === me || reserver === "Invader")
         return false;
-    markRemotePlayerHostile(entry);
+    markRemotePlayerHostile(entry, reserver);
     return true;
 }
 function discoverAdjacentRooms(room) {
@@ -7844,8 +7927,9 @@ function refreshVisibleRemoteRooms(room) {
         if (findInvaderCore(visible))
             markRemoteInvader(remote, visible);
         const hostiles = visible.find(FIND_HOSTILE_CREEPS).filter(canDealDamage);
-        if (hostiles.some(isPlayerCreep)) {
-            markRemotePlayerHostile(remote);
+        const player = hostiles.find(isPlayerCreep);
+        if (player) {
+            markRemotePlayerHostile(remote, player.owner.username);
             continue;
         }
         if (hostiles.some(isInvaderCreep)) {
@@ -8047,9 +8131,9 @@ function surveyRoom(creep, homeRoomName, targetRoomName) {
         return;
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
     const sourceKeepers = hostiles.filter((c) => c.owner.username === "Source Keeper");
-    const hasPlayer = hostiles.some((c) => isPlayerCreep(c) && canDealDamage(c));
-    if (hasPlayer) {
-        markRemotePlayerHostile(entry);
+    const player = hostiles.find((c) => isPlayerCreep(c) && canDealDamage(c));
+    if (player) {
+        markRemotePlayerHostile(entry, player.owner.username);
     }
     else if (sourceKeepers.length > 0) {
         entry.hostile = true;
@@ -8094,72 +8178,6 @@ function markRoomUnreachable(homeRoomName, targetRoomName) {
     entry.lastSeen = Game.time;
     entry.hostile = true;
     entry.hostileUntil = Game.time + UNREACHABLE_RETRY_TICKS;
-}
-
-const MAX_ENTRIES = 40;
-function entries() {
-    if (!Memory.chronicle)
-        Memory.chronicle = [];
-    if (Memory.chronicleEpoch === undefined)
-        Memory.chronicleEpoch = Game.time;
-    return Memory.chronicle;
-}
-function write(entry) {
-    const log = entries();
-    log.push(entry);
-    if (log.length > MAX_ENTRIES)
-        log.splice(0, log.length - MAX_ENTRIES);
-    console.log(`[Chronicle] ${entry.text}`);
-}
-function chronicle(text) {
-    write({ t: Game.time, text });
-}
-function tally(key, n, describe, window) {
-    var _a, _b;
-    const log = entries();
-    for (let i = log.length - 1; i >= 0; i--) {
-        const e = log[i];
-        if (e.key !== key)
-            continue;
-        if (Game.time - ((_a = e.last) !== null && _a !== void 0 ? _a : e.t) > window)
-            break;
-        e.n = ((_b = e.n) !== null && _b !== void 0 ? _b : 0) + n;
-        e.last = Game.time;
-        e.text = describe(e.n);
-        return;
-    }
-    write({ t: Game.time, text: describe(n), key, n, last: Game.time });
-}
-function chronicleDate(t) {
-    var _a;
-    const epoch = (_a = Memory.chronicleEpoch) !== null && _a !== void 0 ? _a : t;
-    const day = Math.floor((t - epoch) / TOWN_DAY_LENGTH) + 1;
-    return `Day ${day}, ${townClock(t).phase}`;
-}
-function recentChronicle(count) {
-    var _a;
-    return ((_a = Memory.chronicle) !== null && _a !== void 0 ? _a : []).slice(-count);
-}
-const NAME_HEADS = [
-    "Ash", "Raven", "Black", "Iron", "Grim", "Thorn", "Wolf", "Dusk",
-    "Storm", "Ember", "Hollow", "Frost", "Gloam", "Bramble", "Crow", "Stone",
-];
-const NAME_TAILS = ["hold", "moor", "keep", "spire", "fell", "gate", "watch", "barrow", "crag", "mere", "ford", "reach"];
-function castleName(roomName) {
-    var _a, _b;
-    const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
-    if (given)
-        return given;
-    let h = 2166136261;
-    for (let i = 0; i < roomName.length; i++) {
-        h ^= roomName.charCodeAt(i);
-        h = Math.imul(h, 16777619) >>> 0;
-    }
-    const head = NAME_HEADS[h % NAME_HEADS.length];
-    let t = (h >>> 8) % NAME_TAILS.length;
-    if (NAME_TAILS[t][0] === head[head.length - 1])
-        t = (t + 1) % NAME_TAILS.length;
-    return head + NAME_TAILS[t];
 }
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
