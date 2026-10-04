@@ -14998,10 +14998,16 @@ function buildRemoteMinerBody(availableEnergy) {
     const maxGroups = Math.max(1, Math.floor(availableEnergy / groupCost));
     const groups = Math.min(maxGroups, Math.ceil(maxWork / 2));
     let work = Math.min(maxWork, groups * 2);
-    const move = groups;
+    let move = groups;
     const cost = () => work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
     if (work === maxWork && availableEnergy < cost() + BODYPART_COST[CARRY])
         work--;
+    const spare = availableEnergy - cost() - BODYPART_COST[CARRY];
+    if (work < maxWork && spare >= BODYPART_COST[WORK]) {
+        work++;
+        if (spare >= BODYPART_COST[WORK] + BODYPART_COST[MOVE])
+            move++;
+    }
     const body = [];
     for (let i = 0; i < work; i++)
         body.push(WORK);
