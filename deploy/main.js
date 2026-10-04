@@ -15569,8 +15569,12 @@ function shouldSpawnMineralMiner(room) {
         return false;
     return countByRoleInRoom(ROLE_MINERAL_MINER, room) === 0;
 }
+const UPKEEP_SMITH_ENERGY = 4 * 200;
 function spawnRepairer(room, spawn) {
-    const allowedEnergy = bodyBudget(room, "available");
+    var _a, _b;
+    const nukeDefense = Object.keys((_b = (_a = room.memory.nukeDefense) === null || _a === void 0 ? void 0 : _a.tiles) !== null && _b !== void 0 ? _b : {}).length > 0;
+    const available = bodyBudget(room, "available");
+    const allowedEnergy = wallSmithFunded(room) || nukeDefense ? available : Math.min(available, UPKEEP_SMITH_ENERGY);
     const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
     const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_REPAIRER, homeRoom: room.name },
