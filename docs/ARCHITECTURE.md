@@ -280,7 +280,9 @@ load ("+800 gold"). Each load is added to the merchant's lifetime haul
 (`memory.hauled`), and a merchant who dies of age having brought home more gold
 than any before it is named in the chronicle (`Memory.richestHaul`). A new
 keep's first born is remembered by name (`memory.firstBorn`) and its bells ring
-again in the chronicle when it dies of age.
+again in the chronicle when it dies of age. The chronicle also notes when a
+castle's mineral vein is dug dry, with the days until it returns, and when it
+runs full again (`memory.heraldVeinDry`).
 
 News outlives its cry. For 600 ticks after a level, new renown, a keep's
 firstborn, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the

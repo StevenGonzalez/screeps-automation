@@ -92,6 +92,7 @@ export function heraldRooms(): void {
       heraldVisitors(room);
       heraldWorks(room);
       heraldRoads(room);
+      heraldVein(room);
     }
     heraldKills(room);
   }
@@ -243,6 +244,25 @@ function heraldRoads(room: Room): void {
     chronicle(
       `The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`
     );
+  }
+}
+
+// A castle's mineral vein, told when its jewelers dig it dry and again when it
+// fills back up, tens of thousands of ticks later.
+function heraldVein(room: Room): void {
+  if (Game.time % WORKS_CHECK_PERIOD !== 0) return;
+  const mineral = room.find(FIND_MINERALS)[0];
+  if (!mineral) return;
+  const dry = mineral.mineralAmount === 0;
+  const known = room.memory.heraldVeinDry;
+  room.memory.heraldVeinDry = dry;
+  if (known === undefined || known === dry) return;
+  const vein = `The ${WARES[mineral.mineralType] ?? mineral.mineralType} vein beneath ${castleName(room.name)}`;
+  if (dry) {
+    const days = Math.max(1, Math.round((mineral.ticksToRegeneration ?? 0) / TOWN_DAY_LENGTH));
+    chronicle(`${vein} is dug dry. Its jewelers lay down their picks for ${days} days.`);
+  } else {
+    chronicle(`${vein} runs full again. Its jewelers take up their picks.`);
   }
 }
 

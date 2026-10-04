@@ -7,6 +7,7 @@ g.FIND_HOSTILE_CREEPS = 103;
 g.FIND_MY_STRUCTURES = 108;
 g.FIND_MY_SPAWNS = 112;
 g.FIND_STRUCTURES = 107;
+g.FIND_MINERALS = 116;
 g.STRUCTURE_ROAD = "road";
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
@@ -338,6 +339,34 @@ describe("herald", () => {
       "The masons of Ravenhold raise a barracks.",
       "The masons of Ravenhold raise a watchtower.",
       "The masons of Ravenhold raise 3 alchemy labs.",
+    ]);
+  });
+
+  it("tells when a castle's vein is dug dry and when it runs full again, not what it was at the first look", () => {
+    g.Memory = { rooms: { [ROOM]: { townName: "Ravenhold" } } };
+    const mineral = { mineralType: "O", mineralAmount: 0, ticksToRegeneration: 49_800 as number | undefined };
+    const room = {
+      name: ROOM,
+      controller: { my: true, level: 6 },
+      memory: {} as RoomMemory,
+      getEventLog: () => "[]",
+      find: (type: number) => (type === g.FIND_MINERALS ? [mineral] : []),
+    };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {} };
+      heraldRooms();
+    };
+    at(1000);
+    Object.assign(mineral, { mineralAmount: 70_000, ticksToRegeneration: undefined });
+    at(1100);
+    at(1200);
+    Object.assign(mineral, { mineralAmount: 0, ticksToRegeneration: 50_000 });
+    at(1300);
+    at(1400);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "The oxygen vein beneath Ravenhold runs full again. Its jewelers take up their picks.",
+      "The oxygen vein beneath Ravenhold is dug dry. Its jewelers lay down their picks for 50 days.",
     ]);
   });
 

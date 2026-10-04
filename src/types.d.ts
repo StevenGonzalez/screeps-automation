@@ -268,6 +268,9 @@ declare global {
     heraldWorks?: Record<string, number>;
     // Remotes whose paved road the herald has told of (services.herald).
     heraldRoads?: string[];
+    // Whether the castle's mineral vein was dug dry when the herald last looked
+    // (services.herald).
+    heraldVeinDry?: boolean;
     // Set once a new keep's first creep of its own was proclaimed (services.herald).
     heraldBorn?: boolean;
     // That first creep's name while it lives, so its death is told (services.herald).
