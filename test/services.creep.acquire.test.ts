@@ -48,3 +48,42 @@ describe("acquireEnergy link fallback", () => {
     expect(run(ROLE_UPGRADER)).toEqual(["ctrlLink"]);
   });
 });
+
+describe("acquireEnergy's chosen store", () => {
+  type Store = { id: string; structureType: string; store: { energy: number } };
+  const far: Store = { id: "far", structureType: "container", store: { energy: 500 } };
+  const near: Store = { id: "near", structureType: "container", store: { energy: 500 } };
+
+  function trip(cached: string | undefined, inRange: boolean) {
+    clock++;
+    g.Game = { time: clock, getObjectById: (id: string) => [far, near].find((s) => s.id === id) ?? null };
+    g.Memory = { rooms: {}, creeps: {} };
+    const room = { name: "W1N1", memory: {}, find: (type: number) => (type === g.FIND_STRUCTURES ? [far, near] : []) };
+    const withdrawn: string[] = [];
+    const creep = {
+      room,
+      memory: { role: "builder", energySourceId: cached },
+      pos: {
+        findInRange: () => [],
+        findClosestByPath: (targets: unknown[] | number) => (Array.isArray(targets) ? targets.find((t) => t === near) ?? null : null),
+      },
+      withdraw: (t: { id: string }) => {
+        withdrawn.push(t.id);
+        return inRange ? 0 : -9;
+      },
+      moveTo: () => 0,
+    } as unknown as Creep;
+    acquireEnergy(creep, { bufferOnly: true });
+    return { withdrawn, cached: creep.memory.energySourceId };
+  }
+
+  it("is kept for the walk to it", () => {
+    expect(trip(undefined, false)).toEqual({ withdrawn: ["near"], cached: "near" });
+    expect(trip("far", false)).toEqual({ withdrawn: ["far"], cached: "far" });
+  });
+
+  it("is let go once the creep draws from it, so the next load comes from the nearest store", () => {
+    expect(trip("far", true)).toEqual({ withdrawn: ["far"], cached: undefined });
+    expect(trip(undefined, true)).toEqual({ withdrawn: ["near"], cached: undefined });
+  });
+});

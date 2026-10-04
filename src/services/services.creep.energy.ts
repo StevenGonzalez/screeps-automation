@@ -69,7 +69,14 @@ export function acquireEnergy(
         creep.moveTo(cached, { reusePath: 50 });
         return true;
       }
-      if (res === OK) return true;
+      if (res === OK) {
+        // The source is kept only for the walk to it. Kept past the
+        // withdrawal, it held a creep for life to the first store it chose:
+        // Grimford's masons crossed the keep to it for every load while
+        // another container stood beside their road sites.
+        creep.memory.energySourceId = undefined;
+        return true;
+      }
     }
     creep.memory.energySourceId = undefined;
   }
@@ -110,9 +117,9 @@ export function acquireEnergy(
       : null;
 
   if (storeTarget) {
-    creep.memory.energySourceId = storeTarget.id;
     const res = creep.withdraw(storeTarget, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) {
+      creep.memory.energySourceId = storeTarget.id;
       creep.moveTo(storeTarget, { reusePath: 50 });
       return true;
     }
@@ -132,9 +139,9 @@ export function acquireEnergy(
   if (links.length > 0) {
     const link = closestByPath(creep.pos, links) as StructureLink | null;
     if (link) {
-      creep.memory.energySourceId = link.id as unknown as Id<AnyStoreStructure>;
       const res = creep.withdraw(link, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
+        creep.memory.energySourceId = link.id as unknown as Id<AnyStoreStructure>;
         creep.moveTo(link, { reusePath: 50 });
         return true;
       }
