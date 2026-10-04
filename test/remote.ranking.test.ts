@@ -9,7 +9,7 @@ import {
   buildRemoteHaulerBody,
   planRemoteSource,
 } from "../src/orchestrators/orchestrator.spawning";
-import { shouldSpawnRemoteHauler, spawnRemoteHauler } from "../src/orchestrators/orchestrator.spawning.remote";
+import { reassignStrayHaulers, shouldSpawnRemoteHauler, spawnRemoteHauler } from "../src/orchestrators/orchestrator.spawning.remote";
 import { ROLE_REMOTE_HAULER, ROLE_REMOTE_MINER, ROLE_UPGRADER } from "../src/config/config.roles";
 
 const HOME = "W5N5";
@@ -178,6 +178,7 @@ describe("stray merchants", () => {
     (g.Game as { rooms: Record<string, unknown> }).rooms.W5N4 = { name: "W5N4", controller: { my: true } };
 
     // W4N5 plans two merchants; the two strays now fill them, so none is spawned.
+    reassignStrayHaulers(room);
     expect(shouldSpawnRemoteHauler(room)).toBe(false);
     const targets = Object.values((g.Game as { creeps: Record<string, Creep> }).creeps).map((c) => c.memory.targetRoom);
     expect(targets).toEqual(["W4N5", "W4N5"]);
@@ -189,7 +190,7 @@ describe("stray merchants", () => {
       remotes: [remote("W4N5", [40]), invaded],
       creeps: [creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W5N4" })],
     });
-    shouldSpawnRemoteHauler(room);
+    reassignStrayHaulers(room);
     const [merchant] = Object.values((g.Game as { creeps: Record<string, Creep> }).creeps);
     expect(merchant.memory.targetRoom).toBe("W5N4");
   });

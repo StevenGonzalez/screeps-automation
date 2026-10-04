@@ -41,6 +41,7 @@ import {
   spawnRemoteMiner,
   shouldSpawnRemoteHauler,
   spawnRemoteHauler,
+  reassignStrayHaulers,
   shouldSpawnReserver,
   spawnReserver,
 } from "./orchestrator.spawning.remote";
@@ -91,11 +92,15 @@ export {
 } from "./orchestrator.spawning.military";
 export { buildPowerAttackerBody, buildSkGuardianBody } from "./orchestrator.spawning.ops";
 
+// How often each home checks for merchants whose remote is no longer worked.
+const STRAY_HAULER_INTERVAL = 10;
+
 export function loop() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
     refreshBlockade(room);
+    if (Game.time % STRAY_HAULER_INTERVAL === 0) reassignStrayHaulers(room);
     const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
     for (const spawn of spawns) {
       if (!spawn.spawning) processRoomSpawning(room, spawn);

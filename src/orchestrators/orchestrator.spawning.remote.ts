@@ -462,11 +462,14 @@ function neediestRemote(
 // counted against the remotes that are: when a remote became a keep, its two
 // merchants kept the home's other remote from getting any. It is sent to the
 // neediest remote instead. One that is only fleeing invaders keeps its post.
-function reassignStrayHaulers(room: Room, activeRooms: RemoteRoomData[]): void {
+export function reassignStrayHaulers(room: Room): void {
   const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name);
+  if (haulers.length === 0) return;
   const worked = getPickedRemoteRoomNames(room);
   const strays = haulers.filter((c) => !worked.has(c.memory.targetRoom ?? ""));
   if (strays.length === 0) return;
+  const activeRooms = getActiveRemoteRooms(room);
+  if (activeRooms.length === 0) return;
 
   const haulersByRoom: Record<string, number> = {};
   for (const h of haulers) {
@@ -486,7 +489,6 @@ export function shouldSpawnRemoteHauler(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 3) return false;
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return false;
-  reassignStrayHaulers(room, activeRooms);
 
   const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter(
     (c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c)
