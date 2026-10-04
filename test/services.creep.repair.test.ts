@@ -151,6 +151,10 @@ describe("remote player strikes", () => {
     return { roomName: "W2N1", sources: [], lastSeen: 0, hostile: false };
   }
 
+  beforeEach(() => {
+    g.Memory = {};
+  });
+
   it("escalates across visits instead of resetting on the first clean look", () => {
     const e = entry();
     g.Game = { time: 10_000 };
@@ -166,6 +170,20 @@ describe("remote player strikes", () => {
     markRemotePlayerHostile(e);
     expect(e.hostileStrikes).toBe(2);
     expect(e.hostileUntil).toBe(10_500 + 4000);
+  });
+
+  it("writes one chronicle line for a player who keeps coming back", () => {
+    const e = entry();
+    g.Game = { time: 10_000 };
+    markRemotePlayerHostile(e, "Rival");
+
+    g.Game = { time: 10_100 };
+    clearRemotePlayerHostile(e);
+    g.Game = { time: 10_500 };
+    markRemotePlayerHostile(e, "Rival");
+
+    const log = (g.Memory as Memory).chronicle ?? [];
+    expect(log.map((l) => l.text)).toEqual(["The men of Rival hold the wilds of W2N1. The vendors keep away."]);
   });
 
   it("forgives one strike per clean window", () => {

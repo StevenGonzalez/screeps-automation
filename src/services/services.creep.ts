@@ -1,5 +1,6 @@
 import { pickSignature } from "../config/signatures";
-import { invaderStrength, isPlayerCreep } from "./services.combat";
+import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
+import { chronicle, tally } from "./services.chronicle";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -161,6 +162,10 @@ const REMOTE_PLAYER_WINDOW = 2000;
 
 const REMOTE_PLAYER_WINDOW_MAX = 20000;
 
+// A player who keeps walking in and out of a remote stays one line in the
+// chronicle while they come back within this many ticks.
+const RIVAL_CHRONICLE_WINDOW = 5000;
+
 function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
   const home = creep.memory.homeRoom;
   const target = creep.memory.targetRoom;
@@ -182,8 +187,15 @@ export function flagRemoteInvader(creep: Creep): void {
 
 // `room` is the remote itself, seen this tick.
 export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
+  const fresh = entry.invaderUntil === undefined || entry.invaderUntil <= Game.time;
   entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
   entry.invaderStrength = invaderStrength(room);
+  if (!fresh) return;
+  chronicle(
+    findInvaderCore(room)
+      ? `Invaders raised a stronghold in the wilds of ${room.name}. The vendors flee the road.`
+      : `Raiders fell upon the vendors in the wilds of ${room.name}.`
+  );
 }
 
 // Damage taken in the assigned remote. Only a player there earns a strike;
@@ -197,13 +209,20 @@ export function flagRemoteDamage(creep: Creep): void {
 
 export function flagRemotePlayer(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
-  if (entry) markRemotePlayerHostile(entry);
+  if (!entry) return;
+  const player = creep.room.find(FIND_HOSTILE_CREEPS).find(isPlayerCreep);
+  markRemotePlayerHostile(entry, player?.owner.username);
 }
 
-export function markRemotePlayerHostile(entry: RemoteRoomData): void {
+// `who` is the player whose creeps or reservation made the remote hostile.
+export function markRemotePlayerHostile(entry: RemoteRoomData, who?: string): void {
   const avoided =
     entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
-  if (!avoided) entry.hostileStrikes = (entry.hostileStrikes ?? 0) + 1;
+  if (!avoided) {
+    entry.hostileStrikes = (entry.hostileStrikes ?? 0) + 1;
+    const text = `${who ? `The men of ${who}` : "Strangers"} hold the wilds of ${entry.roomName}. The vendors keep away.`;
+    tally(`rival:${entry.roomName}`, 1, () => text, RIVAL_CHRONICLE_WINDOW);
+  }
   const window = Math.min(
     REMOTE_PLAYER_WINDOW * 2 ** ((entry.hostileStrikes ?? 1) - 1),
     REMOTE_PLAYER_WINDOW_MAX
@@ -236,6 +255,12 @@ export function isAssignedRemoteInvaded(creep: Creep): boolean {
 
 export function clearRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
-  if (entry && entry.invaderUntil !== undefined) entry.invaderUntil = undefined;
-  if (entry) delete entry.invaderStrength;
+  if (!entry) return;
+  if (entry.invaderUntil !== undefined) {
+    if (entry.invaderUntil > Game.time) {
+      chronicle(`The wilds of ${entry.roomName} are safe again. The vendors take to the road.`);
+    }
+    entry.invaderUntil = undefined;
+  }
+  delete entry.invaderStrength;
 }

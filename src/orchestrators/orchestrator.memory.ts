@@ -299,7 +299,7 @@ export function applyRemoteControllerStatus(
   }
   const reserver = controller.reservation?.username;
   if (!reserver || reserver === me || reserver === "Invader") return false;
-  markRemotePlayerHostile(entry);
+  markRemotePlayerHostile(entry, reserver);
   return true;
 }
 
@@ -358,8 +358,9 @@ export function refreshVisibleRemoteRooms(room: Room) {
     // An Invader core reserves the room and blocks harvesting; a knight has to clear it.
     if (findInvaderCore(visible)) markRemoteInvader(remote, visible);
     const hostiles = visible.find(FIND_HOSTILE_CREEPS).filter(canDealDamage);
-    if (hostiles.some(isPlayerCreep)) {
-      markRemotePlayerHostile(remote);
+    const player = hostiles.find(isPlayerCreep);
+    if (player) {
+      markRemotePlayerHostile(remote, player.owner.username);
       continue;
     }
     // Invader creeps get a knight sized to them, as a core does. Marking the

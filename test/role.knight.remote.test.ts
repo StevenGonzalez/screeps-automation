@@ -17,6 +17,7 @@ vi.mock("../src/orchestrators/orchestrator.military", () => ({
 }));
 
 import { runKnight } from "../src/roles/role.knight";
+import { markRemoteInvader } from "../src/services/services.creep";
 import { ROLE_KNIGHT } from "../src/config/config.roles";
 
 const HOME = "W1N1";
@@ -62,6 +63,9 @@ describe("remote knight", () => {
     runKnight(knight);
     expect(remoteEntry.invaderUntil).toBeUndefined();
     expect(destination(knight)).toBe(HOME);
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "The wilds of W2N1 are safe again. The vendors take to the road.",
+    ]);
   });
 
   it("stays home while the remote is only marked hostile by a player", () => {
@@ -70,5 +74,19 @@ describe("remote knight", () => {
     const knight = knightIn(HOME);
     runKnight(knight);
     expect(destination(knight)).toBeUndefined();
+  });
+});
+
+describe("raids in the chronicle", () => {
+  const remoteRoom = { name: REMOTE, find: () => [] } as unknown as Room;
+
+  it("writes a raid once, not on every tick the remote is flagged", () => {
+    markRemoteInvader(remoteEntry, remoteRoom);
+    g.Game = { time: 1001 };
+    markRemoteInvader(remoteEntry, remoteRoom);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Raiders fell upon the vendors in the wilds of W2N1.",
+    ]);
   });
 });

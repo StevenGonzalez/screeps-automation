@@ -131,10 +131,10 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
     (c) => c.owner.username === "Source Keeper"
   );
   // Unarmed or allied creeps (other players' scouts) don't make a room hostile.
-  const hasPlayer = hostiles.some((c) => isPlayerCreep(c) && canDealDamage(c));
+  const player = hostiles.find((c) => isPlayerCreep(c) && canDealDamage(c));
 
-  if (hasPlayer) {
-    markRemotePlayerHostile(entry);
+  if (player) {
+    markRemotePlayerHostile(entry, player.owner.username);
   } else if (sourceKeepers.length > 0) {
     entry.hostile = true;
     entry.hostileUntil = Game.time + SCOUT_HOSTILE_DURATION;
