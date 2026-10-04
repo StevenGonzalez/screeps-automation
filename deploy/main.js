@@ -12871,7 +12871,6 @@ function getRoomMemory(room) {
 
 const SAMPLE_EVERY = 5;
 const CLOSE_BOOKS_EVERY = 100;
-const MIN_WINDOW_TICKS = 50;
 const SMOOTHING = 0.3;
 const windows = {};
 function storedGold(room) {
@@ -12960,11 +12959,9 @@ const INCOME_KEYS = ["mines", "vendors"];
 const SPEND_KEYS = ["recruits", "enchant", "masonry", "smithy", "towers"];
 function closeBooks(room) {
     const w = windows[room.name];
-    if (!w)
+    if (!w || w.samples === 0)
         return;
     const ticks = Game.time - w.start;
-    if (ticks < MIN_WINDOW_TICKS || w.samples === 0)
-        return;
     if (!Memory.exchequer)
         Memory.exchequer = {};
     const prev = Memory.exchequer[room.name];
@@ -13004,14 +13001,17 @@ function loop$8() {
             readEvents(remote, windowFor(home), false);
         }
     }
-    if (Game.time % CLOSE_BOOKS_EVERY === 0) {
-        for (const home of homes)
-            closeBooks(home);
-        if (Memory.exchequer) {
-            for (const name in Memory.exchequer) {
-                if (!((_d = (_c = Game.rooms[name]) === null || _c === void 0 ? void 0 : _c.controller) === null || _d === void 0 ? void 0 : _d.my))
-                    delete Memory.exchequer[name];
-            }
+    let closed = false;
+    for (const home of homes) {
+        if (Game.time - windows[home.name].start < CLOSE_BOOKS_EVERY)
+            continue;
+        closeBooks(home);
+        closed = true;
+    }
+    if (closed && Memory.exchequer) {
+        for (const name in Memory.exchequer) {
+            if (!((_d = (_c = Game.rooms[name]) === null || _c === void 0 ? void 0 : _c.controller) === null || _d === void 0 ? void 0 : _d.my))
+                delete Memory.exchequer[name];
         }
     }
 }
