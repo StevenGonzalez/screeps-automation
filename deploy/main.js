@@ -13200,6 +13200,9 @@ function recordCpu(name, used) {
 function getCpuStats() {
     return stats;
 }
+function cpuPerTick(s) {
+    return s.ema * Math.min(1, s.runs / Math.max(1, Game.time - s.since + 1));
+}
 const roleStats = {};
 function recordRole(role, used) {
     var _a;
@@ -14683,7 +14686,7 @@ function cpuShareUsed() {
         return 1;
     let total = 0;
     for (const name in stats)
-        total += stats[name].ema;
+        total += cpuPerTick(stats[name]);
     return total / Game.cpu.limit;
 }
 function autoQueue() {
@@ -21006,7 +21009,7 @@ function setupConsole() {
         cpu: () => {
             const stats = getCpuStats();
             const rows = Object.entries(stats).sort((a, b) => b[1].ema - a[1].ema);
-            const total = rows.reduce((sum, [, s]) => sum + s.ema, 0);
+            const total = rows.reduce((sum, [, s]) => sum + cpuPerTick(s), 0);
             console.log(`[CPU] limit=${Game.cpu.limit} bucket=${Game.cpu.bucket} avgTotal=${total.toFixed(2)}`);
             for (const [name, s] of rows) {
                 const ran = Math.round((100 * s.runs) / Math.max(1, Game.time - s.since + 1));
