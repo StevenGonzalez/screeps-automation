@@ -533,6 +533,21 @@ describe("herald", () => {
     expect((g.Memory as Memory).annals).toEqual({ since: 7_000, gold: 0, slain: 0, fallen: 0, recruits: 0 });
   });
 
+  it("ends the year with the winter and names the new one in spring", () => {
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    at(27_000);
+    annal("gold", 900);
+    at(28_000);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "So ends the winter, and with it the year 1. Since the scribes took up their pens the realm gathered 900 gold, slew no foe and lost none of its own.",
+      "Spring comes to the realm. The snow melts from the castle walls. It is the year 2 of the Old Reckoning. The Sowing Feast begins.",
+    ]);
+  });
+
   it("leaves recruits out of annals begun before they were counted", () => {
     g.Game = { time: 3_000 };
     g.Memory = { annals: { since: 0, gold: 0, slain: 0, fallen: 0 } };

@@ -6,7 +6,7 @@
 import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
 import { isArmedHostile, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
-import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TownSeason } from "../config/config.town";
+import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 import { remotePaved } from "./services.remote";
 
@@ -142,6 +142,12 @@ const SEASON_TIDINGS: Record<TownSeason, string> = {
   winter: "Winter comes to the realm. Snow settles on the battlements.",
 };
 
+// The realm counts its years from the shard's first tick, the Old Reckoning,
+// so every castle keeps the same calendar. Year 1 began at tick 0.
+function reckoningYear(time: number): number {
+  return Math.floor(time / (TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON * TOWN_SEASONS.length)) + 1;
+}
+
 function heraldSeason(): void {
   const season = townSeason(Game.time);
   const known = Memory.heraldSeason;
@@ -150,8 +156,9 @@ function heraldSeason(): void {
   const annals = Memory.annals;
   Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
   if (annals) chronicle(annalsLine(known, annals));
+  const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
   const feast = townFeast(Game.time);
-  chronicle(feast ? `${SEASON_TIDINGS[season]} The ${feast} begins.` : SEASON_TIDINGS[season]);
+  chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
 }
 
 function annalsLine(season: string, a: Annals): string {
@@ -160,7 +167,8 @@ function annalsLine(season: string, a: Annals): string {
   const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
   const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
   const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
-  return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
+  const ended = season === "winter" ? `, and with it the year ${reckoningYear(Game.time - 1)}` : "";
+  return `So ends the ${season}${ended}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
 }
 
 // Trade with other players, read from the market's own records every few
