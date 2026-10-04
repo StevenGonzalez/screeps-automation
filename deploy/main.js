@@ -14176,12 +14176,17 @@ function neediestRemote(activeRooms, plans, haulersByRoom) {
     }
     return neediest;
 }
-function reassignStrayHaulers(room, activeRooms) {
+function reassignStrayHaulers(room) {
     var _a, _b;
     const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name);
+    if (haulers.length === 0)
+        return;
     const worked = getPickedRemoteRoomNames(room);
     const strays = haulers.filter((c) => { var _a; return !worked.has((_a = c.memory.targetRoom) !== null && _a !== void 0 ? _a : ""); });
     if (strays.length === 0)
+        return;
+    const activeRooms = getActiveRemoteRooms(room);
+    if (activeRooms.length === 0)
         return;
     const haulersByRoom = {};
     for (const h of haulers) {
@@ -14204,7 +14209,6 @@ function shouldSpawnRemoteHauler(room) {
     const activeRooms = getActiveRemoteRooms(room);
     if (activeRooms.length === 0)
         return false;
-    reassignStrayHaulers(room, activeRooms);
     const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c));
     const needed = haulers.length < getRemoteHaulerTarget(room);
     if (waitForFullBody(room, ROLE_REMOTE_HAULER, needed))
@@ -15711,6 +15715,7 @@ function spawnSkHauler(room, spawn, op) {
     return res === OK;
 }
 
+const STRAY_HAULER_INTERVAL = 10;
 function loop$7() {
     var _a;
     for (const roomName in Game.rooms) {
@@ -15718,6 +15723,8 @@ function loop$7() {
         if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
             continue;
         refreshBlockade(room);
+        if (Game.time % STRAY_HAULER_INTERVAL === 0)
+            reassignStrayHaulers(room);
         const spawns = room.find(FIND_MY_SPAWNS);
         for (const spawn of spawns) {
             if (!spawn.spawning)
