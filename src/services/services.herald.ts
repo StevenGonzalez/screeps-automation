@@ -3,7 +3,7 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
+import { Annals, annal, castleName, chronicle, formatK, lordName, tally, warbandIn, wildsName } from "./services.chronicle";
 import { isArmedHostile, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, TownSeason } from "../config/config.town";
@@ -68,7 +68,8 @@ export function crySortie(creep: Creep, roomName: string): void {
   creep.memory.sortie = roomName;
   freshCries();
   creepCries[creep.name] = "Ride out!";
-  chronicle(`${creep.name} rides out against the raiders in the ${wildsName(roomName)}.`);
+  const band = warbandIn(roomName);
+  chronicle(`${creep.name} rides out against ${band ? `${band}'s` : "the"} raiders in the ${wildsName(roomName)}.`);
 }
 
 // How long the realm talks of a piece of news.
@@ -570,10 +571,13 @@ function chronicleKill(room: Room, slayer?: string): void {
   // Lair keepers fall every few hundred ticks where their lairs are farmed;
   // that is work, not news.
   if (foe === "raider") spreadWord("victory!");
+  const band = foe === "raider" ? warbandIn(room.name) : undefined;
+  const one = band ? `A raider of ${band}'s band` : `A ${foe}`;
+  const many = (n: number) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
   tally(
     `slain:${room.name}`,
     1,
-    (n) => (n === 1 ? `A ${foe} fell${slayer ? ` to ${slayer}` : ""}` : `${n} ${foe}s fell`) + ` ${whereIn(room.name)}.`,
+    (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`,
     BATTLE_WINDOW
   );
 }
@@ -594,7 +598,9 @@ function foeIn(roomName: string): string | undefined {
   const player = hostiles.find(isPlayerCreep);
   if (player) return `the men of ${lordName(player.owner.username)}`;
   if (hostiles.length === 0) return undefined;
-  return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
+  if (isSourceKeeperRoom(roomName)) return "a lair keeper";
+  const band = warbandIn(roomName);
+  return band ? `${band}'s raiders` : "raiders";
 }
 
 // One of ours gone before its time, last seen wounded, fell in a fight. A

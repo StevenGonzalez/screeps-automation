@@ -1,6 +1,6 @@
 import { keepSignature, remoteSignature } from "../config/signatures";
 import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
-import { lordName, tally, wildsName } from "./services.chronicle";
+import { lordName, raiseWarband, tally, wildsName, warbandIn } from "./services.chronicle";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -201,7 +201,7 @@ export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
   if (!fresh) return;
   const text = findInvaderCore(room)
     ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
-    : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`;
+    : `Raiders under ${raiseWarband(entry.roomName)} fell upon the vendors in the ${wildsName(entry.roomName)}.`;
   tally(`raid:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
 }
 
@@ -277,7 +277,10 @@ export function clearRemoteInvader(creep: Creep): void {
 export function clearRemoteInvaderEntry(entry: RemoteRoomData): void {
   if (entry.invaderUntil !== undefined) {
     if (entry.invaderUntil > Game.time) {
-      const text = `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
+      const band = warbandIn(entry.roomName);
+      const text = band
+        ? `The ${wildsName(entry.roomName)} is rid of ${band}'s raiders. The vendors take to the road.`
+        : `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
       tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
     }
     entry.invaderUntil = undefined;

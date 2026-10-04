@@ -200,6 +200,31 @@ describe("herald", () => {
     expect((g.Memory as Memory).gossip?.line).toBe("victory!");
   });
 
+  it("names the warlord whose raiders fell and who struck ours down", () => {
+    (g.Memory as Memory).warbands = { [ROOM]: { name: "Grask One-Eye", at: tick }, W2N1: { name: "Vulk Ironjaw", at: tick } };
+    const knight = new FakeCreep("Dragon Knight Edric", { name: ROOM });
+    setup(roomWith(killed("raider1", ["knight"])), { knight });
+    heraldRooms();
+    expect((g.Memory as Memory).chronicle!.at(-1)!.text).toBe(
+      "A raider of Grask One-Eye's band fell to Dragon Knight Edric in the Gallows Forest."
+    );
+    setup(roomWith(killed("raider2", ["knight"])), { knight });
+    heraldRooms();
+    expect((g.Memory as Memory).chronicle!.at(-1)!.text).toBe("2 of Grask One-Eye's raiders fell in the Gallows Forest.");
+
+    const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
+    const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900, memory: {} };
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Merchant Leofric": merchant } };
+    heraldRooms();
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: { W2N1: wilds }, creeps: {} };
+    heraldRooms();
+    expect((g.Memory as Memory).chronicle!.at(-1)!.text).toBe(
+      "Merchant Leofric fell to Vulk Ironjaw's raiders in the Shadow March."
+    );
+  });
+
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
     const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
     const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900, memory: {} };

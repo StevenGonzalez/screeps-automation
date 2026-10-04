@@ -17,7 +17,7 @@ vi.mock("../src/orchestrators/orchestrator.military", () => ({
 }));
 
 import { runKnight } from "../src/roles/role.knight";
-import { markRemoteInvader } from "../src/services/services.creep";
+import { clearRemoteInvaderEntry, markRemoteInvader } from "../src/services/services.creep";
 import { cryFor } from "../src/services/services.herald";
 import { ROLE_KNIGHT } from "../src/config/config.roles";
 
@@ -109,7 +109,29 @@ describe("raids in the chronicle", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Raiders fell upon the vendors in the Shadow March.",
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
     ]);
+  });
+
+  it("names the raid's warlord when a knight rides out and when the raid ends", () => {
+    markRemoteInvader(remoteEntry, remoteRoom);
+    runKnight(knightIn(HOME));
+    g.Game = { time: 1400 };
+    clearRemoteInvaderEntry(remoteEntry);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
+      "Dragon Knight Godric rides out against Brakka the Gaunt's raiders in the Shadow March.",
+      "The Shadow March is rid of Brakka the Gaunt's raiders. The vendors take to the road.",
+    ]);
+  });
+
+  it("draws a new warlord for the next raid", () => {
+    markRemoteInvader(remoteEntry, remoteRoom);
+    const first = (g.Memory as Memory).warbands?.[REMOTE]?.name;
+    clearRemoteInvaderEntry(remoteEntry);
+    g.Game = { time: 6000 };
+    markRemoteInvader(remoteEntry, remoteRoom);
+    expect((g.Memory as Memory).warbands?.[REMOTE]?.name).not.toBe(first);
   });
 });

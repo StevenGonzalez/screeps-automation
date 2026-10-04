@@ -118,6 +118,16 @@ function nameHash(roomName: string): number {
   return h;
 }
 
+// The FNV hash's low bits barely change between names that differ in their
+// last character, such as neighbouring rooms; mixing it again keeps the next
+// room over from sharing half its name.
+function mixedHash(s: string): number {
+  let h = nameHash(s);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
 /** A castle's name: its town name if one was given, or one drawn from its room name. */
 export function castleName(roomName: string): string {
   const given = Memory.rooms?.[roomName]?.townName;
@@ -160,11 +170,39 @@ const WILD_LANDS = [
  * its room name: "Weeping Fen". Callers put "the" before it.
  */
 export function wildsName(roomName: string): string {
-  // The hash's low bits barely change between neighbouring rooms; mixing it
-  // again keeps the next room over from sharing half its name.
-  let h = nameHash(roomName);
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
-  h = (h ^ (h >>> 16)) >>> 0;
+  const h = mixedHash(roomName);
   return `${WILD_HEADS[(h >>> 4) % WILD_HEADS.length]} ${WILD_LANDS[(h >>> 12) % WILD_LANDS.length]}`;
+}
+
+const WARLORDS = [
+  "Grask", "Mordrek", "Vulk", "Skarn", "Brakka", "Gorm", "Thrask", "Vilgrot",
+  "Krug", "Raznak", "Ulfgar", "Hask", "Dregga", "Orvik", "Odrik", "Zagra",
+];
+const WARLORD_EPITHETS = [
+  "the Flayer", "One-Eye", "the Gaunt", "Black-Tooth", "the Burner", "Red-Hand",
+  "the Unwashed", "Ironjaw", "the Hungry", "Crow-Feeder", "Half-Ear", "the Fen-Rat",
+];
+
+// Raiders live this long, so no raid outlasts it.
+const WARBAND_LIFE = 1500;
+
+/**
+ * Names the warlord leading a raid that begins in `roomName` this tick. A
+ * remote next to two castles is marked raided once for each, in the same tick,
+ * and both draw the same name.
+ */
+export function raiseWarband(roomName: string): string {
+  const h = mixedHash(`${roomName}:${Game.time}`);
+  const name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
+  (Memory.warbands ??= {})[roomName] = { name, at: Game.time };
+  return name;
+}
+
+/** The warlord whose raid on `roomName` may still be going on, if one is. */
+export function warbandIn(roomName: string): string | undefined {
+  const band = Memory.warbands?.[roomName];
+  if (!band) return undefined;
+  if (Game.time - band.at <= WARBAND_LIFE) return band.name;
+  delete Memory.warbands![roomName];
+  return undefined;
 }

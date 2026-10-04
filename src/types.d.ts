@@ -356,6 +356,9 @@ declare global {
     richestHauler?: string;
     // The creep that slew the most foes in its life (services.herald).
     greatestSlayer?: { name: string; kills: number };
+    // The warlord of the last raid on each remote and the tick it began
+    // (services.chronicle).
+    warbands?: Record<string, { name: string; at: number }>;
     // News the realm's creeps repeat in their chatter until it goes stale
     // (services.herald).
     gossip?: { line: string; until: number };

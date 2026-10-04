@@ -223,7 +223,7 @@ describe("refreshVisibleRemoteRooms", () => {
       const invader = { owner: { username: "Invader" }, body: body("attack", "move") };
       const { entries, lines } = refreshBoth([invader], false);
       expect(entries.every((e) => (e.invaderUntil ?? 0) > tick)).toBe(true);
-      expect(lines.filter((t) => /^Raiders fell upon/.test(t))).toHaveLength(1);
+      expect(lines.filter((t) => /^Raiders under .+ fell upon/.test(t))).toHaveLength(1);
     });
 
     it("lifts both castles' marks once the remote is seen clear, and tells of it once", () => {
