@@ -18360,8 +18360,24 @@ function drawLandmarks(room) {
         const y = Math.max(...labs.map((p) => p.y));
         v.text(titleCase(labs.length === 1 ? one : many), x, y + 0.95, LANDMARK_LABEL);
     }
+    for (const site of room.find(FIND_MY_CONSTRUCTION_SITES)) {
+        const names = LANDMARKS[site.structureType];
+        if (names)
+            drawScaffold(v, site, names[0]);
+    }
     if (room.controller)
         v.text("Throne", room.controller.pos.x, room.controller.pos.y + 0.95, LANDMARK_LABEL);
+}
+const SCAFFOLD = { color: "#8b6b43", width: 0.06, opacity: 0.8 };
+const SCAFFOLD_STONE = "#9a9080";
+function drawScaffold(v, site, name) {
+    const { x, y } = site.pos;
+    const share = site.progress / site.progressTotal;
+    v.rect(x - 0.45, y + 0.45 - 0.9 * share, 0.9, 0.9 * share, { fill: SCAFFOLD_STONE, opacity: 0.5 });
+    v.rect(x - 0.45, y - 0.45, 0.9, 0.9, { fill: "transparent", stroke: SCAFFOLD.color, strokeWidth: SCAFFOLD.width, opacity: SCAFFOLD.opacity });
+    v.line(x - 0.45, y - 0.45, x + 0.45, y + 0.45, SCAFFOLD);
+    v.line(x + 0.45, y - 0.45, x - 0.45, y + 0.45, SCAFFOLD);
+    v.text(`${titleCase(name)} rising · ${Math.floor(share * 100)}%`, x, y + 0.95, LANDMARK_LABEL);
 }
 const SEASON_TINT = {
     spring: "#88cc77",
