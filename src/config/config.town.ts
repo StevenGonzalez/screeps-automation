@@ -45,6 +45,9 @@ export const TOWN = {
 // A day in the town lasts a thousand ticks. Dawn and day send the militia to the
 // watch posts, dusk and night put them to bed.
 export const TOWN_DAY_LENGTH = 1000;
+// The hour on the HUD clock when dawn breaks, so day runs from 07:00 to
+// 19:00 and night from 21:00 to dawn.
+export const TOWN_DAWN_HOUR = 5;
 export const TOWN_PHASES: ReadonlyArray<{ name: TownPhase; start: number }> = [
   { name: "dawn", start: 0 },
   { name: "day", start: 100 },

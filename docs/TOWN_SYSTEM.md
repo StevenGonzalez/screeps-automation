@@ -178,12 +178,12 @@ Under attack it runs for a cottage bed like any other civilian.
 
 A town day lasts 1000 ticks:
 
-| Ticks | Phase |
-|---|---|
-| 0-99 | Dawn |
-| 100-599 | Day |
-| 600-699 | Dusk |
-| 700-999 | Night |
+| Ticks | Phase | HUD hours |
+|---|---|---|
+| 0-99 | Dawn | 05:00-07:00 |
+| 100-599 | Day | 07:00-19:00 |
+| 600-699 | Dusk | 19:00-21:00 |
+| 700-999 | Night | 21:00-05:00 |
 
 Seven days make a season, and the year turns through spring, summer, autumn
 and winter, the same in every castle. The Royal Chronicle notes each new
@@ -220,7 +220,7 @@ number and the tick alone, so every castle sees the same sky.
 
 The room HUD shows the part of the day, the hour, the season, any feast, any
 storm and, after dark, the moon and any northern lights: `Day, 10:00 in
-autumn, Harvest Home  8 townsfolk`, or `Night, 20:00 in winter, full moon,
+autumn, Harvest Home  8 townsfolk`, or `Night, 23:00 in winter, full moon,
 northern lights  8 townsfolk`.
 
 ---

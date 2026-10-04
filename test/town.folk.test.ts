@@ -118,10 +118,11 @@ beforeEach(() => {
 
 describe("townClock", () => {
   it("runs dawn, day, dusk and night through each thousand-tick day", () => {
-    expect(townClock(0)).toEqual({ phase: "dawn", hour: 0 });
-    expect(townClock(1250).phase).toBe("day");
+    expect(townClock(0)).toEqual({ phase: "dawn", hour: 5 });
+    expect(townClock(1100)).toEqual({ phase: "day", hour: 7 });
     expect(townClock(2650).phase).toBe("dusk");
-    expect(townClock(3999)).toEqual({ phase: "night", hour: 23 });
+    expect(townClock(3700)).toEqual({ phase: "night", hour: 21 });
+    expect(townClock(3999)).toEqual({ phase: "night", hour: 4 });
   });
 });
 

@@ -1,5 +1,6 @@
 import {
   TOWN_AURORA_ODDS,
+  TOWN_DAWN_HOUR,
   TOWN_DAY_LENGTH,
   TOWN_DAYS_PER_SEASON,
   TOWN_DRAGON_FLIGHT,
@@ -29,7 +30,7 @@ export function townClock(time: number): TownClock {
   for (const p of TOWN_PHASES) if (t >= p.start) phase = p.name;
   return {
     phase,
-    hour: Math.floor((t * 24) / TOWN_DAY_LENGTH),
+    hour: (Math.floor((t * 24) / TOWN_DAY_LENGTH) + TOWN_DAWN_HOUR) % 24,
   };
 }
 
