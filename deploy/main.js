@@ -858,6 +858,9 @@ const TOWN_MOON_NAMES = [
 ];
 const TOWN_HOWL_EVERY = 50;
 const TOWN_HOWL_TICKS = 6;
+const TOWN_AURORA_ODDS = 3;
+const TOWN_STAR_ODDS = 15;
+const TOWN_STAR_TICKS = 8;
 const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
 const TOWN_FEASTS = {
     spring: "Sowing Feast",
@@ -944,6 +947,20 @@ function townHowl(time) {
     const n = Math.floor(night / TOWN_HOWL_EVERY);
     const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
     return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
+}
+function townAurora(time) {
+    if (townSeason(time) !== "winter" || townClock(time).phase !== "night")
+        return false;
+    return dayHash(Math.floor(time / TOWN_DAY_LENGTH), 0x165667b1) % TOWN_AURORA_ODDS === 0;
+}
+function townFallingStar(time) {
+    if (townClock(time).phase !== "night" || townStorm(time))
+        return undefined;
+    const window = Math.floor(time / TOWN_STAR_TICKS);
+    const h = dayHash(window, 0x2c1b3c6d);
+    if (h % TOWN_STAR_ODDS !== 0)
+        return undefined;
+    return { t: time % TOWN_STAR_TICKS, x: 12 + ((h >>> 8) % 34), y: 2 + ((h >>> 16) % 10) };
 }
 function isNightfall(phase) {
     return phase === "dusk" || phase === "night";
@@ -18501,7 +18518,8 @@ function drawRoomHUD(room) {
         const feast = townFeast(Game.time);
         const storm = townStorm(Game.time) ? ", storm" : "";
         const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
-        const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}`;
+        const aurora = townAurora(Game.time) ? ", northern lights" : "";
+        const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}${aurora}`;
         v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
         y += lineH;
     }
@@ -18689,8 +18707,11 @@ function drawTown(room) {
         v.rect(-0.5, -0.5, 50, 50, { fill: "#0a1030", opacity: shade });
     const label = { font: 0.45, color: "#ffe9a8", stroke: "#000000", strokeWidth: 0.06 };
     const lit = clock.phase === "dusk" || clock.phase === "night";
+    if (townAurora(Game.time))
+        drawAurora(v, Game.time);
     if (lit && !townStorm(Game.time))
         drawMoon(v, townMoon(Game.time));
+    drawFallingStar(v, Game.time);
     drawHowl(v, Game.time);
     for (const c of town.cottages) {
         const l = cottageLayout(c);
@@ -18754,6 +18775,33 @@ function drawMoon(v, age) {
     v.poly(lit, { fill: MOON_LIGHT, stroke: "transparent", opacity: 0.85 });
     if (age === TOWN_MOON_DAYS / 2)
         v.circle(MOON_X, MOON_Y, { radius: MOON_RADIUS * 2.2, fill: MOON_LIGHT, opacity: 0.07 });
+}
+const AURORA_COLOURS = ["#3ee08f", "#5fd3c6", "#9b6bff"];
+const AURORA_FADE = 60;
+function drawAurora(v, time) {
+    const t = time % TOWN_DAY_LENGTH;
+    const fade = Math.max(0, Math.min(1, (t - NIGHT_START) / AURORA_FADE, (TOWN_DAY_LENGTH - t) / AURORA_FADE));
+    AURORA_COLOURS.forEach((colour, i) => {
+        const top = [];
+        const bottom = [];
+        for (let x = -0.5; x <= 49.5; x += 2.5) {
+            const wave = Math.sin(x * 0.18 + time * 0.05 + i * 2.1) + 0.5 * Math.sin(x * 0.07 - time * 0.03 + i);
+            const y = 3 + i * 2.2 + 1.4 * wave;
+            top.push([x, y]);
+            bottom.push([x, y + 1.6 + 0.9 * Math.sin(x * 0.11 + time * 0.04 + i * 1.3)]);
+        }
+        v.poly([...top, ...bottom.reverse()], { fill: colour, stroke: "transparent", opacity: 0.16 * fade });
+    });
+}
+function drawFallingStar(v, time) {
+    const star = townFallingStar(time);
+    if (!star)
+        return;
+    const x = star.x - 1.6 * star.t;
+    const y = star.y + 0.9 * star.t;
+    const fade = 1 - star.t / TOWN_STAR_TICKS;
+    v.line(x + 2.4, y - 1.35, x, y, { color: "#fffbe8", width: 0.06, opacity: 0.7 * fade });
+    v.circle(x, y, { radius: 0.1, fill: "#ffffff", opacity: 0.9 * fade });
 }
 const HOWL_STYLE = { font: "italic 0.5 serif", color: "#a8b8d8", stroke: "#000000", strokeWidth: 0.05 };
 function drawHowl(v, time) {
