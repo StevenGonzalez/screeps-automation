@@ -32,9 +32,13 @@ Cottages and townsfolk also need 10k energy in storage. That is the upgraders'
 floor: they spend everything above it, so storage settles near 10k and a higher
 gate would never open.
 
-Townsfolk spawn last, after every economic and military role, and never while
-the room is blockaded. The economy-critical line that stops war and expansion
-(25k in storage) does not apply to them: the town's own 10k gate does. Below
+Townsfolk spawn after the castle's own workers and defenders (miners,
+porters, smiths, masons, enchanters) but ahead of expeditions, scouts and
+vendors, and never while the room is blockaded. Each takes only a few ticks of
+spawn time, and a castle sending pilgrims keeps its spawn busy for hundreds of
+ticks at a stretch, so a town at the end of the line was never raised. The
+economy-critical line that stops war and expansion (25k in storage) does not
+apply to them: the town's own 10k gate does. Below
 the storage gate the town keeps what it has and stops growing.
 
 All thresholds live in `src/config/config.town.ts`.

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRepairer, need } = vi.hoisted(() => {
+const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnRepairer, need } = vi.hoisted(() => {
   const spawnTownsfolk = vi.fn(() => true);
   const spawnRemoteMiner = vi.fn(() => true);
+  const spawnRemoteHauler = vi.fn(() => true);
   const spawnRepairer = vi.fn(() => true);
   // Roles a test says are short; every other role is already satisfied.
-  const need = { remoteMiner: false, repairer: false };
+  const need = { remoteMiner: false, remoteHauler: false, repairer: false };
   // A module whose every export says no, apart from the ones given: every role
   // ahead of the town in the spawn order is already satisfied.
   const stub = (given: Record<string, unknown>) =>
@@ -16,7 +17,7 @@ const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRepairer, need } = vi.hoist
         return k in t ? t[k] : () => false;
       },
     });
-  return { stub, spawnTownsfolk, spawnRemoteMiner, spawnRepairer, need };
+  return { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnRepairer, need };
 });
 
 vi.mock("../src/orchestrators/orchestrator.spawning.economy", () =>
@@ -29,7 +30,12 @@ vi.mock("../src/orchestrators/orchestrator.spawning.economy", () =>
   })
 );
 vi.mock("../src/orchestrators/orchestrator.spawning.remote", () =>
-  stub({ shouldSpawnRemoteMiner: () => need.remoteMiner, spawnRemoteMiner })
+  stub({
+    shouldSpawnRemoteMiner: () => need.remoteMiner,
+    spawnRemoteMiner,
+    shouldSpawnRemoteHauler: () => need.remoteHauler,
+    spawnRemoteHauler,
+  })
 );
 vi.mock("../src/orchestrators/orchestrator.spawning.military", () => stub({}));
 vi.mock("../src/orchestrators/orchestrator.spawning.ops", () => stub({}));
@@ -57,7 +63,9 @@ function castle(storedEnergy: number): Room {
 beforeEach(() => {
   vi.clearAllMocks();
   need.remoteMiner = false;
+  need.remoteHauler = false;
   need.repairer = false;
+  spawnTownsfolk.mockImplementation(() => true);
 });
 
 describe("spawn order", () => {
@@ -77,5 +85,18 @@ describe("spawn order", () => {
     processRoomSpawning(castle(15_000), {} as StructureSpawn);
 
     expect(spawnTownsfolk).toHaveBeenCalledTimes(1);
+  });
+
+  it("raises townsfolk ahead of the vendors, and the vendors once the town has all it wants", () => {
+    // A busy spawn never reached a town at the end of the line.
+    need.remoteHauler = true;
+    processRoomSpawning(castle(30_000), {} as StructureSpawn);
+    expect(spawnTownsfolk).toHaveBeenCalledTimes(1);
+    expect(spawnRemoteHauler).not.toHaveBeenCalled();
+
+    spawnTownsfolk.mockImplementation(() => false);
+    (globalThis as Record<string, unknown>).Memory = {};
+    processRoomSpawning(castle(30_000), {} as StructureSpawn);
+    expect(spawnRemoteHauler).toHaveBeenCalledTimes(1);
   });
 });

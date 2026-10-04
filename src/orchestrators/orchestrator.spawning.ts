@@ -199,6 +199,14 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
 
+  // The town comes after the castle's own workers but ahead of expeditions,
+  // scouts and vendors. Townsfolk take a few ticks of spawn time each, and a
+  // castle sending pilgrims keeps its spawn so busy that a town at the end of
+  // the line was never raised at all. The town keeps its own, lower storage
+  // gate: storage settles near the upgraders' 10k floor, so the
+  // economy-critical line below would never let it grow.
+  if (!blockaded && spawnTownsfolk(room, spawn)) return;
+
   if (!blockaded && shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
 
   const economyCritical = isEconomyCritical(room);
@@ -221,8 +229,4 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!blockaded && spawnSkCreeps(room, spawn)) return;
   if (shouldSpawnApothecary(room) && spawnApothecary(room, spawn)) return;
   if (shouldSpawnMineralMiner(room) && spawnMineralMiner(room, spawn)) return;
-  // Townsfolk last of all: the town lives on what the castle does not need.
-  // The town keeps its own, lower storage gate: storage settles near the
-  // upgraders' 10k floor, so the economy-critical line would never let it grow.
-  if (!blockaded && spawnTownsfolk(room, spawn)) return;
 }
