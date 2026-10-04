@@ -859,6 +859,7 @@ const TOWN_MOON_NAMES = [
 ];
 const TOWN_HOWL_EVERY = 50;
 const TOWN_HOWL_TICKS = 6;
+const TOWN_WISPS = 5;
 const TOWN_AURORA_ODDS = 3;
 const TOWN_STAR_ODDS = 15;
 const TOWN_STAR_TICKS = 8;
@@ -948,6 +949,21 @@ function townHowl(time) {
     const n = Math.floor(night / TOWN_HOWL_EVERY);
     const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
     return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
+}
+function townWisps(time) {
+    return townMoon(time) === 0 && townClock(time).phase === "night";
+}
+function wispTiles(time, isMarsh) {
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    const tiles = [];
+    for (let i = 0; i < 64 && tiles.length < TOWN_WISPS; i++) {
+        const h = dayHash(day * 64 + i, 0x5bd1e995);
+        const x = 3 + (h % 44);
+        const y = 3 + ((h >>> 8) % 44);
+        if (isMarsh(x, y))
+            tiles.push([x, y]);
+    }
+    return tiles;
 }
 function townAurora(time) {
     if (townSeason(time) !== "winter" || townClock(time).phase !== "night")
@@ -7220,6 +7236,7 @@ function heraldRooms() {
     }
     heraldDragon(castles);
     heraldWolves(castles);
+    heraldWisps(castles);
 }
 function castleList(castles) {
     const names = castles.map((r) => castleName(r.name));
@@ -7361,6 +7378,19 @@ function heraldWolves(castles) {
         roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
     if (howl.n === 0)
         chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
+}
+const WISP_CRIES = ["Wisps!", "Don't follow!", "Spirits..."];
+const WISP_TIDINGS = [
+    "Under the dark moon, will-o'-the-wisps drifted over the marshes. None who followed them came back.",
+    "Pale lights wandered the bogs all night beneath the new moon.",
+    "The marsh-lights were out under the dark moon. The old folk barred their doors.",
+];
+function heraldWisps(castles) {
+    if (castles.length === 0 || Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townWisps(Game.time))
+        return;
+    castles.forEach((room, i) => (roomCries[room.name] = WISP_CRIES[i % WISP_CRIES.length]));
+    const moon = Math.floor(Game.time / (TOWN_DAY_LENGTH * TOWN_MOON_DAYS));
+    chronicle(WISP_TIDINGS[moon % WISP_TIDINGS.length]);
 }
 const AURORA_TIDINGS = [
     "The northern lights burned green over the realm.",
@@ -9352,6 +9382,11 @@ function runSettler(creep) {
         }
         return;
     }
+    const ctrl = creep.room.controller;
+    if ((ctrl === null || ctrl === void 0 ? void 0 : ctrl.my) && ctrl.level === 1) {
+        tendThrone(creep, ctrl);
+        return;
+    }
     const site = creep.pos.findClosestByRange(FIND_CONSTRUCTION_SITES);
     if (site) {
         if (creep.build(site) === ERR_NOT_IN_RANGE) {
@@ -9366,30 +9401,31 @@ function runSettler(creep) {
         }
         return;
     }
-    const ctrl = creep.room.controller;
-    if (ctrl) {
-        const exp = Memory.expansion;
-        const shouldSign = exp &&
-            exp.roomName === creep.room.name &&
-            exp.phase === "bootstrapping" &&
-            creep.room.memory.lastSigned === undefined;
-        if (shouldSign) {
-            try {
-                const sig = pickSignature(creep.room.name);
-                const sres = creep.signController(ctrl, sig);
-                if (sres === OK) {
-                    if (!Memory.rooms)
-                        Memory.rooms = {};
-                    if (!Memory.rooms[creep.room.name])
-                        Memory.rooms[creep.room.name] = {};
-                    Memory.rooms[creep.room.name].lastSigned = Game.time;
-                }
+    if (ctrl)
+        tendThrone(creep, ctrl);
+}
+function tendThrone(creep, ctrl) {
+    const exp = Memory.expansion;
+    const shouldSign = exp &&
+        exp.roomName === creep.room.name &&
+        exp.phase === "bootstrapping" &&
+        creep.room.memory.lastSigned === undefined;
+    if (shouldSign) {
+        try {
+            const sig = pickSignature(creep.room.name);
+            const sres = creep.signController(ctrl, sig);
+            if (sres === OK) {
+                if (!Memory.rooms)
+                    Memory.rooms = {};
+                if (!Memory.rooms[creep.room.name])
+                    Memory.rooms[creep.room.name] = {};
+                Memory.rooms[creep.room.name].lastSigned = Game.time;
             }
-            catch (e) { }
         }
-        if (creep.upgradeController(ctrl) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(ctrl, { reusePath: 20 });
-        }
+        catch (e) { }
+    }
+    if (creep.upgradeController(ctrl) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(ctrl, { reusePath: 20 });
     }
 }
 const MIN_STOCK = 100;
@@ -18819,6 +18855,7 @@ function drawSky(room) {
         drawMoon(v, townMoon(Game.time));
     drawFallingStar(v, Game.time);
     drawHowl(v, Game.time);
+    drawWisps(room, Game.time);
     if (!lit)
         return;
     for (const s of room.find(FIND_MY_STRUCTURES)) {
@@ -18984,6 +19021,29 @@ function drawHowl(v, time) {
     v.circle(howl.x - 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
     v.circle(howl.x + 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
     v.text("Awoo-oo!", howl.x, howl.y - 0.7 - howl.t * 0.15, { ...HOWL_STYLE, opacity: 0.4 + 0.6 * fade });
+}
+let wispNight = -1;
+let wispsByRoom = {};
+function drawWisps(room, time) {
+    if (!townWisps(time))
+        return;
+    const night = Math.floor(time / TOWN_DAY_LENGTH);
+    if (wispNight !== night) {
+        wispNight = night;
+        wispsByRoom = {};
+    }
+    let tiles = wispsByRoom[room.name];
+    if (!tiles) {
+        const terrain = room.getTerrain();
+        tiles = wispsByRoom[room.name] = wispTiles(time, (x, y) => terrain.get(x, y) === TERRAIN_MASK_SWAMP);
+    }
+    tiles.forEach(([x, y], i) => {
+        const wx = x + 0.7 * Math.sin(time * 0.09 + i * 1.7);
+        const wy = y + 0.5 * Math.cos(time * 0.07 + i * 2.3);
+        const flicker = 0.5 + 0.5 * Math.sin(time * 0.8 + i * 3.1);
+        room.visual.circle(wx, wy, { radius: 0.5, fill: "#6fe8c8", opacity: 0.08 + 0.05 * flicker });
+        room.visual.circle(wx, wy, { radius: 0.1 + 0.04 * flicker, fill: "#d8fff4", opacity: 0.5 + 0.4 * flicker });
+    });
 }
 const DRAGON = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.92 };
 const DRAGON_SHADOW = { fill: "#000000", opacity: 0.2 };
