@@ -8219,6 +8219,7 @@ function heraldRooms() {
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
             heraldRise(room);
             heraldVisitors(room);
+            heraldWorks(room);
         }
         heraldKills(room);
     }
@@ -8281,6 +8282,41 @@ function heraldVisitors(room) {
             ? `A war party of ${who} came in arms to the walls of ${castleName(room.name)}.`
             : `Spies of ${who} crept about ${castleName(room.name)}.`;
         tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
+    }
+}
+const WORKS_CHECK_PERIOD = 100;
+const WORKS_WINDOW = 1500;
+const WORKS = {
+    spawn: ["a barracks", "barracks"],
+    tower: ["a watchtower", "watchtowers"],
+    storage: ["a treasury", "treasuries"],
+    terminal: ["a trading post", "trading posts"],
+    lab: ["an alchemy lab", "alchemy labs"],
+    factory: ["a workshop", "workshops"],
+    extractor: ["a jeweler's mine", "jeweler's mines"],
+    observer: ["a seeing-stone", "seeing-stones"],
+    powerSpawn: ["a power shrine", "power shrines"],
+    nuker: ["a doom engine", "doom engines"],
+};
+function heraldWorks(room) {
+    var _a, _b, _c;
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const counts = {};
+    for (const s of room.find(FIND_MY_STRUCTURES)) {
+        if (WORKS[s.structureType])
+            counts[s.structureType] = ((_a = counts[s.structureType]) !== null && _a !== void 0 ? _a : 0) + 1;
+    }
+    const known = room.memory.heraldWorks;
+    room.memory.heraldWorks = counts;
+    if (!known)
+        return;
+    for (const type of Object.keys(WORKS)) {
+        const gained = ((_b = counts[type]) !== null && _b !== void 0 ? _b : 0) - ((_c = known[type]) !== null && _c !== void 0 ? _c : 0);
+        if (gained <= 0)
+            continue;
+        const [one, many] = WORKS[type];
+        tally(`works:${room.name}:${type}`, gained, (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? one : `${n} ${many}`}.`, WORKS_WINDOW);
     }
 }
 function heraldRise(room) {
