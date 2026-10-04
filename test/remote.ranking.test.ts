@@ -16,6 +16,7 @@ import {
   shouldSpawnRemoteHauler,
   spawnRemoteHauler,
 } from "../src/orchestrators/orchestrator.spawning.remote";
+import { shouldSpawnRemoteDefender } from "../src/orchestrators/orchestrator.spawning.military";
 import {
   ROLE_KNIGHT,
   ROLE_REMOTE_HAULER,
@@ -498,5 +499,17 @@ describe("remote miner body", () => {
       const body = buildRemoteMinerBody(gold);
       expect(body.reduce((n, p) => n + cost[p], 0)).toBeLessThanOrEqual(gold);
     }
+  });
+});
+
+describe("remote knights", () => {
+  const raided = () => ({ ...remote("W4N5", [30]), invaderUntil: clock + 500 });
+
+  it("rides out for a raided remote the castle works", () => {
+    expect(shouldSpawnRemoteDefender(home({ remotes: [raided()] }))).toBe(true);
+  });
+
+  it("is not raised by a castle below level 3, which sends no vendors out", () => {
+    expect(shouldSpawnRemoteDefender(home({ remotes: [raided()], rcl: 2 }))).toBe(false);
   });
 });

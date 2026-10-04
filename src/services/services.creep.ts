@@ -1,6 +1,6 @@
 import { keepSignature, remoteSignature } from "../config/signatures";
 import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
-import { chronicle, lordName, tally, wildsName } from "./services.chronicle";
+import { lordName, tally, wildsName } from "./services.chronicle";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -169,6 +169,11 @@ const REMOTE_PLAYER_WINDOW_MAX = 20000;
 // chronicle while they come back within this many ticks.
 const RIVAL_CHRONICLE_WINDOW = 5000;
 
+// A remote next to two castles is in both their lists, and each list is marked
+// and cleared on its own, in the same tick. The chronicle tells of a raid, and
+// of its end, once: the Crow Glen's raid was told twice in one tick.
+const RAID_CHRONICLE_WINDOW = 10;
+
 function assignedRemoteEntry(creep: Creep): RemoteRoomData | undefined {
   const home = creep.memory.homeRoom;
   const target = creep.memory.targetRoom;
@@ -194,11 +199,10 @@ export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
   entry.invaderUntil = Game.time + REMOTE_INVADER_WINDOW;
   entry.invaderStrength = invaderStrength(room);
   if (!fresh) return;
-  chronicle(
-    findInvaderCore(room)
-      ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
-      : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`
-  );
+  const text = findInvaderCore(room)
+    ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
+    : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`;
+  tally(`raid:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
 }
 
 // Damage taken in the assigned remote. Only a player there earns a strike;
@@ -266,10 +270,15 @@ export function isAssignedRemoteInvaded(creep: Creep): boolean {
 
 export function clearRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
-  if (!entry) return;
+  if (entry) clearRemoteInvaderEntry(entry);
+}
+
+// `entry` is a remote seen clear of invaders this tick.
+export function clearRemoteInvaderEntry(entry: RemoteRoomData): void {
   if (entry.invaderUntil !== undefined) {
     if (entry.invaderUntil > Game.time) {
-      chronicle(`The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`);
+      const text = `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
+      tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
     }
     entry.invaderUntil = undefined;
   }

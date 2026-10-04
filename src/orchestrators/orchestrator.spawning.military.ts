@@ -589,6 +589,10 @@ function remoteKnightsNeeded(room: Room, remote: RemoteRoomData): number {
 }
 
 function findRemoteInvaderTarget(room: Room): string | null {
+  // Below level 3 a castle sends no vendors out, so no remote earns it a
+  // thing. Thornbarrow, at level 2, raised a knight it could ill afford for a
+  // remote only Embercrag mines.
+  if ((room.controller?.level ?? 0) < 3) return null;
   const remotes = room.memory.remoteRooms;
   if (!remotes) return null;
   // Only remotes this home works are worth a knight; the rest earn nothing.

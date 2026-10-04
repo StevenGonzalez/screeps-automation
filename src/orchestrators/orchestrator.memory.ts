@@ -9,6 +9,7 @@ import {
   markRemotePlayerHostile,
   clearRemotePlayerHostile,
   markRemoteInvader,
+  clearRemoteInvaderEntry,
 } from "../services/services.creep";
 
 declare global {
@@ -356,7 +357,8 @@ export function refreshVisibleRemoteRooms(room: Room) {
       continue;
     }
     // An Invader core reserves the room and blocks harvesting; a knight has to clear it.
-    if (findInvaderCore(visible)) markRemoteInvader(remote, visible);
+    const core = findInvaderCore(visible);
+    if (core) markRemoteInvader(remote, visible);
     const hostiles = remoteThreats(visible);
     const player = hostiles.find(isPlayerCreep);
     if (player) {
@@ -377,6 +379,11 @@ export function refreshVisibleRemoteRooms(room: Room) {
       continue;
     }
     clearRemotePlayerHostile(remote);
+    // Seen clear, the room is safe for every castle that lists it. Only a
+    // castle whose own creeps walked in used to clear its mark: the other's
+    // stood for the whole window, and Thornbarrow sent a knight to the Crow
+    // Glen after Embercrag's had already cleared it.
+    if (!core) clearRemoteInvaderEntry(remote);
 
     const sources = visible.find(FIND_SOURCES);
     for (const source of sources) {

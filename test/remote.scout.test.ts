@@ -187,6 +187,52 @@ describe("refreshVisibleRemoteRooms", () => {
     expect(entry.hostile).toBe(false);
   });
 
+  describe("with a remote two castles list", () => {
+    const OTHER = "W0N2";
+    let tick = 9000;
+
+    // Both castles look at the remote in the same tick, as the memory loop does.
+    function refreshBoth(hostiles: unknown[], marked: boolean) {
+      (g.Game as any).time = ++tick;
+      const entries = [HOME, OTHER].map(
+        () =>
+          ({
+            roomName: "W1N2",
+            sources: [],
+            lastSeen: 0,
+            hostile: false,
+            invaderUntil: marked ? tick + 1000 : undefined,
+          }) as RemoteRoomData
+      );
+      (g.Game as any).rooms = {
+        W1N2: {
+          name: "W1N2",
+          controller: { reservation: { username: ME } },
+          find: (type: number) => (type === g.FIND_HOSTILE_CREEPS ? hostiles : []),
+        },
+      };
+      for (const [i, name] of [HOME, OTHER].entries()) {
+        const room = { name, controller: { owner: { username: ME } }, memory: { remoteRooms: [entries[i]] } };
+        refreshVisibleRemoteRooms(room as unknown as Room);
+      }
+      const lines = (((g.Memory as any).chronicle ?? []) as { text: string }[]).map((e) => e.text);
+      return { entries, lines };
+    }
+
+    it("tells of a raid once", () => {
+      const invader = { owner: { username: "Invader" }, body: body("attack", "move") };
+      const { entries, lines } = refreshBoth([invader], false);
+      expect(entries.every((e) => (e.invaderUntil ?? 0) > tick)).toBe(true);
+      expect(lines.filter((t) => /^Raiders fell upon/.test(t))).toHaveLength(1);
+    });
+
+    it("lifts both castles' marks once the remote is seen clear, and tells of it once", () => {
+      const { entries, lines } = refreshBoth([], true);
+      expect(entries.map((e) => e.invaderUntil)).toEqual([undefined, undefined]);
+      expect(lines.filter((t) => / is safe again\./.test(t))).toHaveLength(1);
+    });
+  });
+
   describe("with another player's creeps in the remote", () => {
     let tick = 6000;
 
