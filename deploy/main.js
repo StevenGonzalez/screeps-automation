@@ -12786,7 +12786,8 @@ const EMA_ALPHA = 0.1;
 const stats = {};
 function recordCpu(name, used) {
     var _a;
-    const s = (_a = stats[name]) !== null && _a !== void 0 ? _a : (stats[name] = { ema: used, last: used, peak: used });
+    const s = (_a = stats[name]) !== null && _a !== void 0 ? _a : (stats[name] = { ema: used, last: used, peak: used, runs: 0, since: Game.time });
+    s.runs++;
     s.last = used;
     s.ema = s.ema * (1 - EMA_ALPHA) + used * EMA_ALPHA;
     if (used > s.peak)
@@ -12798,7 +12799,8 @@ function getCpuStats() {
 const roleStats = {};
 function recordRole(role, used) {
     var _a;
-    const s = (_a = roleStats[role]) !== null && _a !== void 0 ? _a : (roleStats[role] = { ema: used, last: used, peak: used });
+    const s = (_a = roleStats[role]) !== null && _a !== void 0 ? _a : (roleStats[role] = { ema: used, last: used, peak: used, runs: 0, since: Game.time });
+    s.runs++;
     s.last = used;
     s.ema = s.ema * (1 - EMA_ALPHA) + used * EMA_ALPHA;
     if (used > s.peak)
@@ -20546,7 +20548,8 @@ function setupConsole() {
             const total = rows.reduce((sum, [, s]) => sum + s.ema, 0);
             console.log(`[CPU] limit=${Game.cpu.limit} bucket=${Game.cpu.bucket} avgTotal=${total.toFixed(2)}`);
             for (const [name, s] of rows) {
-                console.log(`  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`);
+                const ran = Math.round((100 * s.runs) / Math.max(1, Game.time - s.since + 1));
+                console.log(`  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)} ran=${ran}%`);
             }
             const roles = Object.entries(getRoleStats()).sort((a, b) => b[1].ema - a[1].ema);
             if (roles.length === 0)
@@ -20721,7 +20724,6 @@ function setupConsole() {
 }
 
 const CPU_WARN_THRESHOLD = 0.85;
-const CPU_SKIP_STRUCTURES_THRESHOLD = 0.70;
 const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
 const CPU_SKIP_HEAVY_THRESHOLD = 0.80;
 const CPU_BUCKET_CRITICAL = 2000;
@@ -20745,10 +20747,8 @@ function loop() {
     runSafe("score", () => loop$f());
     runSafe("creeps", () => loop$e());
     runSafe("spawning", () => loop$7());
-    const cpuAfterCore = Game.cpu.getUsed() - tickStart;
-    if (!bucketCritical && cpuFraction(cpuAfterCore) < CPU_SKIP_STRUCTURES_THRESHOLD) {
+    if (!bucketCritical)
         runSafe("structures", () => loop$6());
-    }
     if (!heavyShed())
         runSafe("labs", () => loop$d());
     if (!heavyShed())
