@@ -225,6 +225,24 @@ describe("herald", () => {
     );
   });
 
+  it("tells of a warlord's band broken once its fifth raider falls", () => {
+    (g.Memory as Memory).warbands = { [ROOM]: { name: "Grask One-Eye", at: tick, raids: 3, slain: 3 } };
+    const knight = new FakeCreep("Dragon Knight Edric", { name: ROOM });
+    setup(roomWith(killed("raider1", ["knight"])), { knight });
+    heraldRooms();
+    expect((g.Memory as Memory).warbands![ROOM].broken).toBeUndefined();
+
+    setup(roomWith(killed("raider2", ["knight"])), { knight });
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle!.map((l) => l.text)).toEqual([
+      "2 of Grask One-Eye's raiders fell in the Gallows Forest.",
+      "Dragon Knight Edric broke Grask One-Eye's band in the Gallows Forest. The warlord is heard of no more.",
+    ]);
+    expect((g.Memory as Memory).warbands![ROOM].broken).toBe(true);
+    expect((g.Memory as Memory).gossip?.line).toBe("routed!");
+  });
+
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
     const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
     const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900, memory: {} };

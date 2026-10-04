@@ -20,6 +20,7 @@ import { runKnight } from "../src/roles/role.knight";
 import { clearRemoteInvaderEntry, markRemoteInvader } from "../src/services/services.creep";
 import { cryFor } from "../src/services/services.herald";
 import { ROLE_KNIGHT } from "../src/config/config.roles";
+import { warbandLoss } from "../src/services/services.chronicle";
 
 const HOME = "W1N1";
 const REMOTE = "W2N1";
@@ -139,12 +140,35 @@ describe("raids in the chronicle", () => {
     ]);
   });
 
-  it("draws a new warlord for the next raid", () => {
+  it("brings the same warlord back raid after raid", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
-    const first = (g.Memory as Memory).warbands?.[REMOTE]?.name;
     clearRemoteInvaderEntry(remoteEntry);
     g.Game = { time: 6000 };
     markRemoteInvader(remoteEntry, remoteRoom);
-    expect((g.Memory as Memory).warbands?.[REMOTE]?.name).not.toBe(first);
+    clearRemoteInvaderEntry(remoteEntry);
+    g.Game = { time: 9000 };
+    markRemoteInvader(remoteEntry, remoteRoom);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text).filter((t) => !t.includes(" is rid of "))).toEqual([
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
+      "Brakka the Gaunt comes back to the Shadow March for a second raid on the vendors.",
+      "Brakka the Gaunt comes back to the Shadow March for a third raid on the vendors.",
+    ]);
+  });
+
+  it("draws a new warlord once the last one's band is broken", () => {
+    markRemoteInvader(remoteEntry, remoteRoom);
+    const first = (g.Memory as Memory).warbands![REMOTE];
+    for (let i = 0; i < 5; i++) warbandLoss(REMOTE);
+    expect(first.broken).toBe(true);
+    clearRemoteInvaderEntry(remoteEntry);
+    g.Game = { time: 6000 };
+    markRemoteInvader(remoteEntry, remoteRoom);
+
+    const next = (g.Memory as Memory).warbands![REMOTE];
+    expect(next.name).not.toBe(first.name);
+    expect((g.Memory as Memory).chronicle!.at(-1)!.text).toBe(
+      `Raiders under ${next.name} fell upon the vendors in the Shadow March.`
+    );
   });
 });

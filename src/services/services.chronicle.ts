@@ -183,29 +183,56 @@ const WARLORD_EPITHETS = [
   "the Unwashed", "Ironjaw", "the Hungry", "Crow-Feeder", "Half-Ear", "the Fen-Rat",
 ];
 
-// Raiders live this long, so no raid outlasts it.
-const WARBAND_LIFE = 1500;
-
 // A remote next to two castles is marked raided once for each, and the second
 // may see the raiders a few ticks after the first. The chronicle writes the
 // raid once for both, so both take the warlord it names.
 const WARBAND_MUSTER = 10;
 
-/** Names the warlord leading a raid that begins in `roomName` this tick. */
-export function raiseWarband(roomName: string): string {
-  const known = Memory.warbands?.[roomName];
-  if (known && Game.time - known.at <= WARBAND_MUSTER) return known.name;
+// A warlord comes back to raid the same remote until this many of its raiders
+// have fallen. Then its band is broken, and the next raid there comes under a
+// new warlord.
+const WARBAND_BREAK = 5;
+
+/**
+ * The warlord leading a raid that begins in `roomName` this tick, and how many
+ * raids on it that warlord has now led.
+ */
+export function raiseWarband(roomName: string): { name: string; raids: number } {
+  const bands = (Memory.warbands ??= {});
+  const known = bands[roomName];
+  if (known && Game.time - known.at <= WARBAND_MUSTER) return { name: known.name, raids: known.raids ?? 1 };
+  if (known && !known.broken) {
+    known.raids = (known.raids ?? 1) + 1;
+    known.at = Game.time;
+    return { name: known.name, raids: known.raids };
+  }
   const h = mixedHash(`${roomName}:${Game.time}`);
   const name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
-  (Memory.warbands ??= {})[roomName] = { name, at: Game.time };
-  return name;
+  bands[roomName] = { name, at: Game.time, raids: 1 };
+  return { name, raids: 1 };
 }
 
-/** The warlord whose raid on `roomName` may still be going on, if one is. */
+/** The warlord who raids `roomName`, if one has. */
 export function warbandIn(roomName: string): string | undefined {
+  return Memory.warbands?.[roomName]?.name;
+}
+
+/** Counts a raider of the band in `roomName` slain. True when that breaks the band. */
+export function warbandLoss(roomName: string): boolean {
   const band = Memory.warbands?.[roomName];
-  if (!band) return undefined;
-  if (Game.time - band.at <= WARBAND_LIFE) return band.name;
-  delete Memory.warbands![roomName];
-  return undefined;
+  if (!band || band.broken) return false;
+  band.slain = (band.slain ?? 0) + 1;
+  if (band.slain < WARBAND_BREAK) return false;
+  band.broken = true;
+  return true;
+}
+
+const ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+
+/** "second", "third", ..., then "11th", "21st", "22nd". */
+export function ordinal(n: number): string {
+  if (ORDINALS[n - 1]) return ORDINALS[n - 1];
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${suffix}`;
 }

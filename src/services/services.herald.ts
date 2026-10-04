@@ -3,7 +3,7 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { Annals, annal, castleName, chronicle, formatK, lordName, tally, warbandIn, wildsName } from "./services.chronicle";
+import { Annals, annal, castleName, chronicle, formatK, lordName, tally, warbandIn, warbandLoss, wildsName } from "./services.chronicle";
 import { isArmedHostile, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, TownSeason } from "../config/config.town";
@@ -580,6 +580,12 @@ function chronicleKill(room: Room, slayer?: string): void {
     (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`,
     BATTLE_WINDOW
   );
+  if (band && warbandLoss(room.name)) {
+    spreadWord("routed!");
+    chronicle(
+      `${slayer ? `${slayer} broke ${band}'s band` : `${band}'s band is broken`} ${whereIn(room.name)}. The warlord is heard of no more.`
+    );
+  }
 }
 
 // Each of our creeps as it stood at the start of last tick.

@@ -1,6 +1,6 @@
 import { keepSignature, remoteSignature } from "../config/signatures";
 import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
-import { lordName, raiseWarband, tally, wildsName, warbandIn } from "./services.chronicle";
+import { lordName, ordinal, raiseWarband, tally, wildsName, warbandIn } from "./services.chronicle";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -201,8 +201,16 @@ export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
   if (!fresh) return;
   const text = findInvaderCore(room)
     ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
-    : `Raiders under ${raiseWarband(entry.roomName)} fell upon the vendors in the ${wildsName(entry.roomName)}.`;
+    : raidLine(entry.roomName);
   tally(`raid:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
+}
+
+function raidLine(roomName: string): string {
+  const band = raiseWarband(roomName);
+  const wilds = wildsName(roomName);
+  return band.raids === 1
+    ? `Raiders under ${band.name} fell upon the vendors in the ${wilds}.`
+    : `${band.name} comes back to the ${wilds} for a ${ordinal(band.raids)} raid on the vendors.`;
 }
 
 // Damage taken in the assigned remote. Only a player there earns a strike;
