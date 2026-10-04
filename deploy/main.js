@@ -3222,6 +3222,11 @@ function clearRemotePlayerHostile(entry) {
     entry.hostileStrikes = strikes;
     entry.hostileUntil = strikes > 0 ? since : undefined;
 }
+function isAssignedRemoteInvaded(creep) {
+    var _a;
+    const until = (_a = assignedRemoteEntry(creep)) === null || _a === void 0 ? void 0 : _a.invaderUntil;
+    return until !== undefined && until > Game.time;
+}
 function clearRemoteInvader(creep) {
     const entry = assignedRemoteEntry(creep);
     if (entry && entry.invaderUntil !== undefined)
@@ -8591,8 +8596,14 @@ function runKnight(creep) {
         }
         delete creep.memory.defensiveTarget;
     }
-    if (creep.memory.targetRoom && creep.room.name !== creep.memory.targetRoom) {
-        creep.moveTo(new RoomPosition(25, 25, creep.memory.targetRoom), { reusePath: 20 });
+    const target = creep.memory.targetRoom;
+    const home = creep.memory.homeRoom;
+    if (target && creep.room.name !== target && isAssignedRemoteInvaded(creep)) {
+        creep.moveTo(new RoomPosition(25, 25, target), { reusePath: 20 });
+        return;
+    }
+    if (target && home && creep.room.name !== home && creep.room.name !== target) {
+        creep.moveTo(new RoomPosition(25, 25, home), { reusePath: 20 });
         return;
     }
     if (creep.hits < creep.hitsMax * RETREAT_THRESHOLD) {
@@ -8622,8 +8633,13 @@ function runKnight(creep) {
         }
         return;
     }
-    if (creep.memory.targetRoom === creep.room.name)
+    if (target && target === creep.room.name) {
         clearRemoteInvader(creep);
+        if (home && home !== target) {
+            creep.moveTo(new RoomPosition(25, 25, home), { reusePath: 20 });
+            return;
+        }
+    }
     if (parkIdle(creep, "watch"))
         return;
     const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
@@ -14047,20 +14063,20 @@ function getContainerDistances(room, spawn, containers) {
     containerDistanceCache[key] = { distances, cachedAt: Game.time };
     return distances;
 }
-function shouldSpawnHauler(room) {
+const HAULER_CARRY_MARGIN = 1.5;
+const MIN_HAULER_CARRY = 4;
+function getHaulerPlan(room) {
     var _a, _b, _c;
     const containerIds = (_a = room.memory.containerIds) !== null && _a !== void 0 ? _a : [];
     if (containerIds.length === 0)
-        return false;
+        return null;
     const containers = containerIds
         .map((id) => Game.getObjectById(id))
         .filter(Boolean);
     if (containers.length === 0)
-        return false;
-    const haulers = getCreepsByRole(ROLE_HAULER).filter((c) => { var _a; return !c.spawning && ((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) === room.name; });
+        return null;
     const minerContainerIds = new Set((_b = room.memory.minerContainerIds) !== null && _b !== void 0 ? _b : []);
     const minerContainers = containers.filter((c) => minerContainerIds.has(c.id));
-    const minerContainerCount = minerContainers.length;
     const spawn = getSpawnForRoom(room);
     let requiredCarry = 0;
     if (spawn) {
@@ -14072,30 +14088,40 @@ function shouldSpawnHauler(room) {
                 (HAULER_SPAWN.SOURCE_OUTPUT * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
         }
     }
+    const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
     const idealRepeats = Math.min(Math.floor(MAX_BODY_PART_COUNT / 3), Math.floor(bodyBudget(room, "capacity") / 150));
     const carryPerIdealHauler = Math.max(1, idealRepeats * 2);
-    const targetFromThroughput = Math.ceil(requiredCarry / carryPerIdealHauler);
-    const desired = Math.min(HAULER_SPAWN.MAX_HAULERS, Math.max(minerContainerCount, targetFromThroughput));
-    const lead = spawnLeadTicks(idealRepeats * 3, getMinerTravelTicks(room));
+    const count = Math.min(HAULER_SPAWN.MAX_HAULERS, Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler)));
+    const share = count > 0 ? 2 * Math.ceil(neededCarry / count / 2) : 0;
+    const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
+    return { count, carryEach };
+}
+function shouldSpawnHauler(room) {
+    const plan = getHaulerPlan(room);
+    if (!plan)
+        return false;
+    const haulers = getCreepsByRole(ROLE_HAULER).filter((c) => { var _a; return !c.spawning && ((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) === room.name; });
+    const lead = spawnLeadTicks((plan.carryEach / 2) * 3, getMinerTravelTicks(room));
     const haulerCount = haulers.filter((h) => !isRetiring(h, lead)).length +
         getRoomSpawningCount(room, ROLE_HAULER);
-    if (haulerCount < desired)
+    if (haulerCount < plan.count)
         return true;
     if (haulers.length >= HAULER_SPAWN.MAX_HAULERS)
         return false;
-    const carryPerIdealHaulerUnits = carryPerIdealHauler * HAULER_SPAWN.CARRY_CAPACITY;
-    const totalCurrentCarry = haulers.reduce((sum, h) => sum + h.body.filter((p) => p.type === CARRY).length * HAULER_SPAWN.CARRY_CAPACITY, 0);
-    return totalCurrentCarry < desired * carryPerIdealHaulerUnits * 0.5;
+    const totalCurrentCarry = haulers.reduce((sum, h) => sum + h.body.filter((p) => p.type === CARRY).length, 0);
+    return totalCurrentCarry < plan.count * plan.carryEach * 0.5;
 }
 function spawnHauler(room, spawn) {
     const existingHaulers = getCreepsByRole(ROLE_HAULER).filter((c) => { var _a; return ((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) === room.name; });
-    const allowedEnergy = bodyBudget(room, existingHaulers.length === 0 ? "available" : "capacity");
+    const plan = getHaulerPlan(room);
+    const planEnergy = plan ? (plan.carryEach / 2) * calculateBodyPartCost(BODY_PATTERNS[ROLE_HAULER]) : Infinity;
+    const allowedEnergy = Math.min(planEnergy, bodyBudget(room, existingHaulers.length === 0 ? "available" : "capacity"));
     const body = buildScaledBody(ROLE_HAULER, allowedEnergy);
     const bodyCost = calculateBodyPartCost(body);
     if (room.energyAvailable < bodyCost) {
         if (existingHaulers.length > 0 && holdSpawnFor(room, ROLE_HAULER))
             return true;
-        const affordableEnergy = bodyBudget(room, "available");
+        const affordableEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
         const affordableBody = buildScaledBody(ROLE_HAULER, affordableEnergy);
         if (room.energyAvailable < calculateBodyPartCost(affordableBody)) {
             return false;
@@ -14389,8 +14415,9 @@ function shouldSpawnApothecary(room) {
         return false;
     return countByRoleInRoom(ROLE_APOTHECARY, room) < 1;
 }
+const APOTHECARY_MAX_SETS = 5;
 function spawnApothecary(room, spawn) {
-    const allowedEnergy = bodyBudget(room, "available");
+    const allowedEnergy = Math.min(APOTHECARY_MAX_SETS * calculateBodyPartCost(BODY_PATTERNS[ROLE_APOTHECARY]), bodyBudget(room, "available"));
     const body = buildScaledBody(ROLE_APOTHECARY, allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
