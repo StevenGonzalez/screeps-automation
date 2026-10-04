@@ -28,6 +28,8 @@ import {
   TOWN_MOON_DAYS,
   TOWN_MOON_NAMES,
   TOWN_STAR_TICKS,
+  SCENERY_BEGIN,
+  SCENERY_END,
   TownSeason,
 } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
@@ -51,15 +53,26 @@ export function loop() {
     if (!room.controller?.my) continue;
     drawRoomHUD(room);
     drawChronicle(room);
-    drawSeason(room);
+    scenery(room, () => drawSeason(room));
     drawLandmarks(room);
-    drawSky(room);
-    drawCamp(room);
-    drawTown(room);
-    drawDragon(room);
+    scenery(room, () => {
+      drawSky(room);
+      drawCamp(room);
+      drawTown(room);
+      drawDragon(room);
+    });
     drawBlueprint(room);
   }
   drawRealmMap();
+}
+
+const MARKER: TextStyle = { opacity: 0 };
+
+/** Draws `draw` between the invisible markers that tell the realm viewer it is scenery. */
+export function scenery(room: Room, draw: () => void): void {
+  room.visual.text(SCENERY_BEGIN, 0, 0, MARKER);
+  draw();
+  room.visual.text(SCENERY_END, 0, 0, MARKER);
 }
 
 const GRAVE_STONE: LineStyle = { color: "#c8c0b0", width: 0.08, opacity: 0.8 };

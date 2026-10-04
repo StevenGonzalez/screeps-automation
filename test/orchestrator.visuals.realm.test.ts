@@ -26,8 +26,10 @@ import {
   drawSky,
   drawMist,
   drawTown,
+  scenery,
 } from "../src/orchestrators/orchestrator.visuals";
 import { townDragon, townStorm } from "../src/services/services.town";
+import { SCENERY_BEGIN, SCENERY_END } from "../src/config/config.town";
 import { armsColours } from "../src/services/services.heraldry";
 import {
   ROLE_FILLER,
@@ -591,5 +593,29 @@ describe("mist", () => {
     expect(mist(calm * 1000 + 300)).toEqual([]);
     expect(mist(stormy * 1000 + 50)).toEqual([]);
     expect(mist(calm * 1000 + 50, () => false, "W2N2")).toEqual([]);
+  });
+});
+
+describe("scenery", () => {
+  it("brackets the sky and the town's dressing in invisible markers for the realm viewer", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const room = {
+      name: HOME,
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly"), line: record("line") },
+      memory: {},
+      find: () => [{ structureType: "tower", pos: { x: 20, y: 20 } }],
+    } as unknown as Room;
+    g.Game = { time: 3_800, creeps: {}, rooms: {} };
+
+    scenery(room, () => drawSky(room));
+
+    const first = drawn[0];
+    const last = drawn[drawn.length - 1];
+    expect(first.kind).toBe("text");
+    expect(first.args[0]).toBe(SCENERY_BEGIN);
+    expect(last.kind).toBe("text");
+    expect(last.args[0]).toBe(SCENERY_END);
+    for (const marker of [first, last]) expect((marker.args[3] as TextStyle).opacity).toBe(0);
+    expect(drawn.length).toBeGreaterThan(2);
   });
 });

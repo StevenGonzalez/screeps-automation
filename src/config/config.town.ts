@@ -114,3 +114,10 @@ export const COTTAGE_FAMILIES = [
   "Thatcher",
   "Wren",
 ];
+
+// The realm viewer draws the sky, the weather and the town's dressing for
+// itself. The bot brackets the shapes it draws for them between a pair of
+// invisible texts, so the viewer can leave those shapes out and keep the
+// bot's labels.
+export const SCENERY_BEGIN = "scenery:begin";
+export const SCENERY_END = "scenery:end";
