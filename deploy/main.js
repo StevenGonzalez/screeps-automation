@@ -11082,6 +11082,12 @@ const PHASE_CALLS = {
     dusk: ["lamps lit", "home time", "supper!"],
     night: ["zzz", "g'night", "bar the door"],
 };
+const SEASON_CALLS = {
+    spring: ["blossoms!", "lambs out", "mud again"],
+    summer: ["hot one", "hay to cut", "long day"],
+    autumn: ["harvest!", "cider time", "leaves down"],
+    winter: ["brr!", "snow again", "stoke fires"],
+};
 function runTownsfolk(creep) {
     if (creep.memory.job === "lookout")
         runLookout(creep);
@@ -11146,7 +11152,7 @@ function callThePhase(creep) {
     const phase = TOWN_PHASES.find((p) => p.start === t);
     if (!phase)
         return;
-    const lines = PHASE_CALLS[phase.name];
+    const lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
