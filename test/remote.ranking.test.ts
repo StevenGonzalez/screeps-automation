@@ -528,23 +528,25 @@ describe("remote miner body", () => {
 });
 
 describe("relieving a peddler", () => {
-  // A ten-part peddler on a 96-tile path: 30 ticks to raise its relief and 96
-  // to walk it out, by the path alone.
+  // A ten-part peddler on a 96-tile path: 30 ticks to raise its relief, 96 to
+  // walk it out by the path alone, and 78 to wait behind the castle's longest
+  // body, 26 parts at 1300 capacity.
   const peddler = (ticksToLive: number, walk?: number) =>
     Object.assign(creep(ROLE_REMOTE_MINER, 10, { targetRoom: "W4N5", remoteSourceId: "W4N5-s0" as Id<Source>, walk }), {
       ticksToLive,
     });
 
   it("orders the relief by the path while the peddler has yet to reach its post", () => {
-    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(150)] }))).toBe(false);
+    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(205)] }))).toBe(false);
   });
 
   it("orders it as far ahead as the peddler's own walk out took", () => {
-    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(150, 170)] }))).toBe(true);
+    // 30 + 170 + 78 = 278.
+    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(250, 170)] }))).toBe(true);
   });
 
-  it("orders it by the path when the walk out went unmeasured", () => {
-    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(126, 0)] }))).toBe(true);
+  it("orders it by the path, a body's spawning early, when the walk out went unmeasured", () => {
+    expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(204, 0)] }))).toBe(true);
   });
 });
 

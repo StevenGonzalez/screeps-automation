@@ -51,18 +51,21 @@ function isRemoteCreepRetiring(home: Room, creep: Creep): boolean {
   const target = creep.memory.targetRoom;
   if (!target) return false;
   const travel = creep.memory.walk || remoteTravelTicks(home, target, creep.memory.remoteSourceId);
-  const queue = creep.memory.role === ROLE_RESERVER ? reservationQueueMargin(home, target) : 0;
-  return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + queue);
+  return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + reliefQueueMargin(home, creep, target));
 }
 
-// An envoy of one CLAIM holds its reservation where it stands and puts no ticks
-// by, so the reservation lapses as soon as the envoy dies and the remote's
-// sources fall to half. Its relief is ordered a body's spawning sooner, less
-// whatever the reservation has banked, so it can wait behind the body in the
-// barracks and still arrive in time. The Misty Thicket's reservation lapsed,
-// and its source fell to fifteen hundred, while the relief waited behind a
-// merchant and then a porter.
-function reservationQueueMargin(home: Room, roomName: string): number {
+// A relief that comes due while the barracks spawns something else waits for
+// that body to finish, so it is ordered the longest body's spawning sooner, as
+// a home miner's is. A peddler's source lies idle while it waits. An envoy of
+// one CLAIM holds its reservation where it stands and puts no ticks by, so the
+// reservation lapses as soon as the envoy dies and the remote's sources fall
+// to half; an envoy with ticks banked needs that much less margin. The Misty
+// Thicket's reservation lapsed, and its source fell to fifteen hundred, while
+// the relief waited behind a merchant and then a porter. A merchant late to
+// its road only leaves gold waiting in the container, so it gets no margin.
+function reliefQueueMargin(home: Room, creep: Creep, roomName: string): number {
+  if (creep.memory.role === ROLE_REMOTE_MINER) return longestSpawnTicks(home);
+  if (creep.memory.role !== ROLE_RESERVER) return 0;
   const res = Game.rooms[roomName]?.controller?.reservation;
   const banked = res && res.username === home.controller?.owner?.username ? res.ticksToEnd : 0;
   return Math.max(0, longestSpawnTicks(home) - banked);
