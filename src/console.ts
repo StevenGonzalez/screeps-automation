@@ -15,7 +15,7 @@ import {
   getDrainOps,
 } from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity, isBlockaded } from "./services/services.combat";
-import { getCpuStats, getRoleStats } from "./services/services.profiler";
+import { cpuPerTick, getCpuStats, getRoleStats } from "./services/services.profiler";
 import { castleName, chronicleDate, recentChronicle } from "./services/services.chronicle";
 import {
   launchSkOp,
@@ -861,7 +861,7 @@ export function setupConsole() {
     cpu: () => {
       const stats = getCpuStats();
       const rows = Object.entries(stats).sort((a, b) => b[1].ema - a[1].ema);
-      const total = rows.reduce((sum, [, s]) => sum + s.ema, 0);
+      const total = rows.reduce((sum, [, s]) => sum + cpuPerTick(s), 0);
       console.log(
         `[CPU] limit=${Game.cpu.limit} bucket=${Game.cpu.bucket} avgTotal=${total.toFixed(2)}`
       );

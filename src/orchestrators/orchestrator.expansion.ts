@@ -1,6 +1,6 @@
 import { getThreatInfo, isSourceKeeperRoom } from "../services/services.combat";
 import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles";
-import { getCpuStats } from "../services/services.profiler";
+import { cpuPerTick, getCpuStats } from "../services/services.profiler";
 import { KEEP_FUND_FLOOR } from "../services/services.treasury";
 import { castleName, chronicle, wildsName } from "../services/services.chronicle";
 import { blazon } from "../services/services.heraldry";
@@ -594,7 +594,7 @@ function cpuShareUsed(): number {
   const stats = getCpuStats();
   if (!stats.creeps) return 1;
   let total = 0;
-  for (const name in stats) total += stats[name].ema;
+  for (const name in stats) total += cpuPerTick(stats[name]);
   return total / Game.cpu.limit;
 }
 

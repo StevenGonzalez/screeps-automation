@@ -24,6 +24,14 @@ export function getCpuStats(): Record<string, CpuStat> {
   return stats;
 }
 
+// A system's average over every tick, a tick it did not run counting as none.
+// Its own average is over the ticks it ran: summed as they were, the labs and
+// the visuals, which run one tick in ten or fewer, counted some 4 CPU a tick
+// the realm never spent.
+export function cpuPerTick(s: CpuStat): number {
+  return s.ema * Math.min(1, s.runs / Math.max(1, Game.time - s.since + 1));
+}
+
 const roleStats: Record<string, CpuStat> = {};
 
 export function recordRole(role: string, used: number): void {
