@@ -839,6 +839,8 @@ const TOWN_PHASES = [
     { name: "dusk", start: 600 },
     { name: "night", start: 700 },
 ];
+const TOWN_DAYS_PER_SEASON = 7;
+const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
 const COTTAGE_FAMILIES = [
     "Aldermere",
     "Blackwood",
@@ -860,6 +862,10 @@ function townClock(time) {
         phase,
         hour: Math.floor((t * 24) / TOWN_DAY_LENGTH),
     };
+}
+function townSeason(time) {
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    return TOWN_SEASONS[Math.floor(day / TOWN_DAYS_PER_SEASON) % TOWN_SEASONS.length];
 }
 function isNightfall(phase) {
     return phase === "dusk" || phase === "night";
@@ -8217,6 +8223,7 @@ function heraldRooms() {
     heraldFallen();
     heraldRenown();
     heraldTrade();
+    heraldSeason();
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
@@ -8234,6 +8241,20 @@ function heraldRenown() {
     if (known === undefined || level <= known)
         return;
     chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
+}
+const SEASON_TIDINGS = {
+    spring: "Spring comes to the realm. The snow melts from the castle walls.",
+    summer: "Summer comes to the realm. The days run long on the vendors' roads.",
+    autumn: "Autumn comes to the realm. Leaves blow across the wilds.",
+    winter: "Winter comes to the realm. Snow settles on the battlements.",
+};
+function heraldSeason() {
+    const season = townSeason(Game.time);
+    const known = Memory.heraldSeason;
+    Memory.heraldSeason = season;
+    if (known === undefined || known === season)
+        return;
+    chronicle(SEASON_TIDINGS[season]);
 }
 const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
@@ -17746,6 +17767,7 @@ function loop$1() {
             continue;
         drawRoomHUD(room);
         drawChronicle(room);
+        drawSeason(room);
         drawTown(room);
         drawBlueprint(room);
     }
@@ -17926,7 +17948,8 @@ function drawRoomHUD(room) {
         const folk = (_b = counts[ROLE_TOWNSFOLK]) !== null && _b !== void 0 ? _b : 0;
         const hh = String(clock.hour).padStart(2, "0");
         const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
-        v.text(`${icon} ${phase}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+        const season = townSeason(Game.time);
+        v.text(`${icon} ${phase}, ${hh}:00 in ${season}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
         y += lineH;
     }
     const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) : null;
@@ -17966,6 +17989,49 @@ function drawChronicle(room) {
 }
 const PHASE_ICON = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
 const NIGHT_SHADE = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
+const SEASON_TINT = {
+    spring: "#88cc77",
+    autumn: "#cc7a33",
+    winter: "#aaccff",
+};
+const SEASON_DRIFT = {
+    spring: { count: 10, colours: ["#ffb7c5", "#ffd9e0"], radius: 0.1, fall: 0.12 },
+    autumn: { count: 14, colours: ["#d9822b", "#a0522d", "#c9a227"], radius: 0.13, fall: 0.18 },
+    winter: { count: 30, colours: ["#ffffff"], radius: 0.08, fall: 0.25 },
+};
+const FIREFLIES = 8;
+function drawSeason(room, time = Game.time) {
+    var _a;
+    const v = room.visual;
+    const season = townSeason(time);
+    const tint = SEASON_TINT[season];
+    if (tint)
+        v.rect(-0.5, -0.5, 50, 50, { fill: tint, opacity: 0.05 });
+    const drift = SEASON_DRIFT[season];
+    if (drift) {
+        for (let i = 0; i < drift.count; i++) {
+            const sway = Math.sin((time + i * 13) / 8) * 0.8;
+            const x = ((((i * 0.7548776662) % 1) * 50 + sway) % 50 + 50) % 50;
+            const y = ((time * drift.fall + ((i * 0.5698402910) % 1) * 52) % 52) - 1;
+            v.circle(x, y, { radius: drift.radius, fill: drift.colours[i % drift.colours.length], opacity: 0.7 });
+        }
+        return;
+    }
+    const fountain = (_a = room.memory.town) === null || _a === void 0 ? void 0 : _a.fountain;
+    if (!fountain || !isNightfall(townClock(time).phase))
+        return;
+    const { x, y } = parseTile(fountain);
+    for (let i = 0; i < FIREFLIES; i++) {
+        const angle = (i * Math.PI * 2) / FIREFLIES + time / 40;
+        const reach = 2 + (i % 3) + Math.sin((time + i * 7) / 11) * 0.6;
+        const glow = Math.max(0, Math.sin((time + i * 5) / 4));
+        v.circle(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach, {
+            radius: 0.1,
+            fill: "#d4ff66",
+            opacity: 0.2 + 0.7 * glow,
+        });
+    }
+}
 function drawTown(room) {
     const town = room.memory.town;
     if (!town)
