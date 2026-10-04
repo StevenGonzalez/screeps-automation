@@ -77,6 +77,575 @@ const ENERGY_DEPOSIT_PRIORITY = {
     ],
 };
 
+const TOWN = {
+    watchRcl: 4,
+    cottagesByRcl: { 5: 1, 6: 1, 7: 2, 8: 3 },
+    militiaByRcl: { 5: 2, 6: 4, 7: 8, 8: 12 },
+    storageGate: 10000,
+    lookoutRcl: 8,
+    maxLookouts: 4,
+    perimeterBuiltRatio: 0.9,
+    barrierHits: 20000,
+    retryInterval: 1500,
+    postsPerSide: 3,
+    squareFallbackTiles: 6,
+    squareMinRange: 3,
+    squareMaxRange: 10,
+    cottageControllerClearance: 4,
+    cottageResourceClearance: 3,
+    cottageMaxRange: 14,
+};
+const TOWN_DAY_LENGTH = 1000;
+const TOWN_DAWN_HOUR = 5;
+const TOWN_PHASES = [
+    { name: "dawn", start: 0 },
+    { name: "day", start: 100 },
+    { name: "dusk", start: 600 },
+    { name: "night", start: 700 },
+];
+const TOWN_DAYS_PER_SEASON = 7;
+const TOWN_STORM_ODDS = 5;
+const TOWN_DRAGON_ODDS = 6;
+const TOWN_DRAGON_FLIGHT = 48;
+const TOWN_MOON_DAYS = 8;
+const TOWN_MOON_NAMES = [
+    "new moon",
+    "waxing crescent",
+    "first quarter",
+    "waxing gibbous",
+    "full moon",
+    "waning gibbous",
+    "last quarter",
+    "waning crescent",
+];
+const TOWN_HOWL_EVERY = 50;
+const TOWN_HOWL_TICKS = 6;
+const TOWN_WISPS = 5;
+const TOWN_MIST_BANKS = 8;
+const TOWN_AURORA_ODDS = 3;
+const TOWN_STAR_ODDS = 15;
+const TOWN_STAR_TICKS = 8;
+const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
+const TOWN_FEASTS = {
+    spring: "Sowing Feast",
+    summer: "Midsummer Fair",
+    autumn: "Harvest Home",
+    winter: "Yule Feast",
+};
+const COTTAGE_FAMILIES = [
+    "Aldermere",
+    "Blackwood",
+    "Cotter",
+    "Fairweather",
+    "Holloway",
+    "Marsh",
+    "Thatcher",
+    "Wren",
+];
+const SCENERY_BEGIN = "scenery:begin";
+const SCENERY_END = "scenery:end";
+
+function townClock(time) {
+    const t = time % TOWN_DAY_LENGTH;
+    let phase = TOWN_PHASES[0].name;
+    for (const p of TOWN_PHASES)
+        if (t >= p.start)
+            phase = p.name;
+    return {
+        phase,
+        hour: (Math.floor((t * 24) / TOWN_DAY_LENGTH) + TOWN_DAWN_HOUR) % 24,
+    };
+}
+function townSeason(time) {
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    return TOWN_SEASONS[Math.floor(day / TOWN_DAYS_PER_SEASON) % TOWN_SEASONS.length];
+}
+function townFeast(time) {
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    return day % TOWN_DAYS_PER_SEASON === 0 ? TOWN_FEASTS[townSeason(time)] : undefined;
+}
+function townStorm(time) {
+    if (townFeast(time) || townSeason(time) === "winter")
+        return false;
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    return (Math.imul(day, 2654435761) >>> 16) % TOWN_STORM_ODDS === 0;
+}
+function dayHash(day, salt) {
+    let h = Math.imul(day ^ salt, 0x9e3779b1);
+    h ^= h >>> 15;
+    h = Math.imul(h, 0x85ebca6b);
+    h ^= h >>> 13;
+    return h >>> 0;
+}
+function townDragon(time) {
+    if (townFeast(time))
+        return undefined;
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    const h = dayHash(day, 0x5bd1e995);
+    if (h % TOWN_DRAGON_ODDS !== 0)
+        return undefined;
+    const start = 100 + ((h >>> 8) % 550);
+    const t = (time % TOWN_DAY_LENGTH) - start;
+    if (t < 0 || t >= TOWN_DRAGON_FLIGHT)
+        return undefined;
+    const dir = (h >>> 4) & 1 ? 1 : -1;
+    const fromY = 8 + ((h >>> 18) % 34);
+    const toY = 8 + ((h >>> 24) % 34);
+    const f = t / (TOWN_DRAGON_FLIGHT - 1);
+    return { t, x: dir === 1 ? -6 + 62 * f : 55 - 62 * f, y: fromY + (toY - fromY) * f, dir, day };
+}
+function townMoon(time) {
+    return Math.floor(time / TOWN_DAY_LENGTH) % TOWN_MOON_DAYS;
+}
+function isFullMoon(time) {
+    return townMoon(time) === TOWN_MOON_DAYS / 2;
+}
+const NIGHT_START = TOWN_PHASES.find((p) => p.name === "night").start;
+const DAY_START = TOWN_PHASES.find((p) => p.name === "day").start;
+function townHowl(time) {
+    if (!isFullMoon(time))
+        return undefined;
+    const night = (time % TOWN_DAY_LENGTH) - NIGHT_START;
+    if (night < 0)
+        return undefined;
+    const t = night % TOWN_HOWL_EVERY;
+    if (t >= TOWN_HOWL_TICKS)
+        return undefined;
+    const n = Math.floor(night / TOWN_HOWL_EVERY);
+    const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
+    return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
+}
+function townWisps(time) {
+    return townMoon(time) === 0 && townClock(time).phase === "night";
+}
+function wispTiles(time, isMarsh) {
+    return marshTiles(time, isMarsh, TOWN_WISPS, 0x5bd1e995);
+}
+function townMist(time) {
+    return townClock(time).phase === "dawn" && !townStorm(time);
+}
+function mistTiles(time, isMarsh) {
+    return marshTiles(time, isMarsh, TOWN_MIST_BANKS, 0x165667b1);
+}
+function marshTiles(time, isMarsh, count, salt) {
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    const tiles = [];
+    for (let i = 0; i < 64 && tiles.length < count; i++) {
+        const h = dayHash(day * 64 + i, salt);
+        const x = 3 + (h % 44);
+        const y = 3 + ((h >>> 8) % 44);
+        if (isMarsh(x, y))
+            tiles.push([x, y]);
+    }
+    return tiles;
+}
+function townAurora(time) {
+    if (townSeason(time) !== "winter" || townClock(time).phase !== "night")
+        return false;
+    return dayHash(Math.floor(time / TOWN_DAY_LENGTH), 0x165667b1) % TOWN_AURORA_ODDS === 0;
+}
+function townFallingStar(time) {
+    if (townClock(time).phase !== "night" || townStorm(time))
+        return undefined;
+    const window = Math.floor(time / TOWN_STAR_TICKS);
+    const h = dayHash(window, 0x2c1b3c6d);
+    if (h % TOWN_STAR_ODDS !== 0)
+        return undefined;
+    return { t: time % TOWN_STAR_TICKS, x: 12 + ((h >>> 8) % 34), y: 2 + ((h >>> 16) % 10) };
+}
+function isNightfall(phase) {
+    return phase === "dusk" || phase === "night";
+}
+function cottageLayout(c) {
+    const walls = [];
+    const beds = [];
+    for (let dy = 0; dy < 5; dy++) {
+        for (let dx = 0; dx < 5; dx++) {
+            const k = `${c.x + dx},${c.y + dy}`;
+            const edge = dx === 0 || dy === 0 || dx === 4 || dy === 4;
+            if (!edge)
+                beds.push(k);
+            else if (k !== c.door)
+                walls.push(k);
+        }
+    }
+    return { walls, door: c.door, beds };
+}
+function bedTiles(town) {
+    if (!town)
+        return [];
+    const beds = [];
+    for (const c of town.cottages)
+        beds.push(...cottageLayout(c).beds);
+    return beds;
+}
+function townBarrierTiles(town) {
+    const out = new Set();
+    if (!town)
+        return out;
+    for (const c of town.cottages) {
+        const l = cottageLayout(c);
+        for (const k of l.walls)
+            out.add(k);
+        out.add(l.door);
+        for (const k of l.beds)
+            out.add(k);
+    }
+    for (const k of town.posts)
+        out.add(k);
+    if (town.fountain)
+        out.add(town.fountain);
+    return out;
+}
+function townFootprint(town) {
+    const out = townBarrierTiles(town);
+    if (town)
+        for (const k of town.square)
+            out.add(k);
+    return out;
+}
+function parseTile(k) {
+    const comma = k.indexOf(",");
+    return { x: +k.slice(0, comma), y: +k.slice(comma + 1) };
+}
+let spotTick = -1;
+const spotClaims = new Map();
+function claimKey(roomName, tile) {
+    return `${roomName}:${tile}`;
+}
+function spotIndex() {
+    if (spotTick !== Game.time) {
+        spotTick = Game.time;
+        spotClaims.clear();
+        for (const name in Game.creeps) {
+            const c = Game.creeps[name];
+            const spot = c.memory.townSpot;
+            if (!spot || c.memory.townSpotTick === undefined)
+                continue;
+            if (Game.time - c.memory.townSpotTick > 1)
+                continue;
+            spotClaims.set(claimKey(c.room.name, spot), name);
+        }
+    }
+    return spotClaims;
+}
+function spotHolder(roomName, tile) {
+    return spotIndex().get(claimKey(roomName, tile));
+}
+function claimSpot(creep, candidates, near = creep.pos) {
+    const index = spotIndex();
+    const room = creep.room.name;
+    const held = creep.memory.townSpot;
+    const holdsFresh = held !== undefined &&
+        creep.memory.townSpotTick !== undefined &&
+        Game.time - creep.memory.townSpotTick <= 1 &&
+        index.get(claimKey(room, held)) === creep.name;
+    if (holdsFresh && candidates.includes(held)) {
+        creep.memory.townSpotTick = Game.time;
+        return held;
+    }
+    let best = null;
+    let bestRange = Infinity;
+    let bestWalk = Infinity;
+    for (const k of candidates) {
+        const holder = index.get(claimKey(room, k));
+        if (holder && holder !== creep.name)
+            continue;
+        const { x, y } = parseTile(k);
+        const r = Math.max(Math.abs(x - near.x), Math.abs(y - near.y));
+        const walk = Math.max(Math.abs(x - creep.pos.x), Math.abs(y - creep.pos.y));
+        if (r < bestRange || (r === bestRange && walk < bestWalk)) {
+            bestRange = r;
+            bestWalk = walk;
+            best = k;
+        }
+    }
+    if (held && index.get(claimKey(room, held)) === creep.name)
+        index.delete(claimKey(room, held));
+    if (!best) {
+        delete creep.memory.townSpot;
+        delete creep.memory.townSpotTick;
+        return null;
+    }
+    creep.memory.townSpot = best;
+    creep.memory.townSpotTick = Game.time;
+    index.set(claimKey(room, best), creep.name);
+    return best;
+}
+function goToSpot(creep, tile) {
+    const { x, y } = parseTile(tile);
+    if (creep.pos.x === x && creep.pos.y === y)
+        return;
+    creep.moveTo(new RoomPosition(x, y, creep.room.name), { reusePath: 20 });
+}
+function parkOn(creep, candidates, near) {
+    if (candidates.length === 0)
+        return false;
+    const spot = claimSpot(creep, candidates, near);
+    if (!spot)
+        return false;
+    goToSpot(creep, spot);
+    return true;
+}
+function parkIdle(creep, kind) {
+    var _a;
+    const town = creep.room.memory.town;
+    if (!town || !((_a = creep.room.controller) === null || _a === void 0 ? void 0 : _a.my))
+        return false;
+    if (kind === "watch" && parkOn(creep, town.posts))
+        return true;
+    return parkOn(creep, town.square);
+}
+
+const MAX_ENTRIES = 40;
+function entries() {
+    if (!Memory.chronicle)
+        Memory.chronicle = [];
+    if (Memory.chronicleEpoch === undefined)
+        Memory.chronicleEpoch = Game.time;
+    return Memory.chronicle;
+}
+function write(entry) {
+    const log = entries();
+    log.push(entry);
+    if (log.length > MAX_ENTRIES)
+        log.splice(0, log.length - MAX_ENTRIES);
+    console.log(`[Chronicle] ${entry.text}`);
+}
+function chronicle(text) {
+    write({ t: Game.time, text });
+}
+function annal(key, n) {
+    if (!Memory.annals)
+        Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
+    const count = Memory.annals[key];
+    if (count !== undefined)
+        Memory.annals[key] = count + n;
+}
+function formatK(n) {
+    if (n >= 1000000)
+        return `${(n / 1000000).toFixed(1)}M`;
+    if (n >= 1000)
+        return `${(n / 1000).toFixed(1)}K`;
+    return String(n);
+}
+function tally(key, n, describe, window) {
+    var _a, _b;
+    const log = entries();
+    for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (e.key !== key)
+            continue;
+        if (Game.time - ((_a = e.last) !== null && _a !== void 0 ? _a : e.t) > window)
+            break;
+        e.n = ((_b = e.n) !== null && _b !== void 0 ? _b : 0) + n;
+        e.last = Game.time;
+        e.text = describe(e.n);
+        return false;
+    }
+    write({ t: Game.time, text: describe(n), key, n, last: Game.time });
+    return true;
+}
+function chronicleDate(t) {
+    var _a;
+    const epoch = (_a = Memory.chronicleEpoch) !== null && _a !== void 0 ? _a : t;
+    const day = Math.floor((t - epoch) / TOWN_DAY_LENGTH) + 1;
+    return `Day ${day}, ${townClock(t).phase}`;
+}
+function recentChronicle(count) {
+    var _a;
+    return ((_a = Memory.chronicle) !== null && _a !== void 0 ? _a : []).slice(-count);
+}
+const NAME_HEADS = [
+    "Ash", "Raven", "Black", "Iron", "Grim", "Thorn", "Wolf", "Dusk",
+    "Storm", "Ember", "Hollow", "Frost", "Gloam", "Bramble", "Crow", "Stone",
+];
+const NAME_TAILS = ["hold", "moor", "keep", "spire", "fell", "gate", "watch", "barrow", "crag", "mere", "ford", "reach"];
+function nameHash(roomName) {
+    let h = 2166136261;
+    for (let i = 0; i < roomName.length; i++) {
+        h ^= roomName.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h;
+}
+function castleName(roomName) {
+    var _a, _b;
+    const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
+    if (given)
+        return given;
+    const h = nameHash(roomName);
+    const head = NAME_HEADS[h % NAME_HEADS.length];
+    let t = (h >>> 8) % NAME_TAILS.length;
+    if (NAME_TAILS[t][0] === head[head.length - 1])
+        t = (t + 1) % NAME_TAILS.length;
+    return head + NAME_TAILS[t];
+}
+const EPITHETS = [
+    "the Red", "the Grey", "the Bold", "the Pale", "the Grim", "the Silent", "the Wanderer", "the Elder",
+    "the Black", "Ironhand", "the Unbowed", "the Fair", "the Cunning", "the Restless", "the Far-Seeing", "the Stern",
+];
+function lordName(username) {
+    return `${username} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
+}
+const WILD_HEADS = [
+    "Ashen", "Bleak", "Gallows", "Weeping", "Black", "Wolf", "Raven", "Thorn",
+    "Misty", "Grey", "Witch", "Bone", "Sorrow", "Cinder", "Hollow", "Crow",
+    "Blood", "Shadow", "Dread", "Barrow", "Silent", "Rotting", "Howling", "Wither",
+];
+const WILD_LANDS = [
+    "Moor", "Fen", "Wood", "Vale", "Heath", "Marsh", "Waste", "Mire",
+    "Glen", "Weald", "Forest", "March", "Bog", "Reach", "Thicket", "Scar",
+];
+function wildsName(roomName) {
+    let h = nameHash(roomName);
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return `${WILD_HEADS[(h >>> 4) % WILD_HEADS.length]} ${WILD_LANDS[(h >>> 12) % WILD_LANDS.length]}`;
+}
+
+const METALS = [
+    { name: "or", hex: "#d4af37" },
+    { name: "argent", hex: "#e6e6e6" },
+];
+const COLOURS = [
+    { name: "gules", hex: "#a3202a" },
+    { name: "azure", hex: "#24489c" },
+    { name: "vert", hex: "#2f7a3a" },
+    { name: "sable", hex: "#1c1c1c" },
+    { name: "purpure", hex: "#6a2c8a" },
+];
+const DIVISIONS = ["plain", "plain", "per pale", "per fess", "per bend", "quarterly"];
+const CHARGES = ["a cross", "a saltire", "a chevron", "a fess", "a roundel"];
+function armsHash(roomName) {
+    let h = 0x811c9dc5 ^ 0x5eed;
+    for (let i = 0; i < roomName.length; i++)
+        h = Math.imul(h ^ roomName.charCodeAt(i), 0x01000193);
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return (h ^ (h >>> 16)) >>> 0;
+}
+function castleArmsOf(roomName) {
+    const h = armsHash(roomName);
+    const division = DIVISIONS[h % DIVISIONS.length];
+    const metal = METALS[(h >>> 4) % METALS.length];
+    const colour = COLOURS[(h >>> 8) % COLOURS.length];
+    if (division === "plain")
+        return { division, field: colour, other: metal, charge: CHARGES[(h >>> 12) % CHARGES.length] };
+    const metalFirst = (h >>> 16) & 1;
+    return { division, field: metalFirst ? metal : colour, other: metalFirst ? colour : metal };
+}
+function blazon(roomName) {
+    const a = castleArmsOf(roomName);
+    if (a.division === "plain")
+        return `${a.field.name}, ${a.charge} ${a.other.name}`;
+    return `${a.division} ${a.field.name} and ${a.other.name}`;
+}
+const SHIELD = (() => {
+    const pts = [[-1, -1.2], [1, -1.2]];
+    const c = -0.22;
+    const r = 1 - c;
+    const end = Math.atan2(1.2, -c);
+    const STEPS = 8;
+    for (let i = 0; i <= STEPS; i++) {
+        const a = (end * i) / STEPS;
+        pts.push([c + r * Math.cos(a), r * Math.sin(a)]);
+    }
+    for (let i = STEPS - 1; i >= 0; i--) {
+        const a = (end * i) / STEPS;
+        pts.push([-(c + r * Math.cos(a)), r * Math.sin(a)]);
+    }
+    return pts;
+})();
+const HEART_Y = -0.1;
+function clip(poly, a, b, c) {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+        const p = poly[i];
+        const q = poly[(i + 1) % poly.length];
+        const dp = a * p[0] + b * p[1] - c;
+        const dq = a * q[0] + b * q[1] - c;
+        if (dp <= 0)
+            out.push(p);
+        if (dp * dq < 0) {
+            const t = dp / (dp - dq);
+            out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
+        }
+    }
+    return out;
+}
+function band(x0, y0, angle, w, shape = SHIELD) {
+    const nx = -Math.sin(angle);
+    const ny = Math.cos(angle);
+    const d = nx * x0 + ny * y0;
+    return clip(clip(shape, nx, ny, d + w), -nx, -ny, -d + w);
+}
+function chargePieces(charge) {
+    const BEND = Math.atan2(2.4, 2);
+    switch (charge) {
+        case "a cross":
+            return [band(0, 0, Math.PI / 2, 0.22), band(0, HEART_Y, 0, 0.22)];
+        case "a saltire":
+            return [band(0, HEART_Y, BEND, 0.2), band(0, HEART_Y, -BEND, 0.2)];
+        case "a fess":
+            return [band(0, HEART_Y, 0, 0.32)];
+        case "a chevron": {
+            const left = clip(SHIELD, 1, 0, 0);
+            const right = clip(SHIELD, -1, 0, 0);
+            return [band(0, -0.3, -0.75, 0.2, left), band(0, -0.3, 0.75, 0.2, right)];
+        }
+        case "a roundel": {
+            const pts = [];
+            for (let i = 0; i < 16; i++) {
+                const a = (2 * Math.PI * i) / 16;
+                pts.push([0.5 * Math.cos(a), HEART_Y + 0.5 * Math.sin(a)]);
+            }
+            return [pts];
+        }
+    }
+}
+const piecesCache = new Map();
+function armsPieces(roomName) {
+    let pieces = piecesCache.get(roomName);
+    if (!pieces) {
+        pieces = cutArms(castleArmsOf(roomName));
+        piecesCache.set(roomName, pieces);
+    }
+    return pieces;
+}
+function cutArms(a) {
+    const f = a.field.hex;
+    const o = a.other.hex;
+    switch (a.division) {
+        case "plain":
+            return [{ points: SHIELD, fill: f }, ...chargePieces(a.charge).map((points) => ({ points, fill: o }))];
+        case "per pale":
+            return [{ points: clip(SHIELD, 1, 0, 0), fill: f }, { points: clip(SHIELD, -1, 0, 0), fill: o }];
+        case "per fess":
+            return [{ points: clip(SHIELD, 0, 1, HEART_Y), fill: f }, { points: clip(SHIELD, 0, -1, -HEART_Y), fill: o }];
+        case "per bend":
+            return [{ points: clip(SHIELD, -1.2, 1, 0), fill: f }, { points: clip(SHIELD, 1.2, -1, 0), fill: o }];
+        case "quarterly": {
+            const top = clip(SHIELD, 0, 1, HEART_Y);
+            const base = clip(SHIELD, 0, -1, -HEART_Y);
+            return [
+                { points: clip(top, 1, 0, 0), fill: f },
+                { points: clip(top, -1, 0, 0), fill: o },
+                { points: clip(base, 1, 0, 0), fill: o },
+                { points: clip(base, -1, 0, 0), fill: f },
+            ];
+        }
+    }
+}
+function armsColours(roomName) {
+    const a = castleArmsOf(roomName);
+    return { field: a.field.hex, other: a.other.hex };
+}
+function shieldOutline() {
+    return SHIELD;
+}
+
 const SIGNATURES = [
     "By order of the Crown, this land now answers to the castle.",
     "Traveling merchants welcome. Raiders will be hanged at the gate.",
@@ -91,7 +660,7 @@ const SIGNATURES = [
     "Trade, barter, pass through. Just don't stay.",
     "A dark wizard lives here. Knock at your own risk.",
 ];
-function pickSignature(roomName) {
+function proclamation(roomName) {
     var _a;
     if (!Memory.rooms)
         Memory.rooms = {};
@@ -104,6 +673,17 @@ function pickSignature(roomName) {
         meta.lastSignedIndex = next;
     }
     return SIGNATURES[meta.lastSignedIndex];
+}
+const SIGN_LENGTH = 100;
+function sign(head, roomName) {
+    const both = `${head} ${proclamation(roomName)}`;
+    return both.length <= SIGN_LENGTH ? both : head.slice(0, SIGN_LENGTH);
+}
+function keepSignature(roomName) {
+    return sign(`${castleName(roomName)}. Arms: ${blazon(roomName)}.`, roomName);
+}
+function remoteSignature(roomName, homeRoom) {
+    return sign(`The ${wildsName(roomName)}, held by ${castleName(homeRoom)}.`, roomName);
 }
 
 const ALLIES_SEGMENT = 90;
@@ -814,434 +1394,6 @@ function evaluateRoomThreatLevel(room) {
     const { score } = getThreatInfo(room);
     level += Math.min(3, Math.floor(score / 100));
     return Math.min(10, level);
-}
-
-const TOWN = {
-    watchRcl: 4,
-    cottagesByRcl: { 5: 1, 6: 1, 7: 2, 8: 3 },
-    militiaByRcl: { 5: 2, 6: 4, 7: 8, 8: 12 },
-    storageGate: 10000,
-    lookoutRcl: 8,
-    maxLookouts: 4,
-    perimeterBuiltRatio: 0.9,
-    barrierHits: 20000,
-    retryInterval: 1500,
-    postsPerSide: 3,
-    squareFallbackTiles: 6,
-    squareMinRange: 3,
-    squareMaxRange: 10,
-    cottageControllerClearance: 4,
-    cottageResourceClearance: 3,
-    cottageMaxRange: 14,
-};
-const TOWN_DAY_LENGTH = 1000;
-const TOWN_DAWN_HOUR = 5;
-const TOWN_PHASES = [
-    { name: "dawn", start: 0 },
-    { name: "day", start: 100 },
-    { name: "dusk", start: 600 },
-    { name: "night", start: 700 },
-];
-const TOWN_DAYS_PER_SEASON = 7;
-const TOWN_STORM_ODDS = 5;
-const TOWN_DRAGON_ODDS = 6;
-const TOWN_DRAGON_FLIGHT = 48;
-const TOWN_MOON_DAYS = 8;
-const TOWN_MOON_NAMES = [
-    "new moon",
-    "waxing crescent",
-    "first quarter",
-    "waxing gibbous",
-    "full moon",
-    "waning gibbous",
-    "last quarter",
-    "waning crescent",
-];
-const TOWN_HOWL_EVERY = 50;
-const TOWN_HOWL_TICKS = 6;
-const TOWN_WISPS = 5;
-const TOWN_MIST_BANKS = 8;
-const TOWN_AURORA_ODDS = 3;
-const TOWN_STAR_ODDS = 15;
-const TOWN_STAR_TICKS = 8;
-const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
-const TOWN_FEASTS = {
-    spring: "Sowing Feast",
-    summer: "Midsummer Fair",
-    autumn: "Harvest Home",
-    winter: "Yule Feast",
-};
-const COTTAGE_FAMILIES = [
-    "Aldermere",
-    "Blackwood",
-    "Cotter",
-    "Fairweather",
-    "Holloway",
-    "Marsh",
-    "Thatcher",
-    "Wren",
-];
-const SCENERY_BEGIN = "scenery:begin";
-const SCENERY_END = "scenery:end";
-
-function townClock(time) {
-    const t = time % TOWN_DAY_LENGTH;
-    let phase = TOWN_PHASES[0].name;
-    for (const p of TOWN_PHASES)
-        if (t >= p.start)
-            phase = p.name;
-    return {
-        phase,
-        hour: (Math.floor((t * 24) / TOWN_DAY_LENGTH) + TOWN_DAWN_HOUR) % 24,
-    };
-}
-function townSeason(time) {
-    const day = Math.floor(time / TOWN_DAY_LENGTH);
-    return TOWN_SEASONS[Math.floor(day / TOWN_DAYS_PER_SEASON) % TOWN_SEASONS.length];
-}
-function townFeast(time) {
-    const day = Math.floor(time / TOWN_DAY_LENGTH);
-    return day % TOWN_DAYS_PER_SEASON === 0 ? TOWN_FEASTS[townSeason(time)] : undefined;
-}
-function townStorm(time) {
-    if (townFeast(time) || townSeason(time) === "winter")
-        return false;
-    const day = Math.floor(time / TOWN_DAY_LENGTH);
-    return (Math.imul(day, 2654435761) >>> 16) % TOWN_STORM_ODDS === 0;
-}
-function dayHash(day, salt) {
-    let h = Math.imul(day ^ salt, 0x9e3779b1);
-    h ^= h >>> 15;
-    h = Math.imul(h, 0x85ebca6b);
-    h ^= h >>> 13;
-    return h >>> 0;
-}
-function townDragon(time) {
-    if (townFeast(time))
-        return undefined;
-    const day = Math.floor(time / TOWN_DAY_LENGTH);
-    const h = dayHash(day, 0x5bd1e995);
-    if (h % TOWN_DRAGON_ODDS !== 0)
-        return undefined;
-    const start = 100 + ((h >>> 8) % 550);
-    const t = (time % TOWN_DAY_LENGTH) - start;
-    if (t < 0 || t >= TOWN_DRAGON_FLIGHT)
-        return undefined;
-    const dir = (h >>> 4) & 1 ? 1 : -1;
-    const fromY = 8 + ((h >>> 18) % 34);
-    const toY = 8 + ((h >>> 24) % 34);
-    const f = t / (TOWN_DRAGON_FLIGHT - 1);
-    return { t, x: dir === 1 ? -6 + 62 * f : 55 - 62 * f, y: fromY + (toY - fromY) * f, dir, day };
-}
-function townMoon(time) {
-    return Math.floor(time / TOWN_DAY_LENGTH) % TOWN_MOON_DAYS;
-}
-function isFullMoon(time) {
-    return townMoon(time) === TOWN_MOON_DAYS / 2;
-}
-const NIGHT_START = TOWN_PHASES.find((p) => p.name === "night").start;
-const DAY_START = TOWN_PHASES.find((p) => p.name === "day").start;
-function townHowl(time) {
-    if (!isFullMoon(time))
-        return undefined;
-    const night = (time % TOWN_DAY_LENGTH) - NIGHT_START;
-    if (night < 0)
-        return undefined;
-    const t = night % TOWN_HOWL_EVERY;
-    if (t >= TOWN_HOWL_TICKS)
-        return undefined;
-    const n = Math.floor(night / TOWN_HOWL_EVERY);
-    const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
-    return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
-}
-function townWisps(time) {
-    return townMoon(time) === 0 && townClock(time).phase === "night";
-}
-function wispTiles(time, isMarsh) {
-    return marshTiles(time, isMarsh, TOWN_WISPS, 0x5bd1e995);
-}
-function townMist(time) {
-    return townClock(time).phase === "dawn" && !townStorm(time);
-}
-function mistTiles(time, isMarsh) {
-    return marshTiles(time, isMarsh, TOWN_MIST_BANKS, 0x165667b1);
-}
-function marshTiles(time, isMarsh, count, salt) {
-    const day = Math.floor(time / TOWN_DAY_LENGTH);
-    const tiles = [];
-    for (let i = 0; i < 64 && tiles.length < count; i++) {
-        const h = dayHash(day * 64 + i, salt);
-        const x = 3 + (h % 44);
-        const y = 3 + ((h >>> 8) % 44);
-        if (isMarsh(x, y))
-            tiles.push([x, y]);
-    }
-    return tiles;
-}
-function townAurora(time) {
-    if (townSeason(time) !== "winter" || townClock(time).phase !== "night")
-        return false;
-    return dayHash(Math.floor(time / TOWN_DAY_LENGTH), 0x165667b1) % TOWN_AURORA_ODDS === 0;
-}
-function townFallingStar(time) {
-    if (townClock(time).phase !== "night" || townStorm(time))
-        return undefined;
-    const window = Math.floor(time / TOWN_STAR_TICKS);
-    const h = dayHash(window, 0x2c1b3c6d);
-    if (h % TOWN_STAR_ODDS !== 0)
-        return undefined;
-    return { t: time % TOWN_STAR_TICKS, x: 12 + ((h >>> 8) % 34), y: 2 + ((h >>> 16) % 10) };
-}
-function isNightfall(phase) {
-    return phase === "dusk" || phase === "night";
-}
-function cottageLayout(c) {
-    const walls = [];
-    const beds = [];
-    for (let dy = 0; dy < 5; dy++) {
-        for (let dx = 0; dx < 5; dx++) {
-            const k = `${c.x + dx},${c.y + dy}`;
-            const edge = dx === 0 || dy === 0 || dx === 4 || dy === 4;
-            if (!edge)
-                beds.push(k);
-            else if (k !== c.door)
-                walls.push(k);
-        }
-    }
-    return { walls, door: c.door, beds };
-}
-function bedTiles(town) {
-    if (!town)
-        return [];
-    const beds = [];
-    for (const c of town.cottages)
-        beds.push(...cottageLayout(c).beds);
-    return beds;
-}
-function townBarrierTiles(town) {
-    const out = new Set();
-    if (!town)
-        return out;
-    for (const c of town.cottages) {
-        const l = cottageLayout(c);
-        for (const k of l.walls)
-            out.add(k);
-        out.add(l.door);
-        for (const k of l.beds)
-            out.add(k);
-    }
-    for (const k of town.posts)
-        out.add(k);
-    if (town.fountain)
-        out.add(town.fountain);
-    return out;
-}
-function townFootprint(town) {
-    const out = townBarrierTiles(town);
-    if (town)
-        for (const k of town.square)
-            out.add(k);
-    return out;
-}
-function parseTile(k) {
-    const comma = k.indexOf(",");
-    return { x: +k.slice(0, comma), y: +k.slice(comma + 1) };
-}
-let spotTick = -1;
-const spotClaims = new Map();
-function claimKey(roomName, tile) {
-    return `${roomName}:${tile}`;
-}
-function spotIndex() {
-    if (spotTick !== Game.time) {
-        spotTick = Game.time;
-        spotClaims.clear();
-        for (const name in Game.creeps) {
-            const c = Game.creeps[name];
-            const spot = c.memory.townSpot;
-            if (!spot || c.memory.townSpotTick === undefined)
-                continue;
-            if (Game.time - c.memory.townSpotTick > 1)
-                continue;
-            spotClaims.set(claimKey(c.room.name, spot), name);
-        }
-    }
-    return spotClaims;
-}
-function spotHolder(roomName, tile) {
-    return spotIndex().get(claimKey(roomName, tile));
-}
-function claimSpot(creep, candidates, near = creep.pos) {
-    const index = spotIndex();
-    const room = creep.room.name;
-    const held = creep.memory.townSpot;
-    const holdsFresh = held !== undefined &&
-        creep.memory.townSpotTick !== undefined &&
-        Game.time - creep.memory.townSpotTick <= 1 &&
-        index.get(claimKey(room, held)) === creep.name;
-    if (holdsFresh && candidates.includes(held)) {
-        creep.memory.townSpotTick = Game.time;
-        return held;
-    }
-    let best = null;
-    let bestRange = Infinity;
-    let bestWalk = Infinity;
-    for (const k of candidates) {
-        const holder = index.get(claimKey(room, k));
-        if (holder && holder !== creep.name)
-            continue;
-        const { x, y } = parseTile(k);
-        const r = Math.max(Math.abs(x - near.x), Math.abs(y - near.y));
-        const walk = Math.max(Math.abs(x - creep.pos.x), Math.abs(y - creep.pos.y));
-        if (r < bestRange || (r === bestRange && walk < bestWalk)) {
-            bestRange = r;
-            bestWalk = walk;
-            best = k;
-        }
-    }
-    if (held && index.get(claimKey(room, held)) === creep.name)
-        index.delete(claimKey(room, held));
-    if (!best) {
-        delete creep.memory.townSpot;
-        delete creep.memory.townSpotTick;
-        return null;
-    }
-    creep.memory.townSpot = best;
-    creep.memory.townSpotTick = Game.time;
-    index.set(claimKey(room, best), creep.name);
-    return best;
-}
-function goToSpot(creep, tile) {
-    const { x, y } = parseTile(tile);
-    if (creep.pos.x === x && creep.pos.y === y)
-        return;
-    creep.moveTo(new RoomPosition(x, y, creep.room.name), { reusePath: 20 });
-}
-function parkOn(creep, candidates, near) {
-    if (candidates.length === 0)
-        return false;
-    const spot = claimSpot(creep, candidates, near);
-    if (!spot)
-        return false;
-    goToSpot(creep, spot);
-    return true;
-}
-function parkIdle(creep, kind) {
-    var _a;
-    const town = creep.room.memory.town;
-    if (!town || !((_a = creep.room.controller) === null || _a === void 0 ? void 0 : _a.my))
-        return false;
-    if (kind === "watch" && parkOn(creep, town.posts))
-        return true;
-    return parkOn(creep, town.square);
-}
-
-const MAX_ENTRIES = 40;
-function entries() {
-    if (!Memory.chronicle)
-        Memory.chronicle = [];
-    if (Memory.chronicleEpoch === undefined)
-        Memory.chronicleEpoch = Game.time;
-    return Memory.chronicle;
-}
-function write(entry) {
-    const log = entries();
-    log.push(entry);
-    if (log.length > MAX_ENTRIES)
-        log.splice(0, log.length - MAX_ENTRIES);
-    console.log(`[Chronicle] ${entry.text}`);
-}
-function chronicle(text) {
-    write({ t: Game.time, text });
-}
-function annal(key, n) {
-    if (!Memory.annals)
-        Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
-    const count = Memory.annals[key];
-    if (count !== undefined)
-        Memory.annals[key] = count + n;
-}
-function formatK(n) {
-    if (n >= 1000000)
-        return `${(n / 1000000).toFixed(1)}M`;
-    if (n >= 1000)
-        return `${(n / 1000).toFixed(1)}K`;
-    return String(n);
-}
-function tally(key, n, describe, window) {
-    var _a, _b;
-    const log = entries();
-    for (let i = log.length - 1; i >= 0; i--) {
-        const e = log[i];
-        if (e.key !== key)
-            continue;
-        if (Game.time - ((_a = e.last) !== null && _a !== void 0 ? _a : e.t) > window)
-            break;
-        e.n = ((_b = e.n) !== null && _b !== void 0 ? _b : 0) + n;
-        e.last = Game.time;
-        e.text = describe(e.n);
-        return false;
-    }
-    write({ t: Game.time, text: describe(n), key, n, last: Game.time });
-    return true;
-}
-function chronicleDate(t) {
-    var _a;
-    const epoch = (_a = Memory.chronicleEpoch) !== null && _a !== void 0 ? _a : t;
-    const day = Math.floor((t - epoch) / TOWN_DAY_LENGTH) + 1;
-    return `Day ${day}, ${townClock(t).phase}`;
-}
-function recentChronicle(count) {
-    var _a;
-    return ((_a = Memory.chronicle) !== null && _a !== void 0 ? _a : []).slice(-count);
-}
-const NAME_HEADS = [
-    "Ash", "Raven", "Black", "Iron", "Grim", "Thorn", "Wolf", "Dusk",
-    "Storm", "Ember", "Hollow", "Frost", "Gloam", "Bramble", "Crow", "Stone",
-];
-const NAME_TAILS = ["hold", "moor", "keep", "spire", "fell", "gate", "watch", "barrow", "crag", "mere", "ford", "reach"];
-function nameHash(roomName) {
-    let h = 2166136261;
-    for (let i = 0; i < roomName.length; i++) {
-        h ^= roomName.charCodeAt(i);
-        h = Math.imul(h, 16777619) >>> 0;
-    }
-    return h;
-}
-function castleName(roomName) {
-    var _a, _b;
-    const given = (_b = (_a = Memory.rooms) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.townName;
-    if (given)
-        return given;
-    const h = nameHash(roomName);
-    const head = NAME_HEADS[h % NAME_HEADS.length];
-    let t = (h >>> 8) % NAME_TAILS.length;
-    if (NAME_TAILS[t][0] === head[head.length - 1])
-        t = (t + 1) % NAME_TAILS.length;
-    return head + NAME_TAILS[t];
-}
-const EPITHETS = [
-    "the Red", "the Grey", "the Bold", "the Pale", "the Grim", "the Silent", "the Wanderer", "the Elder",
-    "the Black", "Ironhand", "the Unbowed", "the Fair", "the Cunning", "the Restless", "the Far-Seeing", "the Stern",
-];
-function lordName(username) {
-    return `${username} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
-}
-const WILD_HEADS = [
-    "Ashen", "Bleak", "Gallows", "Weeping", "Black", "Wolf", "Raven", "Thorn",
-    "Misty", "Grey", "Witch", "Bone", "Sorrow", "Cinder", "Hollow", "Crow",
-    "Blood", "Shadow", "Dread", "Barrow", "Silent", "Rotting", "Howling", "Wither",
-];
-const WILD_LANDS = [
-    "Moor", "Fen", "Wood", "Vale", "Heath", "Marsh", "Waste", "Mire",
-    "Glen", "Weald", "Forest", "March", "Bog", "Reach", "Thicket", "Scar",
-];
-function wildsName(roomName) {
-    let h = nameHash(roomName);
-    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
-    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
-    h = (h ^ (h >>> 16)) >>> 0;
-    return `${WILD_HEADS[(h >>> 4) % WILD_HEADS.length]} ${WILD_LANDS[(h >>> 12) % WILD_LANDS.length]}`;
 }
 
 const UPGRADER_STORAGE_FLOOR = 10000;
@@ -3399,7 +3551,8 @@ function signControllerIfNeeded(creep, controller) {
     const lastSigned = creep.room.memory.lastSigned;
     if (lastSigned !== undefined && Game.time - lastSigned < SIGN_RECHECK_INTERVAL)
         return false;
-    const desiredSignature = pickSignature(creep.room.name);
+    const home = creep.memory.homeRoom;
+    const desiredSignature = controller.my || !home ? keepSignature(creep.room.name) : remoteSignature(creep.room.name, home);
     const currentSign = controller.sign;
     if ((currentSign === null || currentSign === void 0 ? void 0 : currentSign.username) === "Screeps")
         return false;
@@ -9657,7 +9810,7 @@ function runConqueror(creep) {
         console.log(`[Expansion] Claimed ${targetRoom}!`);
         chronicle(`The Crown's banner rises over the ${wildsName(targetRoom)}. The keep of ${castleName(targetRoom)} is founded.`);
         try {
-            const sig = pickSignature(creep.room.name);
+            const sig = keepSignature(creep.room.name);
             const sres = creep.signController(controller, sig);
             if (sres === OK) {
                 if (!Memory.rooms)
@@ -9768,7 +9921,7 @@ function tendThrone(creep, ctrl) {
         creep.room.memory.lastSigned === undefined;
     if (shouldSign) {
         try {
-            const sig = pickSignature(creep.room.name);
+            const sig = keepSignature(creep.room.name);
             const sres = creep.signController(ctrl, sig);
             if (sres === OK) {
                 if (!Memory.rooms)
@@ -13438,147 +13591,6 @@ function loop$a() {
         console.log(`[Strategy] Posture ${(_f = prev === null || prev === void 0 ? void 0 : prev.posture) !== null && _f !== void 0 ? _f : "EXPAND"} -> ${posture} (${reason})`);
     }
     Memory.empire = empire;
-}
-
-const METALS = [
-    { name: "or", hex: "#d4af37" },
-    { name: "argent", hex: "#e6e6e6" },
-];
-const COLOURS = [
-    { name: "gules", hex: "#a3202a" },
-    { name: "azure", hex: "#24489c" },
-    { name: "vert", hex: "#2f7a3a" },
-    { name: "sable", hex: "#1c1c1c" },
-    { name: "purpure", hex: "#6a2c8a" },
-];
-const DIVISIONS = ["plain", "plain", "per pale", "per fess", "per bend", "quarterly"];
-const CHARGES = ["a cross", "a saltire", "a chevron", "a fess", "a roundel"];
-function armsHash(roomName) {
-    let h = 0x811c9dc5 ^ 0x5eed;
-    for (let i = 0; i < roomName.length; i++)
-        h = Math.imul(h ^ roomName.charCodeAt(i), 0x01000193);
-    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-    return (h ^ (h >>> 16)) >>> 0;
-}
-function castleArmsOf(roomName) {
-    const h = armsHash(roomName);
-    const division = DIVISIONS[h % DIVISIONS.length];
-    const metal = METALS[(h >>> 4) % METALS.length];
-    const colour = COLOURS[(h >>> 8) % COLOURS.length];
-    if (division === "plain")
-        return { division, field: colour, other: metal, charge: CHARGES[(h >>> 12) % CHARGES.length] };
-    const metalFirst = (h >>> 16) & 1;
-    return { division, field: metalFirst ? metal : colour, other: metalFirst ? colour : metal };
-}
-function blazon(roomName) {
-    const a = castleArmsOf(roomName);
-    if (a.division === "plain")
-        return `${a.field.name}, ${a.charge} ${a.other.name}`;
-    return `${a.division} ${a.field.name} and ${a.other.name}`;
-}
-const SHIELD = (() => {
-    const pts = [[-1, -1.2], [1, -1.2]];
-    const c = -0.22;
-    const r = 1 - c;
-    const end = Math.atan2(1.2, -c);
-    const STEPS = 8;
-    for (let i = 0; i <= STEPS; i++) {
-        const a = (end * i) / STEPS;
-        pts.push([c + r * Math.cos(a), r * Math.sin(a)]);
-    }
-    for (let i = STEPS - 1; i >= 0; i--) {
-        const a = (end * i) / STEPS;
-        pts.push([-(c + r * Math.cos(a)), r * Math.sin(a)]);
-    }
-    return pts;
-})();
-const HEART_Y = -0.1;
-function clip(poly, a, b, c) {
-    const out = [];
-    for (let i = 0; i < poly.length; i++) {
-        const p = poly[i];
-        const q = poly[(i + 1) % poly.length];
-        const dp = a * p[0] + b * p[1] - c;
-        const dq = a * q[0] + b * q[1] - c;
-        if (dp <= 0)
-            out.push(p);
-        if (dp * dq < 0) {
-            const t = dp / (dp - dq);
-            out.push([p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1])]);
-        }
-    }
-    return out;
-}
-function band(x0, y0, angle, w, shape = SHIELD) {
-    const nx = -Math.sin(angle);
-    const ny = Math.cos(angle);
-    const d = nx * x0 + ny * y0;
-    return clip(clip(shape, nx, ny, d + w), -nx, -ny, -d + w);
-}
-function chargePieces(charge) {
-    const BEND = Math.atan2(2.4, 2);
-    switch (charge) {
-        case "a cross":
-            return [band(0, 0, Math.PI / 2, 0.22), band(0, HEART_Y, 0, 0.22)];
-        case "a saltire":
-            return [band(0, HEART_Y, BEND, 0.2), band(0, HEART_Y, -BEND, 0.2)];
-        case "a fess":
-            return [band(0, HEART_Y, 0, 0.32)];
-        case "a chevron": {
-            const left = clip(SHIELD, 1, 0, 0);
-            const right = clip(SHIELD, -1, 0, 0);
-            return [band(0, -0.3, -0.75, 0.2, left), band(0, -0.3, 0.75, 0.2, right)];
-        }
-        case "a roundel": {
-            const pts = [];
-            for (let i = 0; i < 16; i++) {
-                const a = (2 * Math.PI * i) / 16;
-                pts.push([0.5 * Math.cos(a), HEART_Y + 0.5 * Math.sin(a)]);
-            }
-            return [pts];
-        }
-    }
-}
-const piecesCache = new Map();
-function armsPieces(roomName) {
-    let pieces = piecesCache.get(roomName);
-    if (!pieces) {
-        pieces = cutArms(castleArmsOf(roomName));
-        piecesCache.set(roomName, pieces);
-    }
-    return pieces;
-}
-function cutArms(a) {
-    const f = a.field.hex;
-    const o = a.other.hex;
-    switch (a.division) {
-        case "plain":
-            return [{ points: SHIELD, fill: f }, ...chargePieces(a.charge).map((points) => ({ points, fill: o }))];
-        case "per pale":
-            return [{ points: clip(SHIELD, 1, 0, 0), fill: f }, { points: clip(SHIELD, -1, 0, 0), fill: o }];
-        case "per fess":
-            return [{ points: clip(SHIELD, 0, 1, HEART_Y), fill: f }, { points: clip(SHIELD, 0, -1, -HEART_Y), fill: o }];
-        case "per bend":
-            return [{ points: clip(SHIELD, -1.2, 1, 0), fill: f }, { points: clip(SHIELD, 1.2, -1, 0), fill: o }];
-        case "quarterly": {
-            const top = clip(SHIELD, 0, 1, HEART_Y);
-            const base = clip(SHIELD, 0, -1, -HEART_Y);
-            return [
-                { points: clip(top, 1, 0, 0), fill: f },
-                { points: clip(top, -1, 0, 0), fill: o },
-                { points: clip(base, 1, 0, 0), fill: o },
-                { points: clip(base, -1, 0, 0), fill: f },
-            ];
-        }
-    }
-}
-function armsColours(roomName) {
-    const a = castleArmsOf(roomName);
-    return { field: a.field.hex, other: a.other.hex };
-}
-function shieldOutline() {
-    return SHIELD;
 }
 
 const BOOTSTRAP_MIN_RCL = 3;
