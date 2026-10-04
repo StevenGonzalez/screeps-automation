@@ -137,6 +137,25 @@ describe("realm map", () => {
     expect(texts).toContain("keep planned");
     expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(1);
   });
+
+  it("stops drawing a remote as a vendors' road once it is claimed as a keep", () => {
+    world(
+      [creep(ROLE_REMOTE_MINER, "W2N1", "W2N1")],
+      [{ roomName: "W2N1", hostile: false, sources: [] }]
+    );
+    (g.Game as { rooms: Record<string, unknown> }).rooms.W2N1 = {
+      name: "W2N1",
+      controller: { my: true, level: 1 },
+      memory: {},
+    };
+
+    drawRealmMap();
+
+    const texts = drawn.filter((d) => d.kind === "text").map((d) => d.args[0]);
+    expect(texts).not.toContain("vendors");
+    expect(texts).toContain("RCL 1");
+    expect(drawn.filter((d) => d.kind === "line")).toHaveLength(0);
+  });
 });
 
 describe("town at night", () => {

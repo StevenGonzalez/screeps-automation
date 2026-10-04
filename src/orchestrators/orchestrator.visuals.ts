@@ -75,6 +75,8 @@ export function drawRealmMap(): void {
     mv.text(`RCL ${room.controller.level}${gold}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
 
     for (const remote of room.memory.remoteRooms ?? []) {
+      // A remote claimed as a keep is drawn as a castle of its own.
+      if (Game.rooms[remote.roomName]?.controller?.my) continue;
       const ours = worked[roomName]?.has(remote.roomName) ?? false;
       // A rival's hold is shown whether or not a peddler is still there.
       const held = remote.hostile && (remote.hostileUntil ?? 0) > Game.time;
