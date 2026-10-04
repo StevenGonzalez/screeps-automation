@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnRepairer, need } = vi.hoisted(() => {
+const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnReserver, spawnRepairer, need } = vi.hoisted(() => {
   const spawnTownsfolk = vi.fn(() => true);
   const spawnRemoteMiner = vi.fn(() => true);
   const spawnRemoteHauler = vi.fn(() => true);
+  const spawnReserver = vi.fn(() => true);
   const spawnRepairer = vi.fn(() => true);
   // Roles a test says are short; every other role is already satisfied.
-  const need = { remoteMiner: false, remoteHauler: false, repairer: false };
+  const need = { remoteMiner: false, remoteHauler: false, reserver: false, repairer: false };
   // A module whose every export says no, apart from the ones given: every role
   // ahead of the town in the spawn order is already satisfied.
   const stub = (given: Record<string, unknown>) =>
@@ -17,7 +18,7 @@ const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnRepairer
         return k in t ? t[k] : () => false;
       },
     });
-  return { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnRepairer, need };
+  return { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnReserver, spawnRepairer, need };
 });
 
 vi.mock("../src/orchestrators/orchestrator.spawning.economy", () =>
@@ -35,6 +36,8 @@ vi.mock("../src/orchestrators/orchestrator.spawning.remote", () =>
     spawnRemoteMiner,
     shouldSpawnRemoteHauler: () => need.remoteHauler,
     spawnRemoteHauler,
+    shouldSpawnReserver: () => need.reserver,
+    spawnReserver,
   })
 );
 vi.mock("../src/orchestrators/orchestrator.spawning.military", () => stub({}));
@@ -64,6 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   need.remoteMiner = false;
   need.remoteHauler = false;
+  need.reserver = false;
   need.repairer = false;
   spawnTownsfolk.mockImplementation(() => true);
 });
@@ -98,5 +102,18 @@ describe("spawn order", () => {
     (globalThis as Record<string, unknown>).Memory = {};
     processRoomSpawning(castle(30_000), {} as StructureSpawn);
     expect(spawnRemoteHauler).toHaveBeenCalledTimes(1);
+  });
+
+  it("raises an envoy ahead of the merchants", () => {
+    // A late envoy lets its remote's reservation lapse.
+    need.remoteHauler = true;
+    need.reserver = true;
+    spawnTownsfolk.mockImplementation(() => false);
+    (globalThis as Record<string, unknown>).Memory = {};
+
+    processRoomSpawning(castle(30_000), {} as StructureSpawn);
+
+    expect(spawnReserver).toHaveBeenCalledTimes(1);
+    expect(spawnRemoteHauler).not.toHaveBeenCalled();
   });
 });

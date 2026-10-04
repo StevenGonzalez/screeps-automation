@@ -15,8 +15,6 @@ g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_HOSTILE_STRUCTURES = 109;
 g.LOOK_RESOURCES = "resource";
 g.RESOURCE_ENERGY = "energy";
-g.CREEP_LIFE_TIME = 1500;
-g.CREEP_CLAIM_LIFE_TIME = 600;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };

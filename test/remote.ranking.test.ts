@@ -15,6 +15,7 @@ import {
   reassignStrayHaulers,
   shouldSpawnRemoteHauler,
   shouldSpawnRemoteMiner,
+  shouldSpawnReserver,
   spawnRemoteHauler,
 } from "../src/orchestrators/orchestrator.spawning.remote";
 import {
@@ -25,6 +26,7 @@ import {
   ROLE_KNIGHT,
   ROLE_REMOTE_HAULER,
   ROLE_REMOTE_MINER,
+  ROLE_RESERVER,
   ROLE_SETTLER,
   ROLE_UPGRADER,
 } from "../src/config/config.roles";
@@ -543,6 +545,36 @@ describe("relieving a peddler", () => {
 
   it("never orders it later than the path says", () => {
     expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(126, 0)] }))).toBe(true);
+  });
+});
+
+describe("relieving an envoy", () => {
+  // A one-CLAIM envoy on a 40-tile path: 6 ticks to raise its relief and 40 to
+  // walk it out. The castle's longest body, 26 parts at 1300 capacity, takes 78
+  // ticks to spawn.
+  const envoy = (ticksToLive: number) =>
+    Object.assign(creep(ROLE_RESERVER, 2, { targetRoom: "W4N5" }), { ticksToLive });
+  const reserved = (room: Room, ticksToEnd: number) => {
+    (g.Game as { rooms: Record<string, unknown> }).rooms.W4N5 = {
+      controller: { reservation: { username: "Me", ticksToEnd } },
+    };
+    return room;
+  };
+
+  it("orders the relief a body's spawning early while the reservation has nothing banked", () => {
+    const room = home({ remotes: [remote("W4N5", [40])], creeps: [envoy(120)] });
+    expect(shouldSpawnReserver(reserved(room, 1))).toBe(true);
+  });
+
+  it("orders it by the walk alone while the reservation can outlast the wait", () => {
+    const room = home({ remotes: [remote("W4N5", [40])], creeps: [envoy(120)] });
+    expect(shouldSpawnReserver(reserved(room, 1000))).toBe(false);
+  });
+
+  it("counts what the reservation has banked against the wait", () => {
+    // 78 ticks of wait, 40 of them banked: 6 + 40 + 38 = 84.
+    const room = home({ remotes: [remote("W4N5", [40])], creeps: [envoy(90)] });
+    expect(shouldSpawnReserver(reserved(room, 40))).toBe(false);
   });
 });
 

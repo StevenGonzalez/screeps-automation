@@ -239,8 +239,10 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!blockaded && !economyCritical && spawnUnclaimer(room, spawn)) return;
   if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
-  if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
+  // An envoy is a few parts, and one late lets its remote's reservation lapse,
+  // so it goes ahead of the merchants, who take the most of the spawn's time.
   if (!blockaded && shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
+  if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
 
   if (!blockaded && shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;
   if (!blockaded && shouldSpawnDepositCreep(room) && spawnNextDepositCreep(room, spawn)) return;

@@ -216,6 +216,16 @@ export function spawnLeadTicks(bodyParts: number, travelTicks: number): number {
   return bodyParts * CREEP_SPAWN_TIME + travelTicks;
 }
 
+// A replacement that comes due while the barracks spawns something else waits
+// for that body to finish. One pilgrim's 99 ticks outlasted both of
+// Embercrag's miners, and the empty posts raised an emergency harvester that
+// then stood idle beside the new miners for its whole life. The longest body
+// the room can afford sets the margin.
+export function longestSpawnTicks(room: Room): number {
+  const parts = Math.min(MAX_BODY_PART_COUNT, Math.floor(room.energyCapacityAvailable / BODYPART_COST[MOVE]));
+  return parts * CREEP_SPAWN_TIME;
+}
+
 export function isRetiring(creep: Creep, lead: number): boolean {
   const ttl = creep.ticksToLive;
   return ttl !== undefined && ttl <= lead;
