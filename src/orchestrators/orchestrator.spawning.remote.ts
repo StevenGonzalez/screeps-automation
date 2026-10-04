@@ -460,9 +460,13 @@ interface RemoteHaulPlan {
 }
 
 // Haulers each active remote needs and how big, from its sources' path
-// distances. The count is what full-size haulers would take; the CARRY is then
-// split evenly between them with REMOTE_HAUL_MARGIN on top. Every hauler used
-// to be full size, so a remote needing 24 CARRY got two 19-CARRY haulers.
+// distances. The count is what full-size haulers would take to carry the
+// output with REMOTE_HAUL_MARGIN on top, and that CARRY is split evenly
+// between them. Every hauler used to be full size, so a remote needing 24
+// CARRY got two 19-CARRY haulers. Counting them before the margin lost it
+// whenever the haulers were already as big as the home could build: Grimford
+// sent eleven 7-CARRY merchants to a remote needing 76 CARRY, and its
+// containers overflowed while they walked.
 function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
   // Ask the body builder how much CARRY a hauler actually gets rather than
   // re-deriving it here. The copy this replaces divided by 200 while the body
@@ -486,13 +490,14 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
     for (const src of remote.sources) {
       requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
     }
+    const carry = requiredCarry * REMOTE_HAUL_MARGIN;
     const count = Math.min(
       Math.ceil((MAX_REMOTE_HAULERS_PER_ROOM * fullSizeCarry(paved)) / carryPerHauler),
-      Math.max(1, Math.ceil(requiredCarry / carryPerHauler))
+      Math.max(1, Math.ceil(carry / carryPerHauler))
     );
     const carryEach = Math.min(
       carryPerHauler,
-      Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil((requiredCarry * REMOTE_HAUL_MARGIN) / count))
+      Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil(carry / count))
     );
     plans[remote.roomName] = { count, carryEach, paved };
   }

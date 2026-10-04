@@ -249,13 +249,13 @@ describe("remote hauler sizing", () => {
 });
 
 describe("merchants on a paved road", () => {
-  // 60 steps out is 24 CARRY. A 1300-gold home plans merchants of 1170 gold:
-  // with one MOVE per CARRY that holds 10, so the remote needs three; with one
-  // MOVE per two it holds 12, and two will do. The road runs over ten tiles
-  // and the exit, which takes none.
+  // 50 steps out is 20 CARRY, 24 with a fifth on top. A 1300-gold home plans
+  // merchants of 1170 gold: with one MOVE per CARRY that holds 10, so the
+  // remote needs three; with one MOVE per two it holds 12, and two will do.
+  // The road runs over ten tiles and the exit, which takes none.
   function remoteWithRoad(built: number): Room {
     const tiles = Array.from({ length: 10 }, (_, i) => `${10 + i},20`);
-    const r = remote("W4N5", [60]);
+    const r = remote("W4N5", [50]);
     r.sources[0].containerId = "box" as Id<StructureContainer>;
     r.sources[0].roadTiles = ["0,20", ...tiles].join(";");
     const merchants = [1, 2].map(() => creep(ROLE_REMOTE_HAULER, 22, { targetRoom: "W4N5" }));
@@ -339,8 +339,10 @@ describe("relieving a merchant", () => {
 });
 
 describe("merchants for a young keep", () => {
-  // Two sources 92 and 97 steps out need 76 CARRY. An 800-gold home plans
-  // merchants of 720 gold, 7 CARRY each, so the remote takes eleven of them.
+  // Two sources 92 and 97 steps out need 76 CARRY, 91 with a fifth on top. An
+  // 800-gold home plans merchants of 720 gold, 7 CARRY each, so the remote
+  // takes thirteen of them. Eleven, without the fifth, let the containers
+  // overflow.
   function youngKeep(merchants: number): Room {
     const posted = Array.from({ length: merchants }, () => creep(ROLE_REMOTE_HAULER, 16, { targetRoom: "W4N5" }));
     const room = home({ remotes: [remote("W4N5", [92, 97])], rcl: 3, creeps: posted });
@@ -351,9 +353,9 @@ describe("merchants for a young keep", () => {
   it("raises as many small merchants as a far remote needs", () => {
     expect(shouldSpawnRemoteHauler(youngKeep(6))).toBe(true);
     clock += 1;
-    expect(shouldSpawnRemoteHauler(youngKeep(10))).toBe(true);
+    expect(shouldSpawnRemoteHauler(youngKeep(12))).toBe(true);
     clock += 1;
-    expect(shouldSpawnRemoteHauler(youngKeep(11))).toBe(false);
+    expect(shouldSpawnRemoteHauler(youngKeep(13))).toBe(false);
   });
 });
 
