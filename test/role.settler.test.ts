@@ -10,6 +10,11 @@ g.FIND_SOURCES_ACTIVE = 104;
 g.FIND_DROPPED_RESOURCES = 106;
 g.FIND_STRUCTURES = 107;
 g.STRUCTURE_CONTAINER = "container";
+g.ERR_NO_PATH = -2;
+g.ERR_INVALID_ARGS = -10;
+g.RoomPosition = class {
+  constructor(public x: number, public y: number, public roomName: string) {}
+};
 
 const { runSettler } = await import("../src/roles/role.settler");
 
@@ -64,5 +69,45 @@ describe("settler", () => {
     runSettler(c as unknown as Creep);
     expect(c.harvest).toHaveBeenCalledWith(source);
     expect(c.withdraw).not.toHaveBeenCalled();
+  });
+
+  it("builds with what it carries when every source is dry", () => {
+    const c = settlerBeside({});
+    c.store.energy = 150;
+    runSettler(c as unknown as Creep);
+    expect(c.memory.working).toBe(true);
+    expect(c.moveTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("pilgrim provisions", () => {
+  beforeEach(() => {
+    g.Memory = { rooms: {}, expansion: { roomName: "W2N1", homeRoom: "W1N1", phase: "bootstrapping", startedAt: 0 } };
+    g.Game = { time: 100 };
+  });
+
+  function pilgrimAtHome(stored: number, free = 550) {
+    const storage = { my: true, store: { energy: stored } };
+    const c = settlerBeside({});
+    Object.assign(c, {
+      room: { name: "W1N1", storage, find: () => [], findExitTo: () => 1 },
+      store: { energy: 550 - free, getFreeCapacity: () => free },
+    });
+    return { c, storage };
+  }
+
+  it("fills its packs from the treasury before setting out", () => {
+    const { c, storage } = pilgrimAtHome(45_000);
+    runSettler(c as unknown as Creep);
+    expect(c.withdraw).toHaveBeenCalledWith(storage, "energy");
+    expect(c.moveTo).toHaveBeenCalledWith(storage, expect.anything());
+  });
+
+  it("sets out once its packs are full, or when the treasury has little to spare", () => {
+    for (const { c } of [pilgrimAtHome(45_000, 0), pilgrimAtHome(8_000)]) {
+      runSettler(c as unknown as Creep);
+      expect(c.withdraw).not.toHaveBeenCalled();
+      expect(c.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: "W2N1" }), expect.anything());
+    }
   });
 });

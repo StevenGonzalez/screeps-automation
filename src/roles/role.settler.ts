@@ -32,6 +32,7 @@ export function runSettler(creep: Creep) {
   }
 
   if (creep.room.name !== targetRoom) {
+    if (creep.room.name === homeRoom && takeProvisions(creep)) return;
     moveToRoom(creep, targetRoom);
     return;
   }
@@ -101,6 +102,22 @@ export function runSettler(creep: Creep) {
 // Smaller stocks are not worth the walk over harvesting.
 const MIN_STOCK = 100;
 
+// A treasury holding less than this keeps its gold for its own castle: well
+// clear of the 25,000 below which it stops raising pilgrims at all.
+const PROVISION_FLOOR = 30_000;
+
+// A pilgrim setting out fills its packs from the treasury first. The new
+// keep's sources are shared by every pilgrim and run dry long before the
+// barracks is built, so a full load carried in is building it starts on at once
+// instead of a wait at the source.
+function takeProvisions(creep: Creep): boolean {
+  const storage = creep.room.storage;
+  if (!storage?.my || storage.store[RESOURCE_ENERGY] < PROVISION_FLOOR) return false;
+  if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) return false;
+  if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 10 });
+  return true;
+}
+
 function harvest(creep: Creep) {
   // A keep founded on a remote inherits the vendors' container and whatever
   // they dropped; taking that is far quicker than harvesting by hand.
@@ -123,6 +140,12 @@ function harvest(creep: Creep) {
 
   const source = creep.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
   if (!source) {
+    // Every source is dry until it regenerates: build with what is carried
+    // rather than stand by the throne holding it.
+    if (creep.store[RESOURCE_ENERGY] > 0) {
+      creep.memory.working = true;
+      return;
+    }
     const ctrl = creep.room.controller;
     if (ctrl && !creep.pos.isNearTo(ctrl)) creep.moveTo(ctrl, { reusePath: 20 });
     return;

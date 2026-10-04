@@ -73,8 +73,11 @@ shows the plan under the treasury line.
 1. **Claiming** - a **darklord** travels to the target and claims the controller.
    Aborts cleanly if the room turns out to be owned by another player or fresh
    scout intel flags it hostile.
-2. **Bootstrapping** - **pilgrims** establish the spawn and economy. During this
-   phase the orchestrator:
+2. **Bootstrapping** - **pilgrims** establish the spawn and economy. Each one
+   fills its packs from the funding castle's treasury before setting out (while
+   it holds 30,000 or more), so it starts building on arrival instead of
+   queueing at the keep's sources, and when every source there is dry it builds
+   with what it carries. During this phase the orchestrator:
    - **Pauses** pilgrim spawning for ~200 ticks and flags `needsDefender` if the
      child room is invaded (pilgrims retreat; a home spawn rule raises a defender).
    - **Times out** after 6,000 ticks if the bootstrap never completes.
