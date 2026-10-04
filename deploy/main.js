@@ -14669,7 +14669,8 @@ function getPickedRemoteRoomNames(room) {
 }
 const MAX_REMOTE_SOURCES = 6;
 const REMOTE_SPAWN_SHARE = 0.8;
-const REMOTE_PICK_HEADROOM = 0.1;
+const REMOTE_PICK_HEADROOM = 0.2;
+const REMOTE_PICK_HOLD = 100;
 const REMOTE_CPU_BUCKET_FLOOR = 5000;
 const REMOTE_ECONOMY_ROLES = new Set([
     ROLE_REMOTE_MINER,
@@ -14718,9 +14719,11 @@ const PASSING_ROLES = new Set([
     ROLE_WIZARD,
     ROLE_CLERIC,
 ]);
+function remoteSpawnCapacity(room) {
+    return room.find(FIND_MY_SPAWNS).length * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE;
+}
 function remoteSpawnBudget(room) {
     var _a;
-    const spawns = room.find(FIND_MY_SPAWNS).length;
     let used = 0;
     for (const name in Game.creeps) {
         const c = Game.creeps[name];
@@ -14730,7 +14733,7 @@ function remoteSpawnBudget(room) {
             continue;
         used += c.body.length * CREEP_SPAWN_TIME;
     }
-    return spawns * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE - used;
+    return remoteSpawnCapacity(room) - used;
 }
 const remotePickCache = {};
 function pickRemoteSources(room) {
@@ -14756,13 +14759,15 @@ function pickRemoteSources(room) {
         }
     }
     plans.sort((a, b) => b.profit - a.profit);
-    const total = remoteSpawnBudget(room);
-    let budget = total;
+    const recent = cached && Game.time - cached.tick <= REMOTE_PICK_HOLD ? cached.picked : undefined;
+    const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
+    let budget = remoteSpawnBudget(room);
     const picked = new Map();
     for (const p of plans) {
         if (picked.size >= MAX_REMOTE_SOURCES)
             break;
-        const reserve = mined.has(p.sourceId) ? 0 : total * REMOTE_PICK_HEADROOM;
+        const held = mined.has(p.sourceId) || (recent === null || recent === void 0 ? void 0 : recent.has(p.sourceId));
+        const reserve = held ? 0 : headroom;
         if (p.spawnTime > budget - reserve)
             continue;
         budget -= p.spawnTime;
