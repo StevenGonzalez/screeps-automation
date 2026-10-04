@@ -25,7 +25,7 @@ import {
   buildBoostQueue,
   boostMemory,
 } from "./orchestrator.spawning.shared";
-import { getPickedRemoteRoomNames } from "./orchestrator.spawning.remote";
+import { getPickedRemoteRoomNames, sharedWithBiggerCastle } from "./orchestrator.spawning.remote";
 
 // Damage eats body parts left to right. TOUGH soaks first, then the damage
 // parts (ATTACK / RANGED_ATTACK / WORK), then MOVE, then HEAL. Losing MOVE
@@ -599,7 +599,7 @@ function findRemoteInvaderTarget(room: Room): string | null {
   const worked = getPickedRemoteRoomNames(room);
   for (const r of remotes) {
     if (r.invaderUntil === undefined || r.invaderUntil <= Game.time) continue;
-    if (!worked.has(r.roomName)) continue;
+    if (!worked.has(r.roomName) || sharedWithBiggerCastle(room, r.roomName)) continue;
     const defending = getCreepsByRole(ROLE_KNIGHT).filter(
       (c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName
     ).length;

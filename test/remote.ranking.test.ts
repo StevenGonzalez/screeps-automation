@@ -588,29 +588,29 @@ describe("relieving an envoy", () => {
   });
 });
 
-describe("a remote two castles share", () => {
-  // Each castle works a source of its own in W4N5: the other castle's peddler
-  // is on the first, this castle's on the second.
-  const shared = (otherCapacity: number) => {
-    const ours = creep(ROLE_REMOTE_MINER, 9, { targetRoom: "W4N5", remoteSourceId: "W4N5-s1" as Id<Source> });
-    const theirs = creep(ROLE_REMOTE_MINER, 9, {
-      homeRoom: "W3N5",
-      targetRoom: "W4N5",
-      remoteSourceId: "W4N5-s0" as Id<Source>,
-    });
-    const room = home({ remotes: [remote("W4N5", [30, 40])], creeps: [ours, theirs] });
-    const other = {
-      name: "W3N5",
-      controller: { my: true, level: 4, owner: { username: "Me" } },
-      energyAvailable: otherCapacity,
-      energyCapacityAvailable: otherCapacity,
-      memory: { remoteRooms: [remote("W4N5", [30, 40])] },
-      find: (type: number) => (type === g.FIND_MY_SPAWNS ? [{ id: "spawnB" }] : []),
-    };
-    (g.Game as { rooms: Record<string, unknown> }).rooms.W3N5 = other;
-    return room;
+// Each castle works a source of its own in W4N5: the castle in W3N5 has its
+// peddler on the first, the home its own on the second.
+function shared(otherCapacity: number, invaderUntil?: number): Room {
+  const ours = creep(ROLE_REMOTE_MINER, 9, { targetRoom: "W4N5", remoteSourceId: "W4N5-s1" as Id<Source> });
+  const theirs = creep(ROLE_REMOTE_MINER, 9, {
+    homeRoom: "W3N5",
+    targetRoom: "W4N5",
+    remoteSourceId: "W4N5-s0" as Id<Source>,
+  });
+  const room = home({ remotes: [{ ...remote("W4N5", [30, 40]), invaderUntil }], creeps: [ours, theirs] });
+  const other = {
+    name: "W3N5",
+    controller: { my: true, level: 4, owner: { username: "Me" } },
+    energyAvailable: otherCapacity,
+    energyCapacityAvailable: otherCapacity,
+    memory: { remoteRooms: [{ ...remote("W4N5", [30, 40]), invaderUntil }] },
+    find: (type: number) => (type === g.FIND_MY_SPAWNS ? [{ id: "spawnB" }] : []),
   };
+  (g.Game as { rooms: Record<string, unknown> }).rooms.W3N5 = other;
+  return room;
+}
 
+describe("a remote two castles share", () => {
   it("leaves the envoy to the castle that raises the bigger one", () => {
     expect(shouldSpawnReserver(shared(2300))).toBe(false);
   });
@@ -658,6 +658,12 @@ describe("remote knights", () => {
     const room = home({ remotes: [{ ...remote("W6N5", [60]), invaderUntil: clock + 500 }, raided()], creeps: [guard] });
     sendIdleRemoteKnights(room);
     expect(guard.memory.targetRoom).toBe("W6N5");
+  });
+
+  it("leaves a raided remote a bigger castle also works to that castle's knights", () => {
+    expect(shouldSpawnRemoteDefender(shared(2300, clock + 500))).toBe(false);
+    clock += 1;
+    expect(shouldSpawnRemoteDefender(shared(800, clock + 500))).toBe(true);
   });
 
   it("does not send a knight near its end", () => {

@@ -807,19 +807,19 @@ function needsReservation(room: Room, roomName: string): boolean {
   return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
 }
 
-// A remote two castles both work, each a source of its own, is reserved by the
-// one that raises the bigger envoy, and the other leaves it be. Each would have
-// sent an envoy as the reservation ran low: Embercrag and Thornbarrow share the
-// Crow Glen once Thornbarrow reaches level 3. Envoys from either castle cover
-// the room, so a change in which castle that is sends no second one.
-function reservedByAnotherCastle(room: Room, roomName: string): boolean {
+// A remote two castles both work, each a source of its own, is reserved and
+// defended by the one that raises the bigger creeps, and the other leaves it
+// be. Each would have sent an envoy as the reservation ran low, and a knight
+// against every raid: Embercrag and Thornbarrow share the Crow Glen once
+// Thornbarrow reaches level 3.
+export function sharedWithBiggerCastle(room: Room, roomName: string): boolean {
   for (const name in Game.rooms) {
     const other = Game.rooms[name];
     if (other === room || !other.controller?.my || other.controller.level < 3) continue;
     const bigger =
       other.energyCapacityAvailable > room.energyCapacityAvailable ||
       (other.energyCapacityAvailable === room.energyCapacityAvailable && other.name < room.name);
-    if (bigger && getActiveRemoteRooms(other, "reserve").some((r) => r.roomName === roomName)) return true;
+    if (bigger && getPickedRemoteRoomNames(other).has(roomName)) return true;
   }
   return false;
 }
@@ -827,7 +827,9 @@ function reservedByAnotherCastle(room: Room, roomName: string): boolean {
 function findReserverTarget(room: Room): string | null {
   if ((room.controller?.level ?? 0) < 3) return null;
   // A reserver about to die no longer covers its room, so its replacement is
-  // ordered while it still works, the same way remote miners are.
+  // ordered while it still works, the same way remote miners are. Envoys from
+  // either castle cover a shared remote, so a change in which castle keeps it
+  // sends no second one.
   const covered = new Set(
     getCreepsByRole(ROLE_RESERVER)
       .filter((c) => !isRemoteCreepRetiring(Game.rooms[c.memory.homeRoom ?? ""] ?? room, c))
@@ -835,7 +837,7 @@ function findReserverTarget(room: Room): string | null {
   );
   for (const r of getActiveRemoteRooms(room, "reserve")) {
     if (covered.has(r.roomName) || !needsReservation(room, r.roomName)) continue;
-    if (!reservedByAnotherCastle(room, r.roomName)) return r.roomName;
+    if (!sharedWithBiggerCastle(room, r.roomName)) return r.roomName;
   }
   return null;
 }
