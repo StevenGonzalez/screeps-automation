@@ -513,8 +513,12 @@ function manageActiveExpansion() {
     if (exp.bootstrapStartedAt === undefined) exp.bootstrapStartedAt = Game.time;
     if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
       if (child?.controller?.my && child.find(FIND_MY_SPAWNS).length > 0) {
-        // The keep has a spawn and stays ours; only the settlers stop coming.
-        chronicle(`${castleName(exp.homeRoom)} sends no more settlers. ${castleName(exp.roomName)} must stand on its own now.`);
+        // The keep has a spawn and stays ours; only the settlers stop coming. It
+        // never reaches the established chronicle below, so its arms are
+        // blazoned here instead.
+        chronicle(
+          `${castleName(exp.homeRoom)} sends no more settlers. ${castleName(exp.roomName)} must stand on its own now, under arms of its own: ${blazon(exp.roomName)}.`
+        );
         clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks`);
         return;
       }

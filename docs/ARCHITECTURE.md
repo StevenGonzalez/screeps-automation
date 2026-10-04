@@ -311,7 +311,7 @@ cross, saltire, chevron, fess or roundel), or a field divided per pale, per
 fess, per bend or quarterly between a metal and a colour. The arms hang over
 the Throne and beside the castle's name on the world map, and the chronicle
 blazons them when a new keep stands on its own ("... and raises its arms: per
-pale or and sable.").
+pale or and sable."), or when its settlers stop coming before it does.
 
 ---
 

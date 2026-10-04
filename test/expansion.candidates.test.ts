@@ -10,6 +10,7 @@ g.FIND_MY_SPAWNS = 112;
 
 import { rankExpansionCandidates, loop } from "../src/orchestrators/orchestrator.expansion";
 import { recordCpu } from "../src/services/services.profiler";
+import { blazon } from "../src/services/services.heraldry";
 
 const HOME = "W1N1";
 const ME = "Me";
@@ -122,7 +123,13 @@ describe("bootstrap timeout", () => {
     expect(unclaim).not.toHaveBeenCalled();
     expect((g.Memory as any).expansion).toBeUndefined();
     expect(lastLine()).not.toMatch(/abandoned/);
-    expect(lastLine()).toMatch(/must stand on its own now\.$/);
+    expect(lastLine()).toContain("must stand on its own now");
+  });
+
+  it("blazons the arms of a keep cut loose, which never reaches the established chronicle", () => {
+    keep([{ id: "s1" }]);
+    loop();
+    expect(lastLine()).toMatch(new RegExp(`under arms of its own: ${blazon("W1N2")}\\.$`));
   });
 });
 
