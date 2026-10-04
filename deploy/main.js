@@ -7762,6 +7762,39 @@ function chronicleTrade(t, verb, ours, them, us) {
     const dir = verb === "sold" ? "to" : "from";
     tally(`trade:${verb}:${ours}:${them !== null && them !== void 0 ? them : ""}:${t.resourceType}`, t.amount, (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`, TRADE_WINDOW);
 }
+const BREW_VIRTUES = {
+    UH: "strength",
+    UO: "delving",
+    KH: "the packhorse",
+    KO: "the far shot",
+    LH: "masonry",
+    LO: "mending",
+    ZH: "sundering",
+    ZO: "swiftness",
+    GH: "the crown",
+    GO: "iron skin",
+};
+const REAGENTS = {
+    OH: "hydroxide",
+    ZK: "zynthium keanite",
+    UL: "utrium lemergite",
+    G: "ghodium",
+};
+function brewName(compound) {
+    const reagent = REAGENTS[compound];
+    if (reagent)
+        return reagent;
+    const m = /^(X?)([UKLZG])(H2O|HO2|H|O)$/.exec(compound);
+    if (!m)
+        return compound;
+    const [, catalyzed, element, rest] = m;
+    const kind = catalyzed ? "philters" : rest.length > 1 ? "elixirs" : "draughts";
+    return `${kind} of ${BREW_VIRTUES[element + (rest === "HO2" ? "O" : rest[0])]}`;
+}
+const BREW_WINDOW = 1500;
+function heraldBrew(roomName, compound, amount) {
+    tally(`brew:${roomName}:${compound}`, amount, (n) => `The goblin of ${castleName(roomName)}'s labs brewed ${formatK(n)} ${brewName(compound)}.`, BREW_WINDOW);
+}
 const VISIT_WINDOW = 1500;
 function heraldVisitors(room) {
     for (const c of room.find(FIND_HOSTILE_CREEPS)) {
@@ -13001,7 +13034,7 @@ function runBoosts(room) {
     }
 }
 function processLabSystem(room) {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     if (!room.memory.labSystem)
         room.memory.labSystem = { queue: [] };
     const ls = room.memory.labSystem;
@@ -13045,6 +13078,7 @@ function processLabSystem(room) {
         return;
     const produced = producedStock(ls.activeCompound, room, outputLabs) - ((_a = ls.startStock) !== null && _a !== void 0 ? _a : 0);
     if (produced >= ((_b = ls.targetAmount) !== null && _b !== void 0 ? _b : 0)) {
+        tellBrew(room, ls, produced);
         ls.queue.shift();
         if (ls.queue.length === 0)
             delete ls.plannedTarget;
@@ -13064,6 +13098,7 @@ function processLabSystem(room) {
         Game.time - ((_e = ls.lastProgressTick) !== null && _e !== void 0 ? _e : Game.time) > stallTimeout(room, ls.inputCompounds)) {
         console.log(`[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
             `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`);
+        tellBrew(room, ls, (_f = ls.lastProduced) !== null && _f !== void 0 ? _f : 0);
         const stalled = ls.queue.shift();
         if ((stalled === null || stalled === void 0 ? void 0 : stalled.auto) && ls.plannedTarget) {
             ls.benchedUntil = { ...ls.benchedUntil, [ls.plannedTarget]: Game.time + LAB_TARGET_BENCH_TICKS };
@@ -13080,8 +13115,8 @@ function processLabSystem(room) {
     }
     const rc0 = ls.inputCompounds[0];
     const rc1 = ls.inputCompounds[1];
-    if (((_f = inputLabs[0].store.getUsedCapacity(rc0)) !== null && _f !== void 0 ? _f : 0) > 0 &&
-        ((_g = inputLabs[1].store.getUsedCapacity(rc1)) !== null && _g !== void 0 ? _g : 0) > 0) {
+    if (((_g = inputLabs[0].store.getUsedCapacity(rc0)) !== null && _g !== void 0 ? _g : 0) > 0 &&
+        ((_h = inputLabs[1].store.getUsedCapacity(rc1)) !== null && _h !== void 0 ? _h : 0) > 0) {
         const boostLabIds = new Set();
         for (const lab of assignBoostLabs(outputLabs, getBoostRequests(room).keys()).values()) {
             boostLabIds.add(lab.id);
@@ -13091,6 +13126,13 @@ function processLabSystem(room) {
                 continue;
             outputLab.runReaction(inputLabs[0], inputLabs[1]);
         }
+    }
+}
+function tellBrew(room, ls, amount) {
+    var _a;
+    const brewed = ls.activeCompound;
+    if (amount > 0 && brewed && ((_a = ls.queue[0]) === null || _a === void 0 ? void 0 : _a.auto) && brewed === ls.plannedTarget) {
+        heraldBrew(room.name, brewed, amount);
     }
 }
 function stallTimeout(room, inputs) {
