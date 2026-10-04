@@ -49,6 +49,10 @@ const MAX_REMOTE_CONTAINER_SITES = 2;
 // without holding the global site cap against the owned rooms.
 const MAX_REMOTE_ROAD_SITES = 10;
 
+function hasOwnTower(ownBuiltCount: Map<StructureConstant, number>): boolean {
+  return (ownBuiltCount.get(STRUCTURE_TOWER) ?? 0) > 0;
+}
+
 function buildPriority(key: string): number {
   if (key === PLANNER_KEYS.STAMP_RAMPART_KEY || key === PLANNER_KEYS.STAMP_WALL_KEY) return PERIMETER_PRIORITY;
   if (key === PLANNER_KEYS.TOWN_WALL_KEY || key === PLANNER_KEYS.TOWN_RAMPART_KEY) return TOWN_PRIORITY;
@@ -143,6 +147,9 @@ export function applyPlannedConstruction(room: Room) {
   const rampOnTopTypes = new Set<StructureConstant>(
     STRUCTURE_PLANNER.rampartOnTopFor as StructureConstant[]
   );
+  // A rampart is raised with 1 hit and decays 300 every 100 ticks, so without
+  // a tower to shore it up it crumbles and is raised again, round and round.
+  const holdsRamparts = hasOwnTower(ownBuiltCount);
 
   const roadCompatible = new Set<StructureConstant>([
     STRUCTURE_ROAD,
@@ -263,7 +270,7 @@ export function applyPlannedConstruction(room: Room) {
           const rampartSites = sitesByType.get(STRUCTURE_RAMPART) ?? new Set<string>();
           const covered =
             builtByType.get(STRUCTURE_RAMPART)?.has(posStr) || rampartSites.has(posStr);
-          if (!covered && budget > 0 && room.createConstructionSite(x, y, STRUCTURE_RAMPART) === OK) {
+          if (!covered && holdsRamparts && budget > 0 && room.createConstructionSite(x, y, STRUCTURE_RAMPART) === OK) {
             budget--;
             rampartSites.add(posStr);
             sitesByType.set(STRUCTURE_RAMPART, rampartSites);
@@ -279,6 +286,7 @@ export function applyPlannedConstruction(room: Room) {
       if (type !== STRUCTURE_EXTRACTOR && terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
       keep.push(posStr);
       if (sites?.has(posStr)) continue;
+      if (type === STRUCTURE_RAMPART && !holdsRamparts) continue;
       // Past the RCL limit the engine rejects the site anyway; check before
       // evicting, or a lower-priority site is thrown away for nothing.
       if (atStructureLimit(type as StructureConstant)) continue;
@@ -341,6 +349,7 @@ function ensureRampartsForExistingStructures(room: Room) {
   const rampTypes = (STRUCTURE_PLANNER.rampartOnTopFor ||
     []) as StructureConstant[];
   const structures = room.find(FIND_STRUCTURES) as Structure[];
+  if (!structures.some((s) => s.structureType === STRUCTURE_TOWER && (s as OwnedStructure).my !== false)) return;
 
   const existingRampSet = new Set<string>();
   for (const s of structures) {

@@ -106,7 +106,10 @@ RCL 3, up to 6 at RCL 8) for overlapping fields of fire.
 
 - **On-top ramparts.** The stamp drops a rampart on top of every key structure
   (spawns, storage, towers, labs, terminal, factory, nuker, power spawn,
-  observer, containers) so a nuke can't one-shot them.
+  observer, containers) so a nuke can't one-shot them. No rampart site of any
+  kind is placed until the room has a tower: a new rampart has 1 hit and decays
+  300 every 100 ticks, so without a tower to repair it, it crumbles and is rebuilt
+  over and over.
 - **Defensive perimeter** (`planning/planner.rampart.ts`). At RCL 4+ a **min-cut**
   rampart wall is computed (`services/services.mincut.ts`, max-flow/min-cut on the
   50x50 grid) to seal the core structures (the blueprint's buildings at RCL 8,

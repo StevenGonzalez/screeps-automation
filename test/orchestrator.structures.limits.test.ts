@@ -132,10 +132,13 @@ describe("applyPlannedConstruction ramparts over built structures", () => {
     const positions = Array.from({ length: 12 }, (_, i) => `${10 + i},10`);
     const room = makeRoom({
       planned: { stamp_extensions: positions },
-      structures: positions.map((p) => {
-        const [x, y] = p.split(",").map(Number);
-        return { structureType: "extension", pos: { x, y } };
-      }),
+      structures: [
+        { structureType: "tower", pos: { x: 5, y: 5 } },
+        ...positions.map((p) => {
+          const [x, y] = p.split(",").map(Number);
+          return { structureType: "extension", pos: { x, y } };
+        }),
+      ],
       created,
     });
 
@@ -143,5 +146,19 @@ describe("applyPlannedConstruction ramparts over built structures", () => {
 
     // maxActiveConstructionSites is 8 per room.
     expect(created.length).toBe(8);
+  });
+
+  it("raises no ramparts until a tower can keep them up", () => {
+    const created: string[] = [];
+    const room = makeRoom({
+      planned: { stamp_extensions: ["10,10"], ramparts: ["10,10", "12,12"] },
+      structures: [{ structureType: "extension", pos: { x: 10, y: 10 } }],
+      created,
+    });
+
+    applyPlannedConstruction(room);
+
+    expect(created).toEqual([]);
+    expect(room.memory.plannedStructures!.ramparts).toEqual(["10,10", "12,12"]);
   });
 });
