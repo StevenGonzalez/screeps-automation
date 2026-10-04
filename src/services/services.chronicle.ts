@@ -186,12 +186,15 @@ const WARLORD_EPITHETS = [
 // Raiders live this long, so no raid outlasts it.
 const WARBAND_LIFE = 1500;
 
-/**
- * Names the warlord leading a raid that begins in `roomName` this tick. A
- * remote next to two castles is marked raided once for each, in the same tick,
- * and both draw the same name.
- */
+// A remote next to two castles is marked raided once for each, and the second
+// may see the raiders a few ticks after the first. The chronicle writes the
+// raid once for both, so both take the warlord it names.
+const WARBAND_MUSTER = 10;
+
+/** Names the warlord leading a raid that begins in `roomName` this tick. */
 export function raiseWarband(roomName: string): string {
+  const known = Memory.warbands?.[roomName];
+  if (known && Game.time - known.at <= WARBAND_MUSTER) return known.name;
   const h = mixedHash(`${roomName}:${Game.time}`);
   const name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
   (Memory.warbands ??= {})[roomName] = { name, at: Game.time };

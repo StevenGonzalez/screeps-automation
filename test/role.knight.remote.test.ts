@@ -126,6 +126,19 @@ describe("raids in the chronicle", () => {
     ]);
   });
 
+  it("names one warlord when a second castle sees the raid a few ticks later", () => {
+    markRemoteInvader(remoteEntry, remoteRoom);
+    g.Game = { time: 1004 };
+    markRemoteInvader({ ...remoteEntry, invaderUntil: undefined }, remoteRoom);
+    g.Game = { time: 1400 };
+    clearRemoteInvaderEntry(remoteEntry);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
+      "The Shadow March is rid of Brakka the Gaunt's raiders. The vendors take to the road.",
+    ]);
+  });
+
   it("draws a new warlord for the next raid", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
     const first = (g.Memory as Memory).warbands?.[REMOTE]?.name;
