@@ -13,7 +13,7 @@ const { shouldSpawnSettler, spawnConqueror, spawnSettler } = await import("../sr
 
 describe("settler spawning", () => {
   it("waits for a full settler while the extensions still fill, rather than sending a runt", () => {
-    const room = { name: "W1N1", energyAvailable: 600, energyCapacityAvailable: 2300, memory: {} } as unknown as Room;
+    const room = { name: "W1N1", energyAvailable: 600, energyCapacityAvailable: 2300, memory: {}, find: () => [] } as unknown as Room;
     g.Memory = {
       creeps: {},
       rooms: { W1N1: room.memory },
@@ -30,7 +30,7 @@ describe("settler spawning", () => {
 
 describe("conqueror spawning", () => {
   it("writes the conqueror's departure into the chronicle", () => {
-    const room = { name: "W1N1", energyAvailable: 800, energyCapacityAvailable: 2300, memory: {} } as unknown as Room;
+    const room = { name: "W1N1", energyAvailable: 800, energyCapacityAvailable: 2300, memory: {}, find: () => [] } as unknown as Room;
     g.Memory = {
       creeps: {},
       rooms: { W1N1: room.memory },
@@ -46,7 +46,7 @@ describe("conqueror spawning", () => {
 
 describe("settler spawning chronicle", () => {
   it("counts the pilgrims sent to a keep in one chronicle line", () => {
-    const room = { name: "W1N1", energyAvailable: 2300, energyCapacityAvailable: 2300, memory: {} } as unknown as Room;
+    const room = { name: "W1N1", energyAvailable: 2300, energyCapacityAvailable: 2300, memory: {}, find: () => [] } as unknown as Room;
     g.WORK = "work";
     g.CARRY = "carry";
     g.BODYPART_COST = { claim: 600, move: 50, work: 100, carry: 50 };

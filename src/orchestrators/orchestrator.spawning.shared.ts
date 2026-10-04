@@ -103,14 +103,17 @@ const GIVEN_NAMES = [
 
 // A creep is named for its role and a given name: "Mason Aldric". A name worn
 // by a live creep, still in Memory, or handed out this tick is skipped, so
-// names come free again only once their bearer is dead and buried.
-export function creepName(role: string): string {
+// names come free again only once their bearer is dead and buried. A name on
+// a grave in the room is skipped too, so a new recruit does not muster under
+// the name on a fresh headstone.
+export function creepName(role: string, room?: Room): string {
   freshIssued();
   const title = ROLE_TITLES[role] ?? role;
+  const graves = new Set(room ? room.find(FIND_TOMBSTONES).map((t) => t.creep.name) : []);
   const start = Game.time % GIVEN_NAMES.length;
   for (let i = 0; i < GIVEN_NAMES.length; i++) {
     const name = `${title} ${GIVEN_NAMES[(start + i) % GIVEN_NAMES.length]}`;
-    if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name)) return name;
+    if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name) && !graves.has(name)) return name;
   }
   return `${title} ${Game.time}`;
 }
@@ -126,7 +129,7 @@ export function trackedSpawn(
 ): ScreepsReturnCode {
   const role = opts.memory.role;
   if (getIssuedCount(room, role) > 0) return ERR_BUSY;
-  const name = creepName(role);
+  const name = creepName(role, room);
   const res = spawn.spawnCreep(body, name, opts);
   if (res === OK) {
     issuedNames.add(name);

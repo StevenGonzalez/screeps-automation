@@ -29,6 +29,7 @@ function storageRoom(stored: number): Room {
     energyCapacityAvailable: 1800,
     storage: { store: { energy: stored } },
     memory: {},
+    find: () => [],
   } as unknown as Room;
   g.Game = { time: clock, rooms: { W1N1: room }, creeps: {} };
   g.Memory = { rooms: { W1N1: room.memory }, creeps: {} };
@@ -221,5 +222,12 @@ describe("creep names", () => {
     expect(named[0]).toBe(third);
     expect(named[1]).toMatch(/^Peddler /);
     expect(creepName(ROLE_UPGRADER)).not.toBe(third);
+  });
+
+  it("skips a name on a fresh grave in the room", () => {
+    const room = storageRoom(0);
+    const first = creepName(ROLE_UPGRADER, room);
+    (room as unknown as { find: () => unknown[] }).find = () => [{ creep: { name: first } }];
+    expect(creepName(ROLE_UPGRADER, room)).not.toBe(first);
   });
 });
