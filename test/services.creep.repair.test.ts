@@ -4,6 +4,10 @@ const g = globalThis as Record<string, unknown>;
 g.FIND_STRUCTURES = 107;
 g.FIND_HOSTILE_CREEPS = 103;
 g.STRUCTURE_WALL = "constructedWall";
+g.RESOURCE_ENERGY = "energy";
+g.ATTACK = "attack";
+g.RANGED_ATTACK = "ranged_attack";
+g.STRUCTURE_KEEPER_LAIR = "keeperLair";
 
 import {
   findMostCriticalRepairTarget,
@@ -59,6 +63,7 @@ describe("findMostCriticalRepairTarget ramparts", () => {
   beforeEach(() => {
     tick++;
     g.Game = { time: tick };
+    g.Memory = {};
   });
 
   it("leaves a bare rampart off the stored ring alone, even when decaying", () => {
@@ -113,6 +118,39 @@ describe("findMostCriticalRepairTarget ramparts", () => {
     const room = makeRoom({ level: 6, structures: [far, near], perimeter: ["40,30", "10,10"] });
     const smith = { room, pos: { getRangeTo: (t: AnyStructure) => t.pos.getRangeTo({ x: 9, y: 10 } as RoomPosition) } };
     expect(findMostCriticalRepairTarget(smith as unknown as Creep)?.id).toBe("far");
+  });
+
+  it("leaves raising the walls while the castle saves for a keep", () => {
+    (g.Memory as Memory).expansionSavings = { room: "W1N1", target: "W1N2" };
+    const wall = rampart("perim", 20, 20, 15_000);
+    const saving = makeRoom({ level: 6, structures: [wall], perimeter: ["20,20"], storageEnergy: 30_000 });
+    expect(repairFor(saving)).toBeNull();
+
+    tick++;
+    g.Game = { time: tick };
+    const saved = makeRoom({ level: 6, structures: [wall], perimeter: ["20,20"], storageEnergy: 50_000 });
+    expect(repairFor(saved)?.id).toBe("perim");
+  });
+
+  it("raises the walls under attack whatever the treasury holds", () => {
+    (g.Memory as Memory).expansionSavings = { room: "W1N1", target: "W1N2" };
+    const wall = rampart("perim", 20, 20, 15_000);
+    const raider = { pos: { x: 25, y: 25 }, getActiveBodyparts: (t: string) => (t === g.ATTACK ? 4 : 0) };
+    const room = makeRoom({
+      level: 6,
+      structures: [wall],
+      perimeter: ["20,20"],
+      storageEnergy: 30_000,
+      hostiles: [raider],
+    });
+    expect(repairFor(room)?.id).toBe("perim");
+  });
+
+  it("keeps a decaying rampart standing whatever the treasury holds", () => {
+    (g.Memory as Memory).expansionSavings = { room: "W1N1", target: "W1N2" };
+    const wall = rampart("perim", 20, 20, 1_500);
+    const room = makeRoom({ level: 6, structures: [wall], perimeter: ["20,20"], storageEnergy: 30_000 });
+    expect(repairFor(room)?.id).toBe("perim");
   });
 
   it("holds the perimeter at 1M until storage has energy to spare", () => {

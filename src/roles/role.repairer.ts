@@ -8,8 +8,11 @@ import {
   repairStructure,
   acquireEnergy,
   putSurplusEnergyToWork,
+  getRoomBuildTarget,
 } from "../services/services.creep";
 import { meetIncomingHandoff } from "../services/services.coordination";
+import { upgradingFunded } from "../services/services.treasury";
+import { parkIdle } from "../services/services.town";
 
 export function runRepairer(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
@@ -48,5 +51,12 @@ export function runRepairer(creep: Creep) {
     return;
   }
 
+  // Nothing to mend. With the treasury at its floor the throne waits too, so
+  // the blacksmith keeps its load and waits on the square rather than handing
+  // the controller gold the enchanters are holding back.
+  if (!upgradingFunded(creep.room) && !getRoomBuildTarget(creep.room)) {
+    parkIdle(creep, "square");
+    return;
+  }
   putSurplusEnergyToWork(creep);
 }

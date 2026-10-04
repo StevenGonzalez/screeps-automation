@@ -13,7 +13,7 @@ import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { countOpenTilesAround, getSources } from "../services/services.creep";
-import { upgraderStorageFloor } from "../services/services.treasury";
+import { upgraderStorageFloor, wallsFunded } from "../services/services.treasury";
 import { labsNeedTending } from "../services/services.labs";
 import {
   buildScaledBody,
@@ -503,7 +503,7 @@ export function getRepairerPopulationTarget(room: Room): number {
     if (hasEnergyBuffer) {
       if (rcl >= 3 && worn.length > 0) value = Math.max(value, 1);
       const barrierTarget = barrierTargetFn(room);
-      const wallsNeedRepair = room.find(FIND_STRUCTURES, {
+      const wallsNeedRepair = wallsFunded(room) && room.find(FIND_STRUCTURES, {
         filter: (s): s is AnyStructure =>
           (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
           (s as AnyStructure).hits < barrierTarget(s as AnyStructure),

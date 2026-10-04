@@ -1,6 +1,7 @@
-// How much gold each castle's treasury keeps back from the enchanters. They
-// upgrade the controller only with what sits above the floor, and the floor
-// rises while the castle saves for a new keep or funds one.
+// How much gold each castle's treasury keeps back from the enchanters and the
+// blacksmiths. They upgrade the controller and raise the walls only with what
+// sits above the floor, and the floor rises while the castle saves for a new
+// keep or funds one.
 
 export const UPGRADER_STORAGE_FLOOR = 10_000;
 
@@ -25,6 +26,17 @@ export function savingForKeep(room: Room): boolean {
 
 export function upgraderStorageFloor(room: Room): number {
   return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
+}
+
+/**
+ * Whether the castle can spend gold raising its walls. The walls draw on the
+ * same treasury as the throne, above the same floor: blacksmiths raising a ring
+ * of ramparts otherwise ate the savings for a new keep that the enchanters were
+ * holding back.
+ */
+export function wallsFunded(room: Room): boolean {
+  const storage = room.storage;
+  return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
 }
 
 /**

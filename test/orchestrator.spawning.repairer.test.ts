@@ -15,12 +15,12 @@ function road(x: number, y: number, hits: number) {
 }
 
 // An RCL 6 room with little in storage and one planned road, at 10,10.
-function plannedRoom(structures: unknown[]): Room {
+function plannedRoom(structures: unknown[], stored = 5_000): Room {
   return {
     name: `W1N1-${tick}`,
     controller: { level: 6 },
     energyCapacityAvailable: 0,
-    storage: { store: { energy: 5_000 } },
+    storage: { store: { energy: stored } },
     memory: {
       blueprint: { v: 1, at: tick, anchor: { x: 10, y: 12 }, hub: { x: 10, y: 11 }, s: "R10,10,2", exits: {} },
     },
@@ -42,5 +42,16 @@ describe("repairer population", () => {
 
   it("still sends one for a worn road on the plan", () => {
     expect(getRepairerPopulationTarget(plannedRoom([road(10, 10, 1000)]))).toBe(1);
+  });
+
+  it("sends none to raise the walls while the castle saves for a keep", () => {
+    const rampart = { id: "r", structureType: "rampart", pos: { x: 20, y: 20 }, hits: 15_000, hitsMax: 10_000_000 };
+    g.Memory = {};
+    expect(getRepairerPopulationTarget(plannedRoom([rampart], 30_000))).toBe(1);
+
+    tick += 100;
+    g.Game = { time: tick };
+    g.Memory = { expansionSavings: { room: `W1N1-${tick}`, target: "W1N2" } };
+    expect(getRepairerPopulationTarget(plannedRoom([rampart], 30_000))).toBe(0);
   });
 });

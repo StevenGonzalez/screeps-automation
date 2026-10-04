@@ -1,4 +1,5 @@
 import { TOWN } from "../config/config.town";
+import { wallsFunded } from "./services.treasury";
 import { townBarrierTiles } from "./services.town";
 import { keptRoadTiles } from "../planning/planner.blueprint";
 import {
@@ -348,10 +349,16 @@ function repairCandidates(room: Room): AnyStructure[] {
   );
   if (dying.length > 0) return [dying.reduce((a, b) => (a.hits < b.hits ? a : b))];
 
-  const criticalBarriers = structures.filter(
-    (st): st is AnyStructure =>
-      isBarrier(st) && st.hits < Math.min(BREACH_DANGER_FLOOR, targetOf(st) * 0.5)
-  );
+  // Raising the walls waits on the treasury floor, the same as enchanting does,
+  // unless the castle is under attack. Keeping them standing (above) never waits.
+  const walls = wallsFunded(room) || getDangerPositions(room).length > 0;
+
+  const criticalBarriers = walls
+    ? structures.filter(
+        (st): st is AnyStructure =>
+          isBarrier(st) && st.hits < Math.min(BREACH_DANGER_FLOOR, targetOf(st) * 0.5)
+      )
+    : [];
   if (criticalBarriers.length > 0) return weakestBand(criticalBarriers);
 
   const nonDefensive = structures.filter(
@@ -368,6 +375,7 @@ function repairCandidates(room: Room): AnyStructure[] {
     const tier = nonRoad.length > 0 ? nonRoad : nonDefensive;
     return [tier.reduce(lowestFraction)];
   }
+  if (!walls) return [];
 
   const belowTarget = structures.filter(
     (st): st is AnyStructure => isBarrier(st) && st.hits < targetOf(st)
