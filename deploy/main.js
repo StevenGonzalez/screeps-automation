@@ -1178,9 +1178,10 @@ function tally(key, n, describe, window) {
         e.n = ((_b = e.n) !== null && _b !== void 0 ? _b : 0) + n;
         e.last = Game.time;
         e.text = describe(e.n);
-        return;
+        return false;
     }
     write({ t: Game.time, text: describe(n), key, n, last: Game.time });
+    return true;
 }
 function chronicleDate(t) {
     var _a;
@@ -7552,7 +7553,11 @@ function heraldVisitors(room) {
         const text = armed
             ? `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`
             : `Spies of ${lordName(who)} crept about ${castleName(room.name)}.`;
-        tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
+        const fresh = tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
+        if (fresh && armed) {
+            roomCries[room.name] = "To arms!";
+            spreadWord("raiders!");
+        }
     }
 }
 const WORKS_CHECK_PERIOD = 100;
