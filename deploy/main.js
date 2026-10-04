@@ -1012,15 +1012,16 @@ function summarizeHostiles(hostiles) {
     return s;
 }
 const DEFENDER_KILL_TICKS = 600;
+function meleeDefendersWin(enemy, body, n) {
+    const net = n * body.filter((p) => p === ATTACK).length * ATTACK_POWER - enemy.heal;
+    if (net <= 0)
+        return false;
+    const ticks = enemy.hits / net;
+    return ticks <= DEFENDER_KILL_TICKS && n * body.length * 100 > enemy.damage * ticks;
+}
 function meleeDefendersToWin(enemy, body, cap) {
-    const attack = body.filter((p) => p === ATTACK).length * ATTACK_POWER;
-    const hits = body.length * 100;
     for (let n = 1; n < cap; n++) {
-        const net = n * attack - enemy.heal;
-        if (net <= 0)
-            continue;
-        const ticks = enemy.hits / net;
-        if (ticks <= DEFENDER_KILL_TICKS && n * hits > enemy.damage * ticks)
+        if (meleeDefendersWin(enemy, body, n))
             return n;
     }
     return cap;
@@ -9957,6 +9958,1824 @@ function moveToRoom$4(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }
 
+const BODY_PATTERNS = {
+    [ROLE_HAULER]: [CARRY, CARRY, MOVE],
+    [ROLE_FILLER]: [CARRY, CARRY, MOVE],
+    [ROLE_APOTHECARY]: [CARRY, CARRY, MOVE],
+    [ROLE_BUILDER]: [WORK, CARRY, MOVE],
+    [ROLE_REPAIRER]: [WORK, CARRY, MOVE],
+    [ROLE_HARVESTER]: [WORK, CARRY, MOVE],
+    [ROLE_UPGRADER]: [WORK, WORK, CARRY, MOVE],
+};
+const MAX_BODY_PART_COUNT = 50;
+
+function getRoomMemory(room) {
+    return room.memory;
+}
+
+const SAMPLE_EVERY = 5;
+const CLOSE_BOOKS_EVERY = 100;
+const SMOOTHING = 0.3;
+const windows = {};
+function storedGold(room) {
+    var _a, _b, _c, _d;
+    return ((_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) + ((_d = (_c = room.terminal) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0);
+}
+function windowFor(room) {
+    let w = windows[room.name];
+    if (!w) {
+        w = { start: Game.time, samples: 0, sampled: {}, exact: {}, stored: storedGold(room) };
+        windows[room.name] = w;
+    }
+    return w;
+}
+function add(bucket, key, amount) {
+    var _a;
+    bucket[key] = ((_a = bucket[key]) !== null && _a !== void 0 ? _a : 0) + amount;
+}
+function recordSpend(roomName, kind, amount) {
+    var _a;
+    const room = Game.rooms[roomName];
+    if (!((_a = room === null || room === void 0 ? void 0 : room.controller) === null || _a === void 0 ? void 0 : _a.my))
+        return;
+    add(windowFor(room).exact, kind, amount);
+}
+function remoteHomes(homes) {
+    var _a;
+    const map = {};
+    for (const home of homes) {
+        for (const r of (_a = home.memory.remoteRooms) !== null && _a !== void 0 ? _a : [])
+            map[r.roomName] = home.name;
+    }
+    return map;
+}
+function isMine(id) {
+    const obj = Game.getObjectById(id);
+    return !!obj && obj.my;
+}
+function readEvents(room, w, isHome) {
+    var _a, _b, _c, _d;
+    const events = room.getEventLog();
+    if (events.length === 0)
+        return;
+    const sources = new Set(room.find(FIND_SOURCES).map((s) => s.id));
+    const towers = isHome
+        ? new Set(((_a = room.memory.towerIds) !== null && _a !== void 0 ? _a : []).map((id) => id))
+        : undefined;
+    for (const e of events) {
+        switch (e.event) {
+            case EVENT_HARVEST:
+                if (!sources.has(e.data.targetId))
+                    break;
+                if (!isHome && !isMine(e.objectId))
+                    break;
+                add(w.sampled, isHome ? "mines" : "vendors", e.data.amount);
+                break;
+            case EVENT_UPGRADE_CONTROLLER:
+                if (isHome)
+                    add(w.sampled, "enchant", (_b = e.data.energySpent) !== null && _b !== void 0 ? _b : 0);
+                break;
+            case EVENT_BUILD:
+                if (isHome || isMine(e.objectId))
+                    add(w.sampled, "masonry", (_c = e.data.energySpent) !== null && _c !== void 0 ? _c : e.data.amount);
+                break;
+            case EVENT_REPAIR:
+                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
+                    add(w.sampled, "smithy", TOWER_ENERGY_COST);
+                else if (isHome || isMine(e.objectId))
+                    add(w.sampled, "smithy", (_d = e.data.energySpent) !== null && _d !== void 0 ? _d : 0);
+                break;
+            case EVENT_ATTACK:
+            case EVENT_HEAL:
+                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
+                    add(w.sampled, "towers", TOWER_ENERGY_COST);
+                break;
+        }
+    }
+}
+function round1(n) {
+    return Math.round(n * 10) / 10;
+}
+function blend(prev, next) {
+    return round1(prev === undefined ? next : prev * (1 - SMOOTHING) + next * SMOOTHING);
+}
+const INCOME_KEYS = ["mines", "vendors"];
+const SPEND_KEYS = ["recruits", "enchant", "masonry", "smithy", "towers"];
+function closeBooks(room) {
+    const w = windows[room.name];
+    if (!w || w.samples === 0)
+        return;
+    const ticks = Game.time - w.start;
+    if (!Memory.exchequer)
+        Memory.exchequer = {};
+    const prev = Memory.exchequer[room.name];
+    const rate = (key) => { var _a, _b; return ((_a = w.sampled[key]) !== null && _a !== void 0 ? _a : 0) / w.samples + ((_b = w.exact[key]) !== null && _b !== void 0 ? _b : 0) / ticks; };
+    const books = { at: Game.time, in: {}, out: {} };
+    for (const k of INCOME_KEYS)
+        books.in[k] = blend(prev === null || prev === void 0 ? void 0 : prev.in[k], rate(k));
+    for (const k of SPEND_KEYS)
+        books.out[k] = blend(prev === null || prev === void 0 ? void 0 : prev.out[k], rate(k));
+    books.trend = blend(prev === null || prev === void 0 ? void 0 : prev.trend, (storedGold(room) - w.stored) / ticks);
+    Memory.exchequer[room.name] = books;
+    annal("gold", Math.round((rate("mines") + rate("vendors")) * ticks));
+    delete windows[room.name];
+    windowFor(room);
+}
+function loop$g() {
+    var _a, _b, _c, _d;
+    const homes = [];
+    for (const name in Game.rooms) {
+        const room = Game.rooms[name];
+        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
+            homes.push(room);
+    }
+    for (const home of homes)
+        windowFor(home);
+    if (Game.time % SAMPLE_EVERY === 0) {
+        const remotes = remoteHomes(homes);
+        for (const home of homes) {
+            const w = windowFor(home);
+            w.samples++;
+            readEvents(home, w, true);
+        }
+        for (const remoteName in remotes) {
+            const remote = Game.rooms[remoteName];
+            const home = Game.rooms[remotes[remoteName]];
+            if (!remote || !home || ((_b = remote.controller) === null || _b === void 0 ? void 0 : _b.my))
+                continue;
+            readEvents(remote, windowFor(home), false);
+        }
+    }
+    let closed = false;
+    for (const home of homes) {
+        if (Game.time - windows[home.name].start < CLOSE_BOOKS_EVERY)
+            continue;
+        closeBooks(home);
+        closed = true;
+    }
+    if (closed && Memory.exchequer) {
+        for (const name in Memory.exchequer) {
+            if (!((_d = (_c = Game.rooms[name]) === null || _c === void 0 ? void 0 : _c.controller) === null || _d === void 0 ? void 0 : _d.my))
+                delete Memory.exchequer[name];
+        }
+    }
+}
+function totalIn(books) {
+    return INCOME_KEYS.reduce((s, k) => { var _a; return s + ((_a = books.in[k]) !== null && _a !== void 0 ? _a : 0); }, 0);
+}
+function totalOut(books) {
+    return SPEND_KEYS.reduce((s, k) => { var _a; return s + ((_a = books.out[k]) !== null && _a !== void 0 ? _a : 0); }, 0);
+}
+function describeBooks(books) {
+    const part = (label, n) => n && n >= 0.05 ? `${label} ${n.toFixed(1)}` : undefined;
+    const income = INCOME_KEYS.map((k) => part(k, books.in[k])).filter(Boolean).join("  ");
+    const spend = SPEND_KEYS.map((k) => part(k, books.out[k])).filter(Boolean).join("  ");
+    const net = totalIn(books) - totalOut(books);
+    const sign = (n) => (n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1));
+    return [
+        `Exchequer ${sign(net)}/t  (in ${totalIn(books).toFixed(1)}, out ${totalOut(books).toFixed(1)})`,
+        `  in:  ${income || "nothing"}`,
+        `  out: ${spend || "nothing"}`,
+    ];
+}
+
+function buildScaledBody(role, availableEnergy) {
+    var _a;
+    const pattern = (_a = BODY_PATTERNS[role]) !== null && _a !== void 0 ? _a : [WORK, CARRY, MOVE];
+    const patternCost = calculateBodyPartCost(pattern);
+    const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
+    const maxByEnergy = Math.floor(availableEnergy / patternCost);
+    const repeats = Math.max(1, Math.min(maxByParts, maxByEnergy));
+    const body = [];
+    for (let i = 0; i < repeats; i++)
+        body.push(...pattern);
+    return body;
+}
+function calculateBodyPartCost(parts) {
+    return parts.reduce((cost, part) => cost + BODYPART_COST[part], 0);
+}
+let creepCacheTick = -1;
+const creepsByRoleCache = {};
+function rebuildCreepCache() {
+    if (creepCacheTick === Game.time)
+        return;
+    creepCacheTick = Game.time;
+    for (const key of Object.keys(creepsByRoleCache))
+        delete creepsByRoleCache[key];
+    for (const name in Game.creeps) {
+        const creep = Game.creeps[name];
+        const role = creep.memory.role;
+        if (role) {
+            if (!creepsByRoleCache[role])
+                creepsByRoleCache[role] = [];
+            creepsByRoleCache[role].push(creep);
+        }
+    }
+}
+function getCreepsByRole(role) {
+    var _a;
+    rebuildCreepCache();
+    return (_a = creepsByRoleCache[role]) !== null && _a !== void 0 ? _a : [];
+}
+function getCreepsByRoleInRoom(role, room) {
+    return getCreepsByRole(role).filter((creep) => creep.room.name === room.name);
+}
+let spawningCacheTick = -1;
+const spawningCache = {};
+let issuedTick = -1;
+const issuedThisTick = {};
+const issuedNames = new Set();
+function freshIssued() {
+    if (issuedTick === Game.time)
+        return;
+    issuedTick = Game.time;
+    issuedNames.clear();
+    for (const k of Object.keys(issuedThisTick))
+        delete issuedThisTick[k];
+}
+function spawnOrdersThisTick() {
+    freshIssued();
+    return issuedNames.size;
+}
+function getIssuedCount(room, role) {
+    var _a, _b;
+    freshIssued();
+    return (_b = (_a = issuedThisTick[room.name]) === null || _a === void 0 ? void 0 : _a[role]) !== null && _b !== void 0 ? _b : 0;
+}
+function getRoomSpawningCount(room, role) {
+    var _a, _b;
+    if (spawningCacheTick !== Game.time) {
+        spawningCacheTick = Game.time;
+        for (const k of Object.keys(spawningCache))
+            delete spawningCache[k];
+    }
+    if (!spawningCache[room.name]) {
+        const counts = {};
+        const spawns = room.find(FIND_MY_SPAWNS);
+        for (const s of spawns) {
+            if (!s.spawning)
+                continue;
+            const mem = Memory.creeps[s.spawning.name];
+            if (!(mem === null || mem === void 0 ? void 0 : mem.role))
+                continue;
+            const r = mem.role;
+            counts[r] = ((_a = counts[r]) !== null && _a !== void 0 ? _a : 0) + 1;
+        }
+        spawningCache[room.name] = counts;
+    }
+    return ((_b = spawningCache[room.name][role]) !== null && _b !== void 0 ? _b : 0) + getIssuedCount(room, role);
+}
+const GIVEN_NAMES = [
+    "Aldric", "Agnes", "Bertram", "Beatrix", "Brannoc", "Cedric", "Cecily", "Corvin",
+    "Dunstan", "Edith", "Edric", "Fulk", "Gareth", "Gisela", "Godric", "Hild",
+    "Isolde", "Ivo", "Jocelin", "Kenric", "Leofric", "Lucan", "Maud", "Merek",
+    "Mordred", "Morwen", "Osric", "Percival", "Roderick", "Rowena", "Sigmund", "Sybil",
+    "Thorne", "Tristan", "Ulric", "Wulfric", "Ysolde", "Varian",
+    "Adela", "Alaric", "Alys", "Amice", "Ansel", "Avice", "Baldwin", "Benedict",
+    "Conrad", "Cuthbert", "Drogo", "Edmund", "Elinor", "Emma", "Eustace", "Felice",
+    "Gervase", "Hamo", "Helewise", "Hereward", "Hugh", "Joan", "Juliana", "Lambert",
+    "Mabel", "Matilda", "Muriel", "Nesta", "Odo", "Osbert", "Oswin", "Piers",
+    "Ralph", "Rohese", "Sabina", "Simon", "Theobald", "Walter", "Warin", "Wystan",
+];
+function creepName(role, room) {
+    var _a;
+    freshIssued();
+    const title = (_a = ROLE_TITLES[role]) !== null && _a !== void 0 ? _a : role;
+    const graves = new Set(room ? room.find(FIND_TOMBSTONES).map((t) => t.creep.name) : []);
+    const worn = new Set([...Object.keys(Game.creeps), ...issuedNames].map((n) => n.slice(n.lastIndexOf(" ") + 1)));
+    const start = Game.time % GIVEN_NAMES.length;
+    let shared;
+    for (let i = 0; i < GIVEN_NAMES.length; i++) {
+        const given = GIVEN_NAMES[(start + i) % GIVEN_NAMES.length];
+        const name = `${title} ${given}`;
+        if (Game.creeps[name] || Memory.creeps[name] || issuedNames.has(name) || graves.has(name))
+            continue;
+        if (!worn.has(given))
+            return name;
+        shared = shared !== null && shared !== void 0 ? shared : name;
+    }
+    return shared !== null && shared !== void 0 ? shared : `${title} ${Game.time}`;
+}
+function trackedSpawn(room, spawn, body, opts) {
+    var _a, _b;
+    const role = opts.memory.role;
+    if (getIssuedCount(room, role) > 0)
+        return ERR_BUSY;
+    const name = creepName(role, room);
+    const res = spawn.spawnCreep(body, name, opts);
+    if (res === OK) {
+        issuedNames.add(name);
+        const byRole = (_a = issuedThisTick[room.name]) !== null && _a !== void 0 ? _a : (issuedThisTick[room.name] = {});
+        byRole[role] = ((_b = byRole[role]) !== null && _b !== void 0 ? _b : 0) + 1;
+        recordSpend(room.name, "recruits", calculateBodyPartCost(body));
+        annal("recruits", 1);
+    }
+    return res;
+}
+function countByRoleInRoom(role, room) {
+    const present = getCreepsByRoleInRoom(role, room).filter((c) => !c.spawning).length;
+    return present + getRoomSpawningCount(room, role);
+}
+const SPAWN_HOLD_LIMIT = 100;
+const SPAWN_IDLE_RECHECK = 3;
+function holdSpawnFor(room, role) {
+    const memory = getRoomMemory(room);
+    const hold = memory.spawnHold;
+    const continuing = hold !== undefined && hold.role === role && Game.time - hold.lastTick <= SPAWN_IDLE_RECHECK;
+    const since = continuing ? hold.since : Game.time;
+    memory.spawnHold = { role, since, lastTick: Game.time };
+    return Game.time - since < SPAWN_HOLD_LIMIT;
+}
+const CAPACITY_TARGET_MARGIN = 0.1;
+function bodyBudget(room, basis) {
+    return basis === "available"
+        ? room.energyAvailable
+        : Math.floor(room.energyCapacityAvailable * (1 - CAPACITY_TARGET_MARGIN));
+}
+function spawnLeadTicks(bodyParts, travelTicks) {
+    return bodyParts * CREEP_SPAWN_TIME + travelTicks;
+}
+function longestSpawnTicks(room) {
+    const parts = Math.min(MAX_BODY_PART_COUNT, Math.floor(room.energyCapacityAvailable / BODYPART_COST[MOVE]));
+    return parts * CREEP_SPAWN_TIME;
+}
+function isRetiring(creep, lead) {
+    const ttl = creep.ticksToLive;
+    return ttl !== undefined && ttl <= lead;
+}
+const FULL_BODY_ENERGY_RATIO = 0.9;
+const FULL_BODY_MAX_WAIT = 40;
+function waitForFullBody(room, role, needed) {
+    const memory = getRoomMemory(room);
+    if (!needed || room.energyAvailable >= room.energyCapacityAvailable * FULL_BODY_ENERGY_RATIO) {
+        if (memory.bodyWait)
+            delete memory.bodyWait[role];
+        return false;
+    }
+    if (!memory.bodyWait)
+        memory.bodyWait = {};
+    const wait = memory.bodyWait[role];
+    const energy = room.energyAvailable;
+    if (typeof wait !== "object" || energy > wait.energy) {
+        memory.bodyWait[role] = { since: Game.time, energy };
+        return true;
+    }
+    wait.energy = energy;
+    if (Game.time - wait.since < FULL_BODY_MAX_WAIT)
+        return true;
+    delete memory.bodyWait[role];
+    return false;
+}
+function getRoomPhase$1(room) {
+    var _a, _b;
+    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
+    if (rcl <= 2)
+        return "bootstrap";
+    if (rcl <= 4)
+        return "developing";
+    if (rcl <= 6)
+        return "established";
+    return "powerhouse";
+}
+const BOOST_CANDIDATES = {
+    melee: ['XUH2O', 'UH2O', 'UH'],
+    ranged: ['XKHO2', 'KHO2', 'KO'],
+    healer: ['XLHO2', 'LHO2', 'LO'],
+    drainer: ['XLHO2', 'LHO2', 'LO'],
+    siege: ['XZH2O', 'ZH2O', 'ZH'],
+    tough: ['XGHO2', 'GHO2', 'GO'],
+    move: ['XZHO2', 'ZHO2', 'ZO'],
+    upgrader: ['XGH2O', 'GH2O', 'GH'],
+};
+function pickBoostCompound(room, roleKey, boostParts) {
+    const candidates = BOOST_CANDIDATES[roleKey];
+    if (!candidates)
+        return undefined;
+    const minRequired = boostParts * 30 + 300;
+    for (const compound of candidates) {
+        if (getStockForCompound(compound, room) >= minRequired)
+            return compound;
+    }
+    return undefined;
+}
+function buildBoostQueue(room, roleKey, primaryParts, toughParts, moveParts = 0) {
+    const queue = [];
+    const primary = pickBoostCompound(room, roleKey, primaryParts);
+    if (primary)
+        queue.push(primary);
+    if (toughParts > 0) {
+        const tough = pickBoostCompound(room, "tough", toughParts);
+        if (tough)
+            queue.push(tough);
+    }
+    if (moveParts > 0) {
+        const move = pickBoostCompound(room, "move", moveParts);
+        if (move)
+            queue.push(move);
+    }
+    return queue;
+}
+function boostMemory(queue) {
+    if (queue.length === 0)
+        return {};
+    return {
+        boostCompound: queue[0],
+        ...(queue.length > 1 ? { boostQueue: queue.slice(1) } : {}),
+    };
+}
+
+const PIXEL_TALLY_WINDOW = 5000;
+const PIXEL_REFILL_WINDOW = 5000;
+const PIXEL_REFILL_SLACK = 200;
+function loop$f() {
+    processPixelGeneration();
+}
+function processPixelGeneration() {
+    var _a, _b;
+    if (typeof Game.cpu.generatePixel !== "function")
+        return;
+    if (Memory.pixelGeneration === false)
+        return;
+    if (Game.cpu.bucket < 10000)
+        return;
+    const posture = (_a = Memory.empire) === null || _a === void 0 ? void 0 : _a.posture;
+    if (posture === "WAR" || posture === "TURTLE")
+        return;
+    for (const name in Game.rooms) {
+        const room = Game.rooms[name];
+        if (((_b = room.controller) === null || _b === void 0 ? void 0 : _b.my) && getThreatInfo(room).hostiles.length > 0)
+            return;
+    }
+    if (Game.cpu.generatePixel() === OK) {
+        Memory.lastPixelTick = Game.time;
+        Memory.pixelRefillPeak = 0;
+        tally("pixels", 1, (n) => `The alchemists distilled ${n === 1 ? "a pixel" : `${n} pixels`} from the realm's idle thought.`, PIXEL_TALLY_WINDOW);
+    }
+}
+function inPixelRefill() {
+    var _a;
+    const last = Memory.lastPixelTick;
+    if (last === undefined)
+        return false;
+    const elapsed = Game.time - last;
+    if (elapsed < 0 || elapsed > PIXEL_REFILL_WINDOW)
+        return false;
+    const bucket = Game.cpu.bucket;
+    const peak = Math.max((_a = Memory.pixelRefillPeak) !== null && _a !== void 0 ? _a : 0, bucket);
+    if (bucket < peak - PIXEL_REFILL_SLACK) {
+        delete Memory.lastPixelTick;
+        delete Memory.pixelRefillPeak;
+        return false;
+    }
+    Memory.pixelRefillPeak = peak;
+    return true;
+}
+
+function getScoreFindConstant() {
+    return typeof FIND_SCORES !== "undefined" ? FIND_SCORES : undefined;
+}
+function scoreHunterSupported() {
+    return getScoreFindConstant() !== undefined;
+}
+function loop$e() {
+    var _a, _b;
+    const findConstant = getScoreFindConstant();
+    if (findConstant === undefined)
+        return;
+    const targets = (_a = Memory.scoreTargets) !== null && _a !== void 0 ? _a : (Memory.scoreTargets = {});
+    const patrol = (_b = Memory.scorePatrol) !== null && _b !== void 0 ? _b : (Memory.scorePatrol = { seen: {} });
+    for (const roomName in Game.rooms) {
+        const room = Game.rooms[roomName];
+        patrol.seen[roomName] = Game.time;
+        const scores = room.find(findConstant);
+        const seenIds = new Set();
+        for (const s of scores) {
+            seenIds.add(s.id);
+            const existing = targets[s.id];
+            targets[s.id] = {
+                roomName,
+                x: s.pos.x,
+                y: s.pos.y,
+                value: s.score,
+                expiresAt: Game.time + s.ticksToDecay,
+                claimedBy: existing === null || existing === void 0 ? void 0 : existing.claimedBy,
+            };
+        }
+        for (const id in targets) {
+            if (targets[id].roomName === roomName && !seenIds.has(id))
+                delete targets[id];
+        }
+    }
+    for (const id in targets) {
+        if (Game.time > targets[id].expiresAt)
+            delete targets[id];
+    }
+    for (const id in targets) {
+        const claimant = targets[id].claimedBy;
+        if (claimant && !Game.creeps[claimant])
+            targets[id].claimedBy = undefined;
+    }
+    for (const rn in patrol.seen) {
+        if (Game.time - patrol.seen[rn] > SEEN_TTL)
+            delete patrol.seen[rn];
+    }
+}
+const SEEN_TTL = 50000;
+const SCORE_SCOUT_RADIUS = 4;
+function homeHasObserver(home) {
+    var _a, _b;
+    return !!((_b = (_a = Game.rooms[home]) === null || _a === void 0 ? void 0 : _a.memory) === null || _b === void 0 ? void 0 : _b.observerId);
+}
+function getUnclaimedScoreTargetCount() {
+    const targets = Memory.scoreTargets;
+    if (!targets)
+        return 0;
+    let count = 0;
+    for (const id in targets)
+        if (!targets[id].claimedBy)
+            count++;
+    return count;
+}
+function getScoreTarget(id) {
+    var _a;
+    return (_a = Memory.scoreTargets) === null || _a === void 0 ? void 0 : _a[id];
+}
+function findNearestScoreInRoom(creep) {
+    const findConstant = getScoreFindConstant();
+    if (findConstant === undefined)
+        return undefined;
+    const scores = creep.room.find(findConstant);
+    let best;
+    let bestRange = Infinity;
+    for (const s of scores) {
+        const range = creep.pos.getRangeTo(s.pos);
+        if (range < bestRange) {
+            bestRange = range;
+            best = s;
+        }
+    }
+    return best === null || best === void 0 ? void 0 : best.pos;
+}
+function estimateTravelTicks(fromRoom, toRoom) {
+    if (fromRoom === toRoom)
+        return 0;
+    return Game.map.getRoomLinearDistance(fromRoom, toRoom) * 50 + 25;
+}
+const TRAVEL_SAFETY_MARGIN = 1.3;
+function claimNearestScoreTarget(creep) {
+    var _a;
+    const targets = Memory.scoreTargets;
+    if (!targets)
+        return undefined;
+    let bestId;
+    let bestRate = -Infinity;
+    for (const id in targets) {
+        const t = targets[id];
+        if (t.claimedBy)
+            continue;
+        const travel = estimateTravelTicks(creep.room.name, t.roomName) * TRAVEL_SAFETY_MARGIN;
+        const remaining = t.expiresAt - Game.time;
+        if (travel >= remaining)
+            continue;
+        if (travel >= ((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : CREEP_LIFE_TIME))
+            continue;
+        const rate = t.value / Math.max(travel, 1);
+        if (rate > bestRate) {
+            bestRate = rate;
+            bestId = id;
+        }
+    }
+    if (bestId)
+        targets[bestId].claimedBy = creep.name;
+    return bestId;
+}
+function pickPatrolRoom(creep) {
+    var _a, _b, _c, _d, _e;
+    const home = creep.memory.homeRoom;
+    if (!home)
+        return undefined;
+    if (homeHasObserver(home))
+        return undefined;
+    const myName = (_c = (_b = (_a = Game.rooms[home]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
+    const region = safeRegionRooms(home, myName, SCORE_SCOUT_RADIUS);
+    if (region.length === 0)
+        return undefined;
+    const fleet = [];
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (c.memory.role === ROLE_SCORE_HUNTER && c.memory.homeRoom === home)
+            fleet.push(c);
+    }
+    fleet.sort((a, b) => (a.name < b.name ? -1 : 1));
+    const seen = (_e = (_d = Memory.scorePatrol) === null || _d === void 0 ? void 0 : _d.seen) !== null && _e !== void 0 ? _e : {};
+    const reserved = new Set();
+    for (const c of fleet) {
+        const pick = bestRoom(region, seen, c.pos.roomName, reserved);
+        if (c.name === creep.name) {
+            return pick !== null && pick !== void 0 ? pick : bestRoom(region, seen, creep.pos.roomName, new Set());
+        }
+        if (pick)
+            reserved.add(pick);
+    }
+    return undefined;
+}
+function bestRoom(region, seen, fromRoom, reserved) {
+    var _a;
+    let best;
+    let bestScore = -Infinity;
+    for (const room of region) {
+        if (room === fromRoom || reserved.has(room))
+            continue;
+        const staleness = Game.time - ((_a = seen[room]) !== null && _a !== void 0 ? _a : 0);
+        const s = staleness - Game.map.getRoomLinearDistance(fromRoom, room) * 50;
+        if (s > bestScore) {
+            bestScore = s;
+            best = room;
+        }
+    }
+    return best;
+}
+function getScoreScanRooms(homeRoomName, range) {
+    var _a, _b, _c;
+    const myName = (_c = (_b = (_a = Game.rooms[homeRoomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
+    return safeRegionRooms(homeRoomName, myName, range);
+}
+function safeRegionRooms(home, myName, range) {
+    const result = [];
+    const visited = new Set([home]);
+    let frontier = [home];
+    const homeStatus = Game.map.getRoomStatus(home).status;
+    for (let depth = 0; depth < range; depth++) {
+        const next = [];
+        for (const rn of frontier) {
+            const exits = Game.map.describeExits(rn);
+            for (const nb of Object.values(exits)) {
+                if (!nb || visited.has(nb))
+                    continue;
+                visited.add(nb);
+                if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb) || isDeathTrapRoom(nb))
+                    continue;
+                if (Game.map.getRoomStatus(nb).status !== homeStatus)
+                    continue;
+                result.push(nb);
+                next.push(nb);
+            }
+        }
+        frontier = next;
+    }
+    return result;
+}
+const SCORE_THREAT_TOLERANCE = 12;
+function isDeathTrapRoom(roomName) {
+    var _a, _b;
+    const intel = (_a = Memory.intel) === null || _a === void 0 ? void 0 : _a[roomName];
+    if (!intel)
+        return false;
+    return ((_b = intel.hostileCombatParts) !== null && _b !== void 0 ? _b : 0) >= SCORE_THREAT_TOLERANCE;
+}
+function isHostileOwned(roomName, myName) {
+    var _a, _b;
+    const owner = (_b = (_a = Memory.intel) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.owner;
+    if (!owner)
+        return false;
+    if (owner === myName)
+        return false;
+    if (isAlly(owner))
+        return false;
+    return true;
+}
+
+function isRemoteCreepRetiring(home, creep) {
+    const target = creep.memory.targetRoom;
+    if (!target)
+        return false;
+    const travel = creep.memory.walk || remoteTravelTicks(home, target, creep.memory.remoteSourceId);
+    return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + reliefQueueMargin(home, creep, target));
+}
+function reliefQueueMargin(home, creep, roomName) {
+    var _a, _b, _c, _d;
+    if (creep.memory.role === ROLE_REMOTE_MINER)
+        return longestSpawnTicks(home);
+    if (creep.memory.role !== ROLE_RESERVER)
+        return 0;
+    const res = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.reservation;
+    const banked = res && res.username === ((_d = (_c = home.controller) === null || _c === void 0 ? void 0 : _c.owner) === null || _d === void 0 ? void 0 : _d.username) ? res.ticksToEnd : 0;
+    return Math.max(0, longestSpawnTicks(home) - banked);
+}
+function remoteTravelTicks(home, roomName, sourceId) {
+    var _a;
+    const remote = (_a = home.memory.remoteRooms) === null || _a === void 0 ? void 0 : _a.find((r) => r.roomName === roomName);
+    if (!remote)
+        return estimateRemoteDistance(home, roomName);
+    const sources = sourceId ? remote.sources.filter((s) => s.sourceId === sourceId) : remote.sources;
+    if (sources.length === 0)
+        return estimateRemoteDistance(home, roomName);
+    return Math.max(...sources.map((s) => getRemoteSourceDistance(home, remote, s)));
+}
+function isRemoteEligible(room, r, purpose, ignoreInvaders = false) {
+    var _a, _b, _c, _d, _e, _f;
+    if (r.hostile || r.sources.length === 0)
+        return false;
+    if (!ignoreInvaders && r.invaderUntil !== undefined && r.invaderUntil > Game.time)
+        return false;
+    const ctrl = (_a = Game.rooms[r.roomName]) === null || _a === void 0 ? void 0 : _a.controller;
+    const intel = (_b = Memory.intel) === null || _b === void 0 ? void 0 : _b[r.roomName];
+    const owner = ctrl ? (_c = ctrl.owner) === null || _c === void 0 ? void 0 : _c.username : intel === null || intel === void 0 ? void 0 : intel.owner;
+    if ((ctrl === null || ctrl === void 0 ? void 0 : ctrl.my) || owner)
+        return false;
+    const reservedBy = ctrl ? (_d = ctrl.reservation) === null || _d === void 0 ? void 0 : _d.username : intel === null || intel === void 0 ? void 0 : intel.reservedBy;
+    if (!reservedBy || reservedBy === ((_f = (_e = room.controller) === null || _e === void 0 ? void 0 : _e.owner) === null || _f === void 0 ? void 0 : _f.username))
+        return true;
+    return reservedBy === "Invader" && purpose === "reserve";
+}
+function getActiveRemoteRooms(room, purpose = "harvest") {
+    var _a;
+    const picked = pickRemoteSources(room);
+    const out = [];
+    for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
+        if (!isRemoteEligible(room, r, purpose))
+            continue;
+        const sources = r.sources.filter((s) => picked.has(s.sourceId));
+        if (sources.length > 0)
+            out.push({ ...r, sources });
+    }
+    const rank = (r) => Math.min(...r.sources.map((s) => picked.get(s.sourceId)));
+    return out.sort((a, b) => rank(a) - rank(b));
+}
+function getPickedRemoteRoomNames(room) {
+    var _a;
+    const picked = pickRemoteSources(room);
+    const out = new Set();
+    for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
+        if (r.sources.some((s) => picked.has(s.sourceId)))
+            out.add(r.roomName);
+    }
+    return out;
+}
+const MAX_REMOTE_SOURCES = 6;
+const REMOTE_SPAWN_SHARE = 0.8;
+const REMOTE_PICK_HEADROOM = 0.2;
+const REMOTE_PICK_HOLD = 100;
+const REMOTE_CPU_BUCKET_FLOOR = 5000;
+const REMOTE_CPU_SHED_INTERVAL = 500;
+const REMOTE_CPU_RESTORE_RISE = 3;
+const REMOTE_CPU_RESTORE_BUCKET = 9000;
+function remoteShedSources() {
+    var _a;
+    const state = ((_a = Memory.remoteShed) !== null && _a !== void 0 ? _a : (Memory.remoteShed = { ids: [], at: Game.time, bucket: Game.cpu.bucket }));
+    const elapsed = Game.time - state.at;
+    if (elapsed >= REMOTE_CPU_SHED_INTERVAL) {
+        const bucket = Game.cpu.bucket;
+        const rise = (bucket - state.bucket) / elapsed;
+        state.at = Game.time;
+        state.bucket = bucket;
+        if (bucket < REMOTE_CPU_BUCKET_FLOOR && rise < 0 && !inPixelRefill()) {
+            shedWorstRemoteSource(state.ids);
+        }
+        else if (state.ids.length > 0 &&
+            (rise >= REMOTE_CPU_RESTORE_RISE || (bucket >= REMOTE_CPU_RESTORE_BUCKET && rise >= 0))) {
+            const back = state.ids.pop();
+            chronicle(`The scribes have caught up with their ledgers. ${castleName(back.home)}'s vendors return to a digging in the ${wildsName(back.room)}.`);
+            spreadWord("road open");
+        }
+    }
+    return new Set(state.ids.map((s) => s.id));
+}
+function shedWorstRemoteSource(shed) {
+    var _a, _b;
+    const done = new Set(shed.map((s) => s.id));
+    let worst;
+    for (const c of getCreepsByRole(ROLE_REMOTE_MINER)) {
+        const id = c.memory.remoteSourceId;
+        const home = Game.rooms[(_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : ""];
+        if (!id || !home || done.has(id))
+            continue;
+        const remote = (_b = home.memory.remoteRooms) === null || _b === void 0 ? void 0 : _b.find((r) => r.roomName === c.memory.targetRoom);
+        const src = remote === null || remote === void 0 ? void 0 : remote.sources.find((s) => s.sourceId === id);
+        if (!remote || !src)
+            continue;
+        const plan = planRemoteSource(home, remote, src);
+        const score = plan.profit / plan.creeps;
+        if (!worst || score < worst.score)
+            worst = { id, home: home.name, room: remote.roomName, score };
+    }
+    if (!worst)
+        return;
+    shed.push({ id: worst.id, home: worst.home, room: worst.room });
+    chronicle(`The Crown's scribes cannot keep the ledgers of so many roads. ${castleName(worst.home)}'s vendors give up a digging in the ${wildsName(worst.room)}.`);
+    spreadWord("road shut");
+}
+const REMOTE_ECONOMY_ROLES = new Set([
+    ROLE_REMOTE_MINER,
+    ROLE_REMOTE_HAULER,
+    ROLE_RESERVER,
+]);
+function remoteSourceOutput(room) {
+    const canReserve = room.energyCapacityAvailable >= BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
+    return ((canReserve ? SOURCE_ENERGY_CAPACITY : SOURCE_ENERGY_NEUTRAL_CAPACITY) / ENERGY_REGEN_TIME);
+}
+function remoteHaulCarry(output, dist) {
+    return (output * 2 * dist) / CARRY_CAPACITY;
+}
+function getRemoteSourceDistance(room, remote, src) {
+    var _a;
+    return ((_a = getRemoteSourcePathLength(room, remote, src)) !== null && _a !== void 0 ? _a : estimateRemoteDistance(room, remote.roomName));
+}
+function planRemoteSource(room, remote, src) {
+    const capacity = room.energyCapacityAvailable;
+    const output = remoteSourceOutput(room);
+    const dist = getRemoteSourceDistance(room, remote, src);
+    const roads = remoteRoadsEnabled(room);
+    const miner = buildRemoteMinerBody(capacity);
+    const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads);
+    const haulerCarry = Math.max(1, hauler.filter((p) => p === CARRY).length);
+    const carry = remoteHaulCarry(output, dist) * REMOTE_HAUL_MARGIN;
+    const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
+    const haulerPartsPerCarry = hauler.length / haulerCarry;
+    const reserver = buildReserverBody(capacity);
+    const reserverShare = 1 / remote.sources.length;
+    const claims = reserver.filter((p) => p === CLAIM).length;
+    const reserverRespawns = CREEP_LIFE_TIME / (claims * Math.max(1, CREEP_CLAIM_LIFE_TIME - dist));
+    const roadTiles = src.roadTiles ? src.roadTiles.split(";").length : dist;
+    const decay = (CONTAINER_DECAY / CONTAINER_DECAY_TIME) * REPAIR_COST +
+        (roads ? (roadTiles * ROAD_DECAY_AMOUNT * REPAIR_COST) / ROAD_DECAY_TIME : 0);
+    const upkeep = calculateBodyPartCost(miner) / CREEP_LIFE_TIME +
+        (carry * haulerCostPerCarry) / CREEP_LIFE_TIME +
+        (calculateBodyPartCost(reserver) * reserverShare * reserverRespawns) / CREEP_LIFE_TIME +
+        decay;
+    const parts = miner.length + carry * haulerPartsPerCarry + reserver.length * reserverShare * reserverRespawns;
+    return {
+        profit: output - upkeep,
+        spawnTime: parts * CREEP_SPAWN_TIME,
+        creeps: 1 + carry / haulerCarry + reserverShare,
+    };
+}
+const PASSING_ROLES = new Set([
+    ROLE_SETTLER,
+    ROLE_CONQUEROR,
+    ROLE_KNIGHT,
+    ROLE_WIZARD,
+    ROLE_CLERIC,
+]);
+function remoteSpawnCapacity(room) {
+    return room.find(FIND_MY_SPAWNS).length * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE;
+}
+function remoteSpawnBudget(room) {
+    var _a;
+    let used = 0;
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (REMOTE_ECONOMY_ROLES.has(c.memory.role) || PASSING_ROLES.has(c.memory.role))
+            continue;
+        if (((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) !== room.name)
+            continue;
+        used += c.body.length * CREEP_SPAWN_TIME;
+    }
+    return remoteSpawnCapacity(room) - used;
+}
+const remotePickCache = {};
+function pickRemoteSources(room) {
+    var _a, _b;
+    var _c;
+    const cached = remotePickCache[room.name];
+    if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
+        return cached.picked;
+    }
+    const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
+    const shed = remoteShedSources();
+    const peddlers = getCreepsByRole(ROLE_REMOTE_MINER);
+    const mined = new Set(peddlers.filter((c) => c.memory.homeRoom === room.name).map((c) => c.memory.remoteSourceId));
+    const minedElsewhere = new Set(peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId));
+    const held = (s) => s.pickedAt === undefined ? mined.has(s.sourceId) : Game.time - s.pickedAt <= REMOTE_PICK_HOLD;
+    const plans = [];
+    for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
+        if (!isRemoteEligible(room, r, "reserve", true))
+            continue;
+        for (const s of r.sources) {
+            if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId))
+                continue;
+            if (lowCpu && !mined.has(s.sourceId) && !held(s))
+                continue;
+            const plan = planRemoteSource(room, r, s);
+            if (plan.profit > 0)
+                plans.push({ source: s, ...plan });
+        }
+    }
+    plans.sort((a, b) => b.profit - a.profit);
+    const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
+    let budget = remoteSpawnBudget(room);
+    const picked = new Map();
+    for (const p of plans) {
+        if (picked.size >= MAX_REMOTE_SOURCES)
+            break;
+        const reserve = held(p.source) ? 0 : headroom;
+        if (p.spawnTime > budget - reserve) {
+            (_b = (_c = p.source).pickedAt) !== null && _b !== void 0 ? _b : (_c.pickedAt = 0);
+            continue;
+        }
+        budget -= p.spawnTime;
+        picked.set(p.source.sourceId, picked.size);
+        p.source.pickedAt = Game.time;
+    }
+    remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
+    return picked;
+}
+function getScoutsForRoom(room) {
+    return getCreepsByRole(ROLE_SCOUT).filter((c) => c.memory.homeRoom === room.name);
+}
+function shouldSpawnScout(room) {
+    var _a;
+    const pending = (_a = room.memory.pendingScoutRooms) !== null && _a !== void 0 ? _a : [];
+    if (pending.length === 0)
+        return false;
+    const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
+    return pending.some((r) => !assignedRooms.has(r));
+}
+function spawnScout(room, spawn) {
+    var _a;
+    const pending = (_a = room.memory.pendingScoutRooms) !== null && _a !== void 0 ? _a : [];
+    const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
+    const target = pending.find((r) => !assignedRooms.has(r));
+    if (!target)
+        return false;
+    const res = trackedSpawn(room, spawn, [MOVE], {
+        memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
+    });
+    return res === OK;
+}
+const BASELINE_SCORE_PATROLLERS = 3;
+const MAX_SCORE_HUNTERS_PER_ROOM = 8;
+const ROOMS_PER_HUNTER = 3;
+const BASELINE_SCORE_COLLECTORS = 2;
+function shouldSpawnScoreHunter(room) {
+    if (!scoreHunterSupported())
+        return false;
+    if (getThreatInfo(room).score > 0)
+        return false;
+    if (room.energyAvailable < bodyBudget(room, "capacity"))
+        return false;
+    const unclaimed = getUnclaimedScoreTargetCount();
+    let target;
+    if (homeHasObserver(room.name)) {
+        target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_COLLECTORS, unclaimed));
+    }
+    else {
+        const scanRooms = getScoreScanRooms(room.name, SCORE_SCOUT_RADIUS).length;
+        if (unclaimed === 0 && scanRooms === 0)
+            return false;
+        const coverageNeed = Math.ceil(scanRooms / ROOMS_PER_HUNTER);
+        target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed, coverageNeed));
+    }
+    const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter((c) => !c.spawning && c.memory.homeRoom === room.name);
+    return owned.length + getRoomSpawningCount(room, ROLE_SCORE_HUNTER) < target;
+}
+function spawnScoreHunter(room, spawn) {
+    const res = trackedSpawn(room, spawn, [MOVE], {
+        memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
+    });
+    return res === OK;
+}
+function findUnassignedRemoteSource(room) {
+    const covered = new Set(getCreepsByRole(ROLE_REMOTE_MINER)
+        .filter((c) => {
+        const home = (c.memory.homeRoom && Game.rooms[c.memory.homeRoom]) || room;
+        return !isRemoteCreepRetiring(home, c);
+    })
+        .map((c) => c.memory.remoteSourceId));
+    for (const remote of getActiveRemoteRooms(room)) {
+        for (const src of remote.sources) {
+            if (!covered.has(src.sourceId)) {
+                return { roomName: remote.roomName, sourceId: src.sourceId };
+            }
+        }
+    }
+    return null;
+}
+function shouldSpawnRemoteMiner(room) {
+    var _a, _b;
+    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
+        return false;
+    const needed = findUnassignedRemoteSource(room) !== null;
+    if (waitForFullBody(room, ROLE_REMOTE_MINER, needed))
+        return false;
+    return needed;
+}
+function spawnRemoteMiner(room, spawn) {
+    const assignment = findUnassignedRemoteSource(room);
+    if (!assignment)
+        return false;
+    const allowedEnergy = bodyBudget(room, "available");
+    const body = buildRemoteMinerBody(allowedEnergy);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_REMOTE_MINER,
+            homeRoom: room.name,
+            targetRoom: assignment.roomName,
+            remoteSourceId: assignment.sourceId,
+        },
+    });
+    return res === OK;
+}
+function estimateRemoteDistance(homeRoom, remoteRoomName) {
+    const rooms = Game.map.getRoomLinearDistance(homeRoom.name, remoteRoomName);
+    return rooms * 50 + 25;
+}
+const MAX_REMOTE_HAULERS_PER_ROOM = 6;
+const REMOTE_HAUL_MARGIN = 1.2;
+const MIN_REMOTE_HAULER_CARRY = 4;
+function getRemoteHaulPlans(room) {
+    const roads = remoteRoadsEnabled(room);
+    const budget = bodyBudget(room, "capacity");
+    const carryOf = (paved) => Math.max(1, buildRemoteHaulerBody(budget, roads, paved).filter((p) => p === CARRY).length);
+    const carryOnFoot = carryOf(false);
+    const carryPaved = carryOf(true);
+    const fullSizeCarry = (paved) => buildRemoteHaulerBody(Infinity, roads, paved).filter((p) => p === CARRY).length;
+    const output = remoteSourceOutput(room);
+    const plans = {};
+    for (const remote of getActiveRemoteRooms(room)) {
+        const paved = roads && remotePaved(remote);
+        const carryPerHauler = paved ? carryPaved : carryOnFoot;
+        let requiredCarry = 0;
+        for (const src of remote.sources) {
+            requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
+        }
+        const carry = requiredCarry * REMOTE_HAUL_MARGIN;
+        const count = Math.min(Math.ceil((MAX_REMOTE_HAULERS_PER_ROOM * fullSizeCarry(paved)) / carryPerHauler), Math.max(1, Math.ceil(carry / carryPerHauler)));
+        const carryEach = Math.min(carryPerHauler, Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil(carry / count)));
+        plans[remote.roomName] = { count, carryEach, paved };
+    }
+    return plans;
+}
+function getRemoteHaulerTarget(room) {
+    return Object.values(getRemoteHaulPlans(room)).reduce((a, p) => a + p.count, 0);
+}
+function neediestRemote(activeRooms, plans, haulersByRoom) {
+    var _a, _b, _c;
+    let neediest = activeRooms[0].roomName;
+    let maxShortfall = -Infinity;
+    for (const remote of activeRooms) {
+        const shortfall = ((_b = (_a = plans[remote.roomName]) === null || _a === void 0 ? void 0 : _a.count) !== null && _b !== void 0 ? _b : 0) - ((_c = haulersByRoom[remote.roomName]) !== null && _c !== void 0 ? _c : 0);
+        if (shortfall > maxShortfall) {
+            maxShortfall = shortfall;
+            neediest = remote.roomName;
+        }
+    }
+    return neediest;
+}
+function reassignStrayHaulers(room) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name);
+    if (haulers.length === 0)
+        return;
+    const worked = getPickedRemoteRoomNames(room);
+    const strays = haulers.filter((c) => { var _a; return !worked.has((_a = c.memory.targetRoom) !== null && _a !== void 0 ? _a : ""); });
+    const activeRooms = getActiveRemoteRooms(room);
+    if (activeRooms.length === 0)
+        return;
+    const serving = haulers.filter((c) => !strays.includes(c) && !isRemoteCreepRetiring(room, c));
+    const haulersByRoom = {};
+    for (const h of serving) {
+        const r = h.memory.targetRoom;
+        haulersByRoom[r] = ((_a = haulersByRoom[r]) !== null && _a !== void 0 ? _a : 0) + 1;
+    }
+    const plans = getRemoteHaulPlans(room);
+    for (const c of strays) {
+        const target = neediestRemote(activeRooms, plans, haulersByRoom);
+        c.memory.targetRoom = target;
+        haulersByRoom[target] = ((_b = haulersByRoom[target]) !== null && _b !== void 0 ? _b : 0) + 1;
+    }
+    for (const remote of activeRooms) {
+        const posted = serving.filter((c) => c.memory.targetRoom === remote.roomName);
+        const spare = posted.length - ((_d = (_c = plans[remote.roomName]) === null || _c === void 0 ? void 0 : _c.count) !== null && _d !== void 0 ? _d : 0);
+        for (const c of posted.slice(0, Math.max(0, spare))) {
+            const target = neediestRemote(activeRooms, plans, haulersByRoom);
+            if (((_f = (_e = plans[target]) === null || _e === void 0 ? void 0 : _e.count) !== null && _f !== void 0 ? _f : 0) - ((_g = haulersByRoom[target]) !== null && _g !== void 0 ? _g : 0) <= 0)
+                return;
+            c.memory.targetRoom = target;
+            haulersByRoom[remote.roomName]--;
+            haulersByRoom[target] = ((_h = haulersByRoom[target]) !== null && _h !== void 0 ? _h : 0) + 1;
+        }
+    }
+}
+function shouldSpawnRemoteHauler(room) {
+    var _a, _b;
+    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
+        return false;
+    const activeRooms = getActiveRemoteRooms(room);
+    if (activeRooms.length === 0)
+        return false;
+    const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c));
+    const needed = haulers.length < getRemoteHaulerTarget(room);
+    if (waitForFullBody(room, ROLE_REMOTE_HAULER, needed))
+        return false;
+    return needed;
+}
+function spawnRemoteHauler(room, spawn) {
+    var _a, _b, _c;
+    const activeRooms = getActiveRemoteRooms(room);
+    if (activeRooms.length === 0)
+        return false;
+    const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c));
+    const haulersByRoom = {};
+    for (const h of haulers) {
+        const r = (_a = h.memory.targetRoom) !== null && _a !== void 0 ? _a : "";
+        haulersByRoom[r] = ((_b = haulersByRoom[r]) !== null && _b !== void 0 ? _b : 0) + 1;
+    }
+    const plans = getRemoteHaulPlans(room);
+    const targetRoomName = neediestRemote(activeRooms, plans, haulersByRoom);
+    const roads = remoteRoadsEnabled(room);
+    const plan = plans[targetRoomName];
+    const paved = (_c = plan === null || plan === void 0 ? void 0 : plan.paved) !== null && _c !== void 0 ? _c : false;
+    const planEnergy = plan === undefined
+        ? Infinity
+        : (roads ? BODYPART_COST[WORK] + BODYPART_COST[MOVE] : 0) +
+            (paved
+                ? Math.ceil(plan.carryEach / 2) * (2 * BODYPART_COST[CARRY] + BODYPART_COST[MOVE])
+                : plan.carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]));
+    const allowedEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
+    const body = buildRemoteHaulerBody(allowedEnergy, roads, paved);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_REMOTE_HAULER,
+            homeRoom: room.name,
+            targetRoom: targetRoomName,
+        },
+    });
+    return res === OK;
+}
+function buildRemoteMinerBody(availableEnergy) {
+    const maxWork = 6;
+    const groupCost = 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE];
+    const maxGroups = Math.max(1, Math.floor(availableEnergy / groupCost));
+    const groups = Math.min(maxGroups, Math.ceil(maxWork / 2));
+    let work = Math.min(maxWork, groups * 2);
+    let move = groups;
+    const cost = () => work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
+    if (work === maxWork && availableEnergy < cost() + BODYPART_COST[CARRY])
+        work--;
+    const spare = availableEnergy - cost() - BODYPART_COST[CARRY];
+    if (work < maxWork && spare >= BODYPART_COST[WORK]) {
+        work++;
+        if (spare >= BODYPART_COST[WORK] + BODYPART_COST[MOVE])
+            move++;
+    }
+    const body = [];
+    for (let i = 0; i < work; i++)
+        body.push(WORK);
+    for (let i = 0; i < move; i++)
+        body.push(MOVE);
+    if (availableEnergy >= cost() + BODYPART_COST[CARRY])
+        body.push(CARRY);
+    return body;
+}
+function buildRemoteHaulerBody(availableEnergy, withWork = false, paved = false) {
+    const head = withWork ? [WORK, MOVE] : [];
+    const pattern = paved ? [CARRY, CARRY, MOVE] : [CARRY, MOVE];
+    const patternCost = calculateBodyPartCost(pattern);
+    const maxByParts = Math.floor((MAX_BODY_PART_COUNT - head.length) / pattern.length);
+    const maxByEnergy = Math.floor((availableEnergy - calculateBodyPartCost(head)) / patternCost);
+    const repeats = Math.max(2, Math.min(maxByParts, maxByEnergy));
+    const body = [...head];
+    for (let i = 0; i < repeats; i++)
+        body.push(...pattern);
+    return body;
+}
+const RESERVATION_TOP_UP_TICKS = 1500;
+const MAX_RESERVER_CLAIM = 3;
+function needsReservation(room, roomName) {
+    var _a, _b, _c;
+    const ctrl = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller;
+    if (!ctrl)
+        return true;
+    const res = ctrl.reservation;
+    if (!res || res.username !== ((_c = (_b = room.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username))
+        return true;
+    return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
+}
+function sharedWithBiggerCastle(room, roomName) {
+    var _a;
+    for (const name in Game.rooms) {
+        const other = Game.rooms[name];
+        if (other === room || !((_a = other.controller) === null || _a === void 0 ? void 0 : _a.my) || other.controller.level < 3)
+            continue;
+        const bigger = other.energyCapacityAvailable > room.energyCapacityAvailable ||
+            (other.energyCapacityAvailable === room.energyCapacityAvailable && other.name < room.name);
+        if (bigger && getPickedRemoteRoomNames(other).has(roomName))
+            return true;
+    }
+    return false;
+}
+function findReserverTarget(room) {
+    var _a, _b;
+    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
+        return null;
+    const covered = new Set(getCreepsByRole(ROLE_RESERVER)
+        .filter((c) => { var _a, _b; return !isRemoteCreepRetiring((_b = Game.rooms[(_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : ""]) !== null && _b !== void 0 ? _b : room, c); })
+        .map((c) => c.memory.targetRoom));
+    for (const r of getActiveRemoteRooms(room, "reserve")) {
+        if (covered.has(r.roomName) || !needsReservation(room, r.roomName))
+            continue;
+        if (!sharedWithBiggerCastle(room, r.roomName))
+            return r.roomName;
+    }
+    return null;
+}
+function shouldSpawnReserver(room) {
+    return findReserverTarget(room) !== null;
+}
+function buildReserverBody(capacity) {
+    const pairCost = BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
+    const pairs = Math.max(1, Math.min(MAX_RESERVER_CLAIM, Math.floor(capacity / pairCost)));
+    return [...Array(pairs).fill(CLAIM), ...Array(pairs).fill(MOVE)];
+}
+function spawnReserver(room, spawn) {
+    const target = findReserverTarget(room);
+    if (!target)
+        return false;
+    const body = buildReserverBody(room.energyCapacityAvailable);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_RESERVER,
+            homeRoom: room.name,
+            targetRoom: target,
+        },
+    });
+    return res === OK;
+}
+
+function buildKnightBody(availableEnergy) {
+    const groupCost = BODYPART_COST[TOUGH] + BODYPART_COST[ATTACK] + 2 * BODYPART_COST[MOVE];
+    const maxGroups = Math.min(Math.floor(MAX_BODY_PART_COUNT / 4), Math.floor(availableEnergy / groupCost));
+    const groups = Math.max(1, maxGroups);
+    return [
+        ...Array(groups).fill(TOUGH),
+        ...Array(groups).fill(ATTACK),
+        ...Array(groups * 2).fill(MOVE),
+    ];
+}
+function buildWizardBody(availableEnergy) {
+    const pairCost = BODYPART_COST[MOVE] + BODYPART_COST[RANGED_ATTACK];
+    const maxPairs = Math.min(Math.floor(MAX_BODY_PART_COUNT / 2), Math.floor(availableEnergy / pairCost));
+    const pairs = Math.max(1, maxPairs);
+    return [
+        ...Array(pairs).fill(RANGED_ATTACK),
+        ...Array(pairs).fill(MOVE),
+    ];
+}
+function buildClericBody(availableEnergy) {
+    const pairCost = BODYPART_COST[HEAL] + BODYPART_COST[MOVE];
+    const maxPairs = Math.min(Math.floor(MAX_BODY_PART_COUNT / 2), Math.floor(availableEnergy / pairCost));
+    const pairs = Math.max(1, maxPairs);
+    return [
+        ...Array(pairs).fill(MOVE),
+        ...Array(pairs).fill(HEAL),
+    ];
+}
+function buildDrainerBody(availableEnergy) {
+    const groupCost = BODYPART_COST[TOUGH] + BODYPART_COST[HEAL] + 2 * BODYPART_COST[MOVE];
+    const maxGroups = Math.min(Math.floor(MAX_BODY_PART_COUNT / 4), Math.floor(availableEnergy / groupCost));
+    const groups = Math.max(1, maxGroups);
+    return [
+        ...Array(groups).fill(TOUGH),
+        ...Array(groups * 2).fill(MOVE),
+        ...Array(groups).fill(HEAL),
+    ];
+}
+function buildSiegerBody(availableEnergy) {
+    const groupCost = BODYPART_COST[TOUGH] + 2 * BODYPART_COST[WORK] + 3 * BODYPART_COST[MOVE];
+    const maxGroups = Math.min(Math.floor(MAX_BODY_PART_COUNT / 6), Math.floor(availableEnergy / groupCost));
+    const groups = Math.max(1, maxGroups);
+    return [
+        ...Array(groups).fill(TOUGH),
+        ...Array(groups * 2).fill(WORK),
+        ...Array(groups * 3).fill(MOVE),
+    ];
+}
+function countDefendersInRoom(role, room) {
+    const present = getCreepsByRoleInRoom(role, room).filter((c) => !c.spawning && !c.memory.offensiveTarget).length;
+    return present + getRoomSpawningCount(room, role);
+}
+function isBreached(room) {
+    const core = room.find(FIND_MY_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
+    });
+    const armed = core.some((s) => s.structureType === STRUCTURE_TOWER && s.store[RESOURCE_ENERGY] >= TOWER_ENERGY_COST);
+    return !armed || core.some((s) => s.hits < s.hitsMax);
+}
+function homeNeedsDefenders(room) {
+    return !towersCanHold(room, getThreatInfo(room).hostiles);
+}
+function homeKnightsNeeded(room, cap) {
+    const body = buildKnightBody(bodyBudget(room, "capacity"));
+    return meleeDefendersToWin(summarizeHostiles(getThreatInfo(room).hostiles), body, cap);
+}
+function waitForDefenderBody(room, key, needed) {
+    return waitForFullBody(room, key, needed && !isBreached(room));
+}
+const HOME_KNIGHT_CAP = 3;
+function shouldSpawnKnight(room, threatScore) {
+    const target = Math.max(Math.ceil(threatScore / 40), homeKnightsNeeded(room, HOME_KNIGHT_CAP));
+    const needed = homeNeedsDefenders(room) &&
+        countDefendersInRoom(ROLE_KNIGHT, room) < Math.min(HOME_KNIGHT_CAP, target);
+    if (waitForDefenderBody(room, ROLE_KNIGHT, needed))
+        return false;
+    return needed;
+}
+function spawnKnight(room, spawn) {
+    const allowedEnergy = bodyBudget(room, "available");
+    const body = buildKnightBody(allowedEnergy);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const attackParts = body.filter((p) => p === ATTACK).length;
+    const toughParts = body.filter((p) => p === TOUGH).length;
+    const moveParts = body.filter((p) => p === MOVE).length;
+    const queue = buildBoostQueue(room, 'melee', attackParts, toughParts, moveParts);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
+    });
+    return res === OK;
+}
+function shouldSpawnWizard(room, threatScore) {
+    const needed = homeNeedsDefenders(room) &&
+        countDefendersInRoom(ROLE_WIZARD, room) < Math.min(2, Math.ceil(threatScore / 60));
+    if (waitForDefenderBody(room, ROLE_WIZARD, needed))
+        return false;
+    return needed;
+}
+function spawnWizard(room, spawn) {
+    const allowedEnergy = bodyBudget(room, "available");
+    const body = buildWizardBody(allowedEnergy);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
+    const queue = buildBoostQueue(room, 'ranged', rangedParts, 0);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: { role: ROLE_WIZARD, ...boostMemory(queue) },
+    });
+    return res === OK;
+}
+function shouldSpawnCleric(room, threatScore) {
+    if (threatScore < 100)
+        return false;
+    const fighters = countDefendersInRoom(ROLE_KNIGHT, room) + countDefendersInRoom(ROLE_WIZARD, room);
+    if (fighters === 0)
+        return false;
+    const needed = homeNeedsDefenders(room) && countDefendersInRoom(ROLE_CLERIC, room) < 1;
+    if (waitForDefenderBody(room, ROLE_CLERIC, needed))
+        return false;
+    return needed;
+}
+function spawnCleric(room, spawn) {
+    const allowedEnergy = bodyBudget(room, "available");
+    const body = buildClericBody(allowedEnergy);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const healParts = body.filter((p) => p === HEAL).length;
+    const queue = buildBoostQueue(room, 'healer', healParts, 0);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: { role: ROLE_CLERIC, ...boostMemory(queue) },
+    });
+    return res === OK;
+}
+function shouldSpawnConqueror() {
+    const exp = Memory.expansion;
+    if (!exp || exp.phase !== "claiming")
+        return false;
+    return !getCreepsByRole(ROLE_CONQUEROR).some((c) => c.memory.targetRoom === exp.roomName);
+}
+function spawnConqueror(room, spawn) {
+    const exp = Memory.expansion;
+    if (!exp)
+        return false;
+    const body = [CLAIM, MOVE, MOVE, MOVE, MOVE];
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_CONQUEROR,
+            homeRoom: room.name,
+            targetRoom: exp.roomName,
+        },
+    });
+    if (res !== OK)
+        return false;
+    chronicle(`A conqueror rides out from ${castleName(room.name)} for the ${wildsName(exp.roomName)}.`);
+    return true;
+}
+const UNCLAIMER_LEAD = 400;
+function findUnclaimTarget(room) {
+    var _a;
+    const targets = Memory.unclaimTargets;
+    if (!targets)
+        return null;
+    for (const name in targets) {
+        const t = targets[name];
+        if (t.until <= Game.time) {
+            delete targets[name];
+            continue;
+        }
+        if (t.homeRoom !== room.name)
+            continue;
+        if (((_a = t.blockedUntil) !== null && _a !== void 0 ? _a : 0) - UNCLAIMER_LEAD > Game.time)
+            continue;
+        if (getCreepsByRole(ROLE_UNCLAIMER).some((c) => c.memory.targetRoom === name))
+            continue;
+        return name;
+    }
+    return null;
+}
+function buildUnclaimerBody(capacity) {
+    const pairCost = BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
+    const pairs = Math.max(1, Math.min(Math.floor(MAX_BODY_PART_COUNT / 2), Math.floor(capacity / pairCost)));
+    return [...Array(pairs).fill(CLAIM), ...Array(pairs).fill(MOVE)];
+}
+function spawnUnclaimer(room, spawn) {
+    const target = findUnclaimTarget(room);
+    if (!target)
+        return false;
+    const body = buildUnclaimerBody(room.energyCapacityAvailable);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const res = trackedSpawn(room, spawn, body, {
+        memory: { role: ROLE_UNCLAIMER, homeRoom: room.name, targetRoom: target },
+    });
+    return res === OK;
+}
+const MAX_SETTLERS = 3;
+const PILGRIM_WINDOW = 2000;
+function shouldSpawnSettler(room) {
+    const exp = Memory.expansion;
+    if (!exp || exp.phase !== "bootstrapping" || exp.homeRoom !== room.name)
+        return false;
+    if (exp.pausedUntil && exp.pausedUntil > Game.time)
+        return false;
+    const settlers = getCreepsByRole(ROLE_SETTLER).filter((c) => c.memory.targetRoom === exp.roomName);
+    const needed = settlers.length < MAX_SETTLERS;
+    if (waitForFullBody(room, ROLE_SETTLER, needed))
+        return false;
+    return needed;
+}
+function spawnSettler(room, spawn) {
+    const exp = Memory.expansion;
+    if (!exp)
+        return false;
+    const allowedEnergy = bodyBudget(room, "available");
+    const body = buildScaledBody(ROLE_SETTLER, allowedEnergy);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_SETTLER,
+            homeRoom: room.name,
+            targetRoom: exp.roomName,
+        },
+    });
+    if (res !== OK)
+        return false;
+    const keep = castleName(exp.roomName);
+    tally(`pilgrims:${exp.roomName}`, 1, (n) => `${n === 1 ? "A pilgrim has" : `${n} pilgrims have`} set out from ${castleName(room.name)} to raise the keep of ${keep}.`, PILGRIM_WINDOW);
+    return true;
+}
+function getOffensiveSquadMembers(op) {
+    return Object.values(Game.creeps).filter((c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom);
+}
+function getOffensiveOpForRoom(room) {
+    var _a;
+    return (_a = Memory.militaryOps) === null || _a === void 0 ? void 0 : _a[room.name];
+}
+function shouldSpawnOffensiveCreep(room) {
+    var _a, _b;
+    const op = getOffensiveOpForRoom(room);
+    if (!op || op.phase !== "forming")
+        return false;
+    const members = getOffensiveSquadMembers(op);
+    return (members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredMelee ||
+        members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredRanged ||
+        members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredHealers ||
+        members.filter((c) => c.memory.role === ROLE_SIEGER).length < ((_a = op.requiredSiege) !== null && _a !== void 0 ? _a : 0) ||
+        members.filter((c) => c.memory.role === ROLE_DRAINER).length < ((_b = op.requiredDrainers) !== null && _b !== void 0 ? _b : 0));
+}
+function countDrainLeeches(targetRoom, homeRoom) {
+    return Object.values(Game.creeps).filter((c) => c.memory.role === ROLE_DRAINER &&
+        c.memory.offensiveTarget === targetRoom &&
+        c.memory.homeRoom === homeRoom).length;
+}
+function firstUnderStrengthDrain(room) {
+    for (const op of getDrainOpsForHome(room.name)) {
+        if (countDrainLeeches(op.targetRoom, op.homeRoom) < op.drainers)
+            return op;
+    }
+    return null;
+}
+function shouldSpawnDrainLeech(room) {
+    return firstUnderStrengthDrain(room) !== null;
+}
+function spawnDrainLeech(room, spawn) {
+    const op = firstUnderStrengthDrain(room);
+    if (!op)
+        return false;
+    const body = buildDrainerBody(room.energyCapacityAvailable);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const healParts = body.filter((p) => p === HEAL).length;
+    const toughParts = body.filter((p) => p === TOUGH).length;
+    const queue = buildBoostQueue(room, "drainer", healParts, toughParts);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_DRAINER,
+            homeRoom: room.name,
+            offensiveTarget: op.targetRoom,
+            ...boostMemory(queue),
+        },
+    });
+    if (res === OK)
+        console.log(`[Drain] Spawning ${ROLE_DRAINER}: ${room.name} -> ${op.targetRoom}`);
+    return res === OK;
+}
+function spawnNextOffensiveCreep(room, spawn) {
+    var _a, _b;
+    const op = getOffensiveOpForRoom(room);
+    if (!op)
+        return false;
+    const members = getOffensiveSquadMembers(op);
+    const melee = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
+    const ranged = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
+    const healers = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
+    const siege = members.filter((c) => c.memory.role === ROLE_SIEGER).length;
+    const drainers = members.filter((c) => c.memory.role === ROLE_DRAINER).length;
+    let roleToSpawn = null;
+    if (melee < op.requiredMelee)
+        roleToSpawn = ROLE_KNIGHT;
+    else if (drainers < ((_a = op.requiredDrainers) !== null && _a !== void 0 ? _a : 0))
+        roleToSpawn = ROLE_DRAINER;
+    else if (siege < ((_b = op.requiredSiege) !== null && _b !== void 0 ? _b : 0))
+        roleToSpawn = ROLE_SIEGER;
+    else if (ranged < op.requiredRanged)
+        roleToSpawn = ROLE_WIZARD;
+    else if (healers < op.requiredHealers)
+        roleToSpawn = ROLE_CLERIC;
+    if (!roleToSpawn)
+        return false;
+    const energy = room.energyCapacityAvailable;
+    let body;
+    let boostKey;
+    let combatPartType;
+    if (roleToSpawn === ROLE_KNIGHT) {
+        body = buildKnightBody(energy);
+        boostKey = "melee";
+        combatPartType = ATTACK;
+    }
+    else if (roleToSpawn === ROLE_SIEGER) {
+        body = buildSiegerBody(energy);
+        boostKey = "siege";
+        combatPartType = WORK;
+    }
+    else if (roleToSpawn === ROLE_WIZARD) {
+        body = buildWizardBody(energy);
+        boostKey = "ranged";
+        combatPartType = RANGED_ATTACK;
+    }
+    else if (roleToSpawn === ROLE_DRAINER) {
+        body = buildDrainerBody(energy);
+        boostKey = "drainer";
+        combatPartType = HEAL;
+    }
+    else {
+        body = buildClericBody(energy);
+        boostKey = "healer";
+        combatPartType = HEAL;
+    }
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const combatParts = body.filter((p) => p === combatPartType).length;
+    const toughParts = body.filter((p) => p === TOUGH).length;
+    const moveParts = boostKey === "melee" || boostKey === "siege"
+        ? body.filter((p) => p === MOVE).length
+        : 0;
+    const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: roleToSpawn,
+            homeRoom: room.name,
+            offensiveTarget: op.targetRoom,
+            ...boostMemory(queue),
+        },
+    });
+    if (res === OK) {
+        console.log(`[Military] Spawning offensive ${roleToSpawn} for ${op.targetRoom}`);
+    }
+    return res === OK;
+}
+function countDefendersByRole(targetRoom, role, homeRoom) {
+    const live = getDefenders(targetRoom).filter((c) => !c.spawning && c.memory.role === role).length;
+    const adHoc = targetRoom === homeRoom.name
+        ? getCreepsByRoleInRoom(role, homeRoom).filter((c) => !c.spawning &&
+            !c.memory.defensiveTarget &&
+            !c.memory.offensiveTarget &&
+            !c.memory.targetRoom).length
+        : 0;
+    return live + adHoc + getRoomSpawningCount(homeRoom, role);
+}
+function needsChildRoomDefender(room) {
+    const exp = Memory.expansion;
+    if (!(exp === null || exp === void 0 ? void 0 : exp.needsDefender) || exp.homeRoom !== room.name)
+        return false;
+    const existing = getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.targetRoom === exp.roomName && c.memory.homeRoom === room.name);
+    return existing.length === 0;
+}
+const DEFENSE_OP_KNIGHT_CAP = 6;
+function requiredOpMelee(room, op) {
+    return Math.max(op.requiredMelee, homeKnightsNeeded(room, DEFENSE_OP_KNIGHT_CAP));
+}
+const DEFENSE_OP_BODY_WAIT = "defenseOp";
+function shouldSpawnDefender(room) {
+    if (needsChildRoomDefender(room))
+        return true;
+    const op = getDefenseOp(room.name);
+    if (!op)
+        return false;
+    const short = countDefendersByRole(room.name, ROLE_KNIGHT, room) < requiredOpMelee(room, op) ||
+        countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredRanged ||
+        countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers;
+    if (waitForDefenderBody(room, DEFENSE_OP_BODY_WAIT, short))
+        return false;
+    return short;
+}
+function spawnNextDefender(room, spawn) {
+    if (needsChildRoomDefender(room)) {
+        return spawnChildRoomDefender(room, spawn);
+    }
+    const op = getDefenseOp(room.name);
+    if (!op)
+        return false;
+    let roleToSpawn = null;
+    let combatPartType = ATTACK;
+    let boostKey = "melee";
+    let body;
+    const allowedEnergy = bodyBudget(room, "available");
+    if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < requiredOpMelee(room, op)) {
+        roleToSpawn = ROLE_KNIGHT;
+        combatPartType = ATTACK;
+        boostKey = "melee";
+        body = buildKnightBody(allowedEnergy);
+    }
+    else if (countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredRanged) {
+        roleToSpawn = ROLE_WIZARD;
+        combatPartType = RANGED_ATTACK;
+        boostKey = "ranged";
+        body = buildWizardBody(allowedEnergy);
+    }
+    else if (countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers) {
+        roleToSpawn = ROLE_CLERIC;
+        combatPartType = HEAL;
+        boostKey = "healer";
+        body = buildClericBody(allowedEnergy);
+    }
+    else {
+        return false;
+    }
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const combatParts = body.filter((p) => p === combatPartType).length;
+    const toughParts = body.filter((p) => p === TOUGH).length;
+    const moveParts = boostKey === "melee" ? body.filter((p) => p === MOVE).length : 0;
+    const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: roleToSpawn,
+            homeRoom: room.name,
+            defensiveTarget: room.name,
+            ...boostMemory(queue),
+        },
+    });
+    if (res === OK) {
+        console.log(`[Defense] Spawning defensive ${roleToSpawn} for ${room.name}`);
+    }
+    return res === OK;
+}
+function spawnChildRoomDefender(room, spawn) {
+    const exp = Memory.expansion;
+    if (!exp)
+        return false;
+    const allowedEnergy = bodyBudget(room, "available");
+    const body = buildKnightBody(allowedEnergy);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const attackParts = body.filter((p) => p === ATTACK).length;
+    const toughParts = body.filter((p) => p === TOUGH).length;
+    const moveParts = body.filter((p) => p === MOVE).length;
+    const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_KNIGHT,
+            homeRoom: room.name,
+            targetRoom: exp.roomName,
+            ...boostMemory(queue),
+        },
+    });
+    if (res === OK) {
+        console.log(`[Defense] Spawning child-room defender for ${exp.roomName}`);
+    }
+    return res === OK;
+}
+const REMOTE_KNIGHT_CAP = 2;
+function remoteKnightsNeeded(room, remote) {
+    if (!remote.invaderStrength)
+        return 1;
+    const body = buildKnightBody(bodyBudget(room, "capacity"));
+    const n = meleeDefendersToWin(remote.invaderStrength, body, REMOTE_KNIGHT_CAP);
+    return meleeDefendersWin(remote.invaderStrength, body, n) ? n : Infinity;
+}
+function awaitingRemoteKnights(creep) {
+    var _a, _b, _c;
+    const homeName = (_a = creep.memory.homeRoom) !== null && _a !== void 0 ? _a : "";
+    const remote = (_c = (_b = Memory.rooms[homeName]) === null || _b === void 0 ? void 0 : _b.remoteRooms) === null || _c === void 0 ? void 0 : _c.find((r) => r.roomName === creep.memory.targetRoom);
+    if (!(remote === null || remote === void 0 ? void 0 : remote.invaderStrength))
+        return false;
+    const home = Game.rooms[homeName];
+    if (!home)
+        return false;
+    const needed = remoteKnightsNeeded(home, remote);
+    if (needed <= 1)
+        return false;
+    const ready = getCreepsByRole(ROLE_KNIGHT).filter((c) => !c.spawning && c.memory.homeRoom === home.name && c.memory.targetRoom === remote.roomName).length;
+    return ready < needed;
+}
+function findRemoteInvaderTarget(room) {
+    var _a, _b;
+    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
+        return null;
+    const remotes = room.memory.remoteRooms;
+    if (!remotes)
+        return null;
+    const worked = getPickedRemoteRoomNames(room);
+    for (const r of remotes) {
+        if (r.invaderUntil === undefined || r.invaderUntil <= Game.time)
+            continue;
+        if (!worked.has(r.roomName) || sharedWithBiggerCastle(room, r.roomName))
+            continue;
+        const defending = getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName).length;
+        const needed = remoteKnightsNeeded(room, r);
+        if (needed <= REMOTE_KNIGHT_CAP && defending < needed)
+            return r.roomName;
+    }
+    return null;
+}
+const REMOTE_KNIGHT_MIN_TTL = 150;
+function sendIdleRemoteKnights(room) {
+    var _a;
+    const remotes = room.memory.remoteRooms;
+    if (!(remotes === null || remotes === void 0 ? void 0 : remotes.some((r) => { var _a; return ((_a = r.invaderUntil) !== null && _a !== void 0 ? _a : 0) > Game.time; })))
+        return;
+    const raided = (name) => { var _a, _b; return ((_b = (_a = remotes.find((r) => r.roomName === name)) === null || _a === void 0 ? void 0 : _a.invaderUntil) !== null && _b !== void 0 ? _b : 0) > Game.time; };
+    for (const knight of getCreepsByRole(ROLE_KNIGHT)) {
+        const m = knight.memory;
+        if (m.homeRoom !== room.name || !m.targetRoom || m.offensiveTarget || m.defensiveTarget)
+            continue;
+        if (raided(m.targetRoom) || ((_a = knight.ticksToLive) !== null && _a !== void 0 ? _a : 0) < REMOTE_KNIGHT_MIN_TTL)
+            continue;
+        const target = findRemoteInvaderTarget(room);
+        if (!target)
+            return;
+        m.targetRoom = target;
+    }
+}
+const REMOTE_DEFENDER_BODY_WAIT = "remoteDefender";
+function shouldSpawnRemoteDefender(room) {
+    const needed = findRemoteInvaderTarget(room) !== null;
+    if (waitForFullBody(room, REMOTE_DEFENDER_BODY_WAIT, needed))
+        return false;
+    return needed;
+}
+function spawnRemoteDefender(room, spawn) {
+    const target = findRemoteInvaderTarget(room);
+    if (!target)
+        return false;
+    const allowedEnergy = bodyBudget(room, "available");
+    const body = buildKnightBody(allowedEnergy);
+    if (room.energyAvailable < calculateBodyPartCost(body))
+        return false;
+    const attackParts = body.filter((p) => p === ATTACK).length;
+    const toughParts = body.filter((p) => p === TOUGH).length;
+    const moveParts = body.filter((p) => p === MOVE).length;
+    const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
+    const res = trackedSpawn(room, spawn, body, {
+        memory: {
+            role: ROLE_KNIGHT,
+            homeRoom: room.name,
+            targetRoom: target,
+            ...boostMemory(queue),
+        },
+    });
+    if (res === OK)
+        console.log(`[Defense] Spawning remote defender for ${target}`);
+    return res === OK;
+}
+
 const RETREAT_THRESHOLD = 0.2;
 function runKnight(creep) {
     var _a;
@@ -9988,7 +11807,8 @@ function runKnight(creep) {
     const invaded = isAssignedRemoteInvaded(creep);
     if (!invaded)
         delete creep.memory.sortie;
-    if (target && creep.room.name !== target && invaded) {
+    const mustering = invaded && creep.room.name === home && awaitingRemoteKnights(creep);
+    if (target && creep.room.name !== target && invaded && !mustering) {
         crySortie(creep, target);
         creep.moveTo(new RoomPosition(25, 25, target), { reusePath: 20 });
         return;
@@ -11043,7 +12863,7 @@ const SK_MIN_HOME_ENERGY = 40000;
 const SK_MIN_HOME_CAPACITY = 2500;
 const SK_MAX_CONCURRENT = 4;
 const SK_MAX_PER_HOME = 2;
-function loop$g() {
+function loop$d() {
     const ops = Memory.skOps;
     if (!ops || ops.length === 0)
         return;
@@ -11419,220 +13239,6 @@ function deposit(creep, homeRoom) {
 }
 function moveToRoom(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
-}
-
-function getScoreFindConstant() {
-    return typeof FIND_SCORES !== "undefined" ? FIND_SCORES : undefined;
-}
-function scoreHunterSupported() {
-    return getScoreFindConstant() !== undefined;
-}
-function loop$f() {
-    var _a, _b;
-    const findConstant = getScoreFindConstant();
-    if (findConstant === undefined)
-        return;
-    const targets = (_a = Memory.scoreTargets) !== null && _a !== void 0 ? _a : (Memory.scoreTargets = {});
-    const patrol = (_b = Memory.scorePatrol) !== null && _b !== void 0 ? _b : (Memory.scorePatrol = { seen: {} });
-    for (const roomName in Game.rooms) {
-        const room = Game.rooms[roomName];
-        patrol.seen[roomName] = Game.time;
-        const scores = room.find(findConstant);
-        const seenIds = new Set();
-        for (const s of scores) {
-            seenIds.add(s.id);
-            const existing = targets[s.id];
-            targets[s.id] = {
-                roomName,
-                x: s.pos.x,
-                y: s.pos.y,
-                value: s.score,
-                expiresAt: Game.time + s.ticksToDecay,
-                claimedBy: existing === null || existing === void 0 ? void 0 : existing.claimedBy,
-            };
-        }
-        for (const id in targets) {
-            if (targets[id].roomName === roomName && !seenIds.has(id))
-                delete targets[id];
-        }
-    }
-    for (const id in targets) {
-        if (Game.time > targets[id].expiresAt)
-            delete targets[id];
-    }
-    for (const id in targets) {
-        const claimant = targets[id].claimedBy;
-        if (claimant && !Game.creeps[claimant])
-            targets[id].claimedBy = undefined;
-    }
-    for (const rn in patrol.seen) {
-        if (Game.time - patrol.seen[rn] > SEEN_TTL)
-            delete patrol.seen[rn];
-    }
-}
-const SEEN_TTL = 50000;
-const SCORE_SCOUT_RADIUS = 4;
-function homeHasObserver(home) {
-    var _a, _b;
-    return !!((_b = (_a = Game.rooms[home]) === null || _a === void 0 ? void 0 : _a.memory) === null || _b === void 0 ? void 0 : _b.observerId);
-}
-function getUnclaimedScoreTargetCount() {
-    const targets = Memory.scoreTargets;
-    if (!targets)
-        return 0;
-    let count = 0;
-    for (const id in targets)
-        if (!targets[id].claimedBy)
-            count++;
-    return count;
-}
-function getScoreTarget(id) {
-    var _a;
-    return (_a = Memory.scoreTargets) === null || _a === void 0 ? void 0 : _a[id];
-}
-function findNearestScoreInRoom(creep) {
-    const findConstant = getScoreFindConstant();
-    if (findConstant === undefined)
-        return undefined;
-    const scores = creep.room.find(findConstant);
-    let best;
-    let bestRange = Infinity;
-    for (const s of scores) {
-        const range = creep.pos.getRangeTo(s.pos);
-        if (range < bestRange) {
-            bestRange = range;
-            best = s;
-        }
-    }
-    return best === null || best === void 0 ? void 0 : best.pos;
-}
-function estimateTravelTicks(fromRoom, toRoom) {
-    if (fromRoom === toRoom)
-        return 0;
-    return Game.map.getRoomLinearDistance(fromRoom, toRoom) * 50 + 25;
-}
-const TRAVEL_SAFETY_MARGIN = 1.3;
-function claimNearestScoreTarget(creep) {
-    var _a;
-    const targets = Memory.scoreTargets;
-    if (!targets)
-        return undefined;
-    let bestId;
-    let bestRate = -Infinity;
-    for (const id in targets) {
-        const t = targets[id];
-        if (t.claimedBy)
-            continue;
-        const travel = estimateTravelTicks(creep.room.name, t.roomName) * TRAVEL_SAFETY_MARGIN;
-        const remaining = t.expiresAt - Game.time;
-        if (travel >= remaining)
-            continue;
-        if (travel >= ((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : CREEP_LIFE_TIME))
-            continue;
-        const rate = t.value / Math.max(travel, 1);
-        if (rate > bestRate) {
-            bestRate = rate;
-            bestId = id;
-        }
-    }
-    if (bestId)
-        targets[bestId].claimedBy = creep.name;
-    return bestId;
-}
-function pickPatrolRoom(creep) {
-    var _a, _b, _c, _d, _e;
-    const home = creep.memory.homeRoom;
-    if (!home)
-        return undefined;
-    if (homeHasObserver(home))
-        return undefined;
-    const myName = (_c = (_b = (_a = Game.rooms[home]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
-    const region = safeRegionRooms(home, myName, SCORE_SCOUT_RADIUS);
-    if (region.length === 0)
-        return undefined;
-    const fleet = [];
-    for (const name in Game.creeps) {
-        const c = Game.creeps[name];
-        if (c.memory.role === ROLE_SCORE_HUNTER && c.memory.homeRoom === home)
-            fleet.push(c);
-    }
-    fleet.sort((a, b) => (a.name < b.name ? -1 : 1));
-    const seen = (_e = (_d = Memory.scorePatrol) === null || _d === void 0 ? void 0 : _d.seen) !== null && _e !== void 0 ? _e : {};
-    const reserved = new Set();
-    for (const c of fleet) {
-        const pick = bestRoom(region, seen, c.pos.roomName, reserved);
-        if (c.name === creep.name) {
-            return pick !== null && pick !== void 0 ? pick : bestRoom(region, seen, creep.pos.roomName, new Set());
-        }
-        if (pick)
-            reserved.add(pick);
-    }
-    return undefined;
-}
-function bestRoom(region, seen, fromRoom, reserved) {
-    var _a;
-    let best;
-    let bestScore = -Infinity;
-    for (const room of region) {
-        if (room === fromRoom || reserved.has(room))
-            continue;
-        const staleness = Game.time - ((_a = seen[room]) !== null && _a !== void 0 ? _a : 0);
-        const s = staleness - Game.map.getRoomLinearDistance(fromRoom, room) * 50;
-        if (s > bestScore) {
-            bestScore = s;
-            best = room;
-        }
-    }
-    return best;
-}
-function getScoreScanRooms(homeRoomName, range) {
-    var _a, _b, _c;
-    const myName = (_c = (_b = (_a = Game.rooms[homeRoomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
-    return safeRegionRooms(homeRoomName, myName, range);
-}
-function safeRegionRooms(home, myName, range) {
-    const result = [];
-    const visited = new Set([home]);
-    let frontier = [home];
-    const homeStatus = Game.map.getRoomStatus(home).status;
-    for (let depth = 0; depth < range; depth++) {
-        const next = [];
-        for (const rn of frontier) {
-            const exits = Game.map.describeExits(rn);
-            for (const nb of Object.values(exits)) {
-                if (!nb || visited.has(nb))
-                    continue;
-                visited.add(nb);
-                if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb) || isDeathTrapRoom(nb))
-                    continue;
-                if (Game.map.getRoomStatus(nb).status !== homeStatus)
-                    continue;
-                result.push(nb);
-                next.push(nb);
-            }
-        }
-        frontier = next;
-    }
-    return result;
-}
-const SCORE_THREAT_TOLERANCE = 12;
-function isDeathTrapRoom(roomName) {
-    var _a, _b;
-    const intel = (_a = Memory.intel) === null || _a === void 0 ? void 0 : _a[roomName];
-    if (!intel)
-        return false;
-    return ((_b = intel.hostileCombatParts) !== null && _b !== void 0 ? _b : 0) >= SCORE_THREAT_TOLERANCE;
-}
-function isHostileOwned(roomName, myName) {
-    var _a, _b;
-    const owner = (_b = (_a = Memory.intel) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.owner;
-    if (!owner)
-        return false;
-    if (owner === myName)
-        return false;
-    if (isAlly(owner))
-        return false;
-    return true;
 }
 
 function runScoreHunter(creep) {
@@ -13375,7 +14981,7 @@ function maybeChatter(creep) {
     if (line)
         creep.say(line, true);
 }
-function loop$e() {
+function loop$c() {
     const profile = Memory.profileRoles === true;
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
@@ -13423,7 +15029,7 @@ const AUTO_PRODUCTION_TARGETS = {
     XGHO2: 2000,
     G: 5000,
 };
-function loop$d() {
+function loop$b() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -13649,7 +15255,7 @@ function getRecipe(commodity) {
         level: (_a = def.level) !== null && _a !== void 0 ? _a : 0,
     };
 }
-function loop$c() {
+function loop$a() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -14016,59 +15622,12 @@ function setAuto(roomName, enabled) {
     return null;
 }
 
-const PIXEL_TALLY_WINDOW = 5000;
-const PIXEL_REFILL_WINDOW = 5000;
-const PIXEL_REFILL_SLACK = 200;
-function loop$b() {
-    processPixelGeneration();
-}
-function processPixelGeneration() {
-    var _a, _b;
-    if (typeof Game.cpu.generatePixel !== "function")
-        return;
-    if (Memory.pixelGeneration === false)
-        return;
-    if (Game.cpu.bucket < 10000)
-        return;
-    const posture = (_a = Memory.empire) === null || _a === void 0 ? void 0 : _a.posture;
-    if (posture === "WAR" || posture === "TURTLE")
-        return;
-    for (const name in Game.rooms) {
-        const room = Game.rooms[name];
-        if (((_b = room.controller) === null || _b === void 0 ? void 0 : _b.my) && getThreatInfo(room).hostiles.length > 0)
-            return;
-    }
-    if (Game.cpu.generatePixel() === OK) {
-        Memory.lastPixelTick = Game.time;
-        Memory.pixelRefillPeak = 0;
-        tally("pixels", 1, (n) => `The alchemists distilled ${n === 1 ? "a pixel" : `${n} pixels`} from the realm's idle thought.`, PIXEL_TALLY_WINDOW);
-    }
-}
-function inPixelRefill() {
-    var _a;
-    const last = Memory.lastPixelTick;
-    if (last === undefined)
-        return false;
-    const elapsed = Game.time - last;
-    if (elapsed < 0 || elapsed > PIXEL_REFILL_WINDOW)
-        return false;
-    const bucket = Game.cpu.bucket;
-    const peak = Math.max((_a = Memory.pixelRefillPeak) !== null && _a !== void 0 ? _a : 0, bucket);
-    if (bucket < peak - PIXEL_REFILL_SLACK) {
-        delete Memory.lastPixelTick;
-        delete Memory.pixelRefillPeak;
-        return false;
-    }
-    Memory.pixelRefillPeak = peak;
-    return true;
-}
-
 const BUCKET_RECOVER_THRESHOLD = 3000;
 const BUCKET_RECOVER_EXIT = 6000;
 const STRATEGY_INTERVAL = 5;
 const MULTI_THREAT_RECOVER_COUNT = 2;
 const SPAWNLESS_CRIPPLED_LEVEL = 4;
-function loop$a() {
+function loop$9() {
     var _a, _b, _c, _d, _e, _f;
     if (Game.time % STRATEGY_INTERVAL !== 0)
         return;
@@ -14682,7 +16241,7 @@ function isExpansionPostureAllowed() {
     const posture = (_b = (_a = Memory.empire) === null || _a === void 0 ? void 0 : _a.posture) !== null && _b !== void 0 ? _b : "EXPAND";
     return posture === "EXPAND";
 }
-function loop$9() {
+function loop$8() {
     manageActiveExpansion();
     if (!Memory.expansion)
         advanceExpansionQueue();
@@ -14753,996 +16312,6 @@ function planSavings() {
     Memory.expansionSavings = { room: home, target: next.roomName };
     const after = Memory.expansion && Memory.expansion.phase !== "established" ? "the next keep, " : "a keep ";
     chronicle(`${castleName(home)} fills its coffers to found ${after}in the ${wildsName(next.roomName)}.`);
-}
-
-const BODY_PATTERNS = {
-    [ROLE_HAULER]: [CARRY, CARRY, MOVE],
-    [ROLE_FILLER]: [CARRY, CARRY, MOVE],
-    [ROLE_APOTHECARY]: [CARRY, CARRY, MOVE],
-    [ROLE_BUILDER]: [WORK, CARRY, MOVE],
-    [ROLE_REPAIRER]: [WORK, CARRY, MOVE],
-    [ROLE_HARVESTER]: [WORK, CARRY, MOVE],
-    [ROLE_UPGRADER]: [WORK, WORK, CARRY, MOVE],
-};
-const MAX_BODY_PART_COUNT = 50;
-
-function getRoomMemory(room) {
-    return room.memory;
-}
-
-const SAMPLE_EVERY = 5;
-const CLOSE_BOOKS_EVERY = 100;
-const SMOOTHING = 0.3;
-const windows = {};
-function storedGold(room) {
-    var _a, _b, _c, _d;
-    return ((_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) + ((_d = (_c = room.terminal) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0);
-}
-function windowFor(room) {
-    let w = windows[room.name];
-    if (!w) {
-        w = { start: Game.time, samples: 0, sampled: {}, exact: {}, stored: storedGold(room) };
-        windows[room.name] = w;
-    }
-    return w;
-}
-function add(bucket, key, amount) {
-    var _a;
-    bucket[key] = ((_a = bucket[key]) !== null && _a !== void 0 ? _a : 0) + amount;
-}
-function recordSpend(roomName, kind, amount) {
-    var _a;
-    const room = Game.rooms[roomName];
-    if (!((_a = room === null || room === void 0 ? void 0 : room.controller) === null || _a === void 0 ? void 0 : _a.my))
-        return;
-    add(windowFor(room).exact, kind, amount);
-}
-function remoteHomes(homes) {
-    var _a;
-    const map = {};
-    for (const home of homes) {
-        for (const r of (_a = home.memory.remoteRooms) !== null && _a !== void 0 ? _a : [])
-            map[r.roomName] = home.name;
-    }
-    return map;
-}
-function isMine(id) {
-    const obj = Game.getObjectById(id);
-    return !!obj && obj.my;
-}
-function readEvents(room, w, isHome) {
-    var _a, _b, _c, _d;
-    const events = room.getEventLog();
-    if (events.length === 0)
-        return;
-    const sources = new Set(room.find(FIND_SOURCES).map((s) => s.id));
-    const towers = isHome
-        ? new Set(((_a = room.memory.towerIds) !== null && _a !== void 0 ? _a : []).map((id) => id))
-        : undefined;
-    for (const e of events) {
-        switch (e.event) {
-            case EVENT_HARVEST:
-                if (!sources.has(e.data.targetId))
-                    break;
-                if (!isHome && !isMine(e.objectId))
-                    break;
-                add(w.sampled, isHome ? "mines" : "vendors", e.data.amount);
-                break;
-            case EVENT_UPGRADE_CONTROLLER:
-                if (isHome)
-                    add(w.sampled, "enchant", (_b = e.data.energySpent) !== null && _b !== void 0 ? _b : 0);
-                break;
-            case EVENT_BUILD:
-                if (isHome || isMine(e.objectId))
-                    add(w.sampled, "masonry", (_c = e.data.energySpent) !== null && _c !== void 0 ? _c : e.data.amount);
-                break;
-            case EVENT_REPAIR:
-                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
-                    add(w.sampled, "smithy", TOWER_ENERGY_COST);
-                else if (isHome || isMine(e.objectId))
-                    add(w.sampled, "smithy", (_d = e.data.energySpent) !== null && _d !== void 0 ? _d : 0);
-                break;
-            case EVENT_ATTACK:
-            case EVENT_HEAL:
-                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
-                    add(w.sampled, "towers", TOWER_ENERGY_COST);
-                break;
-        }
-    }
-}
-function round1(n) {
-    return Math.round(n * 10) / 10;
-}
-function blend(prev, next) {
-    return round1(prev === undefined ? next : prev * (1 - SMOOTHING) + next * SMOOTHING);
-}
-const INCOME_KEYS = ["mines", "vendors"];
-const SPEND_KEYS = ["recruits", "enchant", "masonry", "smithy", "towers"];
-function closeBooks(room) {
-    const w = windows[room.name];
-    if (!w || w.samples === 0)
-        return;
-    const ticks = Game.time - w.start;
-    if (!Memory.exchequer)
-        Memory.exchequer = {};
-    const prev = Memory.exchequer[room.name];
-    const rate = (key) => { var _a, _b; return ((_a = w.sampled[key]) !== null && _a !== void 0 ? _a : 0) / w.samples + ((_b = w.exact[key]) !== null && _b !== void 0 ? _b : 0) / ticks; };
-    const books = { at: Game.time, in: {}, out: {} };
-    for (const k of INCOME_KEYS)
-        books.in[k] = blend(prev === null || prev === void 0 ? void 0 : prev.in[k], rate(k));
-    for (const k of SPEND_KEYS)
-        books.out[k] = blend(prev === null || prev === void 0 ? void 0 : prev.out[k], rate(k));
-    books.trend = blend(prev === null || prev === void 0 ? void 0 : prev.trend, (storedGold(room) - w.stored) / ticks);
-    Memory.exchequer[room.name] = books;
-    annal("gold", Math.round((rate("mines") + rate("vendors")) * ticks));
-    delete windows[room.name];
-    windowFor(room);
-}
-function loop$8() {
-    var _a, _b, _c, _d;
-    const homes = [];
-    for (const name in Game.rooms) {
-        const room = Game.rooms[name];
-        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
-            homes.push(room);
-    }
-    for (const home of homes)
-        windowFor(home);
-    if (Game.time % SAMPLE_EVERY === 0) {
-        const remotes = remoteHomes(homes);
-        for (const home of homes) {
-            const w = windowFor(home);
-            w.samples++;
-            readEvents(home, w, true);
-        }
-        for (const remoteName in remotes) {
-            const remote = Game.rooms[remoteName];
-            const home = Game.rooms[remotes[remoteName]];
-            if (!remote || !home || ((_b = remote.controller) === null || _b === void 0 ? void 0 : _b.my))
-                continue;
-            readEvents(remote, windowFor(home), false);
-        }
-    }
-    let closed = false;
-    for (const home of homes) {
-        if (Game.time - windows[home.name].start < CLOSE_BOOKS_EVERY)
-            continue;
-        closeBooks(home);
-        closed = true;
-    }
-    if (closed && Memory.exchequer) {
-        for (const name in Memory.exchequer) {
-            if (!((_d = (_c = Game.rooms[name]) === null || _c === void 0 ? void 0 : _c.controller) === null || _d === void 0 ? void 0 : _d.my))
-                delete Memory.exchequer[name];
-        }
-    }
-}
-function totalIn(books) {
-    return INCOME_KEYS.reduce((s, k) => { var _a; return s + ((_a = books.in[k]) !== null && _a !== void 0 ? _a : 0); }, 0);
-}
-function totalOut(books) {
-    return SPEND_KEYS.reduce((s, k) => { var _a; return s + ((_a = books.out[k]) !== null && _a !== void 0 ? _a : 0); }, 0);
-}
-function describeBooks(books) {
-    const part = (label, n) => n && n >= 0.05 ? `${label} ${n.toFixed(1)}` : undefined;
-    const income = INCOME_KEYS.map((k) => part(k, books.in[k])).filter(Boolean).join("  ");
-    const spend = SPEND_KEYS.map((k) => part(k, books.out[k])).filter(Boolean).join("  ");
-    const net = totalIn(books) - totalOut(books);
-    const sign = (n) => (n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1));
-    return [
-        `Exchequer ${sign(net)}/t  (in ${totalIn(books).toFixed(1)}, out ${totalOut(books).toFixed(1)})`,
-        `  in:  ${income || "nothing"}`,
-        `  out: ${spend || "nothing"}`,
-    ];
-}
-
-function buildScaledBody(role, availableEnergy) {
-    var _a;
-    const pattern = (_a = BODY_PATTERNS[role]) !== null && _a !== void 0 ? _a : [WORK, CARRY, MOVE];
-    const patternCost = calculateBodyPartCost(pattern);
-    const maxByParts = Math.floor(MAX_BODY_PART_COUNT / pattern.length);
-    const maxByEnergy = Math.floor(availableEnergy / patternCost);
-    const repeats = Math.max(1, Math.min(maxByParts, maxByEnergy));
-    const body = [];
-    for (let i = 0; i < repeats; i++)
-        body.push(...pattern);
-    return body;
-}
-function calculateBodyPartCost(parts) {
-    return parts.reduce((cost, part) => cost + BODYPART_COST[part], 0);
-}
-let creepCacheTick = -1;
-const creepsByRoleCache = {};
-function rebuildCreepCache() {
-    if (creepCacheTick === Game.time)
-        return;
-    creepCacheTick = Game.time;
-    for (const key of Object.keys(creepsByRoleCache))
-        delete creepsByRoleCache[key];
-    for (const name in Game.creeps) {
-        const creep = Game.creeps[name];
-        const role = creep.memory.role;
-        if (role) {
-            if (!creepsByRoleCache[role])
-                creepsByRoleCache[role] = [];
-            creepsByRoleCache[role].push(creep);
-        }
-    }
-}
-function getCreepsByRole(role) {
-    var _a;
-    rebuildCreepCache();
-    return (_a = creepsByRoleCache[role]) !== null && _a !== void 0 ? _a : [];
-}
-function getCreepsByRoleInRoom(role, room) {
-    return getCreepsByRole(role).filter((creep) => creep.room.name === room.name);
-}
-let spawningCacheTick = -1;
-const spawningCache = {};
-let issuedTick = -1;
-const issuedThisTick = {};
-const issuedNames = new Set();
-function freshIssued() {
-    if (issuedTick === Game.time)
-        return;
-    issuedTick = Game.time;
-    issuedNames.clear();
-    for (const k of Object.keys(issuedThisTick))
-        delete issuedThisTick[k];
-}
-function spawnOrdersThisTick() {
-    freshIssued();
-    return issuedNames.size;
-}
-function getIssuedCount(room, role) {
-    var _a, _b;
-    freshIssued();
-    return (_b = (_a = issuedThisTick[room.name]) === null || _a === void 0 ? void 0 : _a[role]) !== null && _b !== void 0 ? _b : 0;
-}
-function getRoomSpawningCount(room, role) {
-    var _a, _b;
-    if (spawningCacheTick !== Game.time) {
-        spawningCacheTick = Game.time;
-        for (const k of Object.keys(spawningCache))
-            delete spawningCache[k];
-    }
-    if (!spawningCache[room.name]) {
-        const counts = {};
-        const spawns = room.find(FIND_MY_SPAWNS);
-        for (const s of spawns) {
-            if (!s.spawning)
-                continue;
-            const mem = Memory.creeps[s.spawning.name];
-            if (!(mem === null || mem === void 0 ? void 0 : mem.role))
-                continue;
-            const r = mem.role;
-            counts[r] = ((_a = counts[r]) !== null && _a !== void 0 ? _a : 0) + 1;
-        }
-        spawningCache[room.name] = counts;
-    }
-    return ((_b = spawningCache[room.name][role]) !== null && _b !== void 0 ? _b : 0) + getIssuedCount(room, role);
-}
-const GIVEN_NAMES = [
-    "Aldric", "Agnes", "Bertram", "Beatrix", "Brannoc", "Cedric", "Cecily", "Corvin",
-    "Dunstan", "Edith", "Edric", "Fulk", "Gareth", "Gisela", "Godric", "Hild",
-    "Isolde", "Ivo", "Jocelin", "Kenric", "Leofric", "Lucan", "Maud", "Merek",
-    "Mordred", "Morwen", "Osric", "Percival", "Roderick", "Rowena", "Sigmund", "Sybil",
-    "Thorne", "Tristan", "Ulric", "Wulfric", "Ysolde", "Varian",
-    "Adela", "Alaric", "Alys", "Amice", "Ansel", "Avice", "Baldwin", "Benedict",
-    "Conrad", "Cuthbert", "Drogo", "Edmund", "Elinor", "Emma", "Eustace", "Felice",
-    "Gervase", "Hamo", "Helewise", "Hereward", "Hugh", "Joan", "Juliana", "Lambert",
-    "Mabel", "Matilda", "Muriel", "Nesta", "Odo", "Osbert", "Oswin", "Piers",
-    "Ralph", "Rohese", "Sabina", "Simon", "Theobald", "Walter", "Warin", "Wystan",
-];
-function creepName(role, room) {
-    var _a;
-    freshIssued();
-    const title = (_a = ROLE_TITLES[role]) !== null && _a !== void 0 ? _a : role;
-    const graves = new Set(room ? room.find(FIND_TOMBSTONES).map((t) => t.creep.name) : []);
-    const worn = new Set([...Object.keys(Game.creeps), ...issuedNames].map((n) => n.slice(n.lastIndexOf(" ") + 1)));
-    const start = Game.time % GIVEN_NAMES.length;
-    let shared;
-    for (let i = 0; i < GIVEN_NAMES.length; i++) {
-        const given = GIVEN_NAMES[(start + i) % GIVEN_NAMES.length];
-        const name = `${title} ${given}`;
-        if (Game.creeps[name] || Memory.creeps[name] || issuedNames.has(name) || graves.has(name))
-            continue;
-        if (!worn.has(given))
-            return name;
-        shared = shared !== null && shared !== void 0 ? shared : name;
-    }
-    return shared !== null && shared !== void 0 ? shared : `${title} ${Game.time}`;
-}
-function trackedSpawn(room, spawn, body, opts) {
-    var _a, _b;
-    const role = opts.memory.role;
-    if (getIssuedCount(room, role) > 0)
-        return ERR_BUSY;
-    const name = creepName(role, room);
-    const res = spawn.spawnCreep(body, name, opts);
-    if (res === OK) {
-        issuedNames.add(name);
-        const byRole = (_a = issuedThisTick[room.name]) !== null && _a !== void 0 ? _a : (issuedThisTick[room.name] = {});
-        byRole[role] = ((_b = byRole[role]) !== null && _b !== void 0 ? _b : 0) + 1;
-        recordSpend(room.name, "recruits", calculateBodyPartCost(body));
-        annal("recruits", 1);
-    }
-    return res;
-}
-function countByRoleInRoom(role, room) {
-    const present = getCreepsByRoleInRoom(role, room).filter((c) => !c.spawning).length;
-    return present + getRoomSpawningCount(room, role);
-}
-const SPAWN_HOLD_LIMIT = 100;
-const SPAWN_IDLE_RECHECK = 3;
-function holdSpawnFor(room, role) {
-    const memory = getRoomMemory(room);
-    const hold = memory.spawnHold;
-    const continuing = hold !== undefined && hold.role === role && Game.time - hold.lastTick <= SPAWN_IDLE_RECHECK;
-    const since = continuing ? hold.since : Game.time;
-    memory.spawnHold = { role, since, lastTick: Game.time };
-    return Game.time - since < SPAWN_HOLD_LIMIT;
-}
-const CAPACITY_TARGET_MARGIN = 0.1;
-function bodyBudget(room, basis) {
-    return basis === "available"
-        ? room.energyAvailable
-        : Math.floor(room.energyCapacityAvailable * (1 - CAPACITY_TARGET_MARGIN));
-}
-function spawnLeadTicks(bodyParts, travelTicks) {
-    return bodyParts * CREEP_SPAWN_TIME + travelTicks;
-}
-function longestSpawnTicks(room) {
-    const parts = Math.min(MAX_BODY_PART_COUNT, Math.floor(room.energyCapacityAvailable / BODYPART_COST[MOVE]));
-    return parts * CREEP_SPAWN_TIME;
-}
-function isRetiring(creep, lead) {
-    const ttl = creep.ticksToLive;
-    return ttl !== undefined && ttl <= lead;
-}
-const FULL_BODY_ENERGY_RATIO = 0.9;
-const FULL_BODY_MAX_WAIT = 40;
-function waitForFullBody(room, role, needed) {
-    const memory = getRoomMemory(room);
-    if (!needed || room.energyAvailable >= room.energyCapacityAvailable * FULL_BODY_ENERGY_RATIO) {
-        if (memory.bodyWait)
-            delete memory.bodyWait[role];
-        return false;
-    }
-    if (!memory.bodyWait)
-        memory.bodyWait = {};
-    const wait = memory.bodyWait[role];
-    const energy = room.energyAvailable;
-    if (typeof wait !== "object" || energy > wait.energy) {
-        memory.bodyWait[role] = { since: Game.time, energy };
-        return true;
-    }
-    wait.energy = energy;
-    if (Game.time - wait.since < FULL_BODY_MAX_WAIT)
-        return true;
-    delete memory.bodyWait[role];
-    return false;
-}
-function getRoomPhase$1(room) {
-    var _a, _b;
-    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
-    if (rcl <= 2)
-        return "bootstrap";
-    if (rcl <= 4)
-        return "developing";
-    if (rcl <= 6)
-        return "established";
-    return "powerhouse";
-}
-const BOOST_CANDIDATES = {
-    melee: ['XUH2O', 'UH2O', 'UH'],
-    ranged: ['XKHO2', 'KHO2', 'KO'],
-    healer: ['XLHO2', 'LHO2', 'LO'],
-    drainer: ['XLHO2', 'LHO2', 'LO'],
-    siege: ['XZH2O', 'ZH2O', 'ZH'],
-    tough: ['XGHO2', 'GHO2', 'GO'],
-    move: ['XZHO2', 'ZHO2', 'ZO'],
-    upgrader: ['XGH2O', 'GH2O', 'GH'],
-};
-function pickBoostCompound(room, roleKey, boostParts) {
-    const candidates = BOOST_CANDIDATES[roleKey];
-    if (!candidates)
-        return undefined;
-    const minRequired = boostParts * 30 + 300;
-    for (const compound of candidates) {
-        if (getStockForCompound(compound, room) >= minRequired)
-            return compound;
-    }
-    return undefined;
-}
-function buildBoostQueue(room, roleKey, primaryParts, toughParts, moveParts = 0) {
-    const queue = [];
-    const primary = pickBoostCompound(room, roleKey, primaryParts);
-    if (primary)
-        queue.push(primary);
-    if (toughParts > 0) {
-        const tough = pickBoostCompound(room, "tough", toughParts);
-        if (tough)
-            queue.push(tough);
-    }
-    if (moveParts > 0) {
-        const move = pickBoostCompound(room, "move", moveParts);
-        if (move)
-            queue.push(move);
-    }
-    return queue;
-}
-function boostMemory(queue) {
-    if (queue.length === 0)
-        return {};
-    return {
-        boostCompound: queue[0],
-        ...(queue.length > 1 ? { boostQueue: queue.slice(1) } : {}),
-    };
-}
-
-function isRemoteCreepRetiring(home, creep) {
-    const target = creep.memory.targetRoom;
-    if (!target)
-        return false;
-    const travel = creep.memory.walk || remoteTravelTicks(home, target, creep.memory.remoteSourceId);
-    return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + reliefQueueMargin(home, creep, target));
-}
-function reliefQueueMargin(home, creep, roomName) {
-    var _a, _b, _c, _d;
-    if (creep.memory.role === ROLE_REMOTE_MINER)
-        return longestSpawnTicks(home);
-    if (creep.memory.role !== ROLE_RESERVER)
-        return 0;
-    const res = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.reservation;
-    const banked = res && res.username === ((_d = (_c = home.controller) === null || _c === void 0 ? void 0 : _c.owner) === null || _d === void 0 ? void 0 : _d.username) ? res.ticksToEnd : 0;
-    return Math.max(0, longestSpawnTicks(home) - banked);
-}
-function remoteTravelTicks(home, roomName, sourceId) {
-    var _a;
-    const remote = (_a = home.memory.remoteRooms) === null || _a === void 0 ? void 0 : _a.find((r) => r.roomName === roomName);
-    if (!remote)
-        return estimateRemoteDistance(home, roomName);
-    const sources = sourceId ? remote.sources.filter((s) => s.sourceId === sourceId) : remote.sources;
-    if (sources.length === 0)
-        return estimateRemoteDistance(home, roomName);
-    return Math.max(...sources.map((s) => getRemoteSourceDistance(home, remote, s)));
-}
-function isRemoteEligible(room, r, purpose, ignoreInvaders = false) {
-    var _a, _b, _c, _d, _e, _f;
-    if (r.hostile || r.sources.length === 0)
-        return false;
-    if (!ignoreInvaders && r.invaderUntil !== undefined && r.invaderUntil > Game.time)
-        return false;
-    const ctrl = (_a = Game.rooms[r.roomName]) === null || _a === void 0 ? void 0 : _a.controller;
-    const intel = (_b = Memory.intel) === null || _b === void 0 ? void 0 : _b[r.roomName];
-    const owner = ctrl ? (_c = ctrl.owner) === null || _c === void 0 ? void 0 : _c.username : intel === null || intel === void 0 ? void 0 : intel.owner;
-    if ((ctrl === null || ctrl === void 0 ? void 0 : ctrl.my) || owner)
-        return false;
-    const reservedBy = ctrl ? (_d = ctrl.reservation) === null || _d === void 0 ? void 0 : _d.username : intel === null || intel === void 0 ? void 0 : intel.reservedBy;
-    if (!reservedBy || reservedBy === ((_f = (_e = room.controller) === null || _e === void 0 ? void 0 : _e.owner) === null || _f === void 0 ? void 0 : _f.username))
-        return true;
-    return reservedBy === "Invader" && purpose === "reserve";
-}
-function getActiveRemoteRooms(room, purpose = "harvest") {
-    var _a;
-    const picked = pickRemoteSources(room);
-    const out = [];
-    for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
-        if (!isRemoteEligible(room, r, purpose))
-            continue;
-        const sources = r.sources.filter((s) => picked.has(s.sourceId));
-        if (sources.length > 0)
-            out.push({ ...r, sources });
-    }
-    const rank = (r) => Math.min(...r.sources.map((s) => picked.get(s.sourceId)));
-    return out.sort((a, b) => rank(a) - rank(b));
-}
-function getPickedRemoteRoomNames(room) {
-    var _a;
-    const picked = pickRemoteSources(room);
-    const out = new Set();
-    for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
-        if (r.sources.some((s) => picked.has(s.sourceId)))
-            out.add(r.roomName);
-    }
-    return out;
-}
-const MAX_REMOTE_SOURCES = 6;
-const REMOTE_SPAWN_SHARE = 0.8;
-const REMOTE_PICK_HEADROOM = 0.2;
-const REMOTE_PICK_HOLD = 100;
-const REMOTE_CPU_BUCKET_FLOOR = 5000;
-const REMOTE_CPU_SHED_INTERVAL = 500;
-const REMOTE_CPU_RESTORE_RISE = 3;
-const REMOTE_CPU_RESTORE_BUCKET = 9000;
-function remoteShedSources() {
-    var _a;
-    const state = ((_a = Memory.remoteShed) !== null && _a !== void 0 ? _a : (Memory.remoteShed = { ids: [], at: Game.time, bucket: Game.cpu.bucket }));
-    const elapsed = Game.time - state.at;
-    if (elapsed >= REMOTE_CPU_SHED_INTERVAL) {
-        const bucket = Game.cpu.bucket;
-        const rise = (bucket - state.bucket) / elapsed;
-        state.at = Game.time;
-        state.bucket = bucket;
-        if (bucket < REMOTE_CPU_BUCKET_FLOOR && rise < 0 && !inPixelRefill()) {
-            shedWorstRemoteSource(state.ids);
-        }
-        else if (state.ids.length > 0 &&
-            (rise >= REMOTE_CPU_RESTORE_RISE || (bucket >= REMOTE_CPU_RESTORE_BUCKET && rise >= 0))) {
-            const back = state.ids.pop();
-            chronicle(`The scribes have caught up with their ledgers. ${castleName(back.home)}'s vendors return to a digging in the ${wildsName(back.room)}.`);
-            spreadWord("road open");
-        }
-    }
-    return new Set(state.ids.map((s) => s.id));
-}
-function shedWorstRemoteSource(shed) {
-    var _a, _b;
-    const done = new Set(shed.map((s) => s.id));
-    let worst;
-    for (const c of getCreepsByRole(ROLE_REMOTE_MINER)) {
-        const id = c.memory.remoteSourceId;
-        const home = Game.rooms[(_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : ""];
-        if (!id || !home || done.has(id))
-            continue;
-        const remote = (_b = home.memory.remoteRooms) === null || _b === void 0 ? void 0 : _b.find((r) => r.roomName === c.memory.targetRoom);
-        const src = remote === null || remote === void 0 ? void 0 : remote.sources.find((s) => s.sourceId === id);
-        if (!remote || !src)
-            continue;
-        const plan = planRemoteSource(home, remote, src);
-        const score = plan.profit / plan.creeps;
-        if (!worst || score < worst.score)
-            worst = { id, home: home.name, room: remote.roomName, score };
-    }
-    if (!worst)
-        return;
-    shed.push({ id: worst.id, home: worst.home, room: worst.room });
-    chronicle(`The Crown's scribes cannot keep the ledgers of so many roads. ${castleName(worst.home)}'s vendors give up a digging in the ${wildsName(worst.room)}.`);
-    spreadWord("road shut");
-}
-const REMOTE_ECONOMY_ROLES = new Set([
-    ROLE_REMOTE_MINER,
-    ROLE_REMOTE_HAULER,
-    ROLE_RESERVER,
-]);
-function remoteSourceOutput(room) {
-    const canReserve = room.energyCapacityAvailable >= BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
-    return ((canReserve ? SOURCE_ENERGY_CAPACITY : SOURCE_ENERGY_NEUTRAL_CAPACITY) / ENERGY_REGEN_TIME);
-}
-function remoteHaulCarry(output, dist) {
-    return (output * 2 * dist) / CARRY_CAPACITY;
-}
-function getRemoteSourceDistance(room, remote, src) {
-    var _a;
-    return ((_a = getRemoteSourcePathLength(room, remote, src)) !== null && _a !== void 0 ? _a : estimateRemoteDistance(room, remote.roomName));
-}
-function planRemoteSource(room, remote, src) {
-    const capacity = room.energyCapacityAvailable;
-    const output = remoteSourceOutput(room);
-    const dist = getRemoteSourceDistance(room, remote, src);
-    const roads = remoteRoadsEnabled(room);
-    const miner = buildRemoteMinerBody(capacity);
-    const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads);
-    const haulerCarry = Math.max(1, hauler.filter((p) => p === CARRY).length);
-    const carry = remoteHaulCarry(output, dist) * REMOTE_HAUL_MARGIN;
-    const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
-    const haulerPartsPerCarry = hauler.length / haulerCarry;
-    const reserver = buildReserverBody(capacity);
-    const reserverShare = 1 / remote.sources.length;
-    const claims = reserver.filter((p) => p === CLAIM).length;
-    const reserverRespawns = CREEP_LIFE_TIME / (claims * Math.max(1, CREEP_CLAIM_LIFE_TIME - dist));
-    const roadTiles = src.roadTiles ? src.roadTiles.split(";").length : dist;
-    const decay = (CONTAINER_DECAY / CONTAINER_DECAY_TIME) * REPAIR_COST +
-        (roads ? (roadTiles * ROAD_DECAY_AMOUNT * REPAIR_COST) / ROAD_DECAY_TIME : 0);
-    const upkeep = calculateBodyPartCost(miner) / CREEP_LIFE_TIME +
-        (carry * haulerCostPerCarry) / CREEP_LIFE_TIME +
-        (calculateBodyPartCost(reserver) * reserverShare * reserverRespawns) / CREEP_LIFE_TIME +
-        decay;
-    const parts = miner.length + carry * haulerPartsPerCarry + reserver.length * reserverShare * reserverRespawns;
-    return {
-        profit: output - upkeep,
-        spawnTime: parts * CREEP_SPAWN_TIME,
-        creeps: 1 + carry / haulerCarry + reserverShare,
-    };
-}
-const PASSING_ROLES = new Set([
-    ROLE_SETTLER,
-    ROLE_CONQUEROR,
-    ROLE_KNIGHT,
-    ROLE_WIZARD,
-    ROLE_CLERIC,
-]);
-function remoteSpawnCapacity(room) {
-    return room.find(FIND_MY_SPAWNS).length * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE;
-}
-function remoteSpawnBudget(room) {
-    var _a;
-    let used = 0;
-    for (const name in Game.creeps) {
-        const c = Game.creeps[name];
-        if (REMOTE_ECONOMY_ROLES.has(c.memory.role) || PASSING_ROLES.has(c.memory.role))
-            continue;
-        if (((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) !== room.name)
-            continue;
-        used += c.body.length * CREEP_SPAWN_TIME;
-    }
-    return remoteSpawnCapacity(room) - used;
-}
-const remotePickCache = {};
-function pickRemoteSources(room) {
-    var _a, _b;
-    var _c;
-    const cached = remotePickCache[room.name];
-    if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
-        return cached.picked;
-    }
-    const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
-    const shed = remoteShedSources();
-    const peddlers = getCreepsByRole(ROLE_REMOTE_MINER);
-    const mined = new Set(peddlers.filter((c) => c.memory.homeRoom === room.name).map((c) => c.memory.remoteSourceId));
-    const minedElsewhere = new Set(peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId));
-    const held = (s) => s.pickedAt === undefined ? mined.has(s.sourceId) : Game.time - s.pickedAt <= REMOTE_PICK_HOLD;
-    const plans = [];
-    for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
-        if (!isRemoteEligible(room, r, "reserve", true))
-            continue;
-        for (const s of r.sources) {
-            if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId))
-                continue;
-            if (lowCpu && !mined.has(s.sourceId) && !held(s))
-                continue;
-            const plan = planRemoteSource(room, r, s);
-            if (plan.profit > 0)
-                plans.push({ source: s, ...plan });
-        }
-    }
-    plans.sort((a, b) => b.profit - a.profit);
-    const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
-    let budget = remoteSpawnBudget(room);
-    const picked = new Map();
-    for (const p of plans) {
-        if (picked.size >= MAX_REMOTE_SOURCES)
-            break;
-        const reserve = held(p.source) ? 0 : headroom;
-        if (p.spawnTime > budget - reserve) {
-            (_b = (_c = p.source).pickedAt) !== null && _b !== void 0 ? _b : (_c.pickedAt = 0);
-            continue;
-        }
-        budget -= p.spawnTime;
-        picked.set(p.source.sourceId, picked.size);
-        p.source.pickedAt = Game.time;
-    }
-    remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
-    return picked;
-}
-function getScoutsForRoom(room) {
-    return getCreepsByRole(ROLE_SCOUT).filter((c) => c.memory.homeRoom === room.name);
-}
-function shouldSpawnScout(room) {
-    var _a;
-    const pending = (_a = room.memory.pendingScoutRooms) !== null && _a !== void 0 ? _a : [];
-    if (pending.length === 0)
-        return false;
-    const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
-    return pending.some((r) => !assignedRooms.has(r));
-}
-function spawnScout(room, spawn) {
-    var _a;
-    const pending = (_a = room.memory.pendingScoutRooms) !== null && _a !== void 0 ? _a : [];
-    const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
-    const target = pending.find((r) => !assignedRooms.has(r));
-    if (!target)
-        return false;
-    const res = trackedSpawn(room, spawn, [MOVE], {
-        memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
-    });
-    return res === OK;
-}
-const BASELINE_SCORE_PATROLLERS = 3;
-const MAX_SCORE_HUNTERS_PER_ROOM = 8;
-const ROOMS_PER_HUNTER = 3;
-const BASELINE_SCORE_COLLECTORS = 2;
-function shouldSpawnScoreHunter(room) {
-    if (!scoreHunterSupported())
-        return false;
-    if (getThreatInfo(room).score > 0)
-        return false;
-    if (room.energyAvailable < bodyBudget(room, "capacity"))
-        return false;
-    const unclaimed = getUnclaimedScoreTargetCount();
-    let target;
-    if (homeHasObserver(room.name)) {
-        target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_COLLECTORS, unclaimed));
-    }
-    else {
-        const scanRooms = getScoreScanRooms(room.name, SCORE_SCOUT_RADIUS).length;
-        if (unclaimed === 0 && scanRooms === 0)
-            return false;
-        const coverageNeed = Math.ceil(scanRooms / ROOMS_PER_HUNTER);
-        target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed, coverageNeed));
-    }
-    const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter((c) => !c.spawning && c.memory.homeRoom === room.name);
-    return owned.length + getRoomSpawningCount(room, ROLE_SCORE_HUNTER) < target;
-}
-function spawnScoreHunter(room, spawn) {
-    const res = trackedSpawn(room, spawn, [MOVE], {
-        memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
-    });
-    return res === OK;
-}
-function findUnassignedRemoteSource(room) {
-    const covered = new Set(getCreepsByRole(ROLE_REMOTE_MINER)
-        .filter((c) => {
-        const home = (c.memory.homeRoom && Game.rooms[c.memory.homeRoom]) || room;
-        return !isRemoteCreepRetiring(home, c);
-    })
-        .map((c) => c.memory.remoteSourceId));
-    for (const remote of getActiveRemoteRooms(room)) {
-        for (const src of remote.sources) {
-            if (!covered.has(src.sourceId)) {
-                return { roomName: remote.roomName, sourceId: src.sourceId };
-            }
-        }
-    }
-    return null;
-}
-function shouldSpawnRemoteMiner(room) {
-    var _a, _b;
-    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
-        return false;
-    const needed = findUnassignedRemoteSource(room) !== null;
-    if (waitForFullBody(room, ROLE_REMOTE_MINER, needed))
-        return false;
-    return needed;
-}
-function spawnRemoteMiner(room, spawn) {
-    const assignment = findUnassignedRemoteSource(room);
-    if (!assignment)
-        return false;
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildRemoteMinerBody(allowedEnergy);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_REMOTE_MINER,
-            homeRoom: room.name,
-            targetRoom: assignment.roomName,
-            remoteSourceId: assignment.sourceId,
-        },
-    });
-    return res === OK;
-}
-function estimateRemoteDistance(homeRoom, remoteRoomName) {
-    const rooms = Game.map.getRoomLinearDistance(homeRoom.name, remoteRoomName);
-    return rooms * 50 + 25;
-}
-const MAX_REMOTE_HAULERS_PER_ROOM = 6;
-const REMOTE_HAUL_MARGIN = 1.2;
-const MIN_REMOTE_HAULER_CARRY = 4;
-function getRemoteHaulPlans(room) {
-    const roads = remoteRoadsEnabled(room);
-    const budget = bodyBudget(room, "capacity");
-    const carryOf = (paved) => Math.max(1, buildRemoteHaulerBody(budget, roads, paved).filter((p) => p === CARRY).length);
-    const carryOnFoot = carryOf(false);
-    const carryPaved = carryOf(true);
-    const fullSizeCarry = (paved) => buildRemoteHaulerBody(Infinity, roads, paved).filter((p) => p === CARRY).length;
-    const output = remoteSourceOutput(room);
-    const plans = {};
-    for (const remote of getActiveRemoteRooms(room)) {
-        const paved = roads && remotePaved(remote);
-        const carryPerHauler = paved ? carryPaved : carryOnFoot;
-        let requiredCarry = 0;
-        for (const src of remote.sources) {
-            requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
-        }
-        const carry = requiredCarry * REMOTE_HAUL_MARGIN;
-        const count = Math.min(Math.ceil((MAX_REMOTE_HAULERS_PER_ROOM * fullSizeCarry(paved)) / carryPerHauler), Math.max(1, Math.ceil(carry / carryPerHauler)));
-        const carryEach = Math.min(carryPerHauler, Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil(carry / count)));
-        plans[remote.roomName] = { count, carryEach, paved };
-    }
-    return plans;
-}
-function getRemoteHaulerTarget(room) {
-    return Object.values(getRemoteHaulPlans(room)).reduce((a, p) => a + p.count, 0);
-}
-function neediestRemote(activeRooms, plans, haulersByRoom) {
-    var _a, _b, _c;
-    let neediest = activeRooms[0].roomName;
-    let maxShortfall = -Infinity;
-    for (const remote of activeRooms) {
-        const shortfall = ((_b = (_a = plans[remote.roomName]) === null || _a === void 0 ? void 0 : _a.count) !== null && _b !== void 0 ? _b : 0) - ((_c = haulersByRoom[remote.roomName]) !== null && _c !== void 0 ? _c : 0);
-        if (shortfall > maxShortfall) {
-            maxShortfall = shortfall;
-            neediest = remote.roomName;
-        }
-    }
-    return neediest;
-}
-function reassignStrayHaulers(room) {
-    var _a, _b, _c, _d, _e, _f, _g, _h;
-    const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name);
-    if (haulers.length === 0)
-        return;
-    const worked = getPickedRemoteRoomNames(room);
-    const strays = haulers.filter((c) => { var _a; return !worked.has((_a = c.memory.targetRoom) !== null && _a !== void 0 ? _a : ""); });
-    const activeRooms = getActiveRemoteRooms(room);
-    if (activeRooms.length === 0)
-        return;
-    const serving = haulers.filter((c) => !strays.includes(c) && !isRemoteCreepRetiring(room, c));
-    const haulersByRoom = {};
-    for (const h of serving) {
-        const r = h.memory.targetRoom;
-        haulersByRoom[r] = ((_a = haulersByRoom[r]) !== null && _a !== void 0 ? _a : 0) + 1;
-    }
-    const plans = getRemoteHaulPlans(room);
-    for (const c of strays) {
-        const target = neediestRemote(activeRooms, plans, haulersByRoom);
-        c.memory.targetRoom = target;
-        haulersByRoom[target] = ((_b = haulersByRoom[target]) !== null && _b !== void 0 ? _b : 0) + 1;
-    }
-    for (const remote of activeRooms) {
-        const posted = serving.filter((c) => c.memory.targetRoom === remote.roomName);
-        const spare = posted.length - ((_d = (_c = plans[remote.roomName]) === null || _c === void 0 ? void 0 : _c.count) !== null && _d !== void 0 ? _d : 0);
-        for (const c of posted.slice(0, Math.max(0, spare))) {
-            const target = neediestRemote(activeRooms, plans, haulersByRoom);
-            if (((_f = (_e = plans[target]) === null || _e === void 0 ? void 0 : _e.count) !== null && _f !== void 0 ? _f : 0) - ((_g = haulersByRoom[target]) !== null && _g !== void 0 ? _g : 0) <= 0)
-                return;
-            c.memory.targetRoom = target;
-            haulersByRoom[remote.roomName]--;
-            haulersByRoom[target] = ((_h = haulersByRoom[target]) !== null && _h !== void 0 ? _h : 0) + 1;
-        }
-    }
-}
-function shouldSpawnRemoteHauler(room) {
-    var _a, _b;
-    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
-        return false;
-    const activeRooms = getActiveRemoteRooms(room);
-    if (activeRooms.length === 0)
-        return false;
-    const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c));
-    const needed = haulers.length < getRemoteHaulerTarget(room);
-    if (waitForFullBody(room, ROLE_REMOTE_HAULER, needed))
-        return false;
-    return needed;
-}
-function spawnRemoteHauler(room, spawn) {
-    var _a, _b, _c;
-    const activeRooms = getActiveRemoteRooms(room);
-    if (activeRooms.length === 0)
-        return false;
-    const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c));
-    const haulersByRoom = {};
-    for (const h of haulers) {
-        const r = (_a = h.memory.targetRoom) !== null && _a !== void 0 ? _a : "";
-        haulersByRoom[r] = ((_b = haulersByRoom[r]) !== null && _b !== void 0 ? _b : 0) + 1;
-    }
-    const plans = getRemoteHaulPlans(room);
-    const targetRoomName = neediestRemote(activeRooms, plans, haulersByRoom);
-    const roads = remoteRoadsEnabled(room);
-    const plan = plans[targetRoomName];
-    const paved = (_c = plan === null || plan === void 0 ? void 0 : plan.paved) !== null && _c !== void 0 ? _c : false;
-    const planEnergy = plan === undefined
-        ? Infinity
-        : (roads ? BODYPART_COST[WORK] + BODYPART_COST[MOVE] : 0) +
-            (paved
-                ? Math.ceil(plan.carryEach / 2) * (2 * BODYPART_COST[CARRY] + BODYPART_COST[MOVE])
-                : plan.carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]));
-    const allowedEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
-    const body = buildRemoteHaulerBody(allowedEnergy, roads, paved);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_REMOTE_HAULER,
-            homeRoom: room.name,
-            targetRoom: targetRoomName,
-        },
-    });
-    return res === OK;
-}
-function buildRemoteMinerBody(availableEnergy) {
-    const maxWork = 6;
-    const groupCost = 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE];
-    const maxGroups = Math.max(1, Math.floor(availableEnergy / groupCost));
-    const groups = Math.min(maxGroups, Math.ceil(maxWork / 2));
-    let work = Math.min(maxWork, groups * 2);
-    let move = groups;
-    const cost = () => work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
-    if (work === maxWork && availableEnergy < cost() + BODYPART_COST[CARRY])
-        work--;
-    const spare = availableEnergy - cost() - BODYPART_COST[CARRY];
-    if (work < maxWork && spare >= BODYPART_COST[WORK]) {
-        work++;
-        if (spare >= BODYPART_COST[WORK] + BODYPART_COST[MOVE])
-            move++;
-    }
-    const body = [];
-    for (let i = 0; i < work; i++)
-        body.push(WORK);
-    for (let i = 0; i < move; i++)
-        body.push(MOVE);
-    if (availableEnergy >= cost() + BODYPART_COST[CARRY])
-        body.push(CARRY);
-    return body;
-}
-function buildRemoteHaulerBody(availableEnergy, withWork = false, paved = false) {
-    const head = withWork ? [WORK, MOVE] : [];
-    const pattern = paved ? [CARRY, CARRY, MOVE] : [CARRY, MOVE];
-    const patternCost = calculateBodyPartCost(pattern);
-    const maxByParts = Math.floor((MAX_BODY_PART_COUNT - head.length) / pattern.length);
-    const maxByEnergy = Math.floor((availableEnergy - calculateBodyPartCost(head)) / patternCost);
-    const repeats = Math.max(2, Math.min(maxByParts, maxByEnergy));
-    const body = [...head];
-    for (let i = 0; i < repeats; i++)
-        body.push(...pattern);
-    return body;
-}
-const RESERVATION_TOP_UP_TICKS = 1500;
-const MAX_RESERVER_CLAIM = 3;
-function needsReservation(room, roomName) {
-    var _a, _b, _c;
-    const ctrl = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller;
-    if (!ctrl)
-        return true;
-    const res = ctrl.reservation;
-    if (!res || res.username !== ((_c = (_b = room.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username))
-        return true;
-    return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
-}
-function sharedWithBiggerCastle(room, roomName) {
-    var _a;
-    for (const name in Game.rooms) {
-        const other = Game.rooms[name];
-        if (other === room || !((_a = other.controller) === null || _a === void 0 ? void 0 : _a.my) || other.controller.level < 3)
-            continue;
-        const bigger = other.energyCapacityAvailable > room.energyCapacityAvailable ||
-            (other.energyCapacityAvailable === room.energyCapacityAvailable && other.name < room.name);
-        if (bigger && getPickedRemoteRoomNames(other).has(roomName))
-            return true;
-    }
-    return false;
-}
-function findReserverTarget(room) {
-    var _a, _b;
-    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
-        return null;
-    const covered = new Set(getCreepsByRole(ROLE_RESERVER)
-        .filter((c) => { var _a, _b; return !isRemoteCreepRetiring((_b = Game.rooms[(_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : ""]) !== null && _b !== void 0 ? _b : room, c); })
-        .map((c) => c.memory.targetRoom));
-    for (const r of getActiveRemoteRooms(room, "reserve")) {
-        if (covered.has(r.roomName) || !needsReservation(room, r.roomName))
-            continue;
-        if (!sharedWithBiggerCastle(room, r.roomName))
-            return r.roomName;
-    }
-    return null;
-}
-function shouldSpawnReserver(room) {
-    return findReserverTarget(room) !== null;
-}
-function buildReserverBody(capacity) {
-    const pairCost = BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
-    const pairs = Math.max(1, Math.min(MAX_RESERVER_CLAIM, Math.floor(capacity / pairCost)));
-    return [...Array(pairs).fill(CLAIM), ...Array(pairs).fill(MOVE)];
-}
-function spawnReserver(room, spawn) {
-    const target = findReserverTarget(room);
-    if (!target)
-        return false;
-    const body = buildReserverBody(room.energyCapacityAvailable);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_RESERVER,
-            homeRoom: room.name,
-            targetRoom: target,
-        },
-    });
-    return res === OK;
 }
 
 const MILITIA_BODY = [RANGED_ATTACK, MOVE];
@@ -16413,556 +16982,6 @@ function spawnApothecary(room, spawn) {
     const res = trackedSpawn(room, spawn, body, {
         memory: { role: ROLE_APOTHECARY },
     });
-    return res === OK;
-}
-
-function buildKnightBody(availableEnergy) {
-    const groupCost = BODYPART_COST[TOUGH] + BODYPART_COST[ATTACK] + 2 * BODYPART_COST[MOVE];
-    const maxGroups = Math.min(Math.floor(MAX_BODY_PART_COUNT / 4), Math.floor(availableEnergy / groupCost));
-    const groups = Math.max(1, maxGroups);
-    return [
-        ...Array(groups).fill(TOUGH),
-        ...Array(groups).fill(ATTACK),
-        ...Array(groups * 2).fill(MOVE),
-    ];
-}
-function buildWizardBody(availableEnergy) {
-    const pairCost = BODYPART_COST[MOVE] + BODYPART_COST[RANGED_ATTACK];
-    const maxPairs = Math.min(Math.floor(MAX_BODY_PART_COUNT / 2), Math.floor(availableEnergy / pairCost));
-    const pairs = Math.max(1, maxPairs);
-    return [
-        ...Array(pairs).fill(RANGED_ATTACK),
-        ...Array(pairs).fill(MOVE),
-    ];
-}
-function buildClericBody(availableEnergy) {
-    const pairCost = BODYPART_COST[HEAL] + BODYPART_COST[MOVE];
-    const maxPairs = Math.min(Math.floor(MAX_BODY_PART_COUNT / 2), Math.floor(availableEnergy / pairCost));
-    const pairs = Math.max(1, maxPairs);
-    return [
-        ...Array(pairs).fill(MOVE),
-        ...Array(pairs).fill(HEAL),
-    ];
-}
-function buildDrainerBody(availableEnergy) {
-    const groupCost = BODYPART_COST[TOUGH] + BODYPART_COST[HEAL] + 2 * BODYPART_COST[MOVE];
-    const maxGroups = Math.min(Math.floor(MAX_BODY_PART_COUNT / 4), Math.floor(availableEnergy / groupCost));
-    const groups = Math.max(1, maxGroups);
-    return [
-        ...Array(groups).fill(TOUGH),
-        ...Array(groups * 2).fill(MOVE),
-        ...Array(groups).fill(HEAL),
-    ];
-}
-function buildSiegerBody(availableEnergy) {
-    const groupCost = BODYPART_COST[TOUGH] + 2 * BODYPART_COST[WORK] + 3 * BODYPART_COST[MOVE];
-    const maxGroups = Math.min(Math.floor(MAX_BODY_PART_COUNT / 6), Math.floor(availableEnergy / groupCost));
-    const groups = Math.max(1, maxGroups);
-    return [
-        ...Array(groups).fill(TOUGH),
-        ...Array(groups * 2).fill(WORK),
-        ...Array(groups * 3).fill(MOVE),
-    ];
-}
-function countDefendersInRoom(role, room) {
-    const present = getCreepsByRoleInRoom(role, room).filter((c) => !c.spawning && !c.memory.offensiveTarget).length;
-    return present + getRoomSpawningCount(room, role);
-}
-function isBreached(room) {
-    const core = room.find(FIND_MY_STRUCTURES, {
-        filter: (s) => s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_TOWER,
-    });
-    const armed = core.some((s) => s.structureType === STRUCTURE_TOWER && s.store[RESOURCE_ENERGY] >= TOWER_ENERGY_COST);
-    return !armed || core.some((s) => s.hits < s.hitsMax);
-}
-function homeNeedsDefenders(room) {
-    return !towersCanHold(room, getThreatInfo(room).hostiles);
-}
-function homeKnightsNeeded(room, cap) {
-    const body = buildKnightBody(bodyBudget(room, "capacity"));
-    return meleeDefendersToWin(summarizeHostiles(getThreatInfo(room).hostiles), body, cap);
-}
-function waitForDefenderBody(room, key, needed) {
-    return waitForFullBody(room, key, needed && !isBreached(room));
-}
-const HOME_KNIGHT_CAP = 3;
-function shouldSpawnKnight(room, threatScore) {
-    const target = Math.max(Math.ceil(threatScore / 40), homeKnightsNeeded(room, HOME_KNIGHT_CAP));
-    const needed = homeNeedsDefenders(room) &&
-        countDefendersInRoom(ROLE_KNIGHT, room) < Math.min(HOME_KNIGHT_CAP, target);
-    if (waitForDefenderBody(room, ROLE_KNIGHT, needed))
-        return false;
-    return needed;
-}
-function spawnKnight(room, spawn) {
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildKnightBody(allowedEnergy);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const attackParts = body.filter((p) => p === ATTACK).length;
-    const toughParts = body.filter((p) => p === TOUGH).length;
-    const moveParts = body.filter((p) => p === MOVE).length;
-    const queue = buildBoostQueue(room, 'melee', attackParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_KNIGHT, ...boostMemory(queue) },
-    });
-    return res === OK;
-}
-function shouldSpawnWizard(room, threatScore) {
-    const needed = homeNeedsDefenders(room) &&
-        countDefendersInRoom(ROLE_WIZARD, room) < Math.min(2, Math.ceil(threatScore / 60));
-    if (waitForDefenderBody(room, ROLE_WIZARD, needed))
-        return false;
-    return needed;
-}
-function spawnWizard(room, spawn) {
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildWizardBody(allowedEnergy);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const rangedParts = body.filter((p) => p === RANGED_ATTACK).length;
-    const queue = buildBoostQueue(room, 'ranged', rangedParts, 0);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_WIZARD, ...boostMemory(queue) },
-    });
-    return res === OK;
-}
-function shouldSpawnCleric(room, threatScore) {
-    if (threatScore < 100)
-        return false;
-    const fighters = countDefendersInRoom(ROLE_KNIGHT, room) + countDefendersInRoom(ROLE_WIZARD, room);
-    if (fighters === 0)
-        return false;
-    const needed = homeNeedsDefenders(room) && countDefendersInRoom(ROLE_CLERIC, room) < 1;
-    if (waitForDefenderBody(room, ROLE_CLERIC, needed))
-        return false;
-    return needed;
-}
-function spawnCleric(room, spawn) {
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildClericBody(allowedEnergy);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const healParts = body.filter((p) => p === HEAL).length;
-    const queue = buildBoostQueue(room, 'healer', healParts, 0);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_CLERIC, ...boostMemory(queue) },
-    });
-    return res === OK;
-}
-function shouldSpawnConqueror() {
-    const exp = Memory.expansion;
-    if (!exp || exp.phase !== "claiming")
-        return false;
-    return !getCreepsByRole(ROLE_CONQUEROR).some((c) => c.memory.targetRoom === exp.roomName);
-}
-function spawnConqueror(room, spawn) {
-    const exp = Memory.expansion;
-    if (!exp)
-        return false;
-    const body = [CLAIM, MOVE, MOVE, MOVE, MOVE];
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_CONQUEROR,
-            homeRoom: room.name,
-            targetRoom: exp.roomName,
-        },
-    });
-    if (res !== OK)
-        return false;
-    chronicle(`A conqueror rides out from ${castleName(room.name)} for the ${wildsName(exp.roomName)}.`);
-    return true;
-}
-const UNCLAIMER_LEAD = 400;
-function findUnclaimTarget(room) {
-    var _a;
-    const targets = Memory.unclaimTargets;
-    if (!targets)
-        return null;
-    for (const name in targets) {
-        const t = targets[name];
-        if (t.until <= Game.time) {
-            delete targets[name];
-            continue;
-        }
-        if (t.homeRoom !== room.name)
-            continue;
-        if (((_a = t.blockedUntil) !== null && _a !== void 0 ? _a : 0) - UNCLAIMER_LEAD > Game.time)
-            continue;
-        if (getCreepsByRole(ROLE_UNCLAIMER).some((c) => c.memory.targetRoom === name))
-            continue;
-        return name;
-    }
-    return null;
-}
-function buildUnclaimerBody(capacity) {
-    const pairCost = BODYPART_COST[CLAIM] + BODYPART_COST[MOVE];
-    const pairs = Math.max(1, Math.min(Math.floor(MAX_BODY_PART_COUNT / 2), Math.floor(capacity / pairCost)));
-    return [...Array(pairs).fill(CLAIM), ...Array(pairs).fill(MOVE)];
-}
-function spawnUnclaimer(room, spawn) {
-    const target = findUnclaimTarget(room);
-    if (!target)
-        return false;
-    const body = buildUnclaimerBody(room.energyCapacityAvailable);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_UNCLAIMER, homeRoom: room.name, targetRoom: target },
-    });
-    return res === OK;
-}
-const MAX_SETTLERS = 3;
-const PILGRIM_WINDOW = 2000;
-function shouldSpawnSettler(room) {
-    const exp = Memory.expansion;
-    if (!exp || exp.phase !== "bootstrapping" || exp.homeRoom !== room.name)
-        return false;
-    if (exp.pausedUntil && exp.pausedUntil > Game.time)
-        return false;
-    const settlers = getCreepsByRole(ROLE_SETTLER).filter((c) => c.memory.targetRoom === exp.roomName);
-    const needed = settlers.length < MAX_SETTLERS;
-    if (waitForFullBody(room, ROLE_SETTLER, needed))
-        return false;
-    return needed;
-}
-function spawnSettler(room, spawn) {
-    const exp = Memory.expansion;
-    if (!exp)
-        return false;
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildScaledBody(ROLE_SETTLER, allowedEnergy);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_SETTLER,
-            homeRoom: room.name,
-            targetRoom: exp.roomName,
-        },
-    });
-    if (res !== OK)
-        return false;
-    const keep = castleName(exp.roomName);
-    tally(`pilgrims:${exp.roomName}`, 1, (n) => `${n === 1 ? "A pilgrim has" : `${n} pilgrims have`} set out from ${castleName(room.name)} to raise the keep of ${keep}.`, PILGRIM_WINDOW);
-    return true;
-}
-function getOffensiveSquadMembers(op) {
-    return Object.values(Game.creeps).filter((c) => c.memory.offensiveTarget === op.targetRoom && c.memory.homeRoom === op.homeRoom);
-}
-function getOffensiveOpForRoom(room) {
-    var _a;
-    return (_a = Memory.militaryOps) === null || _a === void 0 ? void 0 : _a[room.name];
-}
-function shouldSpawnOffensiveCreep(room) {
-    var _a, _b;
-    const op = getOffensiveOpForRoom(room);
-    if (!op || op.phase !== "forming")
-        return false;
-    const members = getOffensiveSquadMembers(op);
-    return (members.filter((c) => c.memory.role === ROLE_KNIGHT).length < op.requiredMelee ||
-        members.filter((c) => c.memory.role === ROLE_WIZARD).length < op.requiredRanged ||
-        members.filter((c) => c.memory.role === ROLE_CLERIC).length < op.requiredHealers ||
-        members.filter((c) => c.memory.role === ROLE_SIEGER).length < ((_a = op.requiredSiege) !== null && _a !== void 0 ? _a : 0) ||
-        members.filter((c) => c.memory.role === ROLE_DRAINER).length < ((_b = op.requiredDrainers) !== null && _b !== void 0 ? _b : 0));
-}
-function countDrainLeeches(targetRoom, homeRoom) {
-    return Object.values(Game.creeps).filter((c) => c.memory.role === ROLE_DRAINER &&
-        c.memory.offensiveTarget === targetRoom &&
-        c.memory.homeRoom === homeRoom).length;
-}
-function firstUnderStrengthDrain(room) {
-    for (const op of getDrainOpsForHome(room.name)) {
-        if (countDrainLeeches(op.targetRoom, op.homeRoom) < op.drainers)
-            return op;
-    }
-    return null;
-}
-function shouldSpawnDrainLeech(room) {
-    return firstUnderStrengthDrain(room) !== null;
-}
-function spawnDrainLeech(room, spawn) {
-    const op = firstUnderStrengthDrain(room);
-    if (!op)
-        return false;
-    const body = buildDrainerBody(room.energyCapacityAvailable);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const healParts = body.filter((p) => p === HEAL).length;
-    const toughParts = body.filter((p) => p === TOUGH).length;
-    const queue = buildBoostQueue(room, "drainer", healParts, toughParts);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_DRAINER,
-            homeRoom: room.name,
-            offensiveTarget: op.targetRoom,
-            ...boostMemory(queue),
-        },
-    });
-    if (res === OK)
-        console.log(`[Drain] Spawning ${ROLE_DRAINER}: ${room.name} -> ${op.targetRoom}`);
-    return res === OK;
-}
-function spawnNextOffensiveCreep(room, spawn) {
-    var _a, _b;
-    const op = getOffensiveOpForRoom(room);
-    if (!op)
-        return false;
-    const members = getOffensiveSquadMembers(op);
-    const melee = members.filter((c) => c.memory.role === ROLE_KNIGHT).length;
-    const ranged = members.filter((c) => c.memory.role === ROLE_WIZARD).length;
-    const healers = members.filter((c) => c.memory.role === ROLE_CLERIC).length;
-    const siege = members.filter((c) => c.memory.role === ROLE_SIEGER).length;
-    const drainers = members.filter((c) => c.memory.role === ROLE_DRAINER).length;
-    let roleToSpawn = null;
-    if (melee < op.requiredMelee)
-        roleToSpawn = ROLE_KNIGHT;
-    else if (drainers < ((_a = op.requiredDrainers) !== null && _a !== void 0 ? _a : 0))
-        roleToSpawn = ROLE_DRAINER;
-    else if (siege < ((_b = op.requiredSiege) !== null && _b !== void 0 ? _b : 0))
-        roleToSpawn = ROLE_SIEGER;
-    else if (ranged < op.requiredRanged)
-        roleToSpawn = ROLE_WIZARD;
-    else if (healers < op.requiredHealers)
-        roleToSpawn = ROLE_CLERIC;
-    if (!roleToSpawn)
-        return false;
-    const energy = room.energyCapacityAvailable;
-    let body;
-    let boostKey;
-    let combatPartType;
-    if (roleToSpawn === ROLE_KNIGHT) {
-        body = buildKnightBody(energy);
-        boostKey = "melee";
-        combatPartType = ATTACK;
-    }
-    else if (roleToSpawn === ROLE_SIEGER) {
-        body = buildSiegerBody(energy);
-        boostKey = "siege";
-        combatPartType = WORK;
-    }
-    else if (roleToSpawn === ROLE_WIZARD) {
-        body = buildWizardBody(energy);
-        boostKey = "ranged";
-        combatPartType = RANGED_ATTACK;
-    }
-    else if (roleToSpawn === ROLE_DRAINER) {
-        body = buildDrainerBody(energy);
-        boostKey = "drainer";
-        combatPartType = HEAL;
-    }
-    else {
-        body = buildClericBody(energy);
-        boostKey = "healer";
-        combatPartType = HEAL;
-    }
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const combatParts = body.filter((p) => p === combatPartType).length;
-    const toughParts = body.filter((p) => p === TOUGH).length;
-    const moveParts = boostKey === "melee" || boostKey === "siege"
-        ? body.filter((p) => p === MOVE).length
-        : 0;
-    const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: roleToSpawn,
-            homeRoom: room.name,
-            offensiveTarget: op.targetRoom,
-            ...boostMemory(queue),
-        },
-    });
-    if (res === OK) {
-        console.log(`[Military] Spawning offensive ${roleToSpawn} for ${op.targetRoom}`);
-    }
-    return res === OK;
-}
-function countDefendersByRole(targetRoom, role, homeRoom) {
-    const live = getDefenders(targetRoom).filter((c) => !c.spawning && c.memory.role === role).length;
-    const adHoc = targetRoom === homeRoom.name
-        ? getCreepsByRoleInRoom(role, homeRoom).filter((c) => !c.spawning &&
-            !c.memory.defensiveTarget &&
-            !c.memory.offensiveTarget &&
-            !c.memory.targetRoom).length
-        : 0;
-    return live + adHoc + getRoomSpawningCount(homeRoom, role);
-}
-function needsChildRoomDefender(room) {
-    const exp = Memory.expansion;
-    if (!(exp === null || exp === void 0 ? void 0 : exp.needsDefender) || exp.homeRoom !== room.name)
-        return false;
-    const existing = getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.targetRoom === exp.roomName && c.memory.homeRoom === room.name);
-    return existing.length === 0;
-}
-const DEFENSE_OP_KNIGHT_CAP = 6;
-function requiredOpMelee(room, op) {
-    return Math.max(op.requiredMelee, homeKnightsNeeded(room, DEFENSE_OP_KNIGHT_CAP));
-}
-const DEFENSE_OP_BODY_WAIT = "defenseOp";
-function shouldSpawnDefender(room) {
-    if (needsChildRoomDefender(room))
-        return true;
-    const op = getDefenseOp(room.name);
-    if (!op)
-        return false;
-    const short = countDefendersByRole(room.name, ROLE_KNIGHT, room) < requiredOpMelee(room, op) ||
-        countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredRanged ||
-        countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers;
-    if (waitForDefenderBody(room, DEFENSE_OP_BODY_WAIT, short))
-        return false;
-    return short;
-}
-function spawnNextDefender(room, spawn) {
-    if (needsChildRoomDefender(room)) {
-        return spawnChildRoomDefender(room, spawn);
-    }
-    const op = getDefenseOp(room.name);
-    if (!op)
-        return false;
-    let roleToSpawn = null;
-    let combatPartType = ATTACK;
-    let boostKey = "melee";
-    let body;
-    const allowedEnergy = bodyBudget(room, "available");
-    if (countDefendersByRole(room.name, ROLE_KNIGHT, room) < requiredOpMelee(room, op)) {
-        roleToSpawn = ROLE_KNIGHT;
-        combatPartType = ATTACK;
-        boostKey = "melee";
-        body = buildKnightBody(allowedEnergy);
-    }
-    else if (countDefendersByRole(room.name, ROLE_WIZARD, room) < op.requiredRanged) {
-        roleToSpawn = ROLE_WIZARD;
-        combatPartType = RANGED_ATTACK;
-        boostKey = "ranged";
-        body = buildWizardBody(allowedEnergy);
-    }
-    else if (countDefendersByRole(room.name, ROLE_CLERIC, room) < op.requiredHealers) {
-        roleToSpawn = ROLE_CLERIC;
-        combatPartType = HEAL;
-        boostKey = "healer";
-        body = buildClericBody(allowedEnergy);
-    }
-    else {
-        return false;
-    }
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const combatParts = body.filter((p) => p === combatPartType).length;
-    const toughParts = body.filter((p) => p === TOUGH).length;
-    const moveParts = boostKey === "melee" ? body.filter((p) => p === MOVE).length : 0;
-    const queue = buildBoostQueue(room, boostKey, combatParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: roleToSpawn,
-            homeRoom: room.name,
-            defensiveTarget: room.name,
-            ...boostMemory(queue),
-        },
-    });
-    if (res === OK) {
-        console.log(`[Defense] Spawning defensive ${roleToSpawn} for ${room.name}`);
-    }
-    return res === OK;
-}
-function spawnChildRoomDefender(room, spawn) {
-    const exp = Memory.expansion;
-    if (!exp)
-        return false;
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildKnightBody(allowedEnergy);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const attackParts = body.filter((p) => p === ATTACK).length;
-    const toughParts = body.filter((p) => p === TOUGH).length;
-    const moveParts = body.filter((p) => p === MOVE).length;
-    const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_KNIGHT,
-            homeRoom: room.name,
-            targetRoom: exp.roomName,
-            ...boostMemory(queue),
-        },
-    });
-    if (res === OK) {
-        console.log(`[Defense] Spawning child-room defender for ${exp.roomName}`);
-    }
-    return res === OK;
-}
-const REMOTE_KNIGHT_CAP = 2;
-function remoteKnightsNeeded(room, remote) {
-    if (!remote.invaderStrength)
-        return 1;
-    const body = buildKnightBody(bodyBudget(room, "capacity"));
-    return meleeDefendersToWin(remote.invaderStrength, body, REMOTE_KNIGHT_CAP);
-}
-function findRemoteInvaderTarget(room) {
-    var _a, _b;
-    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
-        return null;
-    const remotes = room.memory.remoteRooms;
-    if (!remotes)
-        return null;
-    const worked = getPickedRemoteRoomNames(room);
-    for (const r of remotes) {
-        if (r.invaderUntil === undefined || r.invaderUntil <= Game.time)
-            continue;
-        if (!worked.has(r.roomName) || sharedWithBiggerCastle(room, r.roomName))
-            continue;
-        const defending = getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName).length;
-        if (defending < remoteKnightsNeeded(room, r))
-            return r.roomName;
-    }
-    return null;
-}
-const REMOTE_KNIGHT_MIN_TTL = 150;
-function sendIdleRemoteKnights(room) {
-    var _a;
-    const remotes = room.memory.remoteRooms;
-    if (!(remotes === null || remotes === void 0 ? void 0 : remotes.some((r) => { var _a; return ((_a = r.invaderUntil) !== null && _a !== void 0 ? _a : 0) > Game.time; })))
-        return;
-    const raided = (name) => { var _a, _b; return ((_b = (_a = remotes.find((r) => r.roomName === name)) === null || _a === void 0 ? void 0 : _a.invaderUntil) !== null && _b !== void 0 ? _b : 0) > Game.time; };
-    for (const knight of getCreepsByRole(ROLE_KNIGHT)) {
-        const m = knight.memory;
-        if (m.homeRoom !== room.name || !m.targetRoom || m.offensiveTarget || m.defensiveTarget)
-            continue;
-        if (raided(m.targetRoom) || ((_a = knight.ticksToLive) !== null && _a !== void 0 ? _a : 0) < REMOTE_KNIGHT_MIN_TTL)
-            continue;
-        const target = findRemoteInvaderTarget(room);
-        if (!target)
-            return;
-        m.targetRoom = target;
-    }
-}
-const REMOTE_DEFENDER_BODY_WAIT = "remoteDefender";
-function shouldSpawnRemoteDefender(room) {
-    const needed = findRemoteInvaderTarget(room) !== null;
-    if (waitForFullBody(room, REMOTE_DEFENDER_BODY_WAIT, needed))
-        return false;
-    return needed;
-}
-function spawnRemoteDefender(room, spawn) {
-    const target = findRemoteInvaderTarget(room);
-    if (!target)
-        return false;
-    const allowedEnergy = bodyBudget(room, "available");
-    const body = buildKnightBody(allowedEnergy);
-    if (room.energyAvailable < calculateBodyPartCost(body))
-        return false;
-    const attackParts = body.filter((p) => p === ATTACK).length;
-    const toughParts = body.filter((p) => p === TOUGH).length;
-    const moveParts = body.filter((p) => p === MOVE).length;
-    const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
-    const res = trackedSpawn(room, spawn, body, {
-        memory: {
-            role: ROLE_KNIGHT,
-            homeRoom: room.name,
-            targetRoom: target,
-            ...boostMemory(queue),
-        },
-    });
-    if (res === OK)
-        console.log(`[Defense] Spawning remote defender for ${target}`);
     return res === OK;
 }
 
@@ -21249,20 +21268,20 @@ function loop() {
     runSafe("herald", () => heraldRooms());
     runSafe("memory", () => loop$h());
     runSafe("rebrand", () => migrateRoleNames());
-    runSafe("strategy", () => loop$a());
+    runSafe("strategy", () => loop$9());
     runSafe("allies", () => runAllies());
-    runSafe("expansion", () => loop$9());
-    runSafe("score", () => loop$f());
-    runSafe("creeps", () => loop$e());
+    runSafe("expansion", () => loop$8());
+    runSafe("score", () => loop$e());
+    runSafe("creeps", () => loop$c());
     runSafe("spawning", () => loop$7());
     if (!bucketCritical)
         runSafe("structures", () => loop$6());
     if (!bucketCritical)
-        runSafe("exchequer", () => loop$8());
+        runSafe("exchequer", () => loop$g());
     if (!heavyShed())
-        runSafe("labs", () => loop$d());
+        runSafe("labs", () => loop$b());
     if (!heavyShed())
-        runSafe("factory", () => loop$c());
+        runSafe("factory", () => loop$a());
     runSafe("links", () => loop$l());
     runSafe("towers", () => loop$5());
     runSafe("terminal", () => loop$j());
@@ -21270,12 +21289,12 @@ function loop() {
     runSafe("nukes", () => loop$4());
     if (!heavyShed())
         runSafe("nuker", () => loop$k());
-    runSafe("sourcekeeper", () => loop$g());
+    runSafe("sourcekeeper", () => loop$d());
     runSafe("powercreep", () => loop$3());
     if (!heavyShed())
         runSafe("observer", () => loop$2());
     if (!heavyShed())
-        runSafe("pixels", () => loop$b());
+        runSafe("pixels", () => loop$f());
     const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
     const visualsDue = Game.time - lastVisualsDrawn >= VISUALS_MIN_INTERVAL;
     if (!bucketCritical && (visualsDue || cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD)) {
