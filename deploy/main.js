@@ -8475,7 +8475,7 @@ function whereIn(roomName) {
 function chronicleKill(room) {
     const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
     annal("slain", 1);
-    tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}`, BATTLE_WINDOW);
+    tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}.`, BATTLE_WINDOW);
 }
 let muster = new Map();
 function foeIn(roomName) {
@@ -9211,6 +9211,8 @@ function runSettler(creep) {
         return;
     }
     if (creep.room.name !== targetRoom) {
+        if (creep.room.name === homeRoom && takeProvisions(creep))
+            return;
         moveToRoom$3(creep, targetRoom);
         return;
     }
@@ -9274,6 +9276,17 @@ function runSettler(creep) {
     }
 }
 const MIN_STOCK = 100;
+const PROVISION_FLOOR = 30000;
+function takeProvisions(creep) {
+    const storage = creep.room.storage;
+    if (!(storage === null || storage === void 0 ? void 0 : storage.my) || storage.store[RESOURCE_ENERGY] < PROVISION_FLOOR)
+        return false;
+    if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0)
+        return false;
+    if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE)
+        creep.moveTo(storage, { reusePath: 10 });
+    return true;
+}
 function harvest(creep) {
     const pile = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
         filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount >= MIN_STOCK,
@@ -9294,6 +9307,10 @@ function harvest(creep) {
     }
     const source = creep.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
     if (!source) {
+        if (creep.store[RESOURCE_ENERGY] > 0) {
+            creep.memory.working = true;
+            return;
+        }
         const ctrl = creep.room.controller;
         if (ctrl && !creep.pos.isNearTo(ctrl))
             creep.moveTo(ctrl, { reusePath: 20 });
