@@ -12494,15 +12494,21 @@ function getRoomCostMatrix(roomName) {
 function structureCostCallback(roomName) {
     return getRoomCostMatrix(roomName);
 }
+const siteAwareCache = {};
 const creepAwareCache = {};
 let creepAwareTick = -1;
-function roadCostCallback(roomName) {
-    if (creepAwareTick !== Game.time) {
-        creepAwareTick = Game.time;
-        for (const k in creepAwareCache)
-            delete creepAwareCache[k];
-    }
-    const cached = creepAwareCache[roomName];
+function freshCreepAware() {
+    if (creepAwareTick === Game.time)
+        return;
+    creepAwareTick = Game.time;
+    for (const k in siteAwareCache)
+        delete siteAwareCache[k];
+    for (const k in creepAwareCache)
+        delete creepAwareCache[k];
+}
+function siteCostMatrix(roomName) {
+    freshCreepAware();
+    const cached = siteAwareCache[roomName];
     if (cached)
         return cached;
     const base = getRoomCostMatrix(roomName);
@@ -12515,6 +12521,19 @@ function roadCostCallback(roomName) {
             cm.set(s.pos.x, s.pos.y, 0xff);
         }
     }
+    siteAwareCache[roomName] = cm;
+    return cm;
+}
+function roadCostCallback(roomName) {
+    freshCreepAware();
+    const cached = creepAwareCache[roomName];
+    if (cached)
+        return cached;
+    const sites = siteCostMatrix(roomName);
+    const room = Game.rooms[roomName];
+    if (!room)
+        return sites;
+    const cm = sites.clone();
     for (const c of room.find(FIND_CREEPS))
         cm.set(c.pos.x, c.pos.y, 0xff);
     for (const pc of room.find(FIND_POWER_CREEPS))
@@ -12522,8 +12541,28 @@ function roadCostCallback(roomName) {
     creepAwareCache[roomName] = cm;
     return cm;
 }
-function creepAwareIn(here) {
-    return (roomName) => (roomName === here ? roadCostCallback(roomName) : getRoomCostMatrix(roomName));
+const CREEP_OBSTACLE_RANGE = 3;
+function creepsNear(from) {
+    return (roomName) => {
+        if (roomName !== from.roomName)
+            return getRoomCostMatrix(roomName);
+        const sites = siteCostMatrix(roomName);
+        const room = Game.rooms[roomName];
+        if (!room)
+            return sites;
+        let cm;
+        const block = (pos) => {
+            if (Math.max(Math.abs(pos.x - from.x), Math.abs(pos.y - from.y)) > CREEP_OBSTACLE_RANGE)
+                return;
+            cm !== null && cm !== void 0 ? cm : (cm = sites.clone());
+            cm.set(pos.x, pos.y, 0xff);
+        };
+        for (const c of room.find(FIND_CREEPS))
+            block(c.pos);
+        for (const pc of room.find(FIND_POWER_CREEPS))
+            block(pc.pos);
+        return cm !== null && cm !== void 0 ? cm : sites;
+    };
 }
 const ROUTE_TTL = 500;
 const DANGER_ROUTE_COST = 10;
@@ -12641,7 +12680,7 @@ Creep.prototype.moveTo = function (...args) {
     }
     const effectiveOpts = { plainCost: 2, swampCost: 10, ...roomBound, ...(opts !== null && opts !== void 0 ? opts : {}) };
     if (!effectiveOpts.costCallback) {
-        effectiveOpts.costCallback = sameRoom ? roadCostCallback : creepAwareIn(this.pos.roomName);
+        effectiveOpts.costCallback = creepsNear(this.pos);
     }
     if (!sameRoom)
         restrictToRoute(this, tpos, effectiveOpts);
