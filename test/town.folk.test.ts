@@ -25,7 +25,7 @@ vi.mock("../src/services/services.combat", () => ({
 }));
 
 import { runTownsfolk, lookoutTargets } from "../src/roles/role.townsfolk";
-import { claimSpot, townClock, townDragon, townFeast, townSeason, townStorm } from "../src/services/services.town";
+import { claimSpot, isFullMoon, townClock, townDragon, townFeast, townHowl, townMoon, townSeason, townStorm } from "../src/services/services.town";
 import { nextTownJob } from "../src/orchestrators/orchestrator.spawning.town";
 import { ROLE_TOWNSFOLK } from "../src/config/config.roles";
 import { TOWN, TOWN_DAY_LENGTH, TOWN_DRAGON_FLIGHT } from "../src/config/config.town";
@@ -208,6 +208,35 @@ describe("townDragon", () => {
     const [from, to] = first.dir === 1 ? [first.x, last.x] : [last.x, first.x];
     expect(from).toBeLessThan(0);
     expect(to).toBeGreaterThan(49);
+  });
+});
+
+describe("the moon and the wolves", () => {
+  // Day 4 is the first full moon.
+  const FULL = 4 * TOWN_DAY_LENGTH;
+
+  it("waxes and wanes over eight days", () => {
+    expect(townMoon(0)).toBe(0);
+    expect(townMoon(FULL + 999)).toBe(4);
+    expect(townMoon(8 * TOWN_DAY_LENGTH)).toBe(0);
+    expect(isFullMoon(FULL)).toBe(true);
+    expect(isFullMoon(FULL + TOWN_DAY_LENGTH)).toBe(false);
+    expect(isFullMoon(12 * TOWN_DAY_LENGTH + 500)).toBe(true);
+  });
+
+  it("has the wolves howl every fifty ticks of a full-moon night and at no other time", () => {
+    const howling: number[] = [];
+    for (let t = 0; t < 2 * TOWN_DAY_LENGTH; t++) if (townHowl(FULL - TOWN_DAY_LENGTH + t)?.t === 0) howling.push(t);
+    // Six howls, all in the full moon's night: 700 to 999 of the second day.
+    expect(howling).toEqual([1700, 1750, 1800, 1850, 1900, 1950]);
+
+    expect(townHowl(FULL + 700)).toMatchObject({ t: 0, n: 0 });
+    expect(townHowl(FULL + 705)).toMatchObject({ t: 5, n: 0 });
+    expect(townHowl(FULL + 706)).toBeUndefined();
+    const { x, y } = townHowl(FULL + 750)!;
+    expect([2.5, 46.5]).toContain(x);
+    expect(y).toBeGreaterThanOrEqual(14);
+    expect(y).toBeLessThan(42);
   });
 });
 

@@ -62,6 +62,22 @@ export const TOWN_STORM_ODDS = 5;
 // aside, taking this many ticks to fly over a castle.
 export const TOWN_DRAGON_ODDS = 6;
 export const TOWN_DRAGON_FLIGHT = 48;
+// The moon waxes and wanes over this many days, so its full moon falls on a
+// different day of each season. On a full-moon night the wolves howl from
+// beyond the walls, once every TOWN_HOWL_EVERY ticks for TOWN_HOWL_TICKS.
+export const TOWN_MOON_DAYS = 8;
+export const TOWN_MOON_NAMES = [
+  "new moon",
+  "waxing crescent",
+  "first quarter",
+  "waxing gibbous",
+  "full moon",
+  "waning gibbous",
+  "last quarter",
+  "waning crescent",
+];
+export const TOWN_HOWL_EVERY = 50;
+export const TOWN_HOWL_TICKS = 6;
 export type TownSeason = "spring" | "summer" | "autumn" | "winter";
 export const TOWN_SEASONS: ReadonlyArray<TownSeason> = ["spring", "summer", "autumn", "winter"];
 // The first day of each season is a feast day.

@@ -10,7 +10,7 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-import { describeCensus, drawDragon, drawGraves, drawLandmarks, drawRealmMap, drawSeason, drawTown } from "../src/orchestrators/orchestrator.visuals";
+import { describeCensus, drawDragon, drawGraves, drawLandmarks, drawMoon, drawRealmMap, drawSeason, drawTown } from "../src/orchestrators/orchestrator.visuals";
 import { townDragon } from "../src/services/services.town";
 import {
   ROLE_FILLER,
@@ -194,10 +194,43 @@ describe("town at night", () => {
       drawn = [];
       g.Game = { time, creeps: {}, rooms: {} };
       drawTown(room);
-      return drawn.filter((d) => d.kind === "circle").length;
+      // The moon hangs in the north-east corner, well clear of the posts.
+      return drawn.filter((d) => d.kind === "circle" && (d.args[0] as number) < 40).length;
     };
     expect(torches(3_300)).toBe(0);
     expect(torches(3_800)).toBe(6);
+  });
+
+  it("hangs the moon in the sky after dark, lit as it is tonight", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const v = { circle: record("circle"), poly: record("poly") } as unknown as RoomVisual;
+    drawMoon(v, 0);
+    expect(drawn.map((d) => d.kind)).toEqual(["circle"]);
+    drawn = [];
+    drawMoon(v, 2);
+    expect(drawn.map((d) => d.kind)).toEqual(["circle", "poly"]);
+    drawn = [];
+    // The full moon glows.
+    drawMoon(v, 4);
+    expect(drawn.map((d) => d.kind)).toEqual(["circle", "poly", "circle"]);
+  });
+
+  it("has a wolf howl out of the dark on a full-moon night", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const room = {
+      name: HOME,
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
+      memory: { town: { posts: [], square: [], cottages: [] } },
+    } as unknown as Room;
+    const howls = (time: number) => {
+      drawn = [];
+      g.Game = { time, creeps: {}, rooms: {} };
+      drawTown(room);
+      return drawn.filter((d) => d.kind === "text" && d.args[0] === "Awoo-oo!").length;
+    };
+    expect(howls(4_702)).toBe(1);
+    expect(howls(4_720)).toBe(0);
+    expect(howls(3_702)).toBe(0);
   });
 });
 

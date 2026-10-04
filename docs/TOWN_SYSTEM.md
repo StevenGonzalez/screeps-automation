@@ -207,9 +207,15 @@ overhead the whole castle cries out every 8 ticks ("Dragon!", "Look up!",
 across Embercrag."). Like the weather, the dragon's days follow from the day's
 number alone.
 
-The room HUD shows the part of the day, the hour, the season, any feast and
-any storm: `Day, 10:00 in autumn, Harvest Home  8 townsfolk`, or
-`Dusk, 15:00 in spring, storm  8 townsfolk`.
+The moon waxes and wanes over eight days, so its full moon falls on a
+different day of each season. On a full-moon night the wolves howl from the
+dark beyond the walls every 50 ticks; the whole castle starts at each howl
+("Wolves!", "Hark!", "Hear that?"), and the chronicle notes the first ("Wolves
+howled beneath the full moon outside the walls of Embercrag.").
+
+The room HUD shows the part of the day, the hour, the season, any feast, any
+storm and, after dark, the moon: `Day, 10:00 in autumn, Harvest Home  8
+townsfolk`, or `Night, 20:00 in spring, full moon  8 townsfolk`.
 
 ---
 
@@ -231,6 +237,9 @@ When room visuals are on, the town draws itself:
   for a tick;
 - on a dragon's day, the dragon itself crossing the room: wings beating, tail
   swinging, an ember of an eye, and its shadow sliding over the ground below;
+- from dusk to dawn, unless a storm hides it, the moon in the north-east
+  corner, lit as it is tonight and glowing when full; on a full-moon night, a
+  wolf's eyes at the room's west or east edge with its howl rising over them;
 - on a feast day, a ring of lanterns round the fountain with the feast's name,
   and while the minstrel is in the square, the couplet it sings over the
   square's sign and a note bobbing over its head.

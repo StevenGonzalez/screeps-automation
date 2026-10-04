@@ -5,7 +5,7 @@
 
 import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
-import { townDragon, townFeast, townSeason } from "./services.town";
+import { townDragon, townFeast, townHowl, townSeason } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 
@@ -54,6 +54,7 @@ export function heraldRooms(): void {
     if (room.controller?.my) {
       heraldRise(room);
       heraldDragon(room);
+      heraldWolves(room);
       heraldVisitors(room);
       heraldWorks(room);
     }
@@ -200,6 +201,17 @@ function heraldDragon(room: Room): void {
   if (!dragon || dragon.t % DRAGON_CRY_PERIOD !== 0) return;
   roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
   if (dragon.t === 0) chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleName(room.name)));
+}
+
+const HOWL_CRIES = ["Wolves!", "Hark!", "Hear that?", "Awoo?!"];
+
+// Everyone in the castle starts at each howl on a full-moon night, and the
+// chronicle notes the first.
+function heraldWolves(room: Room): void {
+  const howl = townHowl(Game.time);
+  if (!howl || howl.t !== 0) return;
+  roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
+  if (howl.n === 0) chronicle(`Wolves howled beneath the full moon outside the walls of ${castleName(room.name)}.`);
 }
 
 // The whole room cheers when the castle reaches a new controller level.

@@ -16,8 +16,9 @@ class FakeCreep {
 g.Creep = FakeCreep;
 
 import { cryFor, cryFlight, heraldRooms, settleFlight } from "../src/services/services.herald";
-import { annal } from "../src/services/services.chronicle";
+import { annal, castleName } from "../src/services/services.chronicle";
 import { townDragon } from "../src/services/services.town";
+import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
 const ROOM = "W1N1";
 let tick = 100;
@@ -310,6 +311,24 @@ describe("herald", () => {
 
     const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("dragon"));
     expect(lines).toHaveLength(1);
+  });
+
+  it("has the castle start at each wolf's howl on a full-moon night, and chronicles the first", () => {
+    // Night falls at 700; day 4 of every eight has the full moon.
+    const night = 4 * TOWN_DAY_LENGTH + 700;
+    const mason = new FakeCreep("Mason Aldric", { name: ROOM });
+    const room = roomWith([], { my: true, level: 6 });
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {}, getObjectById: () => null };
+      heraldRooms();
+      return cryFor(mason as unknown as Creep);
+    };
+    expect(at(night)).toBe("Wolves!");
+    expect(at(night + 1)).toBeUndefined();
+    expect(at(night + 50)).toBe("Hark!");
+
+    const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("Wolves"));
+    expect(lines).toEqual([`Wolves howled beneath the full moon outside the walls of ${castleName(ROOM)}.`]);
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {

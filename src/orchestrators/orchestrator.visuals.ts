@@ -1,7 +1,19 @@
 import { ROLE_MINSTREL, ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
 import { currentVerse } from "../roles/role.minstrel";
-import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townDragon, townFeast, townSeason, townStorm } from "../services/services.town";
-import { TownSeason } from "../config/config.town";
+import {
+  cottageLayout,
+  isNightfall,
+  parseTile,
+  spotHolder,
+  townClock,
+  townDragon,
+  townFeast,
+  townHowl,
+  townMoon,
+  townSeason,
+  townStorm,
+} from "../services/services.town";
+import { TOWN_MOON_DAYS, TOWN_MOON_NAMES, TOWN_HOWL_TICKS, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
@@ -245,7 +257,8 @@ function drawRoomHUD(room: Room) {
     const season = townSeason(Game.time);
     const feast = townFeast(Game.time);
     const storm = townStorm(Game.time) ? ", storm" : "";
-    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}`;
+    const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
+    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}`;
     v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
     y += lineH;
   }
@@ -467,6 +480,8 @@ export function drawTown(room: Room): void {
 
   const label: TextStyle = { font: 0.45, color: "#ffe9a8", stroke: "#000000", strokeWidth: 0.06 };
   const lit = clock.phase === "dusk" || clock.phase === "night";
+  if (lit && !townStorm(Game.time)) drawMoon(v, townMoon(Game.time));
+  drawHowl(v, Game.time);
 
   for (const c of town.cottages) {
     const l = cottageLayout(c);
@@ -508,6 +523,49 @@ export function drawTown(room: Room): void {
       v.circle(x, y, { radius: 0.12, fill: "#ffe9a8", opacity: 0.3 });
     }
   }
+}
+
+const MOON_X = 46;
+const MOON_Y = 3;
+const MOON_RADIUS = 1.1;
+const MOON_LIGHT = "#f4f1d0";
+
+// The moon in the north-east sky from dusk to dawn, lit as it is tonight:
+// the lit limb on one side and the terminator's half-ellipse on the other,
+// waxing from the right and waning from the left.
+export function drawMoon(v: RoomVisual, age: number): void {
+  v.circle(MOON_X, MOON_Y, { radius: MOON_RADIUS, fill: "#1a1f3a", stroke: "#3a4060", strokeWidth: 0.04, opacity: 0.5 });
+  if (age === 0) return;
+  const angle = (2 * Math.PI * age) / TOWN_MOON_DAYS;
+  const waxing = angle <= Math.PI;
+  const side = waxing ? 1 : -1;
+  const reach = Math.cos(waxing ? angle : 2 * Math.PI - angle);
+  const STEPS = 12;
+  const lit: Array<[number, number]> = [];
+  for (let i = 0; i <= STEPS; i++) {
+    const a = (Math.PI * i) / STEPS;
+    lit.push([MOON_X + side * MOON_RADIUS * Math.sin(a), MOON_Y - MOON_RADIUS * Math.cos(a)]);
+  }
+  for (let i = STEPS; i >= 0; i--) {
+    const a = (Math.PI * i) / STEPS;
+    lit.push([MOON_X + side * MOON_RADIUS * reach * Math.sin(a), MOON_Y - MOON_RADIUS * Math.cos(a)]);
+  }
+  v.poly(lit, { fill: MOON_LIGHT, stroke: "transparent", opacity: 0.85 });
+  // A full moon throws a glow about itself.
+  if (age === TOWN_MOON_DAYS / 2) v.circle(MOON_X, MOON_Y, { radius: MOON_RADIUS * 2.2, fill: MOON_LIGHT, opacity: 0.07 });
+}
+
+const HOWL_STYLE: TextStyle = { font: "italic 0.5 serif", color: "#a8b8d8", stroke: "#000000", strokeWidth: 0.05 };
+
+// A wolf's howl out of the dark at the castle's edge: a pair of eyes and the
+// howl rising and fading over them.
+function drawHowl(v: RoomVisual, time: number): void {
+  const howl = townHowl(time);
+  if (!howl) return;
+  const fade = 1 - howl.t / TOWN_HOWL_TICKS;
+  v.circle(howl.x - 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
+  v.circle(howl.x + 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
+  v.text("Awoo-oo!", howl.x, howl.y - 0.7 - howl.t * 0.15, { ...HOWL_STYLE, opacity: 0.4 + 0.6 * fade });
 }
 
 const DRAGON: PolyStyle = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.92 };

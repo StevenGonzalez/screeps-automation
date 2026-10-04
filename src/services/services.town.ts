@@ -4,6 +4,9 @@ import {
   TOWN_DRAGON_FLIGHT,
   TOWN_DRAGON_ODDS,
   TOWN_FEASTS,
+  TOWN_HOWL_EVERY,
+  TOWN_HOWL_TICKS,
+  TOWN_MOON_DAYS,
   TOWN_PHASES,
   TOWN_SEASONS,
   TOWN_STORM_ODDS,
@@ -88,6 +91,43 @@ export function townDragon(time: number): DragonFlight | undefined {
   const toY = 8 + ((h >>> 24) % 34);
   const f = t / (TOWN_DRAGON_FLIGHT - 1);
   return { t, x: dir === 1 ? -6 + 62 * f : 55 - 62 * f, y: fromY + (toY - fromY) * f, dir, day };
+}
+
+/** The moon's age tonight in days: 0 is the new moon, TOWN_MOON_DAYS / 2 the full. */
+export function townMoon(time: number): number {
+  return Math.floor(time / TOWN_DAY_LENGTH) % TOWN_MOON_DAYS;
+}
+
+export function isFullMoon(time: number): boolean {
+  return townMoon(time) === TOWN_MOON_DAYS / 2;
+}
+
+export interface Howl {
+  // Ticks since the howl began, and which of the night's howls it is.
+  t: number;
+  n: number;
+  // Where in the dark beyond the walls it comes from.
+  x: number;
+  y: number;
+}
+
+const NIGHT_START = TOWN_PHASES.find((p) => p.name === "night")!.start;
+
+/**
+ * The wolves' howl at `time`, if one is sounding: on a full-moon night they
+ * howl every TOWN_HOWL_EVERY ticks from somewhere along the west or east edge
+ * of every castle.
+ */
+export function townHowl(time: number): Howl | undefined {
+  if (!isFullMoon(time)) return undefined;
+  const night = (time % TOWN_DAY_LENGTH) - NIGHT_START;
+  if (night < 0) return undefined;
+  const t = night % TOWN_HOWL_EVERY;
+  if (t >= TOWN_HOWL_TICKS) return undefined;
+  const n = Math.floor(night / TOWN_HOWL_EVERY);
+  const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
+  // Below the HUD in the top-left corner and above the chronicle in the bottom-left.
+  return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
 }
 
 export function isNightfall(phase: TownPhase): boolean {
