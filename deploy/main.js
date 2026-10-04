@@ -14782,7 +14782,7 @@ function remoteSpawnBudget(room) {
 }
 const remotePickCache = {};
 function pickRemoteSources(room) {
-    var _a;
+    var _a, _b;
     const cached = remotePickCache[room.name];
     if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
         return cached.picked;
@@ -14804,21 +14804,25 @@ function pickRemoteSources(room) {
         }
     }
     plans.sort((a, b) => b.profit - a.profit);
-    const recent = cached && Game.time - cached.tick <= REMOTE_PICK_HOLD ? cached.picked : undefined;
+    const fresh = cached !== undefined && Game.time - cached.tick <= REMOTE_PICK_HOLD;
+    const pickedAt = fresh ? cached.pickedAt : {};
     const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
     let budget = remoteSpawnBudget(room);
     const picked = new Map();
     for (const p of plans) {
         if (picked.size >= MAX_REMOTE_SOURCES)
             break;
-        const held = recent ? recent.has(p.sourceId) : mined.has(p.sourceId);
+        const held = fresh
+            ? Game.time - ((_b = pickedAt[p.sourceId]) !== null && _b !== void 0 ? _b : -Infinity) <= REMOTE_PICK_HOLD
+            : mined.has(p.sourceId);
         const reserve = held ? 0 : headroom;
         if (p.spawnTime > budget - reserve)
             continue;
         budget -= p.spawnTime;
         picked.set(p.sourceId, picked.size);
+        pickedAt[p.sourceId] = Game.time;
     }
-    remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
+    remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked, pickedAt };
     return picked;
 }
 function getScoutsForRoom(room) {
