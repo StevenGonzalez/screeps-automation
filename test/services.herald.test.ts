@@ -271,6 +271,23 @@ describe("herald", () => {
     expect(lines[1]).toMatch(/^A war party of Rival the Fair came in arms to the walls of /);
   });
 
+  it("calls the castle to arms once, when a war party is first seen", () => {
+    const castle = { my: true, level: 6 };
+    const spy = { owner: { username: "Rival" }, body: [{ type: "move" }] };
+    const raider = { owner: { username: "Rival" }, body: [{ type: "attack" }, { type: "move" }] };
+    const mason = new FakeCreep("Mason Aldric", { name: ROOM }) as unknown as Creep;
+    setup(roomWith([], castle, [spy]), {});
+    heraldRooms();
+    expect(cryFor(mason)).toBeUndefined();
+    setup(roomWith([], castle, [spy, raider]), {});
+    heraldRooms();
+    expect(cryFor(mason)).toBe("To arms!");
+    setup(roomWith([], castle, [spy, raider]), {});
+    heraldRooms();
+    expect(cryFor(mason)).toBeUndefined();
+    expect((g.Memory as Memory).gossip?.line).toBe("raiders!");
+  });
+
   it("writes the realm's trades with other players, one line a partner and ware", () => {
     const deal = (time: number, amount: number, who: string | undefined, resourceType = "O") => ({
       time,

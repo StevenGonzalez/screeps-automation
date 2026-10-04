@@ -68,9 +68,10 @@ export function formatK(n: number): string {
 /**
  * Adds n to a running count, such as raiders slain in one fight, instead of
  * writing a line for each. The count grows while its entry is no older than
- * `window` ticks since it last grew; after that a new entry starts.
+ * `window` ticks since it last grew; after that a new entry starts. Returns
+ * whether it started a new entry.
  */
-export function tally(key: string, n: number, describe: (total: number) => string, window: number): void {
+export function tally(key: string, n: number, describe: (total: number) => string, window: number): boolean {
   const log = entries();
   for (let i = log.length - 1; i >= 0; i--) {
     const e = log[i];
@@ -79,9 +80,10 @@ export function tally(key: string, n: number, describe: (total: number) => strin
     e.n = (e.n ?? 0) + n;
     e.last = Game.time;
     e.text = describe(e.n);
-    return;
+    return false;
   }
   write({ t: Game.time, text: describe(n), key, n, last: Game.time });
+  return true;
 }
 
 /** When an entry was written, as the realm counts it: "Day 3, dusk". */

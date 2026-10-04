@@ -201,7 +201,12 @@ function heraldVisitors(room: Room): void {
     const text = armed
       ? `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`
       : `Spies of ${lordName(who)} crept about ${castleName(room.name)}.`;
-    tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
+    const fresh = tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
+    // The castle calls its people to arms once, as the war party is first seen.
+    if (fresh && armed) {
+      roomCries[room.name] = "To arms!";
+      spreadWord("raiders!");
+    }
   }
 }
 

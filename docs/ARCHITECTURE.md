@@ -274,8 +274,9 @@ its tally (`memory.kills`), and a kill by towers alone has every creep in the
 room shout "Huzzah!". When a creep with kills to its name dies, the chronicle
 names its tally, whether it fell in a fight or was laid to rest. When an owned room reaches a
 new controller level, every creep there shouts "Long live!" and the console logs a
-`[Herald]` proclamation. A remote peddler or merchant fleeing a contested remote
-shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
+`[Herald]` proclamation. When a player's war party is first seen in a castle,
+every creep there shouts "To arms!". A remote peddler or merchant fleeing a
+contested remote shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
 load ("+800 gold"). Each load is added to the merchant's lifetime haul
 (`memory.hauled`), and a merchant who dies of age having brought home more gold
 than any before it is named in the chronicle (`Memory.richestHaul`). A new
@@ -285,7 +286,7 @@ castle's mineral vein is dug dry, with the days until it returns, and when it
 runs full again (`memory.heraldVeinDry`).
 
 News outlives its cry. For 600 ticks after a level, new renown, a keep's
-firstborn, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the
+firstborn, a war party at the walls, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the
 wolves or the wisps, every creep in the realm now and then repeats it in its idle
 chatter (`Memory.gossip`). Newer news replaces older. In its last 150 ticks a
 creep talks of its end instead of its work ("old bones", "farewell"), and after
