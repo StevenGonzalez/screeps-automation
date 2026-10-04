@@ -21,6 +21,7 @@ const { stallTimeout, planAutoProduction, loop: labLoop } = await import("../src
 const { queuedBaseMineralNeed, labMineralShortfall, resolveChain } = await import(
   "../src/services/services.labs"
 );
+const { brewName } = await import("../src/services/services.herald");
 
 function store(contents: Record<string, number>) {
   return {
@@ -277,6 +278,61 @@ describe("auto production planning", () => {
     expect(ls.queue).toEqual([{ compound: "GH", amount: 1000 }]);
     expect(ls.plannedTarget).toBeUndefined();
     expect(ls.benchedUntil?.XUH2O).toBe(11_500);
+  });
+});
+
+describe("brews in the chronicle", () => {
+  function brewing(
+    queue: LabQueueEntry[],
+    plannedTarget: string,
+    stock: number,
+    lastProduced: number,
+    time: number,
+    idle = 10
+  ) {
+    const room = makeRoom({ name: "R", storage: { [queue[0].compound]: stock }, queue, lastProduced });
+    const out = { id: "R-out", store: store({}), runReaction: () => 0 };
+    objects[out.id] = out;
+    Object.assign(room.memory.labSystem as LabSystemMemory, {
+      outputLabIds: [out.id],
+      inputCompounds: REACTION_INPUTS[queue[0].compound],
+      startStock: 0,
+      targetAmount: queue[0].amount,
+      lastProgressTick: time - idle,
+      lastPlanTick: time,
+      plannedTarget,
+    });
+    setGame([room], time);
+    labLoop();
+    return ((Memory.chronicle ?? []) as { text: string }[]).map((e) => e.text);
+  }
+  const REACTION_INPUTS: Record<string, [string, string]> = { OH: ["O", "H"], UH2O: ["UH", "OH"] };
+
+  it("names each brew for what it does", () => {
+    expect(brewName("OH")).toBe("hydroxide");
+    expect(brewName("KO")).toBe("draughts of the far shot");
+    expect(brewName("UH2O")).toBe("elixirs of strength");
+    expect(brewName("GHO2")).toBe("elixirs of iron skin");
+    expect(brewName("XZHO2")).toBe("philters of swiftness");
+  });
+
+  it("tells of a chain that finishes what it was planned for", () => {
+    const lines = brewing([{ compound: "OH", amount: 3000, auto: true }], "OH", 3000, 2990, 600);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(/^The goblin of \w+'s labs brewed 3\.0K hydroxide\.$/);
+  });
+
+  it("tells what a chain made before it ran short", () => {
+    const lines = brewing([{ compound: "OH", amount: 7000, auto: true }], "OH", 1490, 1490, 700, 500);
+    expect(lines).toEqual([expect.stringMatching(/brewed 1\.5K hydroxide\.$/)]);
+  });
+
+  it("says nothing of a step that only feeds the next", () => {
+    const queue = [
+      { compound: "UH2O", amount: 3000, auto: true },
+      { compound: "XUH2O", amount: 3000, auto: true },
+    ];
+    expect(brewing(queue, "XUH2O", 3000, 2990, 800)).toEqual([]);
   });
 });
 

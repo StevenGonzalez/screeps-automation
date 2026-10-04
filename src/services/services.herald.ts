@@ -200,6 +200,51 @@ function chronicleTrade(t: Transaction, verb: "sold" | "bought", ours: string, t
   );
 }
 
+// What the labs brew, in the realm's tongue. A boost is named for what it does
+// to the creep that drinks it, and by strength: a draught, an elixir, or, once
+// catalyzed, a philter.
+const BREW_VIRTUES: Record<string, string> = {
+  UH: "strength",
+  UO: "delving",
+  KH: "the packhorse",
+  KO: "the far shot",
+  LH: "masonry",
+  LO: "mending",
+  ZH: "sundering",
+  ZO: "swiftness",
+  GH: "the crown",
+  GO: "iron skin",
+};
+const REAGENTS: Record<string, string> = {
+  OH: "hydroxide",
+  ZK: "zynthium keanite",
+  UL: "utrium lemergite",
+  G: "ghodium",
+};
+
+export function brewName(compound: string): string {
+  const reagent = REAGENTS[compound];
+  if (reagent) return reagent;
+  const m = /^(X?)([UKLZG])(H2O|HO2|H|O)$/.exec(compound);
+  if (!m) return compound;
+  const [, catalyzed, element, rest] = m;
+  const kind = catalyzed ? "philters" : rest.length > 1 ? "elixirs" : "draughts";
+  return `${kind} of ${BREW_VIRTUES[element + (rest === "HO2" ? "O" : rest[0])]}`;
+}
+
+// A lab chain finishing the compound it was planned for. One that stops short
+// for want of an input tells what it made before it did.
+const BREW_WINDOW = 1500;
+
+export function heraldBrew(roomName: string, compound: string, amount: number): void {
+  tally(
+    `brew:${roomName}:${compound}`,
+    amount,
+    (n) => `The goblin of ${castleName(roomName)}'s labs brewed ${formatK(n)} ${brewName(compound)}.`,
+    BREW_WINDOW
+  );
+}
+
 // A player's creeps in one of our castles make one line a visit, however long
 // they stay: spies when none of them can fight, a war party when one can.
 const VISIT_WINDOW = 1500;

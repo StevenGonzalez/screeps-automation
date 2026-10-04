@@ -10,6 +10,7 @@ import {
 } from "../services/services.labs";
 import { advanceBoost } from "../services/services.combat";
 import { mineralSupplyExpected } from "./orchestrator.terminal";
+import { heraldBrew } from "../services/services.herald";
 
 const LAB_STALL_TIMEOUT = 200;
 // A reaction short of an input the market or another room can supply waits
@@ -113,6 +114,7 @@ function processLabSystem(room: Room) {
 
   const produced = producedStock(ls.activeCompound, room, outputLabs) - (ls.startStock ?? 0);
   if (produced >= (ls.targetAmount ?? 0)) {
+    tellBrew(room, ls, produced);
     ls.queue.shift();
     if (ls.queue.length === 0) delete ls.plannedTarget;
     delete ls.activeCompound;
@@ -137,6 +139,7 @@ function processLabSystem(room: Room) {
       `[Labs] ${room.name}: reaction ${ls.activeCompound} stalled (no progress in ` +
       `${stallTimeout(room, ls.inputCompounds)} ticks) - aborting and advancing queue.`
     );
+    tellBrew(room, ls, ls.lastProduced ?? 0);
     const stalled = ls.queue.shift();
     // The rest of an auto chain feeds the stalled step's target, so it goes
     // too. Steps queued from the console stay.
@@ -168,6 +171,15 @@ function processLabSystem(room: Room) {
       if (boostLabIds.has(outputLab.id)) continue;
       outputLab.runReaction(inputLabs[0], inputLabs[1]);
     }
+  }
+}
+
+// Only the last step of an auto chain makes what the chain was planned for;
+// the steps before it feed the next.
+function tellBrew(room: Room, ls: LabSystemMemory, amount: number): void {
+  const brewed = ls.activeCompound;
+  if (amount > 0 && brewed && ls.queue[0]?.auto && brewed === ls.plannedTarget) {
+    heraldBrew(room.name, brewed, amount);
   }
 }
 
