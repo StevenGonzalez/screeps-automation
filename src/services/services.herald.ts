@@ -44,6 +44,7 @@ export function heraldRooms(): void {
   freshCries();
   heraldFallen();
   heraldRenown();
+  heraldTrade();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (room.controller?.my) {
@@ -61,6 +62,50 @@ function heraldRenown(): void {
   Memory.heraldGcl = level;
   if (known === undefined || level <= known) return;
   chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
+}
+
+// Trade with other players, read from the market's own records every few
+// ticks. A partner taking an order in several bites makes one line.
+const TRADE_CHECK_PERIOD = 25;
+const TRADE_WINDOW = 1500;
+const WARES: Record<string, string> = {
+  energy: "gold",
+  H: "hydrogen",
+  O: "oxygen",
+  U: "utrium",
+  L: "lemergium",
+  K: "keanium",
+  Z: "zynthium",
+  X: "catalyst",
+};
+
+function heraldTrade(): void {
+  if (Game.time % TRADE_CHECK_PERIOD !== 0) return;
+  const seen = Memory.heraldTradeAt;
+  // Only ticks already over: a deal made this tick may not be on the books yet.
+  Memory.heraldTradeAt = Game.time - 1;
+  if (seen === undefined) return;
+  const fresh = (t: Transaction) => t.time > seen && t.time < Game.time;
+  for (const t of Game.market.outgoingTransactions) {
+    if (fresh(t)) chronicleTrade(t, "sold", t.from, t.recipient?.username, t.sender?.username);
+  }
+  for (const t of Game.market.incomingTransactions) {
+    if (fresh(t)) chronicleTrade(t, "bought", t.to, t.sender?.username, t.recipient?.username);
+  }
+}
+
+function chronicleTrade(t: Transaction, verb: "sold" | "bought", ours: string, them?: string, us?: string): void {
+  // A send between our own castles is no trade.
+  if (them !== undefined && them === us) return;
+  const ware = WARES[t.resourceType] ?? t.resourceType;
+  const partner = them ? `the merchants of ${them}` : "the free markets";
+  const dir = verb === "sold" ? "to" : "from";
+  tally(
+    `trade:${verb}:${ours}:${them ?? ""}:${t.resourceType}`,
+    t.amount,
+    (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`,
+    TRADE_WINDOW
+  );
 }
 
 // A player's creeps in one of our castles make one line a visit, however long

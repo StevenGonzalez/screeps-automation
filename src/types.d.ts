@@ -321,6 +321,8 @@ declare global {
   interface Memory {
     // GCL the herald last proclaimed (services.herald).
     heraldGcl?: number;
+    // Last tick whose market trades the herald has chronicled (services.herald).
+    heraldTradeAt?: number;
     initialized?: boolean;
     uuid: number;
     log: any;

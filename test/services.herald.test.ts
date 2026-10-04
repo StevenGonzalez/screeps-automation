@@ -18,6 +18,7 @@ import { cryFor, cryFlight, heraldRooms, settleFlight } from "../src/services/se
 
 const ROOM = "W1N1";
 let tick = 100;
+const NO_TRADE = { outgoingTransactions: [], incomingTransactions: [] };
 
 function roomWith(events: unknown[], controller?: unknown, hostiles: unknown[] = []) {
   return {
@@ -34,6 +35,7 @@ function setup(room: ReturnType<typeof roomWith>, objects: Record<string, unknow
   g.Game = {
     time: tick,
     gcl: { level: 1 },
+    market: NO_TRADE,
     rooms: { [ROOM]: room },
     getObjectById: (id: string) => objects[id] ?? null,
   };
@@ -114,10 +116,10 @@ describe("herald", () => {
     const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
     const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900 };
     tick++;
-    g.Game = { time: tick, gcl: { level: 1 }, rooms: {}, creeps: { "Merchant Leofric": merchant } };
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Merchant Leofric": merchant } };
     heraldRooms();
     tick++;
-    g.Game = { time: tick, gcl: { level: 1 }, rooms: { W2N1: wilds }, creeps: {} };
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: { W2N1: wilds }, creeps: {} };
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
@@ -129,10 +131,10 @@ describe("herald", () => {
     const old = { pos: { roomName: ROOM }, hits: 300, hitsMax: 1000, ticksToLive: 1 };
     const recycled = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 600 };
     tick++;
-    g.Game = { time: tick, gcl: { level: 1 }, rooms: {}, creeps: { "Porter Ada": old, "Reeve Bran": recycled } };
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Porter Ada": old, "Reeve Bran": recycled } };
     heraldRooms();
     tick++;
-    g.Game = { time: tick, gcl: { level: 1 }, rooms: {}, creeps: {} };
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle).toBeUndefined();
@@ -165,6 +167,50 @@ describe("herald", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(/^Spies of Rival crept about /);
     expect(lines[1]).toMatch(/^A war party of Rival came in arms to the walls of /);
+  });
+
+  it("writes the realm's trades with other players, one line a partner and ware", () => {
+    const deal = (time: number, amount: number, who: string | undefined, resourceType = "O") => ({
+      time,
+      resourceType,
+      amount,
+      from: ROOM,
+      to: "E1S1",
+      sender: { username: "Me" },
+      recipient: who ? { username: who } : undefined,
+      order: { id: "o", type: "sell", price: 80 },
+    });
+    const market = { outgoingTransactions: [] as unknown[], incomingTransactions: [] as unknown[] };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    g.Memory = { rooms: { [ROOM]: { townName: "Ravenhold" } } };
+    // Trades from before the first look are old news.
+    market.outgoingTransactions = [deal(90, 5, "Jumpp")];
+    at(100);
+    market.outgoingTransactions = [
+      deal(110, 1000, "Jumpp"),
+      deal(105, 294, "Jumpp"),
+      // Moved between our own castles: not a trade.
+      { ...deal(104, 50, "Me"), order: undefined },
+      deal(103, 7, undefined, "energy"),
+    ];
+    market.incomingTransactions = [
+      { time: 120, resourceType: "H", amount: 4500, from: "W9N9", to: ROOM, sender: { username: "Oleksii" }, order: {} },
+    ];
+    at(125);
+    // Already told, and a deal made this very tick waits for the next look.
+    market.outgoingTransactions = [deal(150, 6, "Jumpp"), ...market.outgoingTransactions];
+    at(150);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Ravenhold sold 1294 oxygen to the merchants of Jumpp.",
+      "Ravenhold sold 7 gold to the free markets.",
+      "Ravenhold bought 4500 hydrogen from the merchants of Oleksii.",
+    ]);
+    at(175);
+    expect((g.Memory as Memory).chronicle?.[0].text).toBe("Ravenhold sold 1300 oxygen to the merchants of Jumpp.");
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {
