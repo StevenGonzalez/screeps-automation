@@ -11,7 +11,7 @@ const { ROLE_MINER, ROLE_HAULER } = await import("../src/config/config.roles");
 const ROOM = "W1N1";
 let clock = 1_000;
 
-function creep(role: string, work: number, carry: number, containerId?: string, sourceId?: string): Creep {
+function creep(role: string, work: number, carry: number, containerId?: string, sourceId?: string, ttl = 1400): Creep {
   const body = [
     ...Array(work).fill({ type: "work" }),
     ...Array(carry).fill({ type: "carry" }),
@@ -20,7 +20,7 @@ function creep(role: string, work: number, carry: number, containerId?: string, 
   return {
     name: `${role}${Math.random()}`,
     spawning: false,
-    ticksToLive: 1400,
+    ticksToLive: ttl,
     room: { name: ROOM },
     body,
     memory: { role, homeRoom: ROOM, assignedContainerId: containerId, assignedSourceId: sourceId },
@@ -108,6 +108,28 @@ describe("miners for a young keep", () => {
     ];
     expect(shouldSpawnMiner(keep(400, miners(), 2))).toBe(false);
     expect(shouldSpawnMiner(keep(400, miners(), 3))).toBe(true);
+  });
+});
+
+describe("a miner's replacement", () => {
+  // At 2300 capacity the barracks can be held 138 ticks by a 46-part body, on
+  // top of the new miner's own 21 ticks in the spawn and 10 on the road: a
+  // lead of 169.
+  const miners = (ttl: number) => [creep(ROLE_MINER, 5, 1, "c1", undefined, ttl), creep(ROLE_MINER, 5, 1, "c2")];
+
+  it("is raised early enough to outlast the longest body the barracks may be spawning", () => {
+    expect(shouldSpawnMiner(keep(2300, miners(169)))).toBe(true);
+  });
+
+  it("waits while the miner has longer left than that", () => {
+    expect(shouldSpawnMiner(keep(2300, miners(170)))).toBe(false);
+  });
+
+  it("keeps a young keep's margin to the small bodies it can afford", () => {
+    // At 550 the longest body is eleven parts, 33 ticks, and the miner's own
+    // six parts take 18: a lead of 61.
+    expect(shouldSpawnMiner(keep(550, miners(61)))).toBe(true);
+    expect(shouldSpawnMiner(keep(550, miners(62)))).toBe(false);
   });
 });
 

@@ -172,7 +172,9 @@ describe("pre-spawning replacements", () => {
 
   it("does not order a miner one tick before the lead time starts", () => {
     const creeps = settledCreeps();
-    (creeps[1] as unknown as { ticksToLive: number }).ticksToLive = 60;
+    // 21 ticks in the spawn, 20 on the road and 138 for the 46-part body 2300
+    // gold buys, which may hold the barracks first: a lead of 179.
+    (creeps[1] as unknown as { ticksToLive: number }).ticksToLive = 180;
     const { room, spawn } = makeRoom(creeps, FULL_ENERGY);
 
     processRoomSpawning(room, spawn);

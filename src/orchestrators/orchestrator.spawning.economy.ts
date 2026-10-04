@@ -64,9 +64,19 @@ function minerBudget(room: Room): number {
   return room.energyCapacityAvailable;
 }
 
+// A replacement that comes due while the barracks spawns something else waits
+// for that body to finish. One pilgrim's 99 ticks outlasted both of
+// Embercrag's miners, and the empty posts raised an emergency harvester that
+// then stood idle beside the new miners for its whole life. The longest body
+// the room can afford sets the margin.
+function longestSpawnTicks(room: Room): number {
+  const parts = Math.min(MAX_BODY_PART_COUNT, Math.floor(room.energyCapacityAvailable / BODYPART_COST[MOVE]));
+  return parts * CREEP_SPAWN_TIME;
+}
+
 function getMinerReplacementLead(room: Room): number {
   const allowed = minerBudget(room);
-  return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room));
+  return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room)) + longestSpawnTicks(room);
 }
 
 export function hasEnergyGatherers(room: Room): boolean {
