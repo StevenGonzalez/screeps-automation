@@ -4690,6 +4690,20 @@ function labInputStock(room, resource) {
     }
     return total;
 }
+function labsNeedTending(room) {
+    var _a, _b;
+    if (getBoostRequests(room).size > 0)
+        return true;
+    const send = room.memory.pendingSend;
+    if (send && send.resource !== RESOURCE_ENERGY)
+        return true;
+    const ls = room.memory.labSystem;
+    if (!ls)
+        return false;
+    if (ls.inputCompounds)
+        return ls.inputCompounds.every((c) => labInputStock(room, c) >= LAB_REACTION_AMOUNT);
+    return [...((_a = ls.inputLabIds) !== null && _a !== void 0 ? _a : []), ...((_b = ls.outputLabIds) !== null && _b !== void 0 ? _b : [])].some((id) => { var _a; return !!((_a = Game.getObjectById(id)) === null || _a === void 0 ? void 0 : _a.mineralType); });
+}
 function incomingSends(room, resource) {
     var _a;
     let total = 0;
@@ -15595,6 +15609,8 @@ function shouldSpawnApothecary(room) {
     if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 6)
         return false;
     if (!((_d = (_c = room.memory.labSystem) === null || _c === void 0 ? void 0 : _c.inputLabIds) === null || _d === void 0 ? void 0 : _d.length))
+        return false;
+    if (!labsNeedTending(room))
         return false;
     return countByRoleInRoom(ROLE_APOTHECARY, room) < 1;
 }
