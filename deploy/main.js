@@ -13129,7 +13129,7 @@ function getExpansionQueue() {
     return (_a = Memory.expansionQueue) !== null && _a !== void 0 ? _a : [];
 }
 function manageActiveExpansion() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const exp = Memory.expansion;
     if (!exp)
         return;
@@ -13167,14 +13167,15 @@ function manageActiveExpansion() {
         if (exp.bootstrapStartedAt === undefined)
             exp.bootstrapStartedAt = Game.time;
         if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
-            chronicle(`The settlers of ${castleName(exp.roomName)} could not make it stand. The keep is abandoned.`);
-            if (((_b = child === null || child === void 0 ? void 0 : child.controller) === null || _b === void 0 ? void 0 : _b.my) && child.find(FIND_MY_SPAWNS).length === 0) {
-                child.controller.unclaim();
-                clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks - no spawn, unclaimed`);
-            }
-            else {
+            if (((_b = child === null || child === void 0 ? void 0 : child.controller) === null || _b === void 0 ? void 0 : _b.my) && child.find(FIND_MY_SPAWNS).length > 0) {
+                chronicle(`${castleName(exp.homeRoom)} sends no more settlers. ${castleName(exp.roomName)} must stand on its own now.`);
                 clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks`);
+                return;
             }
+            chronicle(`The settlers of ${castleName(exp.roomName)} could not make it stand. The keep is abandoned.`);
+            if ((_c = child === null || child === void 0 ? void 0 : child.controller) === null || _c === void 0 ? void 0 : _c.my)
+                child.controller.unclaim();
+            clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks - no spawn, unclaimed`);
             return;
         }
         if (child) {
@@ -13202,7 +13203,7 @@ function manageActiveExpansion() {
         return;
     }
     if (exp.phase === "established") {
-        const since = (_c = exp.establishedAt) !== null && _c !== void 0 ? _c : exp.startedAt;
+        const since = (_d = exp.establishedAt) !== null && _d !== void 0 ? _d : exp.startedAt;
         if (Game.time - since > ESTABLISHED_RETENTION) {
             clearExpansion("retention window elapsed");
         }
