@@ -540,9 +540,11 @@ export function reassignStrayHaulers(room: Room): void {
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return;
 
+  // Merchants near the end of their lives are left out of the counts, as when
+  // raising one, so a merchant raised to relieve one is not taken for a spare.
+  const serving = haulers.filter((c) => !strays.includes(c) && !isRemoteCreepRetiring(room, c));
   const haulersByRoom: Record<string, number> = {};
-  for (const h of haulers) {
-    if (strays.includes(h)) continue;
+  for (const h of serving) {
     const r = h.memory.targetRoom!;
     haulersByRoom[r] = (haulersByRoom[r] ?? 0) + 1;
   }
@@ -554,7 +556,7 @@ export function reassignStrayHaulers(room: Room): void {
   }
 
   for (const remote of activeRooms) {
-    const posted = haulers.filter((c) => c.memory.targetRoom === remote.roomName);
+    const posted = serving.filter((c) => c.memory.targetRoom === remote.roomName);
     const spare = posted.length - (plans[remote.roomName]?.count ?? 0);
     for (const c of posted.slice(0, Math.max(0, spare))) {
       const target = neediestRemote(activeRooms, plans, haulersByRoom);
@@ -584,8 +586,13 @@ export function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
   const activeRooms = getActiveRemoteRooms(room);
   if (activeRooms.length === 0) return false;
 
+  // A merchant near the end of its life is not counted, as in
+  // shouldSpawnRemoteHauler, so the one raised to relieve it goes to its
+  // remote. Counted, it left that remote looking fully manned: Embercrag sent
+  // a retiring merchant's relief, built for a paved road, to its other remote,
+  // where it was one too many.
   const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter(
-    (c) => c.memory.homeRoom === room.name
+    (c) => c.memory.homeRoom === room.name && !isRemoteCreepRetiring(room, c)
   );
   const haulersByRoom: Record<string, number> = {};
   for (const h of haulers) {

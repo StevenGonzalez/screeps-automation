@@ -296,6 +296,48 @@ describe("merchants on a paved road", () => {
   });
 });
 
+describe("relieving a merchant", () => {
+  it("sends the relief to the remote of the merchant it relieves", () => {
+    // Each remote plans two merchants and has one, but one of those is about
+    // to die of age.
+    const old = creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W5N4" });
+    Object.assign(old, { ticksToLive: 10 });
+    const room = home({
+      remotes: [remote("W4N5", [40]), remote("W5N4", [40])],
+      spawns: 2,
+      creeps: [creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W4N5" }), old],
+    });
+    const targets: (string | undefined)[] = [];
+    const spawn = {
+      name: "Spawn1",
+      spawning: null,
+      spawnCreep(_body: string[], _name: string, opts: { memory: CreepMemory }) {
+        targets.push(opts.memory.targetRoom);
+        return g.OK;
+      },
+    } as unknown as StructureSpawn;
+
+    spawnRemoteHauler(room, spawn);
+
+    expect(targets).toEqual(["W5N4"]);
+  });
+
+  it("does not take the relief for a spare while the old merchant lives", () => {
+    const old = creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W5N4" });
+    Object.assign(old, { ticksToLive: 10 });
+    const posted = [old, ...[1, 2].map(() => creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W5N4" }))];
+    const room = home({
+      remotes: [remote("W4N5", [40]), remote("W5N4", [40])],
+      spawns: 2,
+      creeps: [creep(ROLE_REMOTE_HAULER, 20, { targetRoom: "W4N5" }), ...posted],
+    });
+
+    reassignStrayHaulers(room);
+
+    expect(posted.map((c) => c.memory.targetRoom)).toEqual(["W5N4", "W5N4", "W5N4"]);
+  });
+});
+
 describe("merchants for a young keep", () => {
   // Two sources 92 and 97 steps out need 76 CARRY. An 800-gold home plans
   // merchants of 720 gold, 7 CARRY each, so the remote takes eleven of them.
