@@ -113,7 +113,8 @@ In peace it follows the town clock:
 - **Dusk and night:** sleep in a cottage bed, or wait in the square if every
   bed is taken.
 - On the first tick of each phase the whole town calls it out ("cock-a-doo!",
-  "all's well", "lamps lit", "zzz").
+  "lamps lit", "zzz"). At daybreak the talk is of the season ("blossoms!",
+  "hay to cut", "cider time", "snow again").
 
 When raiders are in the room and safe mode is off:
 

@@ -124,6 +124,24 @@ describe("townSeason", () => {
   });
 });
 
+describe("the town's calls", () => {
+  it("greets the day with talk of the season", () => {
+    const said = (time: number) => {
+      (g.Game as { time: number }).time = time;
+      const c = folk(`Yeoman ${time}`, 40, 40);
+      runTownsfolk(c as unknown as Creep);
+      return c.say.mock.calls[0]?.[0] as string | undefined;
+    };
+    // Day breaks 100 ticks into each town day; day 3 is spring, day 24 winter.
+    const spring = said(3 * TOWN_DAY_LENGTH + 100);
+    const winter = said(24 * TOWN_DAY_LENGTH + 100);
+    expect(spring).toBeTruthy();
+    expect(winter).toBeTruthy();
+    expect(spring).not.toBe(winter);
+    expect(said(24 * TOWN_DAY_LENGTH + 101)).toBeUndefined();
+  });
+});
+
 describe("claimSpot", () => {
   it("gives each tile to one creep and frees a tile its holder stopped using", () => {
     const a = folk("a", 10, 10);

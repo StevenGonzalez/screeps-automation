@@ -1,6 +1,6 @@
 import { getThreatInfo, isSourceKeeperRoom } from "../services/services.combat";
 import { isAlly } from "../services/services.allies";
-import { TOWN_DAY_LENGTH, TOWN_PHASES } from "../config/config.town";
+import { TOWN_DAY_LENGTH, TOWN_PHASES, TownSeason } from "../config/config.town";
 import {
   bedTiles,
   isNightfall,
@@ -8,6 +8,7 @@ import {
   parkOn,
   parseTile,
   townClock,
+  townSeason,
 } from "../services/services.town";
 import { floodInterior } from "../planning/planner.town";
 
@@ -36,6 +37,14 @@ const PHASE_CALLS: Record<string, string[]> = {
   day: ["all's well", "quiet day", "eyes open"],
   dusk: ["lamps lit", "home time", "supper!"],
   night: ["zzz", "g'night", "bar the door"],
+};
+
+// At daybreak the talk is of the weather.
+const SEASON_CALLS: Record<TownSeason, string[]> = {
+  spring: ["blossoms!", "lambs out", "mud again"],
+  summer: ["hot one", "hay to cut", "long day"],
+  autumn: ["harvest!", "cider time", "leaves down"],
+  winter: ["brr!", "snow again", "stoke fires"],
 };
 
 export function runTownsfolk(creep: Creep): void {
@@ -104,7 +113,7 @@ function callThePhase(creep: Creep): void {
   const t = Game.time % TOWN_DAY_LENGTH;
   const phase = TOWN_PHASES.find((p) => p.start === t);
   if (!phase) return;
-  const lines = PHASE_CALLS[phase.name];
+  const lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
   creep.say(lines[Math.abs(hash) % lines.length], true);
