@@ -178,6 +178,25 @@ describe("cross-room moveTo", () => {
     expect(opts.plainCost).toBeUndefined();
   });
 
+  it("counts creeps as obstacles only in the mover's own room", () => {
+    g.FIND_CREEPS = 101;
+    g.FIND_STRUCTURES = 107;
+    g.FIND_MY_CONSTRUCTION_SITES = 114;
+    g.FIND_POWER_CREEPS = 119;
+    const creepsAt = (x: number, y: number) => (type: number) =>
+      type === g.FIND_CREEPS ? [{ pos: { x, y } }] : [];
+    const rooms = (Game as { rooms: Record<string, unknown> }).rooms;
+    rooms.W1N1 = { ...(rooms.W1N1 as object), find: creepsAt(12, 12) };
+    rooms.W2N1 = { name: "W2N1", find: creepsAt(30, 30) };
+
+    creepIn("W1N1").moveTo(new RoomPosition(25, 25, "W3N1"), { range: 20 });
+    const opts = originalMoveTo.mock.calls[0][1] as MoveToOpts;
+    const here = opts.costCallback!("W1N1", new PathFinder.CostMatrix()) as CostMatrix;
+    expect(here.get(12, 12)).toBe(0xff);
+    const ahead = opts.costCallback!("W2N1", new PathFinder.CostMatrix()) as CostMatrix;
+    expect(ahead.get(30, 30)).toBe(0);
+  });
+
   it("does not route same-room moves", () => {
     creepIn("W1N1").moveTo(new RoomPosition(40, 40, "W1N1"));
     expect(findRoute).not.toHaveBeenCalled();

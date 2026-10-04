@@ -104,6 +104,15 @@ function roadCostCallback(roomName: string): CostMatrix {
   return cm;
 }
 
+// Creeps are obstacles only in the room the mover stands in. One standing a
+// room or two ahead will likely have moved on by the time the mover gets
+// there, and counting it as a wall can leave no complete path at all: the
+// mover then walks a partial path that changes every tick, which the stuck
+// check (the same tile three ticks running) never sees.
+function creepAwareIn(here: string): (roomName: string) => CostMatrix {
+  return (roomName) => (roomName === here ? roadCostCallback(roomName) : getRoomCostMatrix(roomName));
+}
+
 const ROUTE_TTL = 500;
 const DANGER_ROUTE_COST = 10;
 
@@ -227,7 +236,7 @@ function restrictToRoute(creep: Creep, tpos: RoomPosition, opts: MoveToOpts): vo
 
   const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
   if (!effectiveOpts.costCallback) {
-    effectiveOpts.costCallback = roadCostCallback;
+    effectiveOpts.costCallback = sameRoom ? roadCostCallback : creepAwareIn(this.pos.roomName);
   }
   if (!sameRoom) restrictToRoute(this, tpos, effectiveOpts);
 
