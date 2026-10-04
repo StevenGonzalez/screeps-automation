@@ -14638,6 +14638,10 @@ function freshIssued() {
     for (const k of Object.keys(issuedThisTick))
         delete issuedThisTick[k];
 }
+function spawnOrdersThisTick() {
+    freshIssued();
+    return issuedNames.size;
+}
 function getIssuedCount(room, role) {
     var _a, _b;
     freshIssued();
@@ -14718,10 +14722,11 @@ function countByRoleInRoom(role, room) {
     return present + getRoomSpawningCount(room, role);
 }
 const SPAWN_HOLD_LIMIT = 100;
+const SPAWN_IDLE_RECHECK = 3;
 function holdSpawnFor(room, role) {
     const memory = getRoomMemory(room);
     const hold = memory.spawnHold;
-    const continuing = hold !== undefined && hold.role === role && Game.time - hold.lastTick <= 1;
+    const continuing = hold !== undefined && hold.role === role && Game.time - hold.lastTick <= SPAWN_IDLE_RECHECK;
     const since = continuing ? hold.since : Game.time;
     memory.spawnHold = { role, since, lastTick: Game.time };
     return Game.time - since < SPAWN_HOLD_LIMIT;
@@ -16788,8 +16793,9 @@ function spawnSkHauler(room, spawn, op) {
 }
 
 const STRAY_HAULER_INTERVAL = 10;
+const idleUntil = {};
 function loop$7() {
-    var _a;
+    var _a, _b;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
         if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
@@ -16799,8 +16805,14 @@ function loop$7() {
             reassignStrayHaulers(room);
         const spawns = room.find(FIND_MY_SPAWNS);
         for (const spawn of spawns) {
-            if (!spawn.spawning)
-                processRoomSpawning(room, spawn);
+            if (spawn.spawning)
+                continue;
+            if (((_b = idleUntil[spawn.id]) !== null && _b !== void 0 ? _b : 0) > Game.time && getThreatInfo(room).hostiles.length === 0)
+                continue;
+            const orders = spawnOrdersThisTick();
+            processRoomSpawning(room, spawn);
+            if (spawnOrdersThisTick() === orders)
+                idleUntil[spawn.id] = Game.time + SPAWN_IDLE_RECHECK;
         }
     }
 }
