@@ -14882,6 +14882,52 @@ const REMOTE_SPAWN_SHARE = 0.8;
 const REMOTE_PICK_HEADROOM = 0.2;
 const REMOTE_PICK_HOLD = 100;
 const REMOTE_CPU_BUCKET_FLOOR = 5000;
+const REMOTE_CPU_SHED_INTERVAL = 500;
+const REMOTE_CPU_RESTORE_RISE = 3;
+const REMOTE_CPU_RESTORE_BUCKET = 9000;
+function remoteShedSources() {
+    var _a;
+    const state = ((_a = Memory.remoteShed) !== null && _a !== void 0 ? _a : (Memory.remoteShed = { ids: [], at: Game.time, bucket: Game.cpu.bucket }));
+    const elapsed = Game.time - state.at;
+    if (elapsed >= REMOTE_CPU_SHED_INTERVAL) {
+        const bucket = Game.cpu.bucket;
+        const rise = (bucket - state.bucket) / elapsed;
+        state.at = Game.time;
+        state.bucket = bucket;
+        if (bucket < REMOTE_CPU_BUCKET_FLOOR && rise < 0 && !inPixelRefill()) {
+            shedWorstRemoteSource(state.ids);
+        }
+        else if (state.ids.length > 0 &&
+            (rise >= REMOTE_CPU_RESTORE_RISE || (bucket >= REMOTE_CPU_RESTORE_BUCKET && rise >= 0))) {
+            const back = state.ids.pop();
+            chronicle(`The scribes have caught up with their ledgers. ${castleName(back.home)}'s vendors return to a digging in the ${wildsName(back.room)}.`);
+        }
+    }
+    return new Set(state.ids.map((s) => s.id));
+}
+function shedWorstRemoteSource(shed) {
+    var _a, _b;
+    const done = new Set(shed.map((s) => s.id));
+    let worst;
+    for (const c of getCreepsByRole(ROLE_REMOTE_MINER)) {
+        const id = c.memory.remoteSourceId;
+        const home = Game.rooms[(_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : ""];
+        if (!id || !home || done.has(id))
+            continue;
+        const remote = (_b = home.memory.remoteRooms) === null || _b === void 0 ? void 0 : _b.find((r) => r.roomName === c.memory.targetRoom);
+        const src = remote === null || remote === void 0 ? void 0 : remote.sources.find((s) => s.sourceId === id);
+        if (!remote || !src)
+            continue;
+        const plan = planRemoteSource(home, remote, src);
+        const score = plan.profit / plan.creeps;
+        if (!worst || score < worst.score)
+            worst = { id, home: home.name, room: remote.roomName, score };
+    }
+    if (!worst)
+        return;
+    shed.push({ id: worst.id, home: worst.home, room: worst.room });
+    chronicle(`The Crown's scribes cannot keep the ledgers of so many roads. ${castleName(worst.home)}'s vendors give up a digging in the ${wildsName(worst.room)}.`);
+}
 const REMOTE_ECONOMY_ROLES = new Set([
     ROLE_REMOTE_MINER,
     ROLE_REMOTE_HAULER,
@@ -14921,7 +14967,11 @@ function planRemoteSource(room, remote, src) {
         (calculateBodyPartCost(reserver) * reserverShare * reserverRespawns) / CREEP_LIFE_TIME +
         decay;
     const parts = miner.length + carry * haulerPartsPerCarry + reserver.length * reserverShare * reserverRespawns;
-    return { profit: output - upkeep, spawnTime: parts * CREEP_SPAWN_TIME };
+    return {
+        profit: output - upkeep,
+        spawnTime: parts * CREEP_SPAWN_TIME,
+        creeps: 1 + carry / haulerCarry + reserverShare,
+    };
 }
 const PASSING_ROLES = new Set([
     ROLE_SETTLER,
@@ -14954,6 +15004,7 @@ function pickRemoteSources(room) {
         return cached.picked;
     }
     const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
+    const shed = remoteShedSources();
     const peddlers = getCreepsByRole(ROLE_REMOTE_MINER);
     const mined = new Set(peddlers.filter((c) => c.memory.homeRoom === room.name).map((c) => c.memory.remoteSourceId));
     const minedElsewhere = new Set(peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId));
@@ -14962,7 +15013,7 @@ function pickRemoteSources(room) {
         if (!isRemoteEligible(room, r, "reserve", true))
             continue;
         for (const s of r.sources) {
-            if (minedElsewhere.has(s.sourceId))
+            if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId))
                 continue;
             if (lowCpu && !mined.has(s.sourceId))
                 continue;
