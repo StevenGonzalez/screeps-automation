@@ -845,6 +845,19 @@ const TOWN_DAYS_PER_SEASON = 7;
 const TOWN_STORM_ODDS = 5;
 const TOWN_DRAGON_ODDS = 6;
 const TOWN_DRAGON_FLIGHT = 48;
+const TOWN_MOON_DAYS = 8;
+const TOWN_MOON_NAMES = [
+    "new moon",
+    "waxing crescent",
+    "first quarter",
+    "waxing gibbous",
+    "full moon",
+    "waning gibbous",
+    "last quarter",
+    "waning crescent",
+];
+const TOWN_HOWL_EVERY = 50;
+const TOWN_HOWL_TICKS = 6;
 const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
 const TOWN_FEASTS = {
     spring: "Sowing Feast",
@@ -911,6 +924,26 @@ function townDragon(time) {
     const toY = 8 + ((h >>> 24) % 34);
     const f = t / (TOWN_DRAGON_FLIGHT - 1);
     return { t, x: dir === 1 ? -6 + 62 * f : 55 - 62 * f, y: fromY + (toY - fromY) * f, dir, day };
+}
+function townMoon(time) {
+    return Math.floor(time / TOWN_DAY_LENGTH) % TOWN_MOON_DAYS;
+}
+function isFullMoon(time) {
+    return townMoon(time) === TOWN_MOON_DAYS / 2;
+}
+const NIGHT_START = TOWN_PHASES.find((p) => p.name === "night").start;
+function townHowl(time) {
+    if (!isFullMoon(time))
+        return undefined;
+    const night = (time % TOWN_DAY_LENGTH) - NIGHT_START;
+    if (night < 0)
+        return undefined;
+    const t = night % TOWN_HOWL_EVERY;
+    if (t >= TOWN_HOWL_TICKS)
+        return undefined;
+    const n = Math.floor(night / TOWN_HOWL_EVERY);
+    const h = dayHash(Math.floor(time / TOWN_DAY_LENGTH) * 16 + n, 0x27d4eb2f);
+    return { t, n, x: h & 1 ? 46.5 : 2.5, y: 14 + ((h >>> 4) % 28) };
 }
 function isNightfall(phase) {
     return phase === "dusk" || phase === "night";
@@ -8325,6 +8358,7 @@ function heraldRooms() {
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
             heraldRise(room);
             heraldDragon(room);
+            heraldWolves(room);
             heraldVisitors(room);
             heraldWorks(room);
         }
@@ -8455,6 +8489,15 @@ function heraldDragon(room) {
     roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
     if (dragon.t === 0)
         chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleName(room.name)));
+}
+const HOWL_CRIES = ["Wolves!", "Hark!", "Hear that?", "Awoo?!"];
+function heraldWolves(room) {
+    const howl = townHowl(Game.time);
+    if (!howl || howl.t !== 0)
+        return;
+    roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
+    if (howl.n === 0)
+        chronicle(`Wolves howled beneath the full moon outside the walls of ${castleName(room.name)}.`);
 }
 function heraldRise(room) {
     const level = room.controller.level;
@@ -18319,7 +18362,8 @@ function drawRoomHUD(room) {
         const season = townSeason(Game.time);
         const feast = townFeast(Game.time);
         const storm = townStorm(Game.time) ? ", storm" : "";
-        const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}`;
+        const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
+        const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}`;
         v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
         y += lineH;
     }
@@ -18498,6 +18542,9 @@ function drawTown(room) {
         v.rect(-0.5, -0.5, 50, 50, { fill: "#0a1030", opacity: shade });
     const label = { font: 0.45, color: "#ffe9a8", stroke: "#000000", strokeWidth: 0.06 };
     const lit = clock.phase === "dusk" || clock.phase === "night";
+    if (lit && !townStorm(Game.time))
+        drawMoon(v, townMoon(Game.time));
+    drawHowl(v, Game.time);
     for (const c of town.cottages) {
         const l = cottageLayout(c);
         v.rect(c.x + 0.5, c.y + 0.5, 3, 3, { fill: "#8a5a2b", opacity: 0.18, stroke: "#c08a4a", strokeWidth: 0.05 });
@@ -18534,6 +18581,42 @@ function drawTown(room) {
             v.circle(x, y, { radius: 0.12, fill: "#ffe9a8", opacity: 0.3 });
         }
     }
+}
+const MOON_X = 46;
+const MOON_Y = 3;
+const MOON_RADIUS = 1.1;
+const MOON_LIGHT = "#f4f1d0";
+function drawMoon(v, age) {
+    v.circle(MOON_X, MOON_Y, { radius: MOON_RADIUS, fill: "#1a1f3a", stroke: "#3a4060", strokeWidth: 0.04, opacity: 0.5 });
+    if (age === 0)
+        return;
+    const angle = (2 * Math.PI * age) / TOWN_MOON_DAYS;
+    const waxing = angle <= Math.PI;
+    const side = waxing ? 1 : -1;
+    const reach = Math.cos(waxing ? angle : 2 * Math.PI - angle);
+    const STEPS = 12;
+    const lit = [];
+    for (let i = 0; i <= STEPS; i++) {
+        const a = (Math.PI * i) / STEPS;
+        lit.push([MOON_X + side * MOON_RADIUS * Math.sin(a), MOON_Y - MOON_RADIUS * Math.cos(a)]);
+    }
+    for (let i = STEPS; i >= 0; i--) {
+        const a = (Math.PI * i) / STEPS;
+        lit.push([MOON_X + side * MOON_RADIUS * reach * Math.sin(a), MOON_Y - MOON_RADIUS * Math.cos(a)]);
+    }
+    v.poly(lit, { fill: MOON_LIGHT, stroke: "transparent", opacity: 0.85 });
+    if (age === TOWN_MOON_DAYS / 2)
+        v.circle(MOON_X, MOON_Y, { radius: MOON_RADIUS * 2.2, fill: MOON_LIGHT, opacity: 0.07 });
+}
+const HOWL_STYLE = { font: "italic 0.5 serif", color: "#a8b8d8", stroke: "#000000", strokeWidth: 0.05 };
+function drawHowl(v, time) {
+    const howl = townHowl(time);
+    if (!howl)
+        return;
+    const fade = 1 - howl.t / TOWN_HOWL_TICKS;
+    v.circle(howl.x - 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
+    v.circle(howl.x + 0.15, howl.y, { radius: 0.07, fill: "#ffdd55", opacity: 0.9 });
+    v.text("Awoo-oo!", howl.x, howl.y - 0.7 - howl.t * 0.15, { ...HOWL_STYLE, opacity: 0.4 + 0.6 * fade });
 }
 const DRAGON = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.92 };
 const DRAGON_SHADOW = { fill: "#000000", opacity: 0.2 };
