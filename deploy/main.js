@@ -3443,7 +3443,7 @@ const LINK_TRANSFER_THRESHOLD = 400;
 const LINK_MIN_TRANSFER = 150;
 const LINK_SINK_HEADROOM = 100;
 const CONTROLLER_LINK_LOW = 400;
-function loop$k() {
+function loop$l() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -3891,7 +3891,7 @@ function collectEnergy$1(creep, storageModel) {
 const NUKER_GHODIUM_RESERVE = NUKER_GHODIUM_CAPACITY;
 const STORAGE_ENERGY_SURPLUS = 250000;
 const MAX_FILL_PER_TICK = 1000;
-function loop$j() {
+function loop$k() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -4430,7 +4430,7 @@ function getMarketHistoryAvg(resource) {
     historyAvgCache[resource] = avg;
     return avg;
 }
-function loop$i() {
+function loop$j() {
     var _a;
     if (Game.time % NETWORK_CONFIG.PLAN_INTERVAL === 0) {
         planNetworkBalancing();
@@ -7384,7 +7384,7 @@ const RETREAT_THRESHOLD$1 = {
     defend: 0.3,
     retreat: 1.1,
 };
-function loop$h() {
+function loop$i() {
     var _a, _b, _c, _d, _e;
     runWarCouncil();
     runDefenseCouncil();
@@ -7576,7 +7576,7 @@ const SCOUT_BFS_DEPTH = 2;
 const SCOUT_REFRESH_INTERVAL = 10000;
 const MAX_PENDING_SCOUT_ROOMS = 4;
 const BFS_RUN_INTERVAL = 200;
-function loop$g() {
+function loop$h() {
     cleanupDeadCreeps();
     initializeMemory();
     for (const roomName in Game.rooms) {
@@ -9486,7 +9486,7 @@ const SK_MIN_HOME_ENERGY = 40000;
 const SK_MIN_HOME_CAPACITY = 2500;
 const SK_MAX_CONCURRENT = 4;
 const SK_MAX_PER_HOME = 2;
-function loop$f() {
+function loop$g() {
     const ops = Memory.skOps;
     if (!ops || ops.length === 0)
         return;
@@ -9870,7 +9870,7 @@ function getScoreFindConstant() {
 function scoreHunterSupported() {
     return getScoreFindConstant() !== undefined;
 }
-function loop$e() {
+function loop$f() {
     var _a, _b;
     const findConstant = getScoreFindConstant();
     if (findConstant === undefined)
@@ -11497,7 +11497,7 @@ function maybeChatter(creep) {
     const eventNo = (Game.time + hash) / SAY_PERIOD;
     creep.say(lines[Math.abs(eventNo + hash) % lines.length], true);
 }
-function loop$d() {
+function loop$e() {
     const profile = Memory.profileRoles === true;
     heraldRooms();
     for (const name in Game.creeps) {
@@ -11547,7 +11547,7 @@ const AUTO_PRODUCTION_TARGETS = {
     OH: 10000,
     G: 5000,
 };
-function loop$c() {
+function loop$d() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -11748,7 +11748,7 @@ function getRecipe(commodity) {
         level: (_a = def.level) !== null && _a !== void 0 ? _a : 0,
     };
 }
-function loop$b() {
+function loop$c() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -12117,7 +12117,7 @@ function setAuto(roomName, enabled) {
 
 const PIXEL_REFILL_WINDOW = 5000;
 const PIXEL_REFILL_SLACK = 200;
-function loop$a() {
+function loop$b() {
     processPixelGeneration();
 }
 function processPixelGeneration() {
@@ -12165,7 +12165,7 @@ const BUCKET_RECOVER_EXIT = 6000;
 const STRATEGY_INTERVAL = 5;
 const MULTI_THREAT_RECOVER_COUNT = 2;
 const SPAWNLESS_CRIPPLED_LEVEL = 4;
-function loop$9() {
+function loop$a() {
     var _a, _b, _c, _d, _e, _f;
     if (Game.time % STRATEGY_INTERVAL !== 0)
         return;
@@ -12771,7 +12771,7 @@ function isExpansionPostureAllowed() {
     const posture = (_b = (_a = Memory.empire) === null || _a === void 0 ? void 0 : _a.posture) !== null && _b !== void 0 ? _b : "EXPAND";
     return posture === "EXPAND";
 }
-function loop$8() {
+function loop$9() {
     var _a, _b, _c;
     manageActiveExpansion();
     if (!Memory.expansion)
@@ -12828,6 +12828,171 @@ const MAX_BODY_PART_COUNT = 50;
 
 function getRoomMemory(room) {
     return room.memory;
+}
+
+const SAMPLE_EVERY = 5;
+const CLOSE_BOOKS_EVERY = 100;
+const MIN_WINDOW_TICKS = 50;
+const SMOOTHING = 0.3;
+const windows = {};
+function storedGold(room) {
+    var _a, _b, _c, _d;
+    return ((_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) + ((_d = (_c = room.terminal) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0);
+}
+function windowFor(room) {
+    let w = windows[room.name];
+    if (!w) {
+        w = { start: Game.time, samples: 0, sampled: {}, exact: {}, stored: storedGold(room) };
+        windows[room.name] = w;
+    }
+    return w;
+}
+function add(bucket, key, amount) {
+    var _a;
+    bucket[key] = ((_a = bucket[key]) !== null && _a !== void 0 ? _a : 0) + amount;
+}
+function recordSpend(roomName, kind, amount) {
+    var _a;
+    const room = Game.rooms[roomName];
+    if (!((_a = room === null || room === void 0 ? void 0 : room.controller) === null || _a === void 0 ? void 0 : _a.my))
+        return;
+    add(windowFor(room).exact, kind, amount);
+}
+function remoteHomes(homes) {
+    var _a;
+    const map = {};
+    for (const home of homes) {
+        for (const r of (_a = home.memory.remoteRooms) !== null && _a !== void 0 ? _a : [])
+            map[r.roomName] = home.name;
+    }
+    return map;
+}
+function isMine(id) {
+    const obj = Game.getObjectById(id);
+    return !!obj && obj.my;
+}
+function readEvents(room, w, isHome) {
+    var _a, _b, _c, _d;
+    const events = room.getEventLog();
+    if (events.length === 0)
+        return;
+    const sources = new Set(room.find(FIND_SOURCES).map((s) => s.id));
+    const towers = isHome
+        ? new Set(((_a = room.memory.towerIds) !== null && _a !== void 0 ? _a : []).map((id) => id))
+        : undefined;
+    for (const e of events) {
+        switch (e.event) {
+            case EVENT_HARVEST:
+                if (!sources.has(e.data.targetId))
+                    break;
+                if (!isHome && !isMine(e.objectId))
+                    break;
+                add(w.sampled, isHome ? "mines" : "vendors", e.data.amount);
+                break;
+            case EVENT_UPGRADE_CONTROLLER:
+                if (isHome)
+                    add(w.sampled, "enchant", (_b = e.data.energySpent) !== null && _b !== void 0 ? _b : 0);
+                break;
+            case EVENT_BUILD:
+                if (isHome || isMine(e.objectId))
+                    add(w.sampled, "masonry", (_c = e.data.energySpent) !== null && _c !== void 0 ? _c : 0);
+                break;
+            case EVENT_REPAIR:
+                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
+                    add(w.sampled, "smithy", TOWER_ENERGY_COST);
+                else if (isHome || isMine(e.objectId))
+                    add(w.sampled, "smithy", (_d = e.data.energySpent) !== null && _d !== void 0 ? _d : 0);
+                break;
+            case EVENT_ATTACK:
+            case EVENT_HEAL:
+                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
+                    add(w.sampled, "towers", TOWER_ENERGY_COST);
+                break;
+        }
+    }
+}
+function round1(n) {
+    return Math.round(n * 10) / 10;
+}
+function blend(prev, next) {
+    return round1(prev === undefined ? next : prev * (1 - SMOOTHING) + next * SMOOTHING);
+}
+const INCOME_KEYS = ["mines", "vendors"];
+const SPEND_KEYS = ["recruits", "enchant", "masonry", "smithy", "towers"];
+function closeBooks(room) {
+    const w = windows[room.name];
+    if (!w)
+        return;
+    const ticks = Game.time - w.start;
+    if (ticks < MIN_WINDOW_TICKS || w.samples === 0)
+        return;
+    if (!Memory.exchequer)
+        Memory.exchequer = {};
+    const prev = Memory.exchequer[room.name];
+    const rate = (key) => { var _a, _b; return ((_a = w.sampled[key]) !== null && _a !== void 0 ? _a : 0) / w.samples + ((_b = w.exact[key]) !== null && _b !== void 0 ? _b : 0) / ticks; };
+    const books = { at: Game.time, in: {}, out: {} };
+    for (const k of INCOME_KEYS)
+        books.in[k] = blend(prev === null || prev === void 0 ? void 0 : prev.in[k], rate(k));
+    for (const k of SPEND_KEYS)
+        books.out[k] = blend(prev === null || prev === void 0 ? void 0 : prev.out[k], rate(k));
+    books.trend = blend(prev === null || prev === void 0 ? void 0 : prev.trend, (storedGold(room) - w.stored) / ticks);
+    Memory.exchequer[room.name] = books;
+    delete windows[room.name];
+    windowFor(room);
+}
+function loop$8() {
+    var _a, _b, _c, _d;
+    const homes = [];
+    for (const name in Game.rooms) {
+        const room = Game.rooms[name];
+        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
+            homes.push(room);
+    }
+    for (const home of homes)
+        windowFor(home);
+    if (Game.time % SAMPLE_EVERY === 0) {
+        const remotes = remoteHomes(homes);
+        for (const home of homes) {
+            const w = windowFor(home);
+            w.samples++;
+            readEvents(home, w, true);
+        }
+        for (const remoteName in remotes) {
+            const remote = Game.rooms[remoteName];
+            const home = Game.rooms[remotes[remoteName]];
+            if (!remote || !home || ((_b = remote.controller) === null || _b === void 0 ? void 0 : _b.my))
+                continue;
+            readEvents(remote, windowFor(home), false);
+        }
+    }
+    if (Game.time % CLOSE_BOOKS_EVERY === 0) {
+        for (const home of homes)
+            closeBooks(home);
+        if (Memory.exchequer) {
+            for (const name in Memory.exchequer) {
+                if (!((_d = (_c = Game.rooms[name]) === null || _c === void 0 ? void 0 : _c.controller) === null || _d === void 0 ? void 0 : _d.my))
+                    delete Memory.exchequer[name];
+            }
+        }
+    }
+}
+function totalIn(books) {
+    return INCOME_KEYS.reduce((s, k) => { var _a; return s + ((_a = books.in[k]) !== null && _a !== void 0 ? _a : 0); }, 0);
+}
+function totalOut(books) {
+    return SPEND_KEYS.reduce((s, k) => { var _a; return s + ((_a = books.out[k]) !== null && _a !== void 0 ? _a : 0); }, 0);
+}
+function describeBooks(books) {
+    const part = (label, n) => n && n >= 0.05 ? `${label} ${n.toFixed(1)}` : undefined;
+    const income = INCOME_KEYS.map((k) => part(k, books.in[k])).filter(Boolean).join("  ");
+    const spend = SPEND_KEYS.map((k) => part(k, books.out[k])).filter(Boolean).join("  ");
+    const net = totalIn(books) - totalOut(books);
+    const sign = (n) => (n >= 0 ? `+${n.toFixed(1)}` : n.toFixed(1));
+    return [
+        `Exchequer ${sign(net)}/t  (in ${totalIn(books).toFixed(1)}, out ${totalOut(books).toFixed(1)})`,
+        `  in:  ${income || "nothing"}`,
+        `  out: ${spend || "nothing"}`,
+    ];
 }
 
 function buildScaledBody(role, availableEnergy) {
@@ -12942,6 +13107,7 @@ function trackedSpawn(room, spawn, body, opts) {
         issuedNames.add(name);
         const byRole = (_a = issuedThisTick[room.name]) !== null && _a !== void 0 ? _a : (issuedThisTick[room.name] = {});
         byRole[role] = ((_b = byRole[role]) !== null && _b !== void 0 ? _b : 0) + 1;
+        recordSpend(room.name, "recruits", calculateBodyPartCost(body));
     }
     return res;
 }
@@ -17273,7 +17439,7 @@ function drawBlueprint(room) {
     }
 }
 function drawRoomHUD(room) {
-    var _a, _b;
+    var _a, _b, _c;
     const v = room.visual;
     const rcl = room.controller.level;
     const progress = room.controller.progress;
@@ -17301,9 +17467,21 @@ function drawRoomHUD(room) {
     const energyColor = energyPct < 0.3 ? "#ff6644" : energyPct < 0.6 ? "#ffcc44" : "#88ff88";
     v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
     y += lineH;
+    const books = (_a = Memory.exchequer) === null || _a === void 0 ? void 0 : _a[room.name];
     if (room.storage) {
         const stored = room.storage.store[RESOURCE_ENERGY];
-        v.text(`Treasury: ${formatK(stored)}`, x, y, dimStyle);
+        const trend = books === null || books === void 0 ? void 0 : books.trend;
+        const trendText = trend === undefined ? "" : `  (${trend >= 0 ? "+" : ""}${trend.toFixed(1)}/t)`;
+        v.text(`Treasury: ${formatK(stored)}${trendText}`, x, y, dimStyle);
+        y += lineH;
+    }
+    if (books) {
+        const [headline, income, spend] = describeBooks(books);
+        v.text(headline, x, y, { ...style, color: "#f2c14e" });
+        y += lineH;
+        v.text(income.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
+        y += lineH * 0.8;
+        v.text(spend.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
         y += lineH;
     }
     const counts = countCreepsByRole(room);
@@ -17319,7 +17497,7 @@ function drawRoomHUD(room) {
     };
     let creepLine = "";
     for (const role of roleOrder) {
-        const n = (_a = counts[role]) !== null && _a !== void 0 ? _a : 0;
+        const n = (_b = counts[role]) !== null && _b !== void 0 ? _b : 0;
         if (n > 0)
             creepLine += `${roleShort[role]}:${n}  `;
     }
@@ -17335,7 +17513,7 @@ function drawRoomHUD(room) {
     if (room.memory.town) {
         const clock = townClock(Game.time);
         const icon = PHASE_ICON[clock.phase];
-        const folk = (_b = counts[ROLE_TOWNSFOLK]) !== null && _b !== void 0 ? _b : 0;
+        const folk = (_c = counts[ROLE_TOWNSFOLK]) !== null && _c !== void 0 ? _c : 0;
         const hh = String(clock.hour).padStart(2, "0");
         const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
         v.text(`${icon} ${phase}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
@@ -18208,6 +18386,23 @@ function setupConsole() {
                 console.log(`  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`);
             }
         },
+        ledger: () => {
+            var _a;
+            const all = (_a = Memory.exchequer) !== null && _a !== void 0 ? _a : {};
+            const names = Object.keys(all);
+            if (names.length === 0) {
+                console.log("[Exchequer] The books are not closed yet - check back in 100 ticks");
+                return;
+            }
+            for (const name of names) {
+                const books = all[name];
+                console.log(`[Exchequer] ${name}, gold a tick as of tick ${books.at}:`);
+                for (const line of describeBooks(books))
+                    console.log(`  ${line}`);
+                if (books.trend !== undefined)
+                    console.log(`  treasury ${books.trend >= 0 ? "+" : ""}${books.trend}/t`);
+            }
+        },
         powercreeps: () => {
             var _a, _b, _c, _d;
             const names = Object.keys(Game.powerCreeps);
@@ -18350,35 +18545,37 @@ function loop() {
                 !(inPixelRefill() && lastTickUsed <= limit)));
     const cpuFraction = (used) => (limit ? used / limit : 0);
     const heavyShed = () => bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
-    runSafe("memory", () => loop$g());
+    runSafe("memory", () => loop$h());
     runSafe("rebrand", () => migrateRoleNames());
-    runSafe("strategy", () => loop$9());
+    runSafe("strategy", () => loop$a());
     runSafe("allies", () => runAllies());
-    runSafe("expansion", () => loop$8());
-    runSafe("score", () => loop$e());
-    runSafe("creeps", () => loop$d());
+    runSafe("expansion", () => loop$9());
+    runSafe("score", () => loop$f());
+    runSafe("creeps", () => loop$e());
     runSafe("spawning", () => loop$7());
     const cpuAfterCore = Game.cpu.getUsed() - tickStart;
     if (!bucketCritical && cpuFraction(cpuAfterCore) < CPU_SKIP_STRUCTURES_THRESHOLD) {
         runSafe("structures", () => loop$6());
     }
     if (!heavyShed())
-        runSafe("labs", () => loop$c());
+        runSafe("labs", () => loop$d());
     if (!heavyShed())
-        runSafe("factory", () => loop$b());
-    runSafe("links", () => loop$k());
+        runSafe("factory", () => loop$c());
+    runSafe("links", () => loop$l());
     runSafe("towers", () => loop$5());
-    runSafe("terminal", () => loop$i());
-    runSafe("military", () => loop$h());
+    runSafe("terminal", () => loop$j());
+    runSafe("military", () => loop$i());
     runSafe("nukes", () => loop$4());
     if (!heavyShed())
-        runSafe("nuker", () => loop$j());
-    runSafe("sourcekeeper", () => loop$f());
+        runSafe("nuker", () => loop$k());
+    runSafe("sourcekeeper", () => loop$g());
     runSafe("powercreep", () => loop$3());
     if (!heavyShed())
         runSafe("observer", () => loop$2());
     if (!heavyShed())
-        runSafe("pixels", () => loop$a());
+        runSafe("exchequer", () => loop$8());
+    if (!heavyShed())
+        runSafe("pixels", () => loop$b());
     const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
     if (!bucketCritical && cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD) {
         runSafe("visuals", () => loop$1());
