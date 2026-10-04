@@ -58,6 +58,10 @@ export type TownPhase = "dawn" | "day" | "dusk" | "night";
 export const TOWN_DAYS_PER_SEASON = 7;
 // About one day in this many is a storm day, feast days and winter aside.
 export const TOWN_STORM_ODDS = 5;
+// About one day in this many a dragon crosses the realm's skies, feast days
+// aside, taking this many ticks to fly over a castle.
+export const TOWN_DRAGON_ODDS = 6;
+export const TOWN_DRAGON_FLIGHT = 48;
 export type TownSeason = "spring" | "summer" | "autumn" | "winter";
 export const TOWN_SEASONS: ReadonlyArray<TownSeason> = ["spring", "summer", "autumn", "winter"];
 // The first day of each season is a feast day.

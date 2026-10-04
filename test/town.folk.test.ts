@@ -25,10 +25,10 @@ vi.mock("../src/services/services.combat", () => ({
 }));
 
 import { runTownsfolk, lookoutTargets } from "../src/roles/role.townsfolk";
-import { claimSpot, townClock, townFeast, townSeason, townStorm } from "../src/services/services.town";
+import { claimSpot, townClock, townDragon, townFeast, townSeason, townStorm } from "../src/services/services.town";
 import { nextTownJob } from "../src/orchestrators/orchestrator.spawning.town";
 import { ROLE_TOWNSFOLK } from "../src/config/config.roles";
-import { TOWN, TOWN_DAY_LENGTH } from "../src/config/config.town";
+import { TOWN, TOWN_DAY_LENGTH, TOWN_DRAGON_FLIGHT } from "../src/config/config.town";
 
 // Night falls 700 ticks into each 1000-tick day.
 const DAY = 3 * TOWN_DAY_LENGTH + 200;
@@ -167,6 +167,47 @@ describe("townStorm", () => {
     }
     expect(storms / days).toBeGreaterThan(0.15);
     expect(storms / days).toBeLessThan(0.25);
+  });
+});
+
+describe("townDragon", () => {
+  // The ticks of the day a dragon is overhead, for days 0 to n-1.
+  function flights(n: number): number[][] {
+    const out: number[][] = [];
+    for (let day = 0; day < n; day++) {
+      const ticks: number[] = [];
+      for (let t = 0; t < TOWN_DAY_LENGTH; t++) if (townDragon(day * TOWN_DAY_LENGTH + t)) ticks.push(t);
+      out.push(ticks);
+    }
+    return out;
+  }
+
+  it("flies over on about one ordinary day in six, never on a feast day", () => {
+    const days = flights(2_800);
+    let seen = 0;
+    days.forEach((ticks, day) => {
+      if (townFeast(day * TOWN_DAY_LENGTH)) expect(ticks).toEqual([]);
+      else if (ticks.length > 0) seen++;
+    });
+    expect(seen / 2_400).toBeGreaterThan(0.12);
+    expect(seen / 2_400).toBeLessThan(0.22);
+  });
+
+  it("crosses in one unbroken flight between morning and dusk, from one edge of the room to the other", () => {
+    const days = flights(200);
+    const day = days.findIndex((ticks) => ticks.length > 0);
+    const ticks = days[day];
+    expect(ticks).toHaveLength(TOWN_DRAGON_FLIGHT);
+    expect(ticks[ticks.length - 1] - ticks[0]).toBe(TOWN_DRAGON_FLIGHT - 1);
+    expect(ticks[0]).toBeGreaterThanOrEqual(100);
+    expect(ticks[ticks.length - 1]).toBeLessThan(700);
+
+    const first = townDragon(day * TOWN_DAY_LENGTH + ticks[0])!;
+    const last = townDragon(day * TOWN_DAY_LENGTH + ticks[ticks.length - 1])!;
+    expect(first.t).toBe(0);
+    const [from, to] = first.dir === 1 ? [first.x, last.x] : [last.x, first.x];
+    expect(from).toBeLessThan(0);
+    expect(to).toBeGreaterThan(49);
   });
 });
 

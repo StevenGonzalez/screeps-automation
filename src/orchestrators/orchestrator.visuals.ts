@@ -1,6 +1,6 @@
 import { ROLE_MINSTREL, ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
 import { currentVerse } from "../roles/role.minstrel";
-import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townFeast, townSeason, townStorm } from "../services/services.town";
+import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townDragon, townFeast, townSeason, townStorm } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 import { readBlueprint } from "../planning/planner.blueprint";
@@ -25,6 +25,7 @@ export function loop() {
     drawSeason(room);
     drawLandmarks(room);
     drawTown(room);
+    drawDragon(room);
     drawBlueprint(room);
   }
   drawRealmMap();
@@ -478,6 +479,31 @@ export function drawTown(room: Room): void {
       v.circle(x, y, { radius: 0.12, fill: "#ffe9a8", opacity: 0.3 });
     }
   }
+}
+
+const DRAGON: PolyStyle = { fill: "#160a0a", stroke: "#7a1414", strokeWidth: 0.08, opacity: 0.9 };
+
+// A dragon crossing the room: beating wings, a body with a long neck, a
+// swinging tail, an ember of an eye, and its shadow on the ground beneath.
+export function drawDragon(room: Room, time = Game.time): void {
+  const d = townDragon(time);
+  if (!d) return;
+  const v = room.visual;
+  // Offsets are given for an eastward flight and mirrored for a westward one.
+  const at = (dx: number, dy: number): [number, number] => [d.x + dx * d.dir, d.y + dy];
+  v.circle(d.x - 1.5 * d.dir, d.y + 3, { radius: 1.8, fill: "#000000", opacity: 0.25 });
+  const span = 1.2 + 2.4 * Math.abs(Math.sin(time * 0.9));
+  v.poly([at(-1, -0.3), at(1.2, -0.3), at(-0.6, -span)], DRAGON);
+  v.poly([at(-1, 0.3), at(1.2, 0.3), at(-0.6, span)], DRAGON);
+  v.poly(
+    [at(-2.5, 0), at(-1.2, -0.45), at(1.4, -0.4), at(2.3, -0.25), at(3, 0), at(2.3, 0.25), at(1.4, 0.4), at(-1.2, 0.45), at(-2.5, 0)],
+    DRAGON
+  );
+  const [tx, ty] = at(-2.5, 0);
+  const [ex, ey] = at(-4.4, 0.4 * Math.sin(time * 0.5));
+  v.line(tx, ty, ex, ey, { color: "#160a0a", width: 0.2, opacity: 0.9 });
+  const [eyeX, eyeY] = at(2.5, -0.1);
+  v.circle(eyeX, eyeY, { radius: 0.1, fill: "#ff5522", opacity: 1 });
 }
 
 const SONG: TextStyle = { font: "italic 0.45 serif", color: "#f5e6a8", stroke: "#000000", strokeWidth: 0.05 };

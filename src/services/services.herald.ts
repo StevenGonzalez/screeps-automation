@@ -5,7 +5,7 @@
 
 import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
-import { townFeast, townSeason } from "./services.town";
+import { townDragon, townFeast, townSeason } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 
@@ -53,6 +53,7 @@ export function heraldRooms(): void {
     const room = Game.rooms[roomName];
     if (room.controller?.my) {
       heraldRise(room);
+      heraldDragon(room);
       heraldVisitors(room);
       heraldWorks(room);
     }
@@ -182,6 +183,23 @@ function heraldWorks(room: Room): void {
       WORKS_WINDOW
     );
   }
+}
+
+// While a dragon is overhead the whole castle cries out every few ticks, and
+// the chronicle notes its passing.
+const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
+const DRAGON_CRY_PERIOD = 8;
+const DRAGON_TIDINGS = [
+  (c: string) => `A dragon passed over ${c}, black against the sky.`,
+  (c: string) => `A dragon crossed the skies of ${c} and was gone.`,
+  (c: string) => `The shadow of a dragon fell across ${c}.`,
+];
+
+function heraldDragon(room: Room): void {
+  const dragon = townDragon(Game.time);
+  if (!dragon || dragon.t % DRAGON_CRY_PERIOD !== 0) return;
+  roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
+  if (dragon.t === 0) chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleName(room.name)));
 }
 
 // The whole room cheers when the castle reaches a new controller level.

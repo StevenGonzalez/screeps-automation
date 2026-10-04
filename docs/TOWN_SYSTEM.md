@@ -199,6 +199,14 @@ About one other day in five is a storm day, except in winter, when it snows
 instead. Which days are stormy follows from the day's number alone, so every
 castle has the same weather.
 
+On about one day in six, never a feast day, a dragon crosses the realm's skies.
+It flies over every castle at once, some time between morning and dusk, and
+takes 48 ticks to cross a room from one edge to the other. While it is
+overhead the whole castle cries out every 8 ticks ("Dragon!", "Look up!",
+"Hide!"), and the chronicle notes its passing ("The shadow of a dragon fell
+across Embercrag."). Like the weather, the dragon's days follow from the day's
+number alone.
+
 The room HUD shows the part of the day, the hour, the season, any feast and
 any storm: `Day, 10:00 in autumn, Harvest Home  8 townsfolk`, or
 `Dusk, 15:00 in spring, storm  8 townsfolk`.
@@ -221,6 +229,8 @@ When room visuals are on, the town draws itself:
 - on a storm day, a grey sky and slanting rain in place of the season's
   drift, and every so often a bolt of lightning that lights the room white
   for a tick;
+- on a dragon's day, the dragon itself crossing the room: wings beating, tail
+  swinging, an ember of an eye, and its shadow sliding over the ground below;
 - on a feast day, a ring of lanterns round the fountain with the feast's name,
   and while the minstrel is in the square, the couplet it sings over the
   square's sign and a note bobbing over its head.

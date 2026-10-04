@@ -1,6 +1,8 @@
 import {
   TOWN_DAY_LENGTH,
   TOWN_DAYS_PER_SEASON,
+  TOWN_DRAGON_FLIGHT,
+  TOWN_DRAGON_ODDS,
   TOWN_FEASTS,
   TOWN_PHASES,
   TOWN_SEASONS,
@@ -44,6 +46,48 @@ export function townStorm(time: number): boolean {
   if (townFeast(time) || townSeason(time) === "winter") return false;
   const day = Math.floor(time / TOWN_DAY_LENGTH);
   return (Math.imul(day, 2654435761) >>> 16) % TOWN_STORM_ODDS === 0;
+}
+
+// A well-mixed hash of a day's number, so each kind of omen falls on days
+// of its own.
+function dayHash(day: number, salt: number): number {
+  let h = Math.imul(day ^ salt, 0x9e3779b1);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  return h >>> 0;
+}
+
+export interface DragonFlight {
+  // Ticks since the dragon came into view.
+  t: number;
+  // Where it is over the room; it starts and ends off the room's edges.
+  x: number;
+  y: number;
+  // 1 flying east, -1 flying west.
+  dir: 1 | -1;
+  // The day's number, for choosing words about it.
+  day: number;
+}
+
+/**
+ * The dragon over the realm at `time`, if one is flying. On about one day in
+ * TOWN_DRAGON_ODDS, never a feast day, a dragon crosses every castle at once
+ * from one side to the other, some time between morning and dusk.
+ */
+export function townDragon(time: number): DragonFlight | undefined {
+  if (townFeast(time)) return undefined;
+  const day = Math.floor(time / TOWN_DAY_LENGTH);
+  const h = dayHash(day, 0x5bd1e995);
+  if (h % TOWN_DRAGON_ODDS !== 0) return undefined;
+  const start = 100 + ((h >>> 8) % 550);
+  const t = (time % TOWN_DAY_LENGTH) - start;
+  if (t < 0 || t >= TOWN_DRAGON_FLIGHT) return undefined;
+  const dir = (h >>> 4) & 1 ? 1 : -1;
+  const fromY = 8 + ((h >>> 18) % 34);
+  const toY = 8 + ((h >>> 24) % 34);
+  const f = t / (TOWN_DRAGON_FLIGHT - 1);
+  return { t, x: dir === 1 ? -6 + 62 * f : 55 - 62 * f, y: fromY + (toY - fromY) * f, dir, day };
 }
 
 export function isNightfall(phase: TownPhase): boolean {

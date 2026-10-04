@@ -17,6 +17,7 @@ g.Creep = FakeCreep;
 
 import { cryFor, cryFlight, heraldRooms, settleFlight } from "../src/services/services.herald";
 import { annal } from "../src/services/services.chronicle";
+import { townDragon } from "../src/services/services.town";
 
 const ROOM = "W1N1";
 let tick = 100;
@@ -290,6 +291,25 @@ describe("herald", () => {
     expect((g.Memory as Memory).chronicle?.[0].text).toBe(
       "So ends the spring. Since the scribes took up their pens the realm gathered 900 gold, slew no foe and lost none of its own."
     );
+  });
+
+  it("has the castle cry out at a passing dragon, and the chronicle tell of it once", () => {
+    let start = 0;
+    while (townDragon(start)?.t !== 0) start++;
+    const mason = new FakeCreep("Mason Aldric", { name: ROOM });
+    const room = roomWith([], { my: true, level: 6 });
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {}, getObjectById: () => null };
+      heraldRooms();
+      return cryFor(mason as unknown as Creep);
+    };
+    expect(at(start - 1)).toBeUndefined();
+    expect(at(start)).toBe("Dragon!");
+    expect(at(start + 1)).toBeUndefined();
+    expect(at(start + 8)).toBe("Look up!");
+
+    const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("dragon"));
+    expect(lines).toHaveLength(1);
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {

@@ -7,7 +7,8 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-import { describeCensus, drawGraves, drawLandmarks, drawRealmMap, drawSeason, drawTown } from "../src/orchestrators/orchestrator.visuals";
+import { describeCensus, drawDragon, drawGraves, drawLandmarks, drawRealmMap, drawSeason, drawTown } from "../src/orchestrators/orchestrator.visuals";
+import { townDragon } from "../src/services/services.town";
 import {
   ROLE_FILLER,
   ROLE_HAULER,
@@ -176,6 +177,26 @@ describe("town at night", () => {
     };
     expect(torches(3_300)).toBe(0);
     expect(torches(3_800)).toBe(6);
+  });
+});
+
+describe("dragon", () => {
+  it("draws a dragon and its shadow while one is overhead, and nothing otherwise", () => {
+    let start = 0;
+    while (townDragon(start)?.t !== 0) start++;
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const room = {
+      name: HOME,
+      visual: { circle: record("circle"), poly: record("poly"), line: record("line") },
+    } as unknown as Room;
+    drawDragon(room, start + 20);
+    // Two wings and a body, a tail, a shadow and an eye.
+    expect(drawn.filter((d) => d.kind === "poly")).toHaveLength(3);
+    expect(drawn.filter((d) => d.kind === "line")).toHaveLength(1);
+    expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(2);
+    drawn = [];
+    drawDragon(room, start - 1);
+    expect(drawn).toEqual([]);
   });
 });
 
