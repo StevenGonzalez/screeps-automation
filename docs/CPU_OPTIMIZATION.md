@@ -9,7 +9,7 @@ The bot manages its CPU budget in `src/main.ts` using a simple threshold system.
 Each tick, `main.ts` measures CPU consumed after the core systems run and skips expensive-but-optional systems when load is high.
 
 ```
-CPU_WARN_THRESHOLD        = 0.85   (85%) - log a warning to console
+CPU_WARN_THRESHOLD        = 1.00  (100%) - log a warning to console
 CPU_SKIP_STRUCTURES_THRESHOLD = 0.70   (70%) - skip structure planner
 CPU_SKIP_VISUALS_THRESHOLD    = 0.60   (60%) - skip room visuals
 CPU_BUCKET_CRITICAL           = 2000  - skip non-core when bucket is depleted
@@ -46,10 +46,11 @@ they borrow as a courier obeys their intents for the tick, and `nuker` runs afte
 
 ### High-CPU Warning
 
-If total tick CPU exceeds 85% of `Game.cpu.limit`, a warning is printed:
+If total tick CPU exceeds `Game.cpu.limit`, so the tick drew on the bucket, a
+warning is printed:
 
 ```
-[CPU] High usage: 17.3/20 (87%) bucket=9500
+[CPU] High usage: 21.3/20 (107%) bucket=9500
 ```
 
 ### Periodic Report

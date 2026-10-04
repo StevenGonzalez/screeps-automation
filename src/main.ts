@@ -26,7 +26,10 @@ import { recordCpu } from "./services/services.profiler";
 import { drawAndKeep, replayKept } from "./services/services.visualreplay";
 import "./services/services.movement";
 
-const CPU_WARN_THRESHOLD = 0.85;
+// Warn only of a tick that ran past the limit and drew on the bucket. At 85%
+// the warning fired on most ticks, since the creeps alone use about 75%, and
+// buried the chronicle in the console.
+const CPU_WARN_THRESHOLD = 1;
 
 const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
 // Past the threshold the visuals still draw once this many ticks have gone by

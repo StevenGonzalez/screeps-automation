@@ -93,6 +93,17 @@ describe("CPU guard in main", () => {
     expect(replay).not.toHaveBeenCalled();
   });
 
+  it("warns of a tick only once it runs past the limit", () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    loops.creep.mockImplementation(() => (used += 18));
+    tick(5000, 500);
+    expect(log).not.toHaveBeenCalled();
+    loops.creep.mockImplementation(() => (used += 21));
+    tick(5000, 600);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("[CPU] High usage: 21.0/20"));
+    log.mockRestore();
+  });
+
   it("holds structures and the visuals back when the bucket is critical", () => {
     tick(1000, 400);
     expect(loops.structures).not.toHaveBeenCalled();
