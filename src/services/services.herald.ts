@@ -224,7 +224,7 @@ function whereIn(roomName: string): string {
 function chronicleKill(room: Room): void {
   const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
   annal("slain", 1);
-  tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}`, BATTLE_WINDOW);
+  tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}.`, BATTLE_WINDOW);
 }
 
 // Each of our creeps as it stood at the start of last tick.

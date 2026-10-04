@@ -112,7 +112,7 @@ describe("herald", () => {
 
     const log = (g.Memory as Memory).chronicle!;
     expect(log).toHaveLength(1);
-    expect(log[0].text).toBe("2 raiders fell in the Gallows Forest");
+    expect(log[0].text).toBe("2 raiders fell in the Gallows Forest.");
     expect((g.Memory as Memory).annals?.slain).toBe(2);
   });
 
