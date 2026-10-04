@@ -8212,11 +8212,35 @@ function heraldRooms() {
     var _a;
     freshCries();
     heraldFallen();
+    heraldRenown();
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
-        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
+        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
             heraldRise(room);
+            heraldVisitors(room);
+        }
         heraldKills(room);
+    }
+}
+function heraldRenown() {
+    const level = Game.gcl.level;
+    const known = Memory.heraldGcl;
+    Memory.heraldGcl = level;
+    if (known === undefined || level <= known)
+        return;
+    chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
+}
+const VISIT_WINDOW = 1500;
+function heraldVisitors(room) {
+    for (const c of room.find(FIND_HOSTILE_CREEPS)) {
+        if (!isPlayerCreep(c))
+            continue;
+        const who = c.owner.username;
+        const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
+        const text = armed
+            ? `A war party of ${who} came in arms to the walls of ${castleName(room.name)}.`
+            : `Spies of ${who} crept about ${castleName(room.name)}.`;
+        tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
     }
 }
 function heraldRise(room) {
