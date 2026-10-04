@@ -9,6 +9,7 @@ import {
   ROLE_UNCLAIMER,
 } from "../config/config.roles";
 import { getThreatInfo, summarizeHostiles, meleeDefendersToWin } from "../services/services.combat";
+import { castleName, chronicle, wildsName } from "../services/services.chronicle";
 import { towersCanHold } from "../roles/role.tower";
 import { getDefenseOp, getDefenders, getDrainOpsForHome } from "./orchestrator.military";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
@@ -225,7 +226,9 @@ export function spawnConqueror(room: Room, spawn: StructureSpawn): boolean {
       targetRoom: exp.roomName,
     },
   });
-  return res === OK;
+  if (res !== OK) return false;
+  chronicle(`A conqueror rides out from ${castleName(room.name)} for the ${wildsName(exp.roomName)}.`);
+  return true;
 }
 
 // Spawn the next unclaimer this long before the controller accepts another
