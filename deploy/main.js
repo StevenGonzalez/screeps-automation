@@ -11887,13 +11887,14 @@ Creep.prototype.moveTo = function (...args) {
     const tpos = (_a = target === null || target === void 0 ? void 0 : target.pos) !== null && _a !== void 0 ? _a : target;
     const sameRoom = tpos instanceof RoomPosition && tpos.roomName === this.pos.roomName;
     const range = (_b = opts === null || opts === void 0 ? void 0 : opts.range) !== null && _b !== void 0 ? _b : 1;
+    const roomBound = sameRoom ? { maxRooms: 1 } : {};
     if (Memory.trafficDisabled) {
-        const plainOpts = { ...(opts !== null && opts !== void 0 ? opts : {}) };
+        const plainOpts = { ...roomBound, ...(opts !== null && opts !== void 0 ? opts : {}) };
         if (!sameRoom)
             restrictToRoute(this, tpos, plainOpts);
         return originalMoveTo.call(this, target, plainOpts);
     }
-    const effectiveOpts = { plainCost: 2, swampCost: 10, ...(opts !== null && opts !== void 0 ? opts : {}) };
+    const effectiveOpts = { plainCost: 2, swampCost: 10, ...roomBound, ...(opts !== null && opts !== void 0 ? opts : {}) };
     if (!effectiveOpts.costCallback) {
         effectiveOpts.costCallback = sameRoom ? roadCostCallback : creepAwareIn(this.pos.roomName);
     }
@@ -11991,6 +11992,13 @@ function shelterFromHostiles(creep) {
         return true;
     }
     return fleeFrom(creep, threats, SHELTER_DISTANCE);
+}
+function walkHome(creep) {
+    const home = creep.memory.homeRoom;
+    if (!home || creep.room.name === home || !CIVILIAN_ROLES.has(creep.memory.role))
+        return false;
+    creep.moveTo(new RoomPosition(25, 25, home), { range: 20 });
+    return true;
 }
 function shelterBed(creep, beds, threats) {
     if (beds.length === 0)
@@ -12206,11 +12214,11 @@ function loop$e() {
             try {
                 if (profile) {
                     const start = Game.cpu.getUsed();
-                    if (!shelterFromHostiles(creep))
+                    if (!shelterFromHostiles(creep) && !walkHome(creep))
                         handler(creep);
                     recordRole(creep.memory.role, Game.cpu.getUsed() - start);
                 }
-                else if (!shelterFromHostiles(creep)) {
+                else if (!shelterFromHostiles(creep) && !walkHome(creep)) {
                     handler(creep);
                 }
                 maybeChatter(creep);
@@ -15047,7 +15055,7 @@ function spawnEmergencyHarvester(room, spawn) {
     for (let i = 0; i < sets; i++)
         body.push(WORK, CARRY, MOVE);
     const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_HARVESTER },
+        memory: { role: ROLE_HARVESTER, homeRoom: room.name },
     });
     return res === OK;
 }
@@ -15077,7 +15085,7 @@ function spawnRepairer(room, spawn) {
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
     const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_REPAIRER },
+        memory: { role: ROLE_REPAIRER, homeRoom: room.name },
     });
     return res === OK;
 }
@@ -15097,7 +15105,7 @@ function spawnMineralMiner(room, spawn) {
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildMineralMinerBody(allowedEnergy);
     const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_MINERAL_MINER },
+        memory: { role: ROLE_MINERAL_MINER, homeRoom: room.name },
     });
     return res === OK;
 }
@@ -15105,7 +15113,7 @@ function spawnHarvester(room, spawn) {
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildScaledBody(ROLE_HARVESTER, allowedEnergy);
     const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_HARVESTER },
+        memory: { role: ROLE_HARVESTER, homeRoom: room.name },
     });
     return res === OK;
 }
@@ -15146,7 +15154,7 @@ function spawnUpgrader(room, spawn) {
         queue = buildBoostQueue(room, "upgrader", workParts, 0);
     }
     const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_UPGRADER, ...boostMemory(queue) },
+        memory: { role: ROLE_UPGRADER, homeRoom: room.name, ...boostMemory(queue) },
     });
     return res === OK;
 }
@@ -15154,7 +15162,7 @@ function spawnBuilder(room, spawn) {
     const allowedEnergy = bodyBudget(room, "available");
     const body = buildScaledBody(ROLE_BUILDER, allowedEnergy);
     const res = trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_BUILDER },
+        memory: { role: ROLE_BUILDER, homeRoom: room.name },
     });
     return res === OK;
 }
@@ -15182,11 +15190,11 @@ function spawnMiner(room, spawn) {
             return true;
         const affordable = buildMinerBody(bodyBudget(room, "available"));
         return trackedSpawn(room, spawn, affordable, {
-            memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
+            memory: { role: ROLE_MINER, homeRoom: room.name, ...inheritMinerPost(room) },
         }) === OK;
     }
     return trackedSpawn(room, spawn, body, {
-        memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
+        memory: { role: ROLE_MINER, homeRoom: room.name, ...inheritMinerPost(room) },
     }) === OK;
 }
 function inheritMinerPost(room) {
