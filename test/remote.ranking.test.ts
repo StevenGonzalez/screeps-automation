@@ -10,7 +10,13 @@ import {
   planRemoteSource,
 } from "../src/orchestrators/orchestrator.spawning";
 import { reassignStrayHaulers, shouldSpawnRemoteHauler, spawnRemoteHauler } from "../src/orchestrators/orchestrator.spawning.remote";
-import { ROLE_REMOTE_HAULER, ROLE_REMOTE_MINER, ROLE_UPGRADER } from "../src/config/config.roles";
+import {
+  ROLE_KNIGHT,
+  ROLE_REMOTE_HAULER,
+  ROLE_REMOTE_MINER,
+  ROLE_SETTLER,
+  ROLE_UPGRADER,
+} from "../src/config/config.roles";
 
 const HOME = "W5N5";
 let clock = 50_000;
@@ -101,6 +107,14 @@ describe("remote source ranking", () => {
     // One spawn, already mostly busy keeping the home's own creeps alive.
     const busy = Array.from({ length: 20 }, () => creep(ROLE_UPGRADER, 16));
     const room = home({ remotes, creeps: busy });
+    expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
+  });
+
+  it("keeps its remotes while pilgrims and a dragon knight are out", () => {
+    const remotes = [remote("W4N5", [30])];
+    const busy = Array.from({ length: 20 }, () => creep(ROLE_UPGRADER, 16));
+    const passing = [33, 30, 33].map((n) => creep(ROLE_SETTLER, n)).concat(creep(ROLE_KNIGHT, 40));
+    const room = home({ remotes, creeps: busy.concat(passing) });
     expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
   });
 

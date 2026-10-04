@@ -4,6 +4,11 @@ import {
   ROLE_REMOTE_HAULER,
   ROLE_RESERVER,
   ROLE_SCORE_HUNTER,
+  ROLE_SETTLER,
+  ROLE_CONQUEROR,
+  ROLE_KNIGHT,
+  ROLE_WIZARD,
+  ROLE_CLERIC,
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
 import { inPixelRefill } from "./orchestrator.pixels";
@@ -190,14 +195,28 @@ export function planRemoteSource(
   return { profit: output - upkeep, spawnTime: parts * CREEP_SPAWN_TIME };
 }
 
+// Creeps that are not kept up as a matter of course: defenders raised against a
+// raid, and the dark lord and pilgrims sent to found a keep. The headroom left
+// by REMOTE_SPAWN_SHARE is what pays for them. Counted as standing upkeep, they
+// cut the budget below a single source while a keep was being raised: the home
+// dropped every remote, and its peddlers mined on with no merchant to carry the
+// gold home.
+const PASSING_ROLES = new Set<string>([
+  ROLE_SETTLER,
+  ROLE_CONQUEROR,
+  ROLE_KNIGHT,
+  ROLE_WIZARD,
+  ROLE_CLERIC,
+]);
+
 // Spawn time per creep lifetime the home has left for remotes, after what its
-// own creeps (and anything else it has spawned) already take.
+// own creeps (and anything else it keeps up) already take.
 function remoteSpawnBudget(room: Room): number {
   const spawns = room.find(FIND_MY_SPAWNS).length;
   let used = 0;
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
-    if (REMOTE_ECONOMY_ROLES.has(c.memory.role)) continue;
+    if (REMOTE_ECONOMY_ROLES.has(c.memory.role) || PASSING_ROLES.has(c.memory.role)) continue;
     if ((c.memory.homeRoom ?? c.room.name) !== room.name) continue;
     used += c.body.length * CREEP_SPAWN_TIME;
   }
