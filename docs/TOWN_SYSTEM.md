@@ -159,7 +159,8 @@ The minstrel walks round the fountain, a step every 10 ticks, passing tiles
 others stand on, and hums ("♪ la la ♪") every few ticks. It sings a ballad of
 the realm, a couplet every 25 ticks: the castle itself, the feast, every other
 castle of the realm, the raiders slain this season (or that none came), the
-gold gathered, the realm's own who fell, and how many castles fly the banner.
+gold gathered, the recruits raised, the realm's own who fell, and how many
+castles fly the banner.
 The numbers come from the season's annals, so the song changes as the season
 goes on. When the feast day ends, the minstrel leaves.
 
@@ -194,8 +195,8 @@ A town day lasts 1000 ticks:
 Seven days make a season, and the year turns through spring, summer, autumn
 and winter, the same in every castle. The Royal Chronicle notes each new
 season, and first reads out the annals of the season just ended: the gold the
-realm gathered, the foes it slew and how many of its own it buried. The gold
-is counted from the exchequer's books, so it is the same figure the ledger
+realm gathered, the recruits its barracks raised, the foes it slew and how many
+of its own it buried. The gold is counted from the exchequer's books, so it is the same figure the ledger
 shows, summed over the season.
 
 The first day of each season is a feast day: the Sowing Feast, the Midsummer

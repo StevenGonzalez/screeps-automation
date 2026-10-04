@@ -3,6 +3,7 @@ import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { ROLE_TITLES } from "../config/config.roles";
 import { recordSpend } from "../services/services.exchequer";
+import { annal } from "../services/services.chronicle";
 
 export function buildScaledBody(
   role: string,
@@ -147,6 +148,7 @@ export function trackedSpawn(
     const byRole = issuedThisTick[room.name] ?? (issuedThisTick[room.name] = {});
     byRole[role] = (byRole[role] ?? 0) + 1;
     recordSpend(room.name, "recruits", calculateBodyPartCost(body));
+    annal("recruits", 1);
   }
   return res;
 }

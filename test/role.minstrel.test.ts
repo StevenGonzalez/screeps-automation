@@ -66,13 +66,14 @@ beforeEach(() => {
 describe("ballad", () => {
   it("sings of the castle, the feast, the other castles and the season's annals", () => {
     g.Game = { time: FEAST_DAY, creeps: {}, rooms: { W1N1: room, W2N1: makeRoom("W2N1") } };
-    g.Memory = { creeps: {}, rooms: {}, annals: { since: 0, gold: 12_000, slain: 3, fallen: 1 } };
+    g.Memory = { creeps: {}, rooms: {}, annals: { since: 0, gold: 12_000, slain: 3, fallen: 1, recruits: 40 } };
     const lines = ballad(room as unknown as Room, FEAST_DAY).map((v) => v.join(" "));
     expect(lines[0]).toBe(`Sing of ${castleName("W1N1")}, its walls of stone, that bow to none but the Crown alone!`);
     expect(lines).toContain("Sow the barley, sow the rye, the Sowing Feast drinks the cellars dry!");
     expect(lines.some((l) => l.includes(`the banners of ${castleName("W2N1")} stand row on row!`))).toBe(true);
     expect(lines).toContain("3 raiders came to steal our gold; now they lie in the earth so cold!");
     expect(lines).toContain("12.0K gold the mines have brought, and not a coin of it for naught!");
+    expect(lines).toContain("40 recruits marched out the barracks door, to serve the Crown as those before!");
     expect(lines).toContain("Pour one out for the one we lost, who held the line and paid the cost.");
     expect(lines[lines.length - 1]).toBe("Raise a cup to the Crown so high, whose banners over 2 castles fly!");
   });
@@ -82,6 +83,7 @@ describe("ballad", () => {
     expect(lines).toContain("No raider came to our gates this spring; they fear our archers, and with reason!");
     expect(lines.some((l) => l.includes("gold the mines"))).toBe(false);
     expect(lines.some((l) => l.includes("Pour one out"))).toBe(false);
+    expect(lines.some((l) => l.includes("barracks door"))).toBe(false);
     expect(lines.some((l) => l.includes("Sowing Feast"))).toBe(false);
     expect(lines[lines.length - 1]).toBe("Raise a cup to the Crown so high, whose banners over 1 castle fly!");
   });

@@ -411,14 +411,22 @@ describe("herald", () => {
     annal("gold", 152_300);
     annal("slain", 7);
     annal("fallen", 1);
+    annal("recruits", 45);
     at(6_999);
     at(7_000);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "So ends the spring. This season the realm gathered 152.3K gold, slew 7 foes and buried 1 of its own.",
+      "So ends the spring. This season the realm gathered 152.3K gold, raised 45 recruits, slew 7 foes and buried 1 of its own.",
       "Summer comes to the realm. The days run long on the vendors' roads. The Midsummer Fair begins.",
     ]);
-    expect((g.Memory as Memory).annals).toEqual({ since: 7_000, gold: 0, slain: 0, fallen: 0 });
+    expect((g.Memory as Memory).annals).toEqual({ since: 7_000, gold: 0, slain: 0, fallen: 0, recruits: 0 });
+  });
+
+  it("leaves recruits out of annals begun before they were counted", () => {
+    g.Game = { time: 3_000 };
+    g.Memory = { annals: { since: 0, gold: 0, slain: 0, fallen: 0 } };
+    annal("recruits", 1);
+    expect((g.Memory as Memory).annals?.recruits).toBeUndefined();
   });
 
   it("owns up to annals begun partway through a season", () => {

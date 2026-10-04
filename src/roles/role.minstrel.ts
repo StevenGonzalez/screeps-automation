@@ -50,6 +50,10 @@ export function ballad(room: Room, time: number): Array<[string, string]> {
   }
   const gold = annals?.gold ?? 0;
   if (gold > 0) verses.push([`${formatK(gold)} gold the mines have brought,`, "and not a coin of it for naught!"]);
+  const recruits = annals?.recruits ?? 0;
+  if (recruits > 0) {
+    verses.push([`${recruits === 1 ? "One recruit" : `${recruits} recruits`} marched out the barracks door,`, "to serve the Crown as those before!"]);
+  }
   const fallen = annals?.fallen ?? 0;
   if (fallen > 0) {
     verses.push([`Pour one out for the ${fallen === 1 ? "one" : fallen} we lost,`, "who held the line and paid the cost."]);

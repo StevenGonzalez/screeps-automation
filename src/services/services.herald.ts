@@ -131,7 +131,7 @@ function heraldSeason(): void {
   Memory.heraldSeason = season;
   if (known === undefined || known === season) return;
   const annals = Memory.annals;
-  Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
+  Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
   if (annals) chronicle(annalsLine(known, annals));
   const feast = townFeast(Game.time);
   chronicle(feast ? `${SEASON_TIDINGS[season]} The ${feast} begins.` : SEASON_TIDINGS[season]);
@@ -142,7 +142,8 @@ function annalsLine(season: string, a: Annals): string {
   const when = whole ? "This season" : "Since the scribes took up their pens";
   const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
   const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
-  return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold, ${slain} and ${fallen}.`;
+  const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
+  return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
 }
 
 // Trade with other players, read from the market's own records every few

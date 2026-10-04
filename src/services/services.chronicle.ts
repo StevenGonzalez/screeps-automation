@@ -23,6 +23,8 @@ export interface Annals {
   gold: number;
   slain: number;
   fallen: number;
+  // Creeps raised in the barracks. Annals begun before this was counted lack it.
+  recruits?: number;
 }
 
 declare global {
@@ -54,9 +56,12 @@ export function chronicle(text: string): void {
 }
 
 /** Adds n to this season's annals. */
-export function annal(key: "gold" | "slain" | "fallen", n: number): void {
-  if (!Memory.annals) Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
-  Memory.annals[key] += n;
+export function annal(key: "gold" | "slain" | "fallen" | "recruits", n: number): void {
+  if (!Memory.annals) Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
+  // Annals begun before a count was kept leave it out until the next season,
+  // rather than read out part of a season's count as the whole.
+  const count = Memory.annals[key];
+  if (count !== undefined) Memory.annals[key] = count + n;
 }
 
 export function formatK(n: number): string {

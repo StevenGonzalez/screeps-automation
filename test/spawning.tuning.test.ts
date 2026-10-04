@@ -222,6 +222,8 @@ describe("creep names", () => {
     expect(named[0]).toBe(third);
     expect(named[1]).toMatch(/^Peddler /);
     expect(creepName(ROLE_UPGRADER)).not.toBe(third);
+    // Each recruit is counted in the season's annals.
+    expect((g.Memory as Memory).annals?.recruits).toBe(2);
   });
 
   it("gives a name no creep of another role wears while one is free", () => {
