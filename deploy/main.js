@@ -3896,6 +3896,10 @@ function runBuilder(creep) {
         if (r !== ERR_NO_PATH)
             return;
     }
+    if (!upgradingFunded(creep.room) && !site) {
+        parkIdle(creep, "square");
+        return;
+    }
     putSurplusEnergyToWork(creep);
 }
 
