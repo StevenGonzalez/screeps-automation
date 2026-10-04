@@ -15079,9 +15079,13 @@ function getMinerTravelTicks(room) {
 function minerBudget(room) {
     return room.energyCapacityAvailable;
 }
+function longestSpawnTicks(room) {
+    const parts = Math.min(MAX_BODY_PART_COUNT, Math.floor(room.energyCapacityAvailable / BODYPART_COST[MOVE]));
+    return parts * CREEP_SPAWN_TIME;
+}
 function getMinerReplacementLead(room) {
     const allowed = minerBudget(room);
-    return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room));
+    return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room)) + longestSpawnTicks(room);
 }
 function hasEnergyGatherers(room) {
     const harvesters = getCreepsByRoleInRoom(ROLE_HARVESTER, room);
