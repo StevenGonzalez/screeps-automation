@@ -66,7 +66,7 @@ import { runTownsfolk } from "../roles/role.townsfolk";
 import { runMinstrel } from "../roles/role.minstrel";
 import { resolveTraffic, shelterFromHostiles, walkHome } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
-import { cryFor, heraldRooms } from "../services/services.herald";
+import { cryFor, gossip, heraldRooms } from "../services/services.herald";
 import { townFeast, townSeason, townStorm } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
 
@@ -132,7 +132,8 @@ const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_MINSTREL]: ["encore!", "a coin?", "♪ tra la ♪"],
 };
 
-// Every creep talks of the weather now and then, and of the feast on a feast day.
+// Every creep talks of the weather now and then, of the feast on a feast day,
+// and of the realm's news (services.herald) while it is fresh.
 const SEASON_CHATTER: Record<TownSeason, string[]> = {
   spring: ["fresh air", "rain again", "blossoms"],
   summer: ["hot!", "thirsty", "sunburnt"],
@@ -161,6 +162,9 @@ export function chatterLine(creep: Creep): string | undefined {
         : SEASON_CHATTER[townSeason(Game.time)];
     return weather[(pick / WEATHER_EVERY) % weather.length];
   }
+  // As often again, the realm's latest news while it is fresh.
+  const news = pick % WEATHER_EVERY === WEATHER_EVERY / 2 ? gossip() : undefined;
+  if (news) return news;
   const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;
   return lines[pick % lines.length];
 }

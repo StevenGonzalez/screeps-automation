@@ -275,6 +275,11 @@ new controller level, every creep there shouts "Long live!" and the console logs
 `[Herald]` proclamation. A remote peddler or merchant fleeing a contested remote
 shouts "Bandits!" once.
 
+News outlives its cry. For 600 ticks after a level, new renown, a keep's
+firstborn, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the
+wolves or the wisps, every creep in the realm now and then repeats it in its idle
+chatter (`Memory.gossip`). Newer news replaces older.
+
 Controller signs are dark-fantasy proclamations (`config/signatures.ts`), and
 envoys sign the remote controllers they reserve.
 

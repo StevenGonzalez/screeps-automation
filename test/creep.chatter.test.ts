@@ -13,9 +13,10 @@ import { ROLE_MINER } from "../src/config/config.roles";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
 // Every line a creep says over a stretch of ticks in the same season.
-function linesFrom(start: number): string[] {
+function linesFrom(start: number, gossip?: Memory["gossip"]): string[] {
   const miner = { name: "Miner Bran", memory: { role: ROLE_MINER } } as unknown as Creep;
   const lines: string[] = [];
+  g.Memory = { gossip };
   for (let t = start; t < start + 3_000; t++) {
     g.Game = { time: t };
     const line = chatterLine(miner);
@@ -39,6 +40,17 @@ describe("chatter", () => {
     // Day 19 is a storm day in autumn; its first 33 lines fall on it.
     const storm = linesFrom(19 * TOWN_DAY_LENGTH).slice(0, 33);
     expect(storm.some((l) => ["rain!", "soaked!", "thunder!"].includes(l))).toBe(true);
+  });
+
+  it("talks of the realm's news while it is fresh, and of its work still", () => {
+    const start = 23 * TOWN_DAY_LENGTH;
+    const lines = linesFrom(start, { line: "† Wulfric", until: start + 1_500 });
+    const fresh = lines.slice(0, 45);
+    const stale = lines.slice(55);
+    expect(fresh).toContain("† Wulfric");
+    expect(fresh).toContain("dig dig");
+    expect(stale).not.toContain("† Wulfric");
+    expect((g.Memory as Memory).gossip).toBeUndefined();
   });
 
   it("talks of the feast on a feast day", () => {

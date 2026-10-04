@@ -103,6 +103,7 @@ describe("herald", () => {
     const log = (g.Memory as Memory).chronicle!;
     expect(log).toHaveLength(1);
     expect(log[0].text).toContain("rises to level 7");
+    expect((g.Memory as Memory).gossip).toEqual({ line: "level 7!", until: tick - 1 + 600 });
   });
 
   it("gathers a fight's kills into one chronicle line", () => {
@@ -116,6 +117,7 @@ describe("herald", () => {
     expect(log).toHaveLength(1);
     expect(log[0].text).toBe("2 raiders fell in the Gallows Forest.");
     expect((g.Memory as Memory).annals?.slain).toBe(2);
+    expect((g.Memory as Memory).gossip?.line).toBe("victory!");
   });
 
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
@@ -132,6 +134,7 @@ describe("herald", () => {
       "Merchant Leofric fell to raiders in the Shadow March.",
     ]);
     expect((g.Memory as Memory).annals?.fallen).toBe(1);
+    expect((g.Memory as Memory).gossip?.line).toBe("† Leofric");
   });
 
   it("does not mourn a creep that died of age or unhurt", () => {

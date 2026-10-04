@@ -331,6 +331,9 @@ declare global {
   interface Memory {
     // GCL the herald last proclaimed (services.herald).
     heraldGcl?: number;
+    // News the realm's creeps repeat in their chatter until it goes stale
+    // (services.herald).
+    gossip?: { line: string; until: number };
     // Last tick whose market trades the herald has chronicled (services.herald).
     heraldTradeAt?: number;
     // Season the herald last proclaimed (services.herald).

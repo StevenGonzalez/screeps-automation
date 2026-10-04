@@ -42,6 +42,29 @@ export function settleFlight(creep: Creep): void {
   if (creep.memory.fled) delete creep.memory.fled;
 }
 
+// How long the realm talks of a piece of news.
+const GOSSIP_TICKS = 600;
+
+// News outlives its cry: for a while after it happens, every creep now and then
+// repeats it in its idle chatter. Newer news replaces older. Kept in Memory so
+// a global reset does not cut the talk short.
+function spreadWord(line: string): void {
+  Memory.gossip = { line: line.slice(0, 10), until: Game.time + GOSSIP_TICKS };
+}
+
+export function gossip(): string | undefined {
+  const word = Memory.gossip;
+  if (!word) return undefined;
+  if (word.until > Game.time) return word.line;
+  delete Memory.gossip;
+  return undefined;
+}
+
+// "Blacksmith Wulfric" -> "† Wulfric".
+function mourn(name: string): string {
+  return `† ${name.slice(name.lastIndexOf(" ") + 1)}`;
+}
+
 // Run once a tick, before creeps act.
 export function heraldRooms(): void {
   freshCries();
@@ -80,6 +103,7 @@ function heraldRenown(): void {
   const known = Memory.heraldGcl;
   Memory.heraldGcl = level;
   if (known === undefined || level <= known) return;
+  spreadWord("renown!");
   chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
 }
 
@@ -212,7 +236,9 @@ function heraldDragon(castles: Room[]): void {
   const dragon = townDragon(Game.time);
   if (castles.length === 0 || !dragon || dragon.t % DRAGON_CRY_PERIOD !== 0) return;
   for (const room of castles) roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
-  if (dragon.t === 0) chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleList(castles)));
+  if (dragon.t !== 0) return;
+  spreadWord("a dragon!");
+  chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleList(castles)));
 }
 
 const HOWL_CRIES = ["Wolves!", "Hark!", "Hear that?", "Awoo?!"];
@@ -223,7 +249,9 @@ function heraldWolves(castles: Room[]): void {
   const howl = townHowl(Game.time);
   if (castles.length === 0 || !howl || howl.t !== 0) return;
   for (const room of castles) roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
-  if (howl.n === 0) chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
+  if (howl.n !== 0) return;
+  spreadWord("wolves...");
+  chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
 }
 
 // On a new-moon night the wisps come out over the marshes. Every castle mutters
@@ -239,6 +267,7 @@ function heraldWisps(castles: Room[]): void {
   if (castles.length === 0 || Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townWisps(Game.time)) return;
   castles.forEach((room, i) => (roomCries[room.name] = WISP_CRIES[i % WISP_CRIES.length]));
   const moon = Math.floor(Game.time / (TOWN_DAY_LENGTH * TOWN_MOON_DAYS));
+  spreadWord("the wisps");
   chronicle(WISP_TIDINGS[moon % WISP_TIDINGS.length]);
 }
 
@@ -281,6 +310,7 @@ function heraldRise(room: Room): void {
   room.memory.heraldLevel = level;
   if (known === undefined || level <= known) return;
   roomCries[room.name] = "Long live!";
+  spreadWord(`level ${level}!`);
   chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
 }
 
@@ -297,6 +327,7 @@ function heraldFirstBorn(room: Room): void {
     if (name !== birth.name && Game.creeps[name].memory.homeRoom === room.name) return;
   }
   roomCries[room.name] = "Huzzah!";
+  spreadWord("firstborn!");
   chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
 }
 
@@ -312,6 +343,9 @@ function whereIn(roomName: string): string {
 function chronicleKill(room: Room): void {
   const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
   annal("slain", 1);
+  // Lair keepers fall every few hundred ticks where their lairs are farmed;
+  // that is work, not news.
+  if (foe === "raider") spreadWord("victory!");
   tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}.`, BATTLE_WINDOW);
 }
 
@@ -347,12 +381,16 @@ function heraldFallen(): void {
     const slew = last.kills > 0 ? `, who slew ${last.kills},` : "";
     if (!last.hurt || last.ttl <= 1) {
       // Age or an unhurt end is no news, unless it was a creep that fought.
-      if (slew) chronicle(`${name}${slew} was laid to rest with honours.`);
+      if (slew) {
+        spreadWord(mourn(name));
+        chronicle(`${name}${slew} was laid to rest with honours.`);
+      }
       continue;
     }
     const foe = foeIn(last.room);
     const by = foe ? ` to ${foe}` : "";
     annal("fallen", 1);
+    spreadWord(mourn(name));
     tally(
       `fallen:${last.room}`,
       1,
