@@ -15041,6 +15041,10 @@ function bodyBudget(room, basis) {
 function spawnLeadTicks(bodyParts, travelTicks) {
     return bodyParts * CREEP_SPAWN_TIME + travelTicks;
 }
+function longestSpawnTicks(room) {
+    const parts = Math.min(MAX_BODY_PART_COUNT, Math.floor(room.energyCapacityAvailable / BODYPART_COST[MOVE]));
+    return parts * CREEP_SPAWN_TIME;
+}
 function isRetiring(creep, lead) {
     const ttl = creep.ticksToLive;
     return ttl !== undefined && ttl <= lead;
@@ -15132,7 +15136,14 @@ function isRemoteCreepRetiring(home, creep) {
     if (!target)
         return false;
     const travel = Math.max(remoteTravelTicks(home, target, creep.memory.remoteSourceId), (_a = creep.memory.walk) !== null && _a !== void 0 ? _a : 0);
-    return isRetiring(creep, spawnLeadTicks(creep.body.length, travel));
+    const queue = creep.memory.role === ROLE_RESERVER ? reservationQueueMargin(home, target) : 0;
+    return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + queue);
+}
+function reservationQueueMargin(home, roomName) {
+    var _a, _b, _c, _d;
+    const res = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.reservation;
+    const banked = res && res.username === ((_d = (_c = home.controller) === null || _c === void 0 ? void 0 : _c.owner) === null || _d === void 0 ? void 0 : _d.username) ? res.ticksToEnd : 0;
+    return Math.max(0, longestSpawnTicks(home) - banked);
 }
 function remoteTravelTicks(home, roomName, sourceId) {
     var _a;
@@ -15774,10 +15785,6 @@ function getMinerTravelTicks(room) {
 }
 function minerBudget(room) {
     return room.energyCapacityAvailable;
-}
-function longestSpawnTicks(room) {
-    const parts = Math.min(MAX_BODY_PART_COUNT, Math.floor(room.energyCapacityAvailable / BODYPART_COST[MOVE]));
-    return parts * CREEP_SPAWN_TIME;
 }
 function getMinerReplacementLead(room) {
     const allowed = minerBudget(room);
@@ -17240,9 +17247,9 @@ function processRoomSpawning(room, spawn) {
         return;
     if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn))
         return;
-    if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn))
-        return;
     if (!blockaded && shouldSpawnReserver(room) && spawnReserver(room, spawn))
+        return;
+    if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn))
         return;
     if (!blockaded && shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn))
         return;
