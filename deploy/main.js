@@ -17581,6 +17581,57 @@ function loop$1() {
         drawTown(room);
         drawBlueprint(room);
     }
+    drawRealmMap();
+}
+const MAP_GOLD = "#f2c14e";
+const MAP_DANGER = "#e05a5a";
+const MAP_KEEP = "#b06bff";
+function drawRealmMap() {
+    var _a, _b, _c, _d, _e;
+    var _f;
+    const mv = Game.map.visual;
+    const worked = {};
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (c.memory.role !== ROLE_REMOTE_MINER || !c.memory.homeRoom || !c.memory.targetRoom)
+            continue;
+        ((_a = worked[_f = c.memory.homeRoom]) !== null && _a !== void 0 ? _a : (worked[_f] = new Set())).add(c.memory.targetRoom);
+    }
+    for (const roomName in Game.rooms) {
+        const room = Game.rooms[roomName];
+        if (!((_b = room.controller) === null || _b === void 0 ? void 0 : _b.my))
+            continue;
+        const centre = new RoomPosition(25, 25, roomName);
+        mv.text(castleName(roomName), new RoomPosition(25, 6, roomName), {
+            color: MAP_GOLD,
+            fontSize: 6,
+            stroke: "#000000",
+            strokeWidth: 0.6,
+        });
+        mv.text(`RCL ${room.controller.level}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
+        for (const remote of (_c = room.memory.remoteRooms) !== null && _c !== void 0 ? _c : []) {
+            if (!((_d = worked[roomName]) === null || _d === void 0 ? void 0 : _d.has(remote.roomName)))
+                continue;
+            const raided = remote.hostile || ((_e = remote.invaderUntil) !== null && _e !== void 0 ? _e : 0) > Game.time;
+            const colour = raided ? MAP_DANGER : MAP_GOLD;
+            mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
+            mv.text(raided ? "raided" : "vendors", new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
+        }
+    }
+    const exp = Memory.expansion;
+    const savings = Memory.expansionSavings;
+    const keep = exp && exp.phase !== "established"
+        ? { from: exp.homeRoom, at: exp.roomName, label: `keep: ${exp.phase}` }
+        : savings
+            ? { from: savings.room, at: savings.target, label: "keep planned" }
+            : undefined;
+    if (keep) {
+        const at = new RoomPosition(25, 25, keep.at);
+        if (keep.from)
+            mv.line(new RoomPosition(25, 25, keep.from), at, { color: MAP_KEEP, width: 1.5, opacity: 0.7, lineStyle: "dotted" });
+        mv.circle(at, { radius: 8, fill: "transparent", stroke: MAP_KEEP, strokeWidth: 1, opacity: 0.8 });
+        mv.text(keep.label, new RoomPosition(25, 12, keep.at), { color: MAP_KEEP, fontSize: 5 });
+    }
 }
 const blueprintShownUntil = {};
 const BLUEPRINT_PREVIEW_TICKS = 50;
@@ -17620,7 +17671,7 @@ function drawBlueprint(room) {
     }
 }
 function drawRoomHUD(room) {
-    var _a, _b, _c;
+    var _a, _b;
     const v = room.visual;
     const rcl = room.controller.level;
     const progress = room.controller.progress;
@@ -17671,24 +17722,13 @@ function drawRoomHUD(room) {
         y += lineH;
     }
     const counts = countCreepsByRole(room);
-    const roleOrder = [ROLE_MINER, ROLE_HAULER, ROLE_HARVESTER, ROLE_UPGRADER, ROLE_BUILDER, ROLE_REPAIRER, ROLE_MINERAL_MINER];
-    const roleShort = {
-        [ROLE_MINER]: "Miner",
-        [ROLE_HAULER]: "Hauler",
-        [ROLE_HARVESTER]: "Harvest",
-        [ROLE_UPGRADER]: "Upgrade",
-        [ROLE_BUILDER]: "Build",
-        [ROLE_REPAIRER]: "Repair",
-        [ROLE_MINERAL_MINER]: "Mineral",
-    };
-    let creepLine = "";
-    for (const role of roleOrder) {
-        const n = (_b = counts[role]) !== null && _b !== void 0 ? _b : 0;
-        if (n > 0)
-            creepLine += `${roleShort[role]}:${n}  `;
+    const [atHome, abroad] = describeCensus(room);
+    if (atHome) {
+        v.text(atHome, x, y, dimStyle);
+        y += lineH;
     }
-    if (creepLine) {
-        v.text(creepLine.trim(), x, y, dimStyle);
+    if (abroad) {
+        v.text(`Abroad: ${abroad}`, x, y, dimStyle);
         y += lineH;
     }
     const hostiles = room.find(FIND_HOSTILE_CREEPS);
@@ -17699,7 +17739,7 @@ function drawRoomHUD(room) {
     if (room.memory.town) {
         const clock = townClock(Game.time);
         const icon = PHASE_ICON[clock.phase];
-        const folk = (_c = counts[ROLE_TOWNSFOLK]) !== null && _c !== void 0 ? _c : 0;
+        const folk = (_b = counts[ROLE_TOWNSFOLK]) !== null && _b !== void 0 ? _b : 0;
         const hh = String(clock.hour).padStart(2, "0");
         const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
         v.text(`${icon} ${phase}, ${hh}:00  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
@@ -17791,6 +17831,31 @@ function getRoomPhase(rcl) {
     if (rcl <= 6)
         return "established";
     return "powerhouse";
+}
+function describeCensus(room) {
+    var _a, _b;
+    const home = {};
+    const away = {};
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) !== room.name)
+            continue;
+        const role = c.memory.role;
+        if (role === ROLE_TOWNSFOLK)
+            continue;
+        const sent = c.memory.targetRoom !== undefined && c.memory.targetRoom !== room.name;
+        const tally = sent ? away : home;
+        tally[role] = ((_b = tally[role]) !== null && _b !== void 0 ? _b : 0) + 1;
+    }
+    const line = (tally) => Object.keys(tally)
+        .sort((a, b) => tally[b] - tally[a] || a.localeCompare(b))
+        .map((role) => {
+        var _a;
+        const title = (_a = ROLE_TITLES[role]) !== null && _a !== void 0 ? _a : role;
+        return `${tally[role]} ${tally[role] === 1 ? title : `${title}s`}`;
+    })
+        .join(" · ");
+    return [line(home), line(away)];
 }
 function countCreepsByRole(room) {
     var _a;
