@@ -342,3 +342,34 @@ describe("road upkeep under a blueprint", () => {
     expect(repairFor(plannedRoom([road("idle", 10, 2, 100)]))).toBeNull();
   });
 });
+
+describe("tower upkeep", () => {
+  function road(id: string, hits: number) {
+    return { id, structureType: "road", pos: { x: 20, y: 20 }, hits, hitsMax: 5000 } as unknown as AnyStructure;
+  }
+
+  it("looks over the keep again only some ticks after finding nothing to mend", () => {
+    const structures = [road("road", 5000)];
+    let looks = 0;
+    const room = makeRoom({ level: 6, structures });
+    room.name = `W1N1-towers-${tick}`;
+    const find = room.find.bind(room);
+    room.find = ((type: number) => {
+      if (type === g.FIND_STRUCTURES) looks++;
+      return find(type);
+    }) as Room["find"];
+
+    g.Game = { time: ++tick };
+    expect(findTowerRepairTarget(room)).toBeNull();
+    const first = looks;
+
+    (structures[0] as { hits: number }).hits = 1000;
+    g.Game = { time: ++tick };
+    expect(findTowerRepairTarget(room)).toBeNull();
+    expect(looks).toBe(first);
+
+    tick += 10;
+    g.Game = { time: tick };
+    expect(findTowerRepairTarget(room)?.id).toBe("road");
+  });
+});

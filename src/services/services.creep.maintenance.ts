@@ -19,6 +19,14 @@ let towerRepairCacheTick = -1;
 
 const towerRepairByRoom: Record<string, AnyStructure | null> = {};
 
+// A room whose towers found nothing to mend is not looked over again for this
+// many ticks. Its roads and containers wear slowly, and looking every tick
+// filtered all of Embercrag's 321 structures for nothing, about a seventh of a
+// CPU a tick.
+const TOWER_REPAIR_IDLE_TICKS = 10;
+
+const towerRepairIdleUntil: Record<string, number> = {};
+
 let nukeTargetCacheTick = -1;
 
 const nukeTargetByRoom: Record<string, StructureRampart | null> = {};
@@ -398,6 +406,7 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
     for (const k in towerRepairByRoom) delete towerRepairByRoom[k];
   }
   if (room.name in towerRepairByRoom) return towerRepairByRoom[room.name];
+  if ((towerRepairIdleUntil[room.name] ?? 0) > Game.time) return null;
 
   const rcl = room.controller?.level ?? 0;
   const towerWallThreshold = Math.min(50_000, Math.max(5_000, getRampartTargetHP(rcl) * 0.05));
@@ -415,6 +424,7 @@ export function findTowerRepairTarget(room: Room): AnyStructure | null {
     ? null
     : candidates.reduce((a, b) => (a.hits < b.hits ? a : b));
   towerRepairByRoom[room.name] = result;
+  if (!result) towerRepairIdleUntil[room.name] = Game.time + TOWER_REPAIR_IDLE_TICKS;
   return result;
 }
 
