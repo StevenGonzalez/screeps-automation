@@ -13465,12 +13465,14 @@ function waitForFullBody(room, role, needed) {
     }
     if (!memory.bodyWait)
         memory.bodyWait = {};
-    const since = memory.bodyWait[role];
-    if (since === undefined) {
-        memory.bodyWait[role] = Game.time;
+    const wait = memory.bodyWait[role];
+    const energy = room.energyAvailable;
+    if (typeof wait !== "object" || energy > wait.energy) {
+        memory.bodyWait[role] = { since: Game.time, energy };
         return true;
     }
-    if (Game.time - since < FULL_BODY_MAX_WAIT)
+    wait.energy = energy;
+    if (Game.time - wait.since < FULL_BODY_MAX_WAIT)
         return true;
     delete memory.bodyWait[role];
     return false;
