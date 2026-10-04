@@ -30,6 +30,7 @@ import {
   ROLE_SCORE_HUNTER,
   ROLE_UNCLAIMER,
   ROLE_TOWNSFOLK,
+  ROLE_MINSTREL,
 } from "../config/config.roles";
 import { runHarvester } from "../roles/role.harvester";
 import { runUpgrader } from "../roles/role.upgrader";
@@ -62,6 +63,7 @@ import { runSkHauler } from "../roles/role.sk_hauler";
 import { runScoreHunter } from "../roles/role.scoreHunter";
 import { runUnclaimer } from "../roles/role.unclaimer";
 import { runTownsfolk } from "../roles/role.townsfolk";
+import { runMinstrel } from "../roles/role.minstrel";
 import { resolveTraffic, shelterFromHostiles } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 import { cryFor, heraldRooms } from "../services/services.herald";
@@ -100,6 +102,7 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SCORE_HUNTER]: runScoreHunter,
   [ROLE_UNCLAIMER]: runUnclaimer,
   [ROLE_TOWNSFOLK]: runTownsfolk,
+  [ROLE_MINSTREL]: runMinstrel,
 };
 
 // creep.say shows at most 10 characters, so every line fits in 10.
@@ -126,6 +129,7 @@ const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
   [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
   [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
+  [ROLE_MINSTREL]: ["encore!", "a coin?", "♪ tra la ♪"],
 };
 
 // Every creep talks of the weather now and then, and of the feast on a feast day.

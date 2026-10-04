@@ -191,6 +191,7 @@ src/
 |   +-- role.depositminer.ts         # nomad - highway deposit harvesting
 |   +-- role.deposithauler.ts        # caravan - highway deposit hauling
 |   +-- role.townsfolk.ts            # townsfolk - militia archers + lookouts
+|   +-- role.minstrel.ts             # minstrel - sings in the square on feast days
 +-- planning/
 |   +-- planner.stamp.ts             # Core stamp layout generation
 |   +-- planner.blueprint.ts         # The room's plan for every RCL: structures, roads, ages
@@ -244,6 +245,7 @@ stored in `memory.role` and shown in `Game.arca` output; the right is what it do
 | **nomad** | `role.depositminer.ts` | Highway deposit harvesting (silicon/metal/biomass/mist) |
 | **caravan** | `role.deposithauler.ts` | Highway deposit hauling home |
 | **townsfolk** | `role.townsfolk.ts` | Town militia (watch posts by day, cottage beds by night, ramparts in a raid) and lookouts in neighbouring rooms |
+| **minstrel** | `role.minstrel.ts` | Walks round the market square on a feast day singing a ballad of the realm, then leaves |
 
 (Source Keeper roles: **delver** (`role.sk_miner.ts`), **packmule** (`role.sk_hauler.ts`),
 **lancer** (`role.sk_guardian.ts`). The season-only score chaser is **seeker** (`role.scoreHunter.ts`).)

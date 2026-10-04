@@ -142,6 +142,23 @@ It runs home when an armed, non-allied creep comes within six tiles, or when it
 finds the room has been claimed by another player (towers). It shouts
 "Raiders!", then waits in the square for 300 ticks before going back out.
 
+### Minstrel: `[MOVE]`, 50 energy
+
+On a feast day, once the militia is at strength, each castle with a square
+calls one minstrel (role `minstrel`, `roles/role.minstrel.ts`). It is called by
+daylight only, and the chronicle notes its coming ("A minstrel comes to
+Embercrag Square for the Harvest Home.").
+
+The minstrel walks round the fountain, a step every 10 ticks, passing tiles
+others stand on, and hums ("♪ la la ♪") every few ticks. It sings a ballad of
+the realm, a couplet every 25 ticks: the castle itself, the feast, every other
+castle of the realm, the raiders slain this season (or that none came), the
+gold gathered, the realm's own who fell, and how many castles fly the banner.
+The numbers come from the season's annals, so the song changes as the season
+goes on. When the feast day ends, the minstrel leaves.
+
+Under attack it runs for a cottage bed like any other civilian.
+
 ---
 
 ## Everyone else uses the town too
@@ -204,7 +221,9 @@ When room visuals are on, the town draws itself:
 - on a storm day, a grey sky and slanting rain in place of the season's
   drift, and every so often a bolt of lightning that lights the room white
   for a tick;
-- on a feast day, a ring of lanterns round the fountain with the feast's name.
+- on a feast day, a ring of lanterns round the fountain with the feast's name,
+  and while the minstrel is in the square, the couplet it sings over the
+  square's sign and a note bobbing over its head.
 
 ---
 
@@ -214,6 +233,7 @@ When room visuals are on, the town draws itself:
 |---|---|
 | Militia, 12 at RCL 8 | 12 x 200 per 1500 ticks = about 1.6 a tick |
 | Lookouts, up to 4 | 4 x 50 per 1500 ticks = about 0.13 a tick |
+| Minstrel | 50 per feast day, one feast in 7000 ticks |
 | Rampart decay, about 40 town ramparts | 3 hits a tick each, at 0.01 energy per hit = about 1.2 a tick |
 | Walls | Never decay; repaired only when shot |
 | One-off build and reinforcement to 20k | About 200 energy a barrier, about 5k a cottage, roughly 17k in all |

@@ -1,4 +1,5 @@
-import { ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
+import { ROLE_MINSTREL, ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
+import { currentVerse } from "../roles/role.minstrel";
 import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townFeast, townSeason, townStorm } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
@@ -470,12 +471,29 @@ export function drawTown(room: Room): void {
     v.circle(x, y, { radius: ripple + 0.15, fill: "transparent", stroke: "#66ccff", strokeWidth: 0.05, opacity: 0.6 });
     v.circle(x, y, { radius: 0.25, fill: "#3399ff", opacity: 0.6 });
     v.text(`${castleName(room.name)} Square`, x, y - 1.8, label);
+    if (townFeast(Game.time)) drawSong(room, x, y);
   } else {
     for (const k of town.square) {
       const { x, y } = parseTile(k);
       v.circle(x, y, { radius: 0.12, fill: "#ffe9a8", opacity: 0.3 });
     }
   }
+}
+
+const SONG: TextStyle = { font: "italic 0.45 serif", color: "#f5e6a8", stroke: "#000000", strokeWidth: 0.05 };
+
+// While a minstrel sings in the square, the couplet it sings hangs over the
+// square's sign and a note bobs over the minstrel's head.
+function drawSong(room: Room, x: number, y: number): void {
+  const minstrel = room.find(FIND_MY_CREEPS).find((c) => c.memory.role === ROLE_MINSTREL);
+  if (!minstrel) return;
+  const v = room.visual;
+  const [first, second] = currentVerse(room, Game.time);
+  // Clear of the ring of feast lanterns, 2.4 tiles out.
+  v.text(first, x, y - 3.8, SONG);
+  v.text(second, x, y - 3.2, SONG);
+  const bob = 0.15 * Math.sin(Game.time / 2);
+  v.text("♪", minstrel.pos.x + 0.5, minstrel.pos.y - 0.5 + bob, { font: 0.6, color: "#ffe9a8" });
 }
 
 function getRoomPhase(rcl: number): string {

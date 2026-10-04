@@ -38,6 +38,8 @@ export const ROLE_UNCLAIMER = "usurper";
 // The townsfolk of the castle's quarter: militia archers who sleep in the
 // cottages and man the walls, and lookouts posted in the neighbouring rooms.
 export const ROLE_TOWNSFOLK = "townsfolk";
+// A travelling minstrel who sings in the market square on feast days.
+export const ROLE_MINSTREL = "minstrel";
 
 // How each role is styled in a creep's name: "Mason Aldric", "Dragon Knight Edric II".
 export const ROLE_TITLES: Record<string, string> = {
@@ -72,6 +74,7 @@ export const ROLE_TITLES: Record<string, string> = {
   [ROLE_SCORE_HUNTER]: "Seeker",
   [ROLE_UNCLAIMER]: "Usurper",
   [ROLE_TOWNSFOLK]: "Yeoman",
+  [ROLE_MINSTREL]: "Minstrel",
 };
 
 export const ENERGY_DEPOSIT_PRIORITY: Record<string, StructureConstant[]> = {

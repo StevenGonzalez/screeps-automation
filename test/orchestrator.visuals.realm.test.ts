@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_STRUCTURES = 108;
+g.FIND_MY_CREEPS = 102;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -11,6 +12,7 @@ import {
   ROLE_FILLER,
   ROLE_HAULER,
   ROLE_KNIGHT,
+  ROLE_MINSTREL,
   ROLE_REMOTE_HAULER,
   ROLE_REMOTE_MINER,
   ROLE_TOWNSFOLK,
@@ -174,6 +176,39 @@ describe("town at night", () => {
     };
     expect(torches(3_300)).toBe(0);
     expect(torches(3_800)).toBe(6);
+  });
+});
+
+describe("minstrel's song", () => {
+  it("hangs the couplet being sung over the square while the minstrel is there", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const minstrel = { pos: { x: 25, y: 24 }, memory: { role: ROLE_MINSTREL } };
+    let folk: unknown[] = [minstrel];
+    const room = {
+      name: HOME,
+      controller: { my: true },
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
+      memory: { town: { posts: [], square: ["25,24"], fountain: "25,25", cottages: [] } },
+      find: () => folk,
+    } as unknown as Room;
+    // Ticks 0-999 are the Sowing Feast; tick 1225 is an ordinary day.
+    const sung = (time: number) => {
+      drawn = [];
+      g.Game = { time, creeps: {}, rooms: { [HOME]: room } };
+      g.Memory = { rooms: { [HOME]: { townName: "Ravenhold" } } };
+      drawTown(room);
+      return drawn.filter((d) => d.kind === "text").map((d) => d.args[0] as string);
+    };
+    // The ballad has four couplets here: the castle, the feast, the raiders
+    // and the Crown. Tick 225 is the tenth couplet sung, so the feast's.
+    expect(sung(225)).toEqual(expect.arrayContaining([
+      "Sow the barley, sow the rye,",
+      "the Sowing Feast drinks the cellars dry!",
+      "♪",
+    ]));
+    expect(sung(1225)).not.toContain("♪");
+    folk = [];
+    expect(sung(225)).not.toContain("♪");
   });
 });
 

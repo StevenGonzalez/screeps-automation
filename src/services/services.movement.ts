@@ -7,6 +7,7 @@ import {
   ROLE_HARVESTER,
   ROLE_MINER,
   ROLE_MINERAL_MINER,
+  ROLE_MINSTREL,
   ROLE_REPAIRER,
 } from "../config/config.roles";
 import { getThreatInfo, isSourceKeeperRoom } from "./services.combat";
@@ -302,6 +303,7 @@ const CIVILIAN_ROLES = new Set<string>([
   ROLE_REPAIRER,
   ROLE_UPGRADER,
   ROLE_MINERAL_MINER,
+  ROLE_MINSTREL,
 ]);
 
 // How close a hostile can get before it can hit us next tick: a ranged hostile
