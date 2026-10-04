@@ -51,8 +51,11 @@ const MIN_HOME_RCL = 4;
 // Below the floor a saving castle keeps, so one sitting on its floor qualifies.
 export const MIN_HOME_STORAGE_ENERGY = KEEP_FUND_FLOOR - 5_000;
 const MIN_BUCKET = 5_000;
-// Every keep costs CPU each tick for good. Auto-expansion stops queueing new
-// ones once the empire's average use passes this share of the limit.
+// Every keep costs CPU each tick for good. Once the empire's average use passes
+// this share of the limit, auto-expansion queues no new keep, founds none from
+// the queue and saves for none. Founding from the queue used to check only the
+// bucket: three keeps queued while the realm had two would have been founded
+// one after another with the creeps already using all of the limit.
 const MAX_CPU_SHARE_TO_EXPAND = 0.55;
 
 export interface ExpansionCandidate {
@@ -384,6 +387,7 @@ function advanceExpansionQueue(): void {
   const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
   if (Game.gcl.level <= ownedRooms.length) return;
   if (Game.cpu.bucket < MIN_BUCKET) return;
+  if (cpuShareUsed() > MAX_CPU_SHARE_TO_EXPAND) return;
 
   let toExamine = queue.length;
   while (queue.length > 0 && toExamine-- > 0) {
@@ -582,11 +586,16 @@ export function loop() {
   planSavings();
 }
 
+// The averages live on the heap. On the first tick after a global reset the
+// systems that run after this one, the creeps among them, have none yet, so the
+// share is taken as full until they do.
 function cpuShareUsed(): number {
-  let total = 0;
+  if (!Game.cpu.limit) return 0;
   const stats = getCpuStats();
+  if (!stats.creeps) return 1;
+  let total = 0;
   for (const name in stats) total += stats[name].ema;
-  return Game.cpu.limit ? total / Game.cpu.limit : 0;
+  return total / Game.cpu.limit;
 }
 
 function autoQueue(): void {
@@ -628,7 +637,7 @@ function autoQueue(): void {
 // (see services.treasury). A castle funding the active expansion holds the same
 // floor without a plan.
 function planSavings(): void {
-  const next = Memory.expansionQueue?.[0];
+  const next = cpuShareUsed() > MAX_CPU_SHARE_TO_EXPAND ? undefined : Memory.expansionQueue?.[0];
   const home = next ? resolveFundingHome(next.roomName, next.homeRoom, canFundKeeps) : undefined;
   if (!next || !home) {
     delete Memory.expansionSavings;

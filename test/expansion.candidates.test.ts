@@ -174,10 +174,31 @@ describe("saving for a keep", () => {
 
 // Last in the file: the profiler's averages live on the module and persist.
 describe("CPU headroom", () => {
+  const queued = () => {
+    (g.Memory as any).expansionQueue = [{ roomName: "W1N2", homeRoom: HOME, queuedAt: 0 }];
+    (g.Game as any).cpu.limit = 20;
+  };
+
   it("queues no keep while the empire already uses most of its CPU", () => {
     recordCpu("creeps", 15);
     (g.Game as any).cpu.limit = 20;
     loop();
     expect((g.Memory as any).expansionQueue).toBeUndefined();
+  });
+
+  it("neither founds nor saves for a keep queued earlier while the empire uses most of its CPU", () => {
+    queued();
+    loop();
+    expect((g.Memory as any).expansion).toBeUndefined();
+    expect((g.Memory as any).expansionSavings).toBeUndefined();
+    expect((g.Memory as any).expansionQueue).toHaveLength(1);
+  });
+
+  it("founds no keep on the first tick after a global reset, before the creeps' use is known", async () => {
+    queued();
+    vi.resetModules();
+    const reset = await import("../src/orchestrators/orchestrator.expansion");
+    reset.loop();
+    expect((g.Memory as any).expansion).toBeUndefined();
   });
 });
