@@ -1,6 +1,7 @@
 import { ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
 import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townFeast, townSeason } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
+import { LANDMARKS } from "../config/config.structures";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
@@ -21,6 +22,7 @@ export function loop() {
     drawRoomHUD(room);
     drawChronicle(room);
     drawSeason(room);
+    drawLandmarks(room);
     drawTown(room);
     drawBlueprint(room);
   }
@@ -275,6 +277,40 @@ const PHASE_ICON: Record<string, string> = { dawn: "🌅", day: "☀", dusk: "�
 
 // How dark the town gets through the day.
 const NIGHT_SHADE: Record<string, number> = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
+
+const LANDMARK_LABEL: TextStyle = { font: 0.4, color: "#d8c8a0", stroke: "#000000", strokeWidth: 0.05, opacity: 0.75 };
+
+function titleCase(s: string): string {
+  return s.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+
+// Each notable work of the castle labelled under it by the name the realm
+// knows it by, and the treasury with its gold. Labs stand together, so they
+// share one label under the middle of the group.
+export function drawLandmarks(room: Room): void {
+  const v = room.visual;
+  const labs: Array<{ x: number; y: number }> = [];
+  for (const s of room.find(FIND_MY_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_LAB) {
+      labs.push(s.pos);
+      continue;
+    }
+    const names = LANDMARKS[s.structureType];
+    if (!names) continue;
+    let text = titleCase(names[0]);
+    if (s.structureType === STRUCTURE_STORAGE) {
+      text += ` · ${formatK((s as StructureStorage).store[RESOURCE_ENERGY])} gold`;
+    }
+    v.text(text, s.pos.x, s.pos.y + 0.95, LANDMARK_LABEL);
+  }
+  if (labs.length > 0) {
+    const [one, many] = LANDMARKS[STRUCTURE_LAB]!;
+    const x = labs.reduce((sum, p) => sum + p.x, 0) / labs.length;
+    const y = Math.max(...labs.map((p) => p.y));
+    v.text(titleCase(labs.length === 1 ? one : many), x, y + 0.95, LANDMARK_LABEL);
+  }
+  if (room.controller) v.text("Throne", room.controller.pos.x, room.controller.pos.y + 0.95, LANDMARK_LABEL);
+}
 
 // The season over the castle: a faint tint and something drifting down through
 // the air, or fireflies round the fountain on a summer night. Every mote's place

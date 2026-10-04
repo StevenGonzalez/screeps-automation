@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
+g.FIND_MY_STRUCTURES = 108;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-import { describeCensus, drawGraves, drawRealmMap, drawSeason } from "../src/orchestrators/orchestrator.visuals";
+import { describeCensus, drawGraves, drawLandmarks, drawRealmMap, drawSeason } from "../src/orchestrators/orchestrator.visuals";
 import {
   ROLE_FILLER,
   ROLE_HAULER,
@@ -124,6 +125,38 @@ describe("realm map", () => {
     expect(texts).toContain("Shadow March");
     expect(texts).toContain("keep planned");
     expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(1);
+  });
+});
+
+describe("landmarks", () => {
+  it("labels the castle's works by their names in the realm, the labs once for all", () => {
+    const at = (structureType: string, x: number, y: number, extra = {}) => ({ structureType, pos: { x, y }, ...extra });
+    const structures = [
+      at("storage", 20, 20, { store: { energy: 31_400 } }),
+      at("tower", 18, 22),
+      at("tower", 22, 22),
+      at("lab", 30, 30),
+      at("lab", 31, 30),
+      at("lab", 32, 31),
+      at("extension", 10, 10),
+      at("road", 11, 10),
+    ];
+    const visual = { text: (...args: unknown[]) => drawn.push({ kind: "text", args }) };
+    const room = {
+      name: HOME,
+      visual,
+      controller: { pos: { x: 5, y: 5 } },
+      find: () => structures,
+    } as unknown as Room;
+
+    drawLandmarks(room);
+
+    const texts = drawn.map((d) => d.args[0]);
+    expect(texts).toContain("Treasury · 31.4K gold");
+    expect(texts.filter((t) => t === "Watchtower")).toHaveLength(2);
+    expect(texts.filter((t) => t === "Alchemy Labs")).toHaveLength(1);
+    expect(texts).toContain("Throne");
+    expect(texts).toHaveLength(5);
   });
 });
 

@@ -5,6 +5,21 @@ export const TOWN_NAMES = [
   "Bleakharrow", "Mournspire", "Frosthaven",
 ];
 
+// What the realm calls its notable works, one and many. The herald tells of
+// new ones and the castle view labels them.
+export const LANDMARKS: Partial<Record<StructureConstant, [one: string, many: string]>> = {
+  spawn: ["barracks", "barracks"],
+  tower: ["watchtower", "watchtowers"],
+  storage: ["treasury", "treasuries"],
+  terminal: ["trading post", "trading posts"],
+  lab: ["alchemy lab", "alchemy labs"],
+  factory: ["workshop", "workshops"],
+  extractor: ["jeweler's mine", "jeweler's mines"],
+  observer: ["seeing-stone", "seeing-stones"],
+  powerSpawn: ["power shrine", "power shrines"],
+  nuker: ["doom engine", "doom engines"],
+};
+
 export const STRUCTURE_PLANNER = {
   roadPadding: 0,
   rampartPadding: 1,

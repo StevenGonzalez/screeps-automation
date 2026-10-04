@@ -7,6 +7,7 @@ import { castleName, chronicle, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { townSeason } from "./services.town";
 import { TownSeason } from "../config/config.town";
+import { LANDMARKS } from "../config/config.structures";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 
@@ -148,36 +149,24 @@ function heraldVisitors(room: Room): void {
 // first look is not news either.
 const WORKS_CHECK_PERIOD = 100;
 const WORKS_WINDOW = 1500;
-const WORKS: Partial<Record<StructureConstant, [one: string, many: string]>> = {
-  spawn: ["a barracks", "barracks"],
-  tower: ["a watchtower", "watchtowers"],
-  storage: ["a treasury", "treasuries"],
-  terminal: ["a trading post", "trading posts"],
-  lab: ["an alchemy lab", "alchemy labs"],
-  factory: ["a workshop", "workshops"],
-  extractor: ["a jeweler's mine", "jeweler's mines"],
-  observer: ["a seeing-stone", "seeing-stones"],
-  powerSpawn: ["a power shrine", "power shrines"],
-  nuker: ["a doom engine", "doom engines"],
-};
-
 function heraldWorks(room: Room): void {
   if (Game.time % WORKS_CHECK_PERIOD !== 0) return;
   const counts: Record<string, number> = {};
   for (const s of room.find(FIND_MY_STRUCTURES)) {
-    if (WORKS[s.structureType]) counts[s.structureType] = (counts[s.structureType] ?? 0) + 1;
+    if (LANDMARKS[s.structureType]) counts[s.structureType] = (counts[s.structureType] ?? 0) + 1;
   }
   const known = room.memory.heraldWorks;
   room.memory.heraldWorks = counts;
   if (!known) return;
-  for (const type of Object.keys(WORKS) as StructureConstant[]) {
+  for (const type of Object.keys(LANDMARKS) as StructureConstant[]) {
     const gained = (counts[type] ?? 0) - (known[type] ?? 0);
     if (gained <= 0) continue;
-    const [one, many] = WORKS[type]!;
+    const [one, many] = LANDMARKS[type]!;
+    const a = /^[aeiou]/.test(one) ? "an" : "a";
     tally(
       `works:${room.name}:${type}`,
       gained,
-      (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? one : `${n} ${many}`}.`,
+      (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`,
       WORKS_WINDOW
     );
   }

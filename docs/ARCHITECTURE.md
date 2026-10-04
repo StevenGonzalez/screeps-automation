@@ -271,6 +271,12 @@ extension energy) and `Treasury: Nk` (storage energy), and console reports such 
 `network()`, `threat()`, `nuker()` and `power()` print `gold` where they used to
 print `energy`.
 
+The room view labels each notable work by its name in the realm (Barracks,
+Watchtower, Treasury with its gold, Trading Post, Alchemy Labs, Workshop,
+Jeweler's Mine, Seeing-stone, Power Shrine, Doom Engine) and the controller
+as the Throne. The names live in `LANDMARKS` (`config/config.structures.ts`),
+which the herald also uses when it tells of new works.
+
 ---
 
 ## Further Reading
