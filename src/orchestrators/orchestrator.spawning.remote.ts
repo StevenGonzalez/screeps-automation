@@ -587,6 +587,7 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
     const carryPerHauler = paved ? carryPaved : carryOnFoot;
     let requiredCarry = 0;
     for (const src of remote.sources) {
+      if (raisingWaystation(src)) continue;
       requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
     }
     const carry = requiredCarry * REMOTE_HAUL_MARGIN;
@@ -601,6 +602,21 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
     plans[remote.roomName] = { count, carryEach, paved };
   }
   return plans;
+}
+
+// A peddler raising its source's container spends every load it digs on the
+// build, so until the container stands there is nothing to haul. Thornbarrow
+// raised six merchants for its first source in the Crow Glen, and they spent
+// most of their lives waiting by the site.
+function raisingWaystation(src: RemoteSourceData): boolean {
+  if (src.containerId && Game.getObjectById(src.containerId)) return false;
+  const source = Game.getObjectById(src.sourceId);
+  if (!source) return false;
+  return (
+    source.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 1, {
+      filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+    }).length > 0
+  );
 }
 
 function getRemoteHaulerTarget(room: Room): number {

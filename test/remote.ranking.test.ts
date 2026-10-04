@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_SPAWNS = 108;
 g.FIND_STRUCTURES = 107;
+g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.OK = 0;
 
 import {
@@ -449,6 +450,19 @@ describe("merchants for a young keep", () => {
     expect(shouldSpawnRemoteHauler(youngKeep(12))).toBe(true);
     clock += 1;
     expect(shouldSpawnRemoteHauler(youngKeep(13))).toBe(false);
+  });
+
+  it("raises only one while its peddlers raise the sources' containers", () => {
+    const room = youngKeep(1);
+    const site = { structureType: STRUCTURE_CONTAINER };
+    const sources = room.memory.remoteRooms![0].sources;
+    // In sight, each source's cached path is still fresh.
+    for (const s of sources) s.pathKey = `spawn0:${s.sourceId}`;
+    (g.Game as Record<string, unknown>).getObjectById = (id: string) =>
+      id.startsWith("W4N5-s")
+        ? { id, pos: { findInRange: (_t: number, _r: number, o: { filter: (s: object) => boolean }) => [site].filter(o.filter) } }
+        : null;
+    expect(shouldSpawnRemoteHauler(room)).toBe(false);
   });
 });
 
