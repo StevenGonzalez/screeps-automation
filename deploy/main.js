@@ -17633,6 +17633,7 @@ function loop$1() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
+        drawGraves(room);
         if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my))
             continue;
         drawRoomHUD(room);
@@ -17641,6 +17642,17 @@ function loop$1() {
         drawBlueprint(room);
     }
     drawRealmMap();
+}
+const GRAVE_STONE = { color: "#c8c0b0", width: 0.08, opacity: 0.8 };
+const GRAVE_LABEL = { font: 0.35, color: "#b8a88a", stroke: "#000000", strokeWidth: 0.05, opacity: 0.8 };
+function drawGraves(room) {
+    const tombs = room.find(FIND_TOMBSTONES, { filter: (t) => t.creep.my });
+    for (const t of tombs) {
+        const { x, y } = t.pos;
+        room.visual.line(x, y - 0.4, x, y + 0.3, GRAVE_STONE);
+        room.visual.line(x - 0.2, y - 0.2, x + 0.2, y - 0.2, GRAVE_STONE);
+        room.visual.text(t.creep.name, x, y - 0.55, GRAVE_LABEL);
+    }
 }
 const MAP_GOLD = "#f2c14e";
 const MAP_DANGER = "#e05a5a";
