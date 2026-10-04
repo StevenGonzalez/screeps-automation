@@ -368,12 +368,12 @@ function repairCandidates(room: Room): AnyStructure[] {
       st.hits < st.hitsMax * 0.8
   );
   if (nonDefensive.length > 0) {
+    // Each blacksmith takes the nearest. Chasing the most worn sent both across
+    // the keep whenever a tick of repair made a container at the far end the
+    // more worn one. Anything worn badly enough to matter is rescued above.
     const isRoad = (st: AnyStructure) => st.structureType === STRUCTURE_ROAD;
-    const lowestFraction = (a: AnyStructure, b: AnyStructure) =>
-      a.hits / a.hitsMax < b.hits / b.hitsMax ? a : b;
     const nonRoad = nonDefensive.filter((st) => !isRoad(st));
-    const tier = nonRoad.length > 0 ? nonRoad : nonDefensive;
-    return [tier.reduce(lowestFraction)];
+    return nonRoad.length > 0 ? nonRoad : nonDefensive;
   }
   if (!walls) return [];
 

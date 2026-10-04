@@ -175,6 +175,39 @@ describe("findMostCriticalRepairTarget ramparts", () => {
   });
 });
 
+describe("findMostCriticalRepairTarget upkeep", () => {
+  beforeEach(() => {
+    tick++;
+    g.Game = { time: tick };
+    g.Memory = {};
+  });
+
+  function container(id: string, x: number, y: number, hits: number) {
+    return {
+      id,
+      structureType: "container",
+      pos: {
+        x,
+        y,
+        getRangeTo: (p: { x: number; y: number }) => Math.max(Math.abs(p.x - x), Math.abs(p.y - y)),
+      },
+      hits,
+      hitsMax: 250_000,
+    } as unknown as AnyStructure;
+  }
+
+  it("mends the nearest worn container rather than the most worn", () => {
+    // Two containers across the keep, one a little more worn. A tick of repair
+    // made the other the more worn, and both blacksmiths turned round and
+    // crossed the keep to it, back and forth, spending nothing.
+    const far = container("far", 10, 6, 182_500);
+    const near = container("near", 12, 38, 187_500);
+    const room = makeRoom({ level: 6, structures: [far, near] });
+    const smith = { room, pos: { getRangeTo: (t: AnyStructure) => t.pos.getRangeTo({ x: 13, y: 36 } as RoomPosition) } };
+    expect(findMostCriticalRepairTarget(smith as unknown as Creep)?.id).toBe("near");
+  });
+});
+
 describe("findTowerDefenseRepairTarget", () => {
   beforeEach(() => {
     tick++;
