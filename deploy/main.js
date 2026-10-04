@@ -14337,19 +14337,30 @@ const GIVEN_NAMES = [
     "Isolde", "Ivo", "Jocelin", "Kenric", "Leofric", "Lucan", "Maud", "Merek",
     "Mordred", "Morwen", "Osric", "Percival", "Roderick", "Rowena", "Sigmund", "Sybil",
     "Thorne", "Tristan", "Ulric", "Wulfric", "Ysolde", "Varian",
+    "Adela", "Alaric", "Alys", "Amice", "Ansel", "Avice", "Baldwin", "Benedict",
+    "Conrad", "Cuthbert", "Drogo", "Edmund", "Elinor", "Emma", "Eustace", "Felice",
+    "Gervase", "Hamo", "Helewise", "Hereward", "Hugh", "Joan", "Juliana", "Lambert",
+    "Mabel", "Matilda", "Muriel", "Nesta", "Odo", "Osbert", "Oswin", "Piers",
+    "Ralph", "Rohese", "Sabina", "Simon", "Theobald", "Walter", "Warin", "Wystan",
 ];
 function creepName(role, room) {
     var _a;
     freshIssued();
     const title = (_a = ROLE_TITLES[role]) !== null && _a !== void 0 ? _a : role;
     const graves = new Set(room ? room.find(FIND_TOMBSTONES).map((t) => t.creep.name) : []);
+    const worn = new Set([...Object.keys(Game.creeps), ...issuedNames].map((n) => n.slice(n.lastIndexOf(" ") + 1)));
     const start = Game.time % GIVEN_NAMES.length;
+    let shared;
     for (let i = 0; i < GIVEN_NAMES.length; i++) {
-        const name = `${title} ${GIVEN_NAMES[(start + i) % GIVEN_NAMES.length]}`;
-        if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name) && !graves.has(name))
+        const given = GIVEN_NAMES[(start + i) % GIVEN_NAMES.length];
+        const name = `${title} ${given}`;
+        if (Game.creeps[name] || Memory.creeps[name] || issuedNames.has(name) || graves.has(name))
+            continue;
+        if (!worn.has(given))
             return name;
+        shared = shared !== null && shared !== void 0 ? shared : name;
     }
-    return `${title} ${Game.time}`;
+    return shared !== null && shared !== void 0 ? shared : `${title} ${Game.time}`;
 }
 function trackedSpawn(room, spawn, body, opts) {
     var _a, _b;
