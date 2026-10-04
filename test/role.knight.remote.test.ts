@@ -195,6 +195,14 @@ describe("raids in the chronicle", () => {
     expect((g.Memory as Memory).gossip?.line).toBe("a bounty!");
   });
 
+  it("does not draw a warlord whose band still raids another remote", () => {
+    (g.Memory as Memory).warbands = { W9N9: { name: "Brakka the Gaunt", at: 1 } };
+    markRemoteInvader(remoteEntry, remoteRoom);
+    const name = (g.Memory as Memory).warbands![REMOTE].name;
+    expect(name).not.toBe("Brakka the Gaunt");
+    expect((g.Memory as Memory).chronicle!.at(-1)!.text).toBe(`Raiders under ${name} fell upon the vendors in the Shadow March.`);
+  });
+
   it("draws a new warlord once the last one's band is broken", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
     const first = (g.Memory as Memory).warbands![REMOTE];

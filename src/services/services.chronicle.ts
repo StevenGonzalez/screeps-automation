@@ -206,8 +206,15 @@ export function raiseWarband(roomName: string): { name: string; raids: number } 
     known.at = Game.time;
     return { name: known.name, raids: known.raids };
   }
-  const h = mixedHash(`${roomName}:${Game.time}`);
-  const name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
+  // A warlord whose band still raids another remote is not drawn again: the
+  // Witch Weald's warlord and the Misty Thicket's were both Mordrek the
+  // Flayer, and the chronicle read as one band in two places.
+  const taken = new Set(Object.values(bands).filter((b) => !b.broken).map((b) => b.name));
+  let name = "";
+  for (let i = 0; i < WARLORDS.length && (i === 0 || taken.has(name)); i++) {
+    const h = mixedHash(`${roomName}:${Game.time}${i ? `:${i}` : ""}`);
+    name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
+  }
   bands[roomName] = { name, at: Game.time, raids: 1 };
   return { name, raids: 1 };
 }
