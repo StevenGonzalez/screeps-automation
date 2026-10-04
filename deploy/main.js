@@ -8107,6 +8107,7 @@ function heraldFallen() {
             if (slew) {
                 spreadWord(mourn(name));
                 chronicle(`${name}${slew} was laid to rest with honours.`);
+                heraldSlayer(name, last.kills);
             }
             heraldRetired(name, last.hauled);
             if (last.ttl <= 1)
@@ -8118,14 +8119,23 @@ function heraldFallen() {
         annal("fallen", 1);
         spreadWord(mourn(name));
         tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
+        heraldSlayer(name, last.kills);
     }
     muster = next;
+}
+function heraldSlayer(name, kills) {
+    var _a, _b;
+    if (kills <= ((_b = (_a = Memory.greatestSlayer) === null || _a === void 0 ? void 0 : _a.kills) !== null && _b !== void 0 ? _b : 0))
+        return;
+    Memory.greatestSlayer = { name, kills };
+    chronicle(`The minstrels make a song of ${name}, who slew more foes than any before.`);
 }
 function heraldRetired(name, hauled) {
     var _a;
     if (hauled <= ((_a = Memory.richestHaul) !== null && _a !== void 0 ? _a : 0))
         return;
     Memory.richestHaul = hauled;
+    Memory.richestHauler = name;
     chronicle(`${name} retired from the road with ${formatK(hauled)} gold brought home, the most of any merchant yet.`);
 }
 function heraldRazed(room, events, id) {
@@ -9352,6 +9362,7 @@ function markRoomUnreachable(homeRoomName, targetRoomName) {
 }
 
 const REMOTE_DAMAGE_BACKOFF$1 = 300;
+const GLUT_PILE = 1000;
 function runRemoteMiner(creep) {
     const { targetRoom, homeRoom, remoteSourceId } = creep.memory;
     if (!targetRoom || !homeRoom || !remoteSourceId) {
@@ -9409,6 +9420,8 @@ function runRemoteMiner(creep) {
             creep.repair(container);
             return;
         }
+        if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && pileAt(creep.pos) >= GLUT_PILE)
+            return;
         harvest$1(creep, source);
     }
     else {
@@ -9454,6 +9467,13 @@ function harvest$1(creep, source) {
 }
 function moveToRoom$6(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
+}
+function pileAt(pos) {
+    let gold = 0;
+    for (const r of pos.lookFor(LOOK_RESOURCES))
+        if (r.resourceType === RESOURCE_ENERGY)
+            gold += r.amount;
+    return gold;
 }
 function findOrUpdateContainer(creep, source) {
     if (creep.memory.assignedContainerId) {
@@ -9627,12 +9647,7 @@ function depositEnergy(creep, homeRoom) {
     }
     const storage = creep.room.storage;
     if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        const load = Math.min(creep.store[RESOURCE_ENERGY], storage.store.getFreeCapacity(RESOURCE_ENERGY));
-        const res = creep.transfer(storage, RESOURCE_ENERGY);
-        if (res === ERR_NOT_IN_RANGE)
-            creep.moveTo(storage, { reusePath: 50 });
-        else if (res === OK)
-            cryHaul(creep, load);
+        unload(creep, storage);
         return;
     }
     const fillTargets = creep.room.find(FIND_STRUCTURES, {
@@ -9642,10 +9657,7 @@ function depositEnergy(creep, homeRoom) {
             s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
     });
     if (fillTargets.length > 0) {
-        const target = creep.pos.findClosestByRange(fillTargets);
-        const res = creep.transfer(target, RESOURCE_ENERGY);
-        if (res === ERR_NOT_IN_RANGE)
-            creep.moveTo(target, { reusePath: 50 });
+        unload(creep, creep.pos.findClosestByRange(fillTargets));
         return;
     }
     const towers = creep.room.find(FIND_STRUCTURES, {
@@ -9653,21 +9665,25 @@ function depositEnergy(creep, homeRoom) {
             s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
     });
     if (towers.length > 0) {
-        const tower = creep.pos.findClosestByRange(towers);
-        const res = creep.transfer(tower, RESOURCE_ENERGY);
-        if (res === ERR_NOT_IN_RANGE)
-            creep.moveTo(tower, { reusePath: 50 });
+        unload(creep, creep.pos.findClosestByRange(towers));
         return;
     }
     const upgradeId = creep.room.memory.upgradeContainerId;
     const upgradeContainer = upgradeId ? Game.getObjectById(upgradeId) : null;
     if (upgradeContainer && upgradeContainer.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        if (creep.transfer(upgradeContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(upgradeContainer, { reusePath: 50 });
-        }
+        unload(creep, upgradeContainer);
         return;
     }
     putSurplusEnergyToWork(creep);
+}
+function unload(creep, target) {
+    var _a;
+    const load = Math.min(creep.store[RESOURCE_ENERGY], (_a = target.store.getFreeCapacity(RESOURCE_ENERGY)) !== null && _a !== void 0 ? _a : 0);
+    const res = creep.transfer(target, RESOURCE_ENERGY);
+    if (res === ERR_NOT_IN_RANGE)
+        creep.moveTo(target, { reusePath: 50 });
+    else if (res === OK)
+        cryHaul(creep, load);
 }
 function moveToRoom$5(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
@@ -12413,7 +12429,7 @@ const FEAST_VERSES = {
     winter: (feast) => ["The snow is deep, the hearth is bright,", `we keep the ${feast} through the night!`],
 };
 function ballad(room, time) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     const home = castleName(room.name);
     const verses = [[`Sing of ${home}, its walls of stone,`, "that bow to none but the Crown alone!"]];
     const feast = townFeast(time);
@@ -12438,14 +12454,25 @@ function ballad(room, time) {
             ? ["A raider came to steal our gold;", "now it lies in the earth so cold!"]
             : [`${slain} raiders came to steal our gold;`, "now they lie in the earth so cold!"]);
     }
+    const slayer = Memory.greatestSlayer;
+    if (slayer) {
+        const foes = slayer.kills === 1 ? "a foe" : `${slayer.kills} foes`;
+        verses.push([`Of ${slayer.name} let the minstrels sing,`, `who slew ${foes} for Crown and King!`]);
+    }
     const gold = (_c = annals === null || annals === void 0 ? void 0 : annals.gold) !== null && _c !== void 0 ? _c : 0;
     if (gold > 0)
         verses.push([`${formatK(gold)} gold the mines have brought,`, "and not a coin of it for naught!"]);
-    const recruits = (_d = annals === null || annals === void 0 ? void 0 : annals.recruits) !== null && _d !== void 0 ? _d : 0;
+    if (Memory.richestHauler) {
+        verses.push([
+            `Of ${Memory.richestHauler}, who walked the vendors' road`,
+            `and brought home ${formatK((_d = Memory.richestHaul) !== null && _d !== void 0 ? _d : 0)} gold, the richest load!`,
+        ]);
+    }
+    const recruits = (_e = annals === null || annals === void 0 ? void 0 : annals.recruits) !== null && _e !== void 0 ? _e : 0;
     if (recruits > 0) {
         verses.push([`${recruits === 1 ? "One recruit" : `${recruits} recruits`} marched out the barracks door,`, "to serve the Crown as those before!"]);
     }
-    const fallen = (_e = annals === null || annals === void 0 ? void 0 : annals.fallen) !== null && _e !== void 0 ? _e : 0;
+    const fallen = (_f = annals === null || annals === void 0 ? void 0 : annals.fallen) !== null && _f !== void 0 ? _f : 0;
     if (fallen > 0) {
         verses.push([`Pour one out for the ${fallen === 1 ? "one" : fallen} we lost,`, "who held the line and paid the cost."]);
     }
