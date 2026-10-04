@@ -152,7 +152,9 @@ describe("RCL 6 spawn stall", () => {
       makeCreep(ROLE_HAULER, "W48S8", 0),
       makeCreep(ROLE_FILLER, "W48S8", 0),
     ];
-    const { room, spawn } = makeRoom(creeps, 1448);
+    // Short of the porter the plan sizes for the two sources, but enough for
+    // a smaller one.
+    const { room, spawn } = makeRoom(creeps, 300);
 
     // A filler is already alive, so the chain reaches the hauler and holds.
     processRoomSpawning(room, spawn as unknown as StructureSpawn);
@@ -164,5 +166,25 @@ describe("RCL 6 spawn stall", () => {
     }
 
     expect(spawnCalls.map((c) => c.role)).toEqual([ROLE_HAULER]);
+  });
+});
+
+describe("hauler sizing", () => {
+  it("sizes a porter to what the sources yield, not to the room's capacity", () => {
+    // Two containers 20 steps from the spawn: 10 gold a tick each over a
+    // 40-tick round trip is 16 CARRY, 24 with the margin, 12 for each porter.
+    const creeps = [
+      makeCreep(ROLE_MINER, "W48S8", 5),
+      makeCreep(ROLE_MINER, "W48S8", 5),
+      makeCreep(ROLE_FILLER, "W48S8", 0),
+    ];
+    const { room, spawn } = makeRoom(creeps, 2300);
+
+    processRoomSpawning(room, spawn as unknown as StructureSpawn);
+
+    expect(spawnCalls.map((c) => c.role)).toEqual([ROLE_HAULER]);
+    const body = spawnCalls[0].body;
+    expect(body.filter((p) => p === g.CARRY).length).toBe(12);
+    expect(body.filter((p) => p === g.MOVE).length).toBe(6);
   });
 });

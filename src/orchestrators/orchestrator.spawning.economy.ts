@@ -10,7 +10,7 @@ import {
   ROLE_APOTHECARY,
 } from "../config/config.roles";
 import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services.creep";
-import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
+import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
 import { upgraderStorageFloor } from "../services/services.treasury";
@@ -271,24 +271,35 @@ function getContainerDistances(
   return distances;
 }
 
-export function shouldSpawnHauler(room: Room): boolean {
+// Haulers carry this much more than the sources' output strictly needs, for
+// the time they spend waiting at containers and on errands of their own.
+const HAULER_CARRY_MARGIN = 1.5;
+// No hauler is planned smaller than this many CARRY parts.
+const MIN_HAULER_CARRY = 4;
+
+interface HaulerPlan {
+  count: number;
+  // CARRY parts in each hauler's body.
+  carryEach: number;
+}
+
+// How many haulers the room needs and how big. Each was built as large as the
+// room could afford, and at least one per miner container: at RCL 6 two
+// 26-CARRY porters carried 52 parts' worth for sources that needed 15, at
+// nearly a tenth of the spawn's time. They are now sized to what the sources
+// yield over the walk, split evenly between them.
+function getHaulerPlan(room: Room): HaulerPlan | null {
   const containerIds = room.memory.containerIds ?? [];
-  if (containerIds.length === 0) return false;
+  if (containerIds.length === 0) return null;
   const containers = containerIds
     .map((id) => Game.getObjectById(id))
     .filter(Boolean) as StructureContainer[];
-
-  if (containers.length === 0) return false;
-
-  const haulers = getCreepsByRole(ROLE_HAULER).filter(
-    (c) => !c.spawning && (c.memory.homeRoom ?? c.room.name) === room.name
-  );
+  if (containers.length === 0) return null;
 
   const minerContainerIds = new Set(room.memory.minerContainerIds ?? []);
   const minerContainers = containers.filter((c) =>
     minerContainerIds.has(c.id as Id<StructureContainer>)
   );
-  const minerContainerCount = minerContainers.length;
 
   const spawn = getSpawnForRoom(room);
   let requiredCarry = 0;
@@ -301,6 +312,7 @@ export function shouldSpawnHauler(room: Room): boolean {
         (HAULER_SPAWN.SOURCE_OUTPUT * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
     }
   }
+  const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
 
   const idealRepeats = Math.min(
     Math.floor(MAX_BODY_PART_COUNT / 3),
@@ -308,26 +320,38 @@ export function shouldSpawnHauler(room: Room): boolean {
   );
   const carryPerIdealHauler = Math.max(1, idealRepeats * 2);
 
-  const targetFromThroughput = Math.ceil(requiredCarry / carryPerIdealHauler);
-
-  const desired = Math.min(
+  const count = Math.min(
     HAULER_SPAWN.MAX_HAULERS,
-    Math.max(minerContainerCount, targetFromThroughput)
+    Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler))
+  );
+  const share = count > 0 ? 2 * Math.ceil(neededCarry / count / 2) : 0;
+  const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
+  return { count, carryEach };
+}
+
+export function shouldSpawnHauler(room: Room): boolean {
+  const plan = getHaulerPlan(room);
+  if (!plan) return false;
+
+  const haulers = getCreepsByRole(ROLE_HAULER).filter(
+    (c) => !c.spawning && (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
-  const lead = spawnLeadTicks(idealRepeats * 3, getMinerTravelTicks(room));
+  // The body's CARRY:CARRY:MOVE repeats, three parts each.
+  const lead = spawnLeadTicks((plan.carryEach / 2) * 3, getMinerTravelTicks(room));
   const haulerCount =
     haulers.filter((h) => !isRetiring(h, lead)).length +
     getRoomSpawningCount(room, ROLE_HAULER);
-  if (haulerCount < desired) return true;
+  if (haulerCount < plan.count) return true;
 
+  // Haulers born small in an energy crunch: add one while they carry less
+  // than half the plan between them.
   if (haulers.length >= HAULER_SPAWN.MAX_HAULERS) return false;
-  const carryPerIdealHaulerUnits = carryPerIdealHauler * HAULER_SPAWN.CARRY_CAPACITY;
   const totalCurrentCarry = haulers.reduce(
-    (sum, h) => sum + h.body.filter((p) => p.type === CARRY).length * HAULER_SPAWN.CARRY_CAPACITY,
+    (sum, h) => sum + h.body.filter((p) => p.type === CARRY).length,
     0
   );
-  return totalCurrentCarry < desired * carryPerIdealHaulerUnits * 0.5;
+  return totalCurrentCarry < plan.count * plan.carryEach * 0.5;
 }
 
 export function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
@@ -335,9 +359,11 @@ export function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
     (c) => (c.memory.homeRoom ?? c.room.name) === room.name
   );
 
-  const allowedEnergy = bodyBudget(
-    room,
-    existingHaulers.length === 0 ? "available" : "capacity"
+  const plan = getHaulerPlan(room);
+  const planEnergy = plan ? (plan.carryEach / 2) * calculateBodyPartCost(BODY_PATTERNS[ROLE_HAULER]) : Infinity;
+  const allowedEnergy = Math.min(
+    planEnergy,
+    bodyBudget(room, existingHaulers.length === 0 ? "available" : "capacity")
   );
   const body = buildScaledBody(ROLE_HAULER, allowedEnergy);
   const bodyCost = calculateBodyPartCost(body);
@@ -348,7 +374,7 @@ export function spawnHauler(room: Room, spawn: StructureSpawn): boolean {
     // miner is saving up for, and the miner never gets to spawn. Give up on the
     // wait once it has starved the rest of the room for SPAWN_HOLD_LIMIT ticks.
     if (existingHaulers.length > 0 && holdSpawnFor(room, ROLE_HAULER)) return true;
-    const affordableEnergy = bodyBudget(room, "available");
+    const affordableEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
     const affordableBody = buildScaledBody(ROLE_HAULER, affordableEnergy);
     if (room.energyAvailable < calculateBodyPartCost(affordableBody)) {
       // Below the cost of the smallest hauler there is nothing to save up for,
