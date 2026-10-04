@@ -365,6 +365,9 @@ declare global {
     // raids it has led there, how many of its raiders have fallen and whether
     // that broke its band (services.chronicle).
     warbands?: Record<string, { name: string; at: number; raids?: number; slain?: number; broken?: boolean }>;
+    // The last warband broken: its warlord, the remote it raided and the creep
+    // who struck the breaking blow alone, if one did (services.herald).
+    lastRout?: { band: string; room: string; slayer?: string };
     // News the realm's creeps repeat in their chatter until it goes stale
     // (services.herald).
     gossip?: { line: string; until: number };

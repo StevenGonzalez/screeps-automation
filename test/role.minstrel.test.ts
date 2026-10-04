@@ -18,7 +18,7 @@ vi.mock("../src/services/services.creep", () => ({ isEnergyEmergency: () => fals
 
 import { ballad, runMinstrel } from "../src/roles/role.minstrel";
 import { spawnTownsfolk, wantsMinstrel } from "../src/orchestrators/orchestrator.spawning.town";
-import { castleName } from "../src/services/services.chronicle";
+import { castleName, wildsName } from "../src/services/services.chronicle";
 import { ROLE_MINSTREL, ROLE_TOWNSFOLK } from "../src/config/config.roles";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
@@ -93,6 +93,21 @@ describe("ballad", () => {
     expect(sung()).toContain(
       "Of Merchant Ada, who walked the vendors' road and brought home 40.5K gold, the richest load!"
     );
+  });
+
+  it("sings of the last warband broken and of this castle's richest road", () => {
+    g.Memory = {
+      creeps: {},
+      rooms: {},
+      lastRout: { band: "Grask One-Eye", room: "W2N1", slayer: "Dragon Knight Edric" },
+      roadGold: { "W1N1>W2N1": 12_000, "W1N1>W3N1": 64_200, "W5N5>W4N1": 900_000 },
+    };
+    const sung = () => ballad(room as unknown as Room, ORDINARY_DAY).map((v) => v.join(" "));
+    expect(sung()).toContain("Grask One-Eye came for our gold and grain; Dragon Knight Edric left the warband slain!");
+    expect(sung()).toContain(`Down the road from the ${wildsName("W3N1")} wild, 64.2K gold our merchants piled!`);
+
+    (g.Memory as Memory).lastRout = { band: "Grask One-Eye", room: "W2N1" };
+    expect(sung()).toContain(`Grask One-Eye came for our gold and grain; in the ${wildsName("W2N1")} the band lies slain!`);
   });
 
   it("sings of the quiet when no raider came and leaves out what the scribes have not counted", () => {

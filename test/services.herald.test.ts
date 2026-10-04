@@ -241,6 +241,7 @@ describe("herald", () => {
     ]);
     expect((g.Memory as Memory).warbands![ROOM].broken).toBe(true);
     expect((g.Memory as Memory).gossip?.line).toBe("routed!");
+    expect((g.Memory as Memory).lastRout).toEqual({ band: "Grask One-Eye", room: ROOM, slayer: "Dragon Knight Edric" });
   });
 
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {

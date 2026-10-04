@@ -615,6 +615,7 @@ function chronicleKill(room: Room, slayer?: string): void {
   );
   if (band && warbandLoss(room.name)) {
     spreadWord("routed!");
+    Memory.lastRout = { band, room: room.name, slayer };
     chronicle(
       `${slayer ? `${slayer} broke ${band}'s band` : `${band}'s band is broken`} ${whereIn(room.name)}. The warlord is heard of no more.`
     );

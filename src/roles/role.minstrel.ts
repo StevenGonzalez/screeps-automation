@@ -54,6 +54,13 @@ export function ballad(room: Room, time: number): Array<[string, string]> {
     const foes = slayer.kills === 1 ? "a foe" : `${slayer.kills} foes`;
     verses.push([`Of ${slayer.name} let the minstrels sing,`, `who slew ${foes} for Crown and King!`]);
   }
+  const rout = Memory.lastRout;
+  if (rout) {
+    verses.push([
+      `${rout.band} came for our gold and grain;`,
+      rout.slayer ? `${rout.slayer} left the warband slain!` : `in the ${wildsName(rout.room)} the band lies slain!`,
+    ]);
+  }
   const gold = annals?.gold ?? 0;
   if (gold > 0) verses.push([`${formatK(gold)} gold the mines have brought,`, "and not a coin of it for naught!"]);
   if (Memory.richestHauler) {
@@ -62,6 +69,8 @@ export function ballad(room: Room, time: number): Array<[string, string]> {
       `and brought home ${formatK(Memory.richestHaul ?? 0)} gold, the richest load!`,
     ]);
   }
+  const road = richestRoad(room.name);
+  if (road) verses.push([`Down the road from the ${wildsName(road.remote)} wild,`, `${formatK(road.gold)} gold our merchants piled!`]);
   const recruits = annals?.recruits ?? 0;
   if (recruits > 0) {
     verses.push([`${recruits === 1 ? "One recruit" : `${recruits} recruits`} marched out the barracks door,`, "to serve the Crown as those before!"]);
@@ -72,6 +81,17 @@ export function ballad(room: Room, time: number): Array<[string, string]> {
   }
   verses.push(["Raise a cup to the Crown so high,", `whose banners over ${castles} ${castles === 1 ? "castle" : "castles"} fly!`]);
   return verses;
+}
+
+// The remote this castle's merchants have brought the most gold home from.
+function richestRoad(home: string): { remote: string; gold: number } | undefined {
+  let best: { remote: string; gold: number } | undefined;
+  for (const key in Memory.roadGold) {
+    const [from, remote] = key.split(">");
+    const gold = Memory.roadGold[key];
+    if (from === home && gold > (best?.gold ?? 0)) best = { remote, gold };
+  }
+  return best;
 }
 
 /** The couplet being sung in `room` at `time`. */

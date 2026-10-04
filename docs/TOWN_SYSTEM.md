@@ -159,8 +159,10 @@ The minstrel walks round the fountain, a step every 10 ticks, passing tiles
 others stand on, and hums ("♪ la la ♪") every few ticks. It sings a ballad of
 the realm, a couplet every 25 ticks: the castle itself, the feast, every other
 castle of the realm, the raiders slain this season (or that none came), the
-gold gathered, the recruits raised, the realm's own who fell, and how many
-castles fly the banner.
+realm's greatest slayer, the last warband broken and who broke it, the gold
+gathered, the richest merchant, the road this castle's merchants have brought
+the most gold home on, the recruits raised, the realm's own who fell, and how
+many castles fly the banner.
 The numbers come from the season's annals, so the song changes as the season
 goes on. When the feast day ends, the minstrel leaves.
 
