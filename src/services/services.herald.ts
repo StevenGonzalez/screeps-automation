@@ -18,12 +18,15 @@ const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 let cryTick = -1;
 let creepCries: Record<string, string> = {};
 let roomCries: Record<string, string> = {};
+// Remote name -> the knights riding out for it this tick.
+let riders: Record<string, string[]> = {};
 
 function freshCries(): void {
   if (cryTick === Game.time) return;
   cryTick = Game.time;
   creepCries = {};
   roomCries = {};
+  riders = {};
 }
 
 export function cryFor(creep: Creep): string | undefined {
@@ -97,13 +100,21 @@ export function settleFlight(creep: Creep): void {
 
 // A knight riding out against raiders in a remote cries out, and the chronicle
 // tells of it, once for each raid rather than on every tick of the ride.
+// Knights who mustered at home ride out on the same tick and share one line.
 export function crySortie(creep: Creep, roomName: string): void {
   if (creep.memory.sortie === roomName) return;
   creep.memory.sortie = roomName;
   freshCries();
   creepCries[creep.name] = "Ride out!";
+  const names = (riders[roomName] ??= []);
+  if (!names.includes(creep.name)) names.push(creep.name);
   const band = warbandIn(roomName);
-  chronicle(`${creep.name} rides out against ${band ? `${band}'s` : "the"} raiders in the ${wildsName(roomName)}.`);
+  const foe = `${band ? `${band}'s` : "the"} raiders in the ${wildsName(roomName)}`;
+  const line = () =>
+    names.length === 1
+      ? `${names[0]} rides out against ${foe}.`
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} ride out together against ${foe}.`;
+  tally(`sortie:${roomName}`, 1, line, 0);
 }
 
 // How long the realm talks of a piece of news.

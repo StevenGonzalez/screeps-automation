@@ -109,6 +109,16 @@ describe("remote knight", () => {
     expect(destination(knight)).toBe(REMOTE);
   });
 
+  it("tells of knights who ride out together in one line", () => {
+    remoteEntry.invaderUntil = 1500;
+    g.Game = { time: 1003, rooms: {}, creeps: {} };
+    runKnight(knightIn(HOME));
+    runKnight(Object.assign(knightIn(HOME), { name: "Dragon Knight Alaric" }));
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Dragon Knight Godric and Dragon Knight Alaric ride out together against the raiders in the Shadow March.",
+    ]);
+  });
+
   it("stays home against raiders two knights could not beat", () => {
     remoteEntry.invaderUntil = 1500;
     remoteEntry.invaderStrength = { heal: 1000, damage: 80, hits: 2085 };
