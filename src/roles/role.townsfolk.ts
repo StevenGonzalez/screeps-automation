@@ -13,12 +13,14 @@ import {
   townStorm,
 } from "../services/services.town";
 import { floodInterior } from "../planning/planner.town";
+import { ROLE_TOWNSFOLK } from "../config/config.roles";
 
 // The townsfolk of the castle's quarter. They carry one bow and one pair of
 // boots each, so no single one of them matters much, but together they are
 // the castle's second line:
 //
-//   militia  sleep in the cottages at night and stand the watch posts by day.
+//   militia  sleep in the cottages at night and stand the watch posts by day,
+//            but for one who keeps the night watch with a lantern.
 //            When raiders come, every militiaman runs for the rampart nearest
 //            the fight and looses arrows from under it. With none in bow range
 //            of the raiders, it shoots over the wall from the ground just
@@ -54,6 +56,33 @@ const STORM_CALLS = ["storm!", "bar doors", "rain again"];
 
 const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
 const FEAST_CHEER_PERIOD = 100;
+
+// Each night one militiaman keeps the watch on a post while the rest sleep, a
+// different one each night, and cries the all's well now and then. A lone
+// militiaman sleeps.
+const NIGHT_WATCH_CRY_PERIOD = 100;
+let watchTick = -1;
+let watchmen: Record<string, string | undefined> = {};
+
+/** The name of the militiaman keeping tonight's watch in the room, if any. */
+export function nightWatchman(roomName: string): string | undefined {
+  if (watchTick !== Game.time) {
+    watchTick = Game.time;
+    watchmen = {};
+  }
+  if (!(roomName in watchmen)) {
+    const names: string[] = [];
+    for (const name in Game.creeps) {
+      const c = Game.creeps[name];
+      const m = c.memory;
+      if (m.role === ROLE_TOWNSFOLK && m.job !== "lookout" && m.homeRoom === roomName && !c.spawning) names.push(name);
+    }
+    names.sort();
+    const night = Math.floor(Game.time / TOWN_DAY_LENGTH);
+    watchmen[roomName] = names.length >= 2 ? names[night % names.length] : undefined;
+  }
+  return watchmen[roomName];
+}
 
 export function runTownsfolk(creep: Creep): void {
   if (creep.memory.job === "lookout") runLookout(creep);
@@ -108,6 +137,10 @@ function runMilitia(creep: Creep): void {
   const clock = townClock(Game.time);
   callThePhase(creep);
   if (isNightfall(clock.phase)) {
+    if (nightWatchman(home) === creep.name) {
+      if (Game.time % NIGHT_WATCH_CRY_PERIOD === NIGHT_WATCH_CRY_PERIOD / 2) creep.say("all's well", true);
+      if (parkIdle(creep, "watch")) return;
+    }
     if (parkOn(creep, bedTiles(room.memory.town))) return;
     parkIdle(creep, "square");
     return;

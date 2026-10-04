@@ -1,5 +1,6 @@
 import { ROLE_MINSTREL, ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
 import { currentVerse } from "../roles/role.minstrel";
+import { nightWatchman } from "../roles/role.townsfolk";
 import {
   NIGHT_START,
   cottageLayout,
@@ -549,6 +550,16 @@ export function drawTown(room: Room): void {
       v.circle(x - 0.25, y - 0.45, { radius: 0.1 + 0.05 * flicker, fill: "#ffcc55", opacity: 0.6 + 0.3 * flicker });
     }
   });
+
+  // The night watchman carries a lantern on his rounds.
+  const watchman = lit ? nightWatchman(room.name) : undefined;
+  const keeper = watchman ? Game.creeps[watchman] : undefined;
+  if (keeper && keeper.room.name === room.name) {
+    const { x, y } = keeper.pos;
+    const sway = 0.06 * Math.sin(Game.time * 0.9);
+    v.circle(x + 0.3 + sway, y - 0.25, { radius: 1.3, fill: "#ffb347", opacity: 0.1 });
+    v.circle(x + 0.3 + sway, y - 0.25, { radius: 0.13, fill: "#ffe39a", opacity: 0.9 });
+  }
 
   // After dark a brazier burns atop each watchtower and the barracks' hearth
   // glows through its doors.

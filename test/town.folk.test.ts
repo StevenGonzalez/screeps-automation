@@ -24,7 +24,7 @@ vi.mock("../src/services/services.combat", () => ({
   isSourceKeeperRoom: (name: string) => name === "W5N5",
 }));
 
-import { runTownsfolk, lookoutTargets } from "../src/roles/role.townsfolk";
+import { runTownsfolk, lookoutTargets, nightWatchman } from "../src/roles/role.townsfolk";
 import {
   claimSpot,
   isFullMoon,
@@ -326,6 +326,33 @@ describe("militia", () => {
     expect(x).toBeLessThanOrEqual(33);
     expect(y).toBeGreaterThanOrEqual(31);
     expect(y).toBeLessThanOrEqual(33);
+  });
+
+  it("keeps one on the night watch while the rest sleep, a different one each night", () => {
+    const inBed = (k: string | null) => {
+      const [x, y] = k!.split(",").map(Number);
+      return x >= 31 && x <= 33 && y >= 31 && y <= 33;
+    };
+    const a = folk("a", 25, 25);
+    const b = folk("b", 26, 25);
+    const night = (n: number) => {
+      (g.Game as { time: number }).time = (11 + n) * TOWN_DAY_LENGTH + 850;
+      a.moveTo.mockClear();
+      b.moveTo.mockClear();
+      runTownsfolk(a as unknown as Creep);
+      runTownsfolk(b as unknown as Creep);
+      return nightWatchman("W1N1");
+    };
+
+    const first = night(0);
+    const [watch, sleeper] = first === "a" ? [a, b] : [b, a];
+    expect(TOWN_MEM.posts).toContain(movedTo(watch));
+    expect(inBed(movedTo(sleeper))).toBe(true);
+    expect(watch.say).toHaveBeenCalledWith("all's well", true);
+
+    expect(night(1)).not.toBe(first);
+    expect(TOWN_MEM.posts).toContain(movedTo(sleeper));
+    expect(inBed(movedTo(watch))).toBe(true);
   });
 
   it("leaves the watch for the square on a feast day, and still runs to the walls for raiders", () => {

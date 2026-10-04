@@ -116,7 +116,9 @@ In peace it follows the town clock:
   square, then in a bed. On a feast day they gather in the square instead,
   and only overflow to the posts.
 - **Dusk and night:** sleep in a cottage bed, or wait in the square if every
-  bed is taken.
+  bed is taken. With two or more militia, one keeps the night watch on a post
+  instead, a different one each night by name, and cries "all's well" every
+  100 ticks.
 - On the first tick of each phase the whole town calls it out ("cock-a-doo!",
   "lamps lit", "zzz"). At daybreak the talk is of the season ("blossoms!",
   "hay to cut", "cider time", "snow again"), or of the storm on a storm day
@@ -239,7 +241,7 @@ When room visuals are on, the town draws itself:
 - a pennant in the castle's colours at each watch post, run up when someone
   stands there, and a flickering torch on each post after dark;
 - after dark, a brazier burning atop each watchtower and the barracks' hearth
-  glowing;
+  glowing, and a swinging lantern carried by the night watchman;
 - rippling water in the fountain and a "... Square" sign;
 - the season: a faint green tint and drifting petals in spring, fireflies
   round the fountain on a summer night, an amber tint and falling leaves in
