@@ -7666,9 +7666,20 @@ function heraldFirstBorn(room) {
         if (name !== birth.name && Game.creeps[name].memory.homeRoom === room.name)
             return;
     }
+    room.memory.firstBorn = birth.name;
     roomCries[room.name] = "Huzzah!";
     spreadWord("firstborn!");
     chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
+}
+function heraldFirstBornRest(name) {
+    for (const roomName in Memory.rooms) {
+        const mem = Memory.rooms[roomName];
+        if (mem.firstBorn !== name)
+            continue;
+        delete mem.firstBorn;
+        spreadWord(mourn(name));
+        chronicle(`${name}, the first born in the barracks of ${castleName(roomName)}, has died of old age. Its bells ring once more.`);
+    }
 }
 const BATTLE_WINDOW = 300;
 function whereIn(roomName) {
@@ -7720,6 +7731,8 @@ function heraldFallen() {
                 chronicle(`${name}${slew} was laid to rest with honours.`);
             }
             heraldRetired(name, last.hauled);
+            if (last.ttl <= 1)
+                heraldFirstBornRest(name);
             continue;
         }
         const foe = foeIn(last.room);
