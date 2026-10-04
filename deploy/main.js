@@ -8303,7 +8303,8 @@ function heraldSeason() {
     Memory.heraldSeason = season;
     if (known === undefined || known === season)
         return;
-    chronicle(SEASON_TIDINGS[season]);
+    const feast = townFeast(Game.time);
+    chronicle(feast ? `${SEASON_TIDINGS[season]} The ${feast} begins.` : SEASON_TIDINGS[season]);
 }
 const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
