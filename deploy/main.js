@@ -8211,6 +8211,7 @@ function settleFlight(creep) {
 function heraldRooms() {
     var _a;
     freshCries();
+    heraldFallen();
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
@@ -8228,11 +8229,44 @@ function heraldRise(room) {
     chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
 }
 const BATTLE_WINDOW = 300;
+function whereIn(roomName) {
+    var _a, _b;
+    return ((_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my)
+        ? `before the walls of ${castleName(roomName)}`
+        : `in the wilds of ${roomName}`;
+}
 function chronicleKill(room) {
-    var _a;
     const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
-    const where = ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) ? `before the walls of ${castleName(room.name)}` : `in the wilds of ${room.name}`;
-    tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${where}`, BATTLE_WINDOW);
+    tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}`, BATTLE_WINDOW);
+}
+let muster = new Map();
+function foeIn(roomName) {
+    var _a, _b;
+    const hostiles = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.find(FIND_HOSTILE_CREEPS)) !== null && _b !== void 0 ? _b : [];
+    const player = hostiles.find(isPlayerCreep);
+    if (player)
+        return `the men of ${player.owner.username}`;
+    if (hostiles.length === 0)
+        return undefined;
+    return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
+}
+function heraldFallen() {
+    var _a;
+    const next = new Map();
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (c.spawning)
+            continue;
+        next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0 });
+    }
+    for (const [name, last] of muster) {
+        if (next.has(name) || !last.hurt || last.ttl <= 1)
+            continue;
+        const foe = foeIn(last.room);
+        const by = foe ? ` to ${foe}` : "";
+        tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
+    }
+    muster = next;
 }
 function heraldKills(room) {
     const raw = room.getEventLog(true);
@@ -10759,6 +10793,7 @@ function planTown(room) {
                 delete town.failedAt;
                 console.log(`[Town] ${room.name}: the House of ${cottage.name} is raised at ${cottage.x},${cottage.y}` +
                     (cottage.outside ? " (beyond the walls; the ring will be redrawn)" : ""));
+                chronicle(`The House of ${cottage.name} settles ${cottage.outside ? "beyond" : "within"} the walls of ${castleName(room.name)}.`);
                 if (cottage.outside && room.memory.plannedStructuresMeta) {
                     delete room.memory.plannedStructuresMeta[PLANNER_KEYS.STAMP_RAMPART_KEY];
                 }
