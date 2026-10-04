@@ -139,6 +139,45 @@ describe("remote miner", () => {
     expect(creep.harvest).toHaveBeenCalled();
     expect(remote.hostile).toBe(true);
   });
+
+  describe("raising its container", () => {
+    const site = { structureType: "container" };
+    const pile = { resourceType: "energy", amount: 3000 };
+    let tick = 2000;
+
+    function builderBeside(piles: unknown[], carried: number) {
+      // A fresh tick, so no threat cached by the tests above is read back.
+      (g.Game as any).time = ++tick;
+      const source = {
+        id: "src",
+        pos: { findInRange: (type: number) => (type === g.FIND_MY_CONSTRUCTION_SITES ? [site] : []) },
+      };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
+      const creep = minerIn(REMOTE, {
+        store: { energy: carried, getFreeCapacity: () => 50 - carried },
+        build: vi.fn(() => 0),
+        pickup: vi.fn(() => 0),
+      });
+      creep.pos = { ...creep.pos, findInRange: () => piles } as any;
+      creep.memory._hp = 100;
+      runRemoteMiner(creep as unknown as Creep);
+      return creep;
+    }
+
+    it("builds every tick with the gold lying at its feet", () => {
+      const creep = builderBeside([pile], 20);
+      expect(creep.pickup).toHaveBeenCalledWith(pile);
+      expect(creep.build).toHaveBeenCalledWith(site);
+      expect(creep.harvest).not.toHaveBeenCalled();
+    });
+
+    it("digs a full load before building when none lies there", () => {
+      const creep = builderBeside([], 20);
+      expect(creep.harvest).toHaveBeenCalled();
+      expect(creep.build).not.toHaveBeenCalled();
+      expect(builderBeside([], 50).build).toHaveBeenCalledWith(site);
+    });
+  });
 });
 
 describe("sk hauler", () => {

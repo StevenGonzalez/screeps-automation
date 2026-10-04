@@ -80,9 +80,22 @@ export function runRemoteMiner(creep: Creep) {
     const site = source.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 1, {
       filter: (s) => s.structureType === STRUCTURE_CONTAINER,
     })[0];
-    if (site && creep.store[RESOURCE_ENERGY] > 0) {
-      if (creep.build(site) === ERR_NOT_IN_RANGE) creep.moveTo(site, { reusePath: 30 });
-      return;
+    if (site) {
+      // Picking up is a separate intent from building, so gold lying at the
+      // miner's feet keeps it building every tick; with none, it digs a full
+      // load first. Building each dig as it came, a tick of each by turns,
+      // raised Grimford's remote containers at five a tick, while three
+      // thousand gold dug before them rotted beside one of them.
+      const pile = creep.pos.findInRange(FIND_DROPPED_RESOURCES, 1, {
+        filter: (r) => r.resourceType === RESOURCE_ENERGY,
+      })[0];
+      if (pile) creep.pickup(pile);
+      const loaded = pile ? creep.store[RESOURCE_ENERGY] > 0 : creep.store.getFreeCapacity() === 0;
+      if (loaded) {
+        if (creep.build(site) === ERR_NOT_IN_RANGE) creep.moveTo(site, { reusePath: 30 });
+        return;
+      }
+      if (pile) return;
     }
     if (harvest(creep, source) === ERR_NOT_IN_RANGE) {
       creep.moveTo(source, { reusePath: 30 });
