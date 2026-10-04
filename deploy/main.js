@@ -14916,7 +14916,10 @@ function shouldSpawnSettler(room) {
     if (exp.pausedUntil && exp.pausedUntil > Game.time)
         return false;
     const settlers = getCreepsByRole(ROLE_SETTLER).filter((c) => c.memory.targetRoom === exp.roomName);
-    return settlers.length < MAX_SETTLERS;
+    const needed = settlers.length < MAX_SETTLERS;
+    if (waitForFullBody(room, ROLE_SETTLER, needed))
+        return false;
+    return needed;
 }
 function spawnSettler(room, spawn) {
     const exp = Memory.expansion;
