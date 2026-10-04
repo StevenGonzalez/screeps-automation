@@ -27,10 +27,10 @@ declare global {
 }
 
 const SAMPLE_EVERY = 5;
+// Books close once a window is this old, on whatever tick the exchequer next
+// runs. Closing on fixed ticks missed every close when the CPU guard in main
+// shed the exchequer on those ticks.
 const CLOSE_BOOKS_EVERY = 100;
-// A window cut short by a global reset is folded into the next one rather than
-// closed on a handful of samples.
-const MIN_WINDOW_TICKS = 50;
 // Weight of the newest window in the running average.
 const SMOOTHING = 0.3;
 
@@ -134,9 +134,8 @@ const SPEND_KEYS: LedgerSpend[] = ["recruits", "enchant", "masonry", "smithy", "
 
 function closeBooks(room: Room): void {
   const w = windows[room.name];
-  if (!w) return;
+  if (!w || w.samples === 0) return;
   const ticks = Game.time - w.start;
-  if (ticks < MIN_WINDOW_TICKS || w.samples === 0) return;
 
   if (!Memory.exchequer) Memory.exchequer = {};
   const prev = Memory.exchequer[room.name];
@@ -176,12 +175,15 @@ export function loop(): void {
     }
   }
 
-  if (Game.time % CLOSE_BOOKS_EVERY === 0) {
-    for (const home of homes) closeBooks(home);
-    if (Memory.exchequer) {
-      for (const name in Memory.exchequer) {
-        if (!Game.rooms[name]?.controller?.my) delete Memory.exchequer[name];
-      }
+  let closed = false;
+  for (const home of homes) {
+    if (Game.time - windows[home.name].start < CLOSE_BOOKS_EVERY) continue;
+    closeBooks(home);
+    closed = true;
+  }
+  if (closed && Memory.exchequer) {
+    for (const name in Memory.exchequer) {
+      if (!Game.rooms[name]?.controller?.my) delete Memory.exchequer[name];
     }
   }
 }
