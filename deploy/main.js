@@ -1003,6 +1003,9 @@ function isArmedHostile(c) {
         return false;
     return c.body.some((p) => p.hits > 0 && (p.type === ATTACK || p.type === RANGED_ATTACK));
 }
+function remoteThreats(room) {
+    return getThreatInfo(room).hostiles.filter((c) => canDealDamage(c) && (!isPlayerCreep(c) || isArmedHostile(c)));
+}
 function inBorderBandFacingHome(exitDir, x, y) {
     const b = BLOCKADE_BORDER_BAND;
     switch (exitDir) {
@@ -9005,7 +9008,7 @@ function refreshVisibleRemoteRooms(room) {
         }
         if (findInvaderCore(visible))
             markRemoteInvader(remote, visible);
-        const hostiles = visible.find(FIND_HOSTILE_CREEPS).filter(canDealDamage);
+        const hostiles = remoteThreats(visible);
         const player = hostiles.find(isPlayerCreep);
         if (player) {
             markRemotePlayerHostile(remote, player.owner.username);
@@ -9210,7 +9213,7 @@ function surveyRoom(creep, homeRoomName, targetRoomName) {
         return;
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
     const sourceKeepers = hostiles.filter((c) => c.owner.username === "Source Keeper");
-    const player = hostiles.find((c) => isPlayerCreep(c) && canDealDamage(c));
+    const player = hostiles.find(isArmedHostile);
     if (player) {
         markRemotePlayerHostile(entry, player.owner.username);
     }
@@ -9279,17 +9282,15 @@ function runRemoteMiner(creep) {
         return;
     }
     const inTarget = creep.room.name === targetRoom;
-    const threat = inTarget ? getThreatInfo(creep.room) : null;
+    const threats = inTarget ? remoteThreats(creep.room) : [];
     const core = inTarget ? findInvaderCore(creep.room) : null;
     if (core)
         flagRemoteInvader(creep);
-    else if (threat && threat.score > 0) {
-        if (threat.hostiles.some(isInvaderCreep))
-            flagRemoteInvader(creep);
-        else if (threat.hostiles.some(isPlayerCreep))
-            flagRemotePlayer(creep);
-    }
-    if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
+    else if (threats.some(isInvaderCreep))
+        flagRemoteInvader(creep);
+    else if (threats.some(isPlayerCreep))
+        flagRemotePlayer(creep);
+    if (isAssignedRemoteContested(creep) || threats.length > 0) {
         cryFlight(creep);
         if (creep.room.name !== homeRoom)
             moveToRoom$6(creep, homeRoom);
@@ -9417,17 +9418,15 @@ function runRemoteHauler(creep) {
         return;
     }
     const inTarget = creep.room.name === targetRoom;
-    const threat = inTarget ? getThreatInfo(creep.room) : null;
+    const threats = inTarget ? remoteThreats(creep.room) : [];
     const core = inTarget ? findInvaderCore(creep.room) : null;
     if (core)
         flagRemoteInvader(creep);
-    else if (threat && threat.score > 0) {
-        if (threat.hostiles.some(isInvaderCreep))
-            flagRemoteInvader(creep);
-        else if (threat.hostiles.some(isPlayerCreep))
-            flagRemotePlayer(creep);
-    }
-    if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
+    else if (threats.some(isInvaderCreep))
+        flagRemoteInvader(creep);
+    else if (threats.some(isPlayerCreep))
+        flagRemotePlayer(creep);
+    if (isAssignedRemoteContested(creep) || threats.length > 0) {
         cryFlight(creep);
         if (creep.store[RESOURCE_ENERGY] > 0) {
             depositEnergy(creep, homeRoom);
