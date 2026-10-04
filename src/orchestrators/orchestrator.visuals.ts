@@ -221,7 +221,8 @@ function drawRoomHUD(room: Room) {
   const energyCap = room.energyCapacityAvailable;
   const energyPct = energyCap > 0 ? energy / energyCap : 0;
   const energyColor = energyPct < 0.3 ? "#ff6644" : energyPct < 0.6 ? "#ffcc44" : "#88ff88";
-  v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
+  if (energyCap > 0) v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
+  else v.text("Gold: no barracks yet", x, y, dimStyle);
   y += lineH;
 
   const books = Memory.exchequer?.[room.name];
