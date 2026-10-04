@@ -186,6 +186,20 @@ describe("remote player strikes", () => {
     expect(log.map((l) => l.text)).toEqual(["The men of Rival hold the wilds of W2N1. The vendors keep away."]);
   });
 
+  it("remembers who holds the remote for the realm map until it is clear again", () => {
+    const e = entry();
+    g.Game = { time: 10_000 };
+    markRemotePlayerHostile(e, "Rival");
+    expect(e.rival).toBe("Rival");
+    // A later sighting with no name to give keeps the one already known.
+    markRemotePlayerHostile(e);
+    expect(e.rival).toBe("Rival");
+
+    g.Game = { time: 10_100 };
+    clearRemotePlayerHostile(e);
+    expect(e.rival).toBeUndefined();
+  });
+
   it("forgives one strike per clean window", () => {
     // Three strikes, the last window having ended at tick 1000.
     const e = { ...entry(), hostile: true, hostileStrikes: 3, hostileUntil: 1000 };

@@ -89,6 +89,27 @@ describe("realm map", () => {
     expect((lines[0].args[1] as RoomPosition).roomName).toBe("W2N1");
   });
 
+  it("names the rival who holds a remote the vendors keep away from", () => {
+    world(
+      [creep(ROLE_REMOTE_MINER, "W2N1", "W2N1")],
+      [
+        { roomName: "W2N1", hostile: true, hostileUntil: 2000, rival: "Oleksii", sources: [] },
+        // Held once, but the hold has lapsed.
+        { roomName: "W1N2", hostile: true, hostileUntil: 900, rival: "Mordred", sources: [] },
+        { roomName: "W0N1", hostile: true, hostileUntil: 2000, sources: [] },
+      ]
+    );
+
+    drawRealmMap();
+
+    const texts = drawn.filter((d) => d.kind === "text").map((d) => d.args[0]);
+    expect(texts).toContain("held by Oleksii");
+    expect(texts).toContain("held by strangers");
+    expect(texts.some((t) => String(t).includes("Mordred"))).toBe(false);
+    // The road is drawn only to the remote a peddler still works.
+    expect(drawn.filter((d) => d.kind === "line")).toHaveLength(1);
+  });
+
   it("marks a raided remote and the keep being saved for", () => {
     world(
       [creep(ROLE_REMOTE_MINER, "W2N1", "W2N1")],

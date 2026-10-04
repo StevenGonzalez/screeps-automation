@@ -181,6 +181,8 @@ declare global {
     hostile: boolean;
     hostileUntil?: number;
     hostileStrikes?: number;
+    // The player whose creeps or reservation made the remote hostile, if known.
+    rival?: string;
     invaderUntil?: number;
     // Last Invader force seen there (creeps plus any core), to size the defenders.
     invaderStrength?: { heal: number; damage: number; hits: number };

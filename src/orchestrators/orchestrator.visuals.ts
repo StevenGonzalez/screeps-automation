@@ -45,8 +45,9 @@ const MAP_DANGER = "#e05a5a";
 const MAP_KEEP = "#b06bff";
 
 // The realm on the world map: each castle's name over its room, a road to
-// each remote its peddlers work (red while raiders or rivals hold it), and the
-// keep it is founding or saving for.
+// each remote its peddlers work (red while raiders or rivals hold it), the
+// name of any rival holding one of its remotes, and the keep it is founding or
+// saving for.
 export function drawRealmMap(): void {
   const mv = Game.map.visual;
   const worked: Record<string, Set<string>> = {};
@@ -69,11 +70,17 @@ export function drawRealmMap(): void {
     mv.text(`RCL ${room.controller.level}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
 
     for (const remote of room.memory.remoteRooms ?? []) {
-      if (!worked[roomName]?.has(remote.roomName)) continue;
-      const raided = remote.hostile || (remote.invaderUntil ?? 0) > Game.time;
+      const ours = worked[roomName]?.has(remote.roomName) ?? false;
+      // A rival's hold is shown whether or not a peddler is still there.
+      const held = remote.hostile && (remote.hostileUntil ?? 0) > Game.time;
+      if (!ours && !held) continue;
+      const raided = held || (remote.invaderUntil ?? 0) > Game.time;
       const colour = raided ? MAP_DANGER : MAP_GOLD;
-      mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
-      mv.text(raided ? "raided" : "vendors", new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
+      if (ours) {
+        mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
+      }
+      const label = held ? `held by ${remote.rival ?? "strangers"}` : raided ? "raided" : "vendors";
+      mv.text(label, new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
     }
   }
 

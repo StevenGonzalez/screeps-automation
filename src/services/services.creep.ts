@@ -229,10 +229,12 @@ export function markRemotePlayerHostile(entry: RemoteRoomData, who?: string): vo
   );
   entry.hostile = true;
   entry.hostileUntil = Game.time + window;
+  if (who) entry.rival = who;
 }
 
 export function clearRemotePlayerHostile(entry: RemoteRoomData): void {
   entry.hostile = false;
+  delete entry.rival;
   // Forgive one strike per clean window rather than all of them on the first
   // clean look, so a player who keeps coming back still escalates the backoff.
   // While strikes remain, hostileUntil (never left in the future) marks where
