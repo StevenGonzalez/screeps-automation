@@ -105,15 +105,21 @@ function collectEnergy(creep: Creep, targetRoom: string) {
   }
 
   const container = findBestContainer(creep);
-  if (container) {
+  // A miner on a full container drops its harvest on the ground, where it
+  // decays, while the container's own store keeps. Take the pile by the
+  // container first.
+  const dropped = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
+    filter: (d) =>
+      d.resourceType === RESOURCE_ENERGY &&
+      d.amount >= 50 &&
+      (!container || d.pos.inRangeTo(container, 1)),
+  }) as Resource | null;
+  if (container && !dropped) {
     const res = creep.withdraw(container, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) creep.moveTo(container, { reusePath: 30 });
     return;
   }
 
-  const dropped = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
-    filter: (d) => d.resourceType === RESOURCE_ENERGY && d.amount >= 50,
-  }) as Resource | null;
   if (dropped) {
     const res = creep.pickup(dropped);
     if (res === ERR_NOT_IN_RANGE) creep.moveTo(dropped, { reusePath: 10 });
