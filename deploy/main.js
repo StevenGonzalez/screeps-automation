@@ -7212,6 +7212,7 @@ function heraldRooms() {
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
             castles.push(room);
             heraldRise(room);
+            heraldFirstBorn(room);
             heraldVisitors(room);
             heraldWorks(room);
         }
@@ -7396,6 +7397,21 @@ function heraldRise(room) {
         return;
     roomCries[room.name] = "Long live!";
     chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+}
+function heraldFirstBorn(room) {
+    var _a, _b;
+    if (((_a = Memory.expansion) === null || _a === void 0 ? void 0 : _a.roomName) !== room.name || room.memory.heraldBorn)
+        return;
+    const birth = (_b = room.find(FIND_MY_SPAWNS).find((s) => s.spawning)) === null || _b === void 0 ? void 0 : _b.spawning;
+    if (!birth)
+        return;
+    room.memory.heraldBorn = true;
+    for (const name in Game.creeps) {
+        if (name !== birth.name && Game.creeps[name].memory.homeRoom === room.name)
+            return;
+    }
+    roomCries[room.name] = "Huzzah!";
+    chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
 }
 const BATTLE_WINDOW = 300;
 function whereIn(roomName) {
