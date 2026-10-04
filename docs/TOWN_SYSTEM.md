@@ -219,9 +219,9 @@ over the realm."). On any clear night a star falls now and then. Both follow fro
 number and the tick alone, so every castle sees the same sky.
 
 The room HUD shows the part of the day, the hour, the season, any feast, any
-storm and, after dark, the moon and any northern lights: `Day, 10:00 in
-autumn, Harvest Home  8 townsfolk`, or `Night, 23:00 in winter, full moon,
-northern lights  8 townsfolk`.
+storm and, after dark, the moon and any northern lights, then how many
+townsfolk there are: `Day, 10:00 in autumn, Harvest Home · 8 townsfolk`, or
+`Night, 23:00 in winter, full moon, northern lights · 8 townsfolk`.
 
 ---
 

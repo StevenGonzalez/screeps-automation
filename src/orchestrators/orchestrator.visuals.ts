@@ -274,7 +274,8 @@ function drawRoomHUD(room: Room) {
     const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
     const aurora = townAurora(Game.time) ? ", northern lights" : "";
     const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}${aurora}`;
-    v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+    const people = folk > 0 ? `  ·  ${folk} townsfolk` : "";
+    v.text(`${icon} ${when}${people}`, x, y, { ...style, color: "#ffe9a8" });
     y += lineH;
   }
 
