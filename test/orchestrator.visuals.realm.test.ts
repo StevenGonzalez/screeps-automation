@@ -5,7 +5,7 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
-import { describeCensus, drawRealmMap } from "../src/orchestrators/orchestrator.visuals";
+import { describeCensus, drawGraves, drawRealmMap } from "../src/orchestrators/orchestrator.visuals";
 import {
   ROLE_FILLER,
   ROLE_HAULER,
@@ -102,5 +102,28 @@ describe("realm map", () => {
     expect(texts).toContain("raided");
     expect(texts).toContain("keep planned");
     expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(1);
+  });
+});
+
+describe("graves", () => {
+  it("marks the tombstones of ours with their names, and no one else's", () => {
+    const tombs = [
+      { pos: { x: 10, y: 12 }, creep: { my: true, name: "Merchant Leofric" } },
+      { pos: { x: 30, y: 30 }, creep: { my: false, name: "Invader123" } },
+    ];
+    const visual = {
+      text: (...args: unknown[]) => drawn.push({ kind: "text", args }),
+      line: (...args: unknown[]) => drawn.push({ kind: "line", args }),
+    };
+    const room = {
+      name: "W2N1",
+      visual,
+      find: (_type: number, opts?: { filter: (t: unknown) => boolean }) => tombs.filter(opts?.filter ?? (() => true)),
+    } as unknown as Room;
+
+    drawGraves(room);
+
+    expect(drawn.filter((d) => d.kind === "text").map((d) => d.args[0])).toEqual(["Merchant Leofric"]);
+    expect(drawn.filter((d) => d.kind === "line")).toHaveLength(2);
   });
 });

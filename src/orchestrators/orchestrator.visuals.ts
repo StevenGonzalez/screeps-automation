@@ -15,6 +15,7 @@ const PHASE_LABEL: Record<string, string> = {
 export function loop() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
+    drawGraves(room);
     if (!room.controller?.my) continue;
     drawRoomHUD(room);
     drawChronicle(room);
@@ -22,6 +23,21 @@ export function loop() {
     drawBlueprint(room);
   }
   drawRealmMap();
+}
+
+const GRAVE_STONE: LineStyle = { color: "#c8c0b0", width: 0.08, opacity: 0.8 };
+const GRAVE_LABEL: TextStyle = { font: 0.35, color: "#b8a88a", stroke: "#000000", strokeWidth: 0.05, opacity: 0.8 };
+
+// A grave marker with a name over each tombstone one of ours left, in any room
+// we can see, for as long as the tombstone lasts.
+export function drawGraves(room: Room): void {
+  const tombs = room.find(FIND_TOMBSTONES, { filter: (t) => t.creep.my });
+  for (const t of tombs) {
+    const { x, y } = t.pos;
+    room.visual.line(x, y - 0.4, x, y + 0.3, GRAVE_STONE);
+    room.visual.line(x - 0.2, y - 0.2, x + 0.2, y - 0.2, GRAVE_STONE);
+    room.visual.text(t.creep.name, x, y - 0.55, GRAVE_LABEL);
+  }
 }
 
 const MAP_GOLD = "#f2c14e";
