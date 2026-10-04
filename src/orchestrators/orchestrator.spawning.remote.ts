@@ -118,8 +118,16 @@ const MAX_REMOTE_SOURCES = 6;
 // defenders and for replacements that happen to come due together.
 const REMOTE_SPAWN_SHARE = 0.8;
 
-// Share of the remote budget a new source must leave spare to be taken on.
-const REMOTE_PICK_HEADROOM = 0.1;
+// Share of the home's remote spawn time a source not yet worked must leave
+// spare to be taken on. Embercrag's budget swung by 90 to 120 ticks as each
+// enchanter, mason or barmaid died and was replaced. A tenth of what was spare,
+// about 65 ticks there, let it take on a source in such a dip, send a peddler
+// and lay road sites to it, and drop it again when the creep was replaced.
+const REMOTE_PICK_HEADROOM = 0.2;
+
+// A source picked within this many ticks holds its place without the
+// headroom, so a worked source is not lost while its miner is being replaced.
+const REMOTE_PICK_HOLD = 100;
 
 // Below this bucket, keep working the remotes already mined but add none. A
 // bucket refilling after a pixel is not short of CPU: under the floor there, a
@@ -215,8 +223,11 @@ const PASSING_ROLES = new Set<string>([
 
 // Spawn time per creep lifetime the home has left for remotes, after what its
 // own creeps (and anything else it keeps up) already take.
+function remoteSpawnCapacity(room: Room): number {
+  return room.find(FIND_MY_SPAWNS).length * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE;
+}
+
 function remoteSpawnBudget(room: Room): number {
-  const spawns = room.find(FIND_MY_SPAWNS).length;
   let used = 0;
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
@@ -224,7 +235,7 @@ function remoteSpawnBudget(room: Room): number {
     if ((c.memory.homeRoom ?? c.room.name) !== room.name) continue;
     used += c.body.length * CREEP_SPAWN_TIME;
   }
-  return spawns * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE - used;
+  return remoteSpawnCapacity(room) - used;
 }
 
 const remotePickCache: Record<
@@ -261,14 +272,17 @@ function pickRemoteSources(room: Room): Map<string, number> {
   plans.sort((a, b) => b.profit - a.profit);
 
   // The budget counts live creeps, so it breathes as home creeps die and are
-  // replaced. A source not yet mined has to fit with REMOTE_PICK_HEADROOM to
-  // spare, so that breathing does not keep adding and dropping the marginal one.
-  const total = remoteSpawnBudget(room);
-  let budget = total;
+  // replaced. A source mined or picked of late stays while it fits; one not yet
+  // worked has to fit with REMOTE_PICK_HEADROOM to spare, so that breathing
+  // does not keep adding and dropping the marginal one.
+  const recent = cached && Game.time - cached.tick <= REMOTE_PICK_HOLD ? cached.picked : undefined;
+  const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
+  let budget = remoteSpawnBudget(room);
   const picked = new Map<string, number>();
   for (const p of plans) {
     if (picked.size >= MAX_REMOTE_SOURCES) break;
-    const reserve = mined.has(p.sourceId as Id<Source>) ? 0 : total * REMOTE_PICK_HEADROOM;
+    const held = mined.has(p.sourceId as Id<Source>) || recent?.has(p.sourceId);
+    const reserve = held ? 0 : headroom;
     if (p.spawnTime > budget - reserve) continue;
     budget -= p.spawnTime;
     picked.set(p.sourceId, picked.size);

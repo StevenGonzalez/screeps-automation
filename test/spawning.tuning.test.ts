@@ -184,11 +184,12 @@ describe("remote picks look past invaders", () => {
     const remotes = [remote("W4N5", false), remote("W6N5", false)];
     let busy = 0;
     // Find a load where both fit only when the mined one needs no headroom.
+    // Each look is long after the last, so no recent pick holds a place.
     for (let n = 0; n < 160; n++) {
       const fresh = getPickedRemoteRoomNames(home(remotes, upgraders(n)));
-      clock += 1;
+      clock += 1_000;
       const withMiner = getPickedRemoteRoomNames(home(remotes, [...upgraders(n), miner]));
-      clock += 1;
+      clock += 1_000;
       if (withMiner.size > fresh.size) {
         busy = n;
         expect(withMiner.has("W6N5")).toBe(true);

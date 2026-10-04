@@ -111,14 +111,14 @@ describe("remote source ranking", () => {
   it("works only the sources the home's spawn time covers, best first", () => {
     const remotes = [remote("W6N5", [120]), remote("W4N5", [30])];
     // One spawn, already mostly busy keeping the home's own creeps alive.
-    const busy = Array.from({ length: 20 }, () => creep(ROLE_UPGRADER, 16));
+    const busy = Array.from({ length: 16 }, () => creep(ROLE_UPGRADER, 16));
     const room = home({ remotes, creeps: busy });
     expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
   });
 
   it("keeps its remotes while pilgrims and a dragon knight are out", () => {
     const remotes = [remote("W4N5", [30])];
-    const busy = Array.from({ length: 20 }, () => creep(ROLE_UPGRADER, 16));
+    const busy = Array.from({ length: 16 }, () => creep(ROLE_UPGRADER, 16));
     const passing = [33, 30, 33].map((n) => creep(ROLE_SETTLER, n)).concat(creep(ROLE_KNIGHT, 40));
     const room = home({ remotes, creeps: busy.concat(passing) });
     expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
@@ -126,7 +126,7 @@ describe("remote source ranking", () => {
 
   it("takes on more remotes as the home adds spawns", () => {
     const remotes = [remote("W6N5", [60, 70]), remote("W4N5", [30, 40]), remote("W5N6", [50])];
-    const busy = Array.from({ length: 18 }, () => creep(ROLE_UPGRADER, 16));
+    const busy = Array.from({ length: 14 }, () => creep(ROLE_UPGRADER, 16));
     const one = sourceIds(getActiveRemoteRooms(home({ remotes, spawns: 1, creeps: busy })));
     clock += 1;
     const three = sourceIds(getActiveRemoteRooms(home({ remotes, spawns: 3, creeps: busy })));
@@ -134,6 +134,22 @@ describe("remote source ranking", () => {
     expect(one.length).toBeLessThan(5);
     expect(three).toHaveLength(5);
     expect(three.slice(0, one.length)).toEqual(one);
+  });
+
+  it("takes on no new remote in a dip of one or two home creeps", () => {
+    // The source fits the budget by 190 ticks, under two creeps of 33 parts.
+    const remotes = [remote("W4N5", [30])];
+    const busy = Array.from({ length: 18 }, () => creep(ROLE_UPGRADER, 16));
+    expect(getActiveRemoteRooms(home({ remotes, creeps: busy }))).toEqual([]);
+  });
+
+  it("keeps a remote it took on while the home fills out and its miner is replaced", () => {
+    const remotes = [remote("W4N5", [30])];
+    const room = home({ remotes, creeps: Array.from({ length: 14 }, () => creep(ROLE_UPGRADER, 16)) });
+    expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
+    clock += 1;
+    const fuller = home({ remotes, creeps: Array.from({ length: 18 }, () => creep(ROLE_UPGRADER, 16)) });
+    expect(sourceIds(getActiveRemoteRooms(fuller))).toEqual(["W4N5-s0"]);
   });
 
   it("never works more than six sources, however much spawn time there is", () => {
