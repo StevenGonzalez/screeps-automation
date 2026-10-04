@@ -881,6 +881,8 @@ const COTTAGE_FAMILIES = [
     "Thatcher",
     "Wren",
 ];
+const SCENERY_BEGIN = "scenery:begin";
+const SCENERY_END = "scenery:end";
 
 function townClock(time) {
     const t = time % TOWN_DAY_LENGTH;
@@ -12530,6 +12532,7 @@ const ROLE_CHATTER = {
     [ROLE_CONQUEROR]: ["kneel!", "my castle", "bow!"],
     [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
     [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
+    [ROLE_APOTHECARY]: ["hee hee!", "potions!", "bubbling"],
     [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
     [ROLE_MINSTREL]: ["encore!", "a coin?", "♪ tra la ♪"],
 };
@@ -18752,15 +18755,23 @@ function loop$1() {
             continue;
         drawRoomHUD(room);
         drawChronicle(room);
-        drawSeason(room);
+        scenery(room, () => drawSeason(room));
         drawLandmarks(room);
-        drawSky(room);
-        drawCamp(room);
-        drawTown(room);
-        drawDragon(room);
+        scenery(room, () => {
+            drawSky(room);
+            drawCamp(room);
+            drawTown(room);
+            drawDragon(room);
+        });
         drawBlueprint(room);
     }
     drawRealmMap();
+}
+const MARKER = { opacity: 0 };
+function scenery(room, draw) {
+    room.visual.text(SCENERY_BEGIN, 0, 0, MARKER);
+    draw();
+    room.visual.text(SCENERY_END, 0, 0, MARKER);
 }
 const GRAVE_STONE = { color: "#c8c0b0", width: 0.08, opacity: 0.8 };
 const GRAVE_LABEL = { font: 0.35, color: "#b8a88a", stroke: "#000000", strokeWidth: 0.05, opacity: 0.8 };
