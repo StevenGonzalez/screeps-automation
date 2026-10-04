@@ -13641,7 +13641,8 @@ function planSavings() {
     if ((plan === null || plan === void 0 ? void 0 : plan.room) === home && plan.target === next.roomName)
         return;
     Memory.expansionSavings = { room: home, target: next.roomName };
-    chronicle(`${castleName(home)} fills its coffers to found a keep in the ${wildsName(next.roomName)}.`);
+    const after = Memory.expansion && Memory.expansion.phase !== "established" ? "the next keep, " : "a keep ";
+    chronicle(`${castleName(home)} fills its coffers to found ${after}in the ${wildsName(next.roomName)}.`);
 }
 
 const BODY_PATTERNS = {
