@@ -597,8 +597,17 @@ export function shouldSpawnMineralMiner(room: Room): boolean {
   return countByRoleInRoom(ROLE_MINERAL_MINER, room) === 0;
 }
 
+// Upkeep alone is light work. Embercrag's roads and containers wore about 60
+// hits a tick between them, with the towers holding the ramparts, while a full
+// 33-part blacksmith repairs 1,100 and cost 2,200 gold and 99 ticks of a busy
+// spawn. One sent only for upkeep is four sets; the walls take a full one.
+const UPKEEP_SMITH_ENERGY = 4 * 200;
+
 export function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
-  const allowedEnergy = bodyBudget(room, "available");
+  const nukeDefense = Object.keys(room.memory.nukeDefense?.tiles ?? {}).length > 0;
+  const available = bodyBudget(room, "available");
+  const allowedEnergy =
+    wallSmithFunded(room) || nukeDefense ? available : Math.min(available, UPKEEP_SMITH_ENERGY);
   const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
   const res = trackedSpawn(room, spawn, body, {
     memory: { role: ROLE_REPAIRER, homeRoom: room.name },

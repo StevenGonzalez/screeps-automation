@@ -5,8 +5,9 @@ g.FIND_STRUCTURES = 107;
 g.FIND_HOSTILE_CREEPS = 103;
 g.STRUCTURE_WALL = "constructedWall";
 g.RESOURCE_ENERGY = "energy";
+g.OK = 0;
 
-import { getRepairerPopulationTarget } from "../src/orchestrators/orchestrator.spawning.economy";
+import { getRepairerPopulationTarget, spawnRepairer } from "../src/orchestrators/orchestrator.spawning.economy";
 
 let tick = 5000;
 
@@ -66,5 +67,35 @@ describe("repairer population", () => {
     g.Game = { time: tick };
     g.Memory = { expansionSavings: { room: `W1N1-${tick}`, target: "W1N2" } };
     expect(getRepairerPopulationTarget(plannedRoom([rampart], 60_000))).toBe(1);
+  });
+});
+
+describe("blacksmith body", () => {
+  beforeEach(() => {
+    tick += 100;
+  });
+
+  function spawnedBody(stored: number): string[] {
+    const room = plannedRoom([], stored) as unknown as Record<string, unknown>;
+    room.energyAvailable = 2300;
+    room.energyCapacityAvailable = 2300;
+    g.Game = { time: tick, creeps: {}, rooms: { [room.name as string]: room } };
+    g.Memory = { creeps: {}, expansionSavings: { room: room.name, target: "W1N2" } };
+    let body: string[] = [];
+    const spawn = { spawnCreep: (b: string[]) => ((body = b), 0) };
+    spawnRepairer(room as unknown as Room, spawn as unknown as StructureSpawn);
+    return body;
+  }
+
+  it("raises a small one for upkeep while the walls wait on the treasury", () => {
+    // Embercrag's roads and containers wore about 60 hits a tick between them,
+    // and the towers hold the ramparts. A full 33-part blacksmith repairs 1,100.
+    const upkeep = spawnedBody(45_500);
+    expect(upkeep.filter((p) => p === WORK).length).toBeLessThanOrEqual(4);
+    expect(upkeep.length).toBeGreaterThan(0);
+  });
+
+  it("raises a full one when there is gold for the walls", () => {
+    expect(spawnedBody(60_000)).toHaveLength(33);
   });
 });
