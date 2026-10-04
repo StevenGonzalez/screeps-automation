@@ -9070,7 +9070,7 @@ function runConqueror(creep) {
     else if (result === OK) {
         Memory.expansion.phase = "bootstrapping";
         console.log(`[Expansion] Claimed ${targetRoom}!`);
-        chronicle(`The Crown's banner rises over ${targetRoom}. The keep of ${castleName(targetRoom)} is founded.`);
+        chronicle(`The Crown's banner rises over the ${wildsName(targetRoom)}. The keep of ${castleName(targetRoom)} is founded.`);
         try {
             const sig = pickSignature(creep.room.name);
             const sres = creep.signController(controller, sig);
