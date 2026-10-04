@@ -3621,6 +3621,7 @@ const REMOTE_INVADER_WINDOW = 1500;
 const REMOTE_PLAYER_WINDOW = 2000;
 const REMOTE_PLAYER_WINDOW_MAX = 20000;
 const RIVAL_CHRONICLE_WINDOW = 5000;
+const RAID_CHRONICLE_WINDOW = 10;
 function assignedRemoteEntry(creep) {
     var _a, _b;
     const home = creep.memory.homeRoom;
@@ -3648,9 +3649,10 @@ function markRemoteInvader(entry, room) {
     entry.invaderStrength = invaderStrength(room);
     if (!fresh)
         return;
-    chronicle(findInvaderCore(room)
+    const text = findInvaderCore(room)
         ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
-        : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`);
+        : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`;
+    tally(`raid:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
 }
 function flagRemoteDamage(creep) {
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
@@ -3704,11 +3706,14 @@ function isAssignedRemoteInvaded(creep) {
 }
 function clearRemoteInvader(creep) {
     const entry = assignedRemoteEntry(creep);
-    if (!entry)
-        return;
+    if (entry)
+        clearRemoteInvaderEntry(entry);
+}
+function clearRemoteInvaderEntry(entry) {
     if (entry.invaderUntil !== undefined) {
         if (entry.invaderUntil > Game.time) {
-            chronicle(`The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`);
+            const text = `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
+            tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
         }
         entry.invaderUntil = undefined;
     }
@@ -9036,7 +9041,8 @@ function refreshVisibleRemoteRooms(room) {
         if (applyRemoteControllerStatus(remote, visible.controller, (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.owner) === null || _b === void 0 ? void 0 : _b.username)) {
             continue;
         }
-        if (findInvaderCore(visible))
+        const core = findInvaderCore(visible);
+        if (core)
             markRemoteInvader(remote, visible);
         const hostiles = remoteThreats(visible);
         const player = hostiles.find(isPlayerCreep);
@@ -9055,6 +9061,8 @@ function refreshVisibleRemoteRooms(room) {
             continue;
         }
         clearRemotePlayerHostile(remote);
+        if (!core)
+            clearRemoteInvaderEntry(remote);
         const sources = visible.find(FIND_SOURCES);
         for (const source of sources) {
             let entry = remote.sources.find((s) => s.sourceId === source.id);
@@ -16524,6 +16532,9 @@ function remoteKnightsNeeded(room, remote) {
     return meleeDefendersToWin(remote.invaderStrength, body, REMOTE_KNIGHT_CAP);
 }
 function findRemoteInvaderTarget(room) {
+    var _a, _b;
+    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) < 3)
+        return null;
     const remotes = room.memory.remoteRooms;
     if (!remotes)
         return null;
