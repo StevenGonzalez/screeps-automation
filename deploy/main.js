@@ -4582,15 +4582,15 @@ const PRICE_HISTORY_LEN = 20;
 const BASE_MINERALS = ['H', 'O', 'Z', 'K', 'U', 'L', 'X'];
 const NON_SELLABLE = new Set([...BASE_MINERALS, RESOURCE_GHODIUM, RESOURCE_ENERGY]);
 const SEND_STALL_TIMEOUT = 1500;
-let orderBookCache = null;
-let orderBookCacheTick = -Infinity;
+const orderBookCache = {};
 const ORDER_BOOK_CACHE_TTL = 15;
-function getMarketOrders(filter) {
-    if (!orderBookCache || Game.time - orderBookCacheTick >= ORDER_BOOK_CACHE_TTL) {
-        orderBookCache = Game.market.getAllOrders();
-        orderBookCacheTick = Game.time;
+function getMarketOrders(resource, filter) {
+    let hit = orderBookCache[resource];
+    if (!hit || Game.time - hit.tick >= ORDER_BOOK_CACHE_TTL) {
+        hit = { tick: Game.time, orders: Game.market.getAllOrders({ resourceType: resource }) };
+        orderBookCache[resource] = hit;
     }
-    return orderBookCache.filter(filter);
+    return hit.orders.filter(filter);
 }
 const historyAvgCache = {};
 let historyAvgCacheTick = -Infinity;
@@ -4792,7 +4792,7 @@ function buyMissingGhodium(room, terminal) {
     if (stock >= target)
         return false;
     const needed = target - stock;
-    const orders = getMarketOrders((o) => o.type === ORDER_SELL &&
+    const orders = getMarketOrders(RESOURCE_GHODIUM, (o) => o.type === ORDER_SELL &&
         o.resourceType === RESOURCE_GHODIUM &&
         o.price <= GHODIUM_CONFIG.MAX_PRICE &&
         !!o.roomName &&
@@ -5014,7 +5014,7 @@ function sellResourceToMarket(room, terminal, resource, availableAmount, maxTrad
     let bestOrderId = null;
     let bestOrderRoom = "";
     let bestOrderAmount = 0;
-    const orders = getMarketOrders((order) => {
+    const orders = getMarketOrders(resource, (order) => {
         if (order.type !== ORDER_BUY || order.resourceType !== resource)
             return false;
         if (!order.roomName || order.amount <= 0)
@@ -5122,7 +5122,7 @@ function buyMissingMinerals(room, terminal) {
         if (avg === undefined)
             continue;
         const maxPrice = avg * BUY_CONFIG.MAX_PRICE_RATIO;
-        const orders = getMarketOrders((o) => o.type === ORDER_SELL &&
+        const orders = getMarketOrders(mineral, (o) => o.type === ORDER_SELL &&
             o.resourceType === mineral &&
             !!o.roomName &&
             o.amount > 0 &&
@@ -5169,7 +5169,7 @@ function tradeEnergy(room, terminal) {
 }
 function sellEnergyToMarket(room, terminal, amount) {
     let best = null;
-    const orders = getMarketOrders((o) => {
+    const orders = getMarketOrders(RESOURCE_ENERGY, (o) => {
         if (o.type !== ORDER_BUY || o.resourceType !== RESOURCE_ENERGY)
             return false;
         if (!o.roomName || o.amount <= 0)
@@ -5203,7 +5203,7 @@ function sellEnergyToMarket(room, terminal, amount) {
     return false;
 }
 function buyCheapEnergy(room, terminal) {
-    const orders = getMarketOrders((o) => {
+    const orders = getMarketOrders(RESOURCE_ENERGY, (o) => {
         if (o.type !== ORDER_SELL || o.resourceType !== RESOURCE_ENERGY)
             return false;
         if (!o.roomName || o.amount <= 0)
@@ -5284,7 +5284,7 @@ function fairSellPrice(resource) {
     const floorAvg = recentAvgPrice(resource);
     const histAvg = getMarketHistoryAvg(resource);
     let bestAsk;
-    const asks = getMarketOrders((o) => o.type === ORDER_SELL &&
+    const asks = getMarketOrders(resource, (o) => o.type === ORDER_SELL &&
         o.resourceType === resource &&
         o.amount > 0 &&
         !(o.id in Game.market.orders));
