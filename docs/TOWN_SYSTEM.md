@@ -214,7 +214,8 @@ dark beyond the walls every 50 ticks; the whole castle starts at each howl
 howled beneath the full moon outside the walls of Embercrag.").
 
 On about one winter night in three the northern lights hang over the realm,
-and on any clear night a star falls now and then. Both follow from the day's
+and the chronicle notes them as night falls ("The northern lights burned green
+over the realm."). On any clear night a star falls now and then. Both follow from the day's
 number and the tick alone, so every castle sees the same sky.
 
 The room HUD shows the part of the day, the hour, the season, any feast, any

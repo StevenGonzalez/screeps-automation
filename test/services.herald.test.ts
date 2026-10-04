@@ -17,7 +17,7 @@ g.Creep = FakeCreep;
 
 import { cryFor, cryFlight, heraldRooms, settleFlight } from "../src/services/services.herald";
 import { annal, castleName } from "../src/services/services.chronicle";
-import { townDragon } from "../src/services/services.town";
+import { townAurora, townDragon } from "../src/services/services.town";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
 const ROOM = "W1N1";
@@ -329,6 +329,19 @@ describe("herald", () => {
 
     const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("Wolves"));
     expect(lines).toEqual([`Wolves howled beneath the full moon outside the walls of ${castleName(ROOM)}.`]);
+  });
+
+  it("chronicles the northern lights once, as night falls", () => {
+    let day = 0;
+    while (!townAurora(day * TOWN_DAY_LENGTH + 800)) day++;
+    const night = day * TOWN_DAY_LENGTH + 700;
+    const room = roomWith([], { my: true, level: 6 });
+    for (const time of [night - 1, night, night + 1, night + 200]) {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {}, getObjectById: () => null };
+      heraldRooms();
+    }
+    const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => /light|Ribbons/.test(t));
+    expect(lines).toHaveLength(1);
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {

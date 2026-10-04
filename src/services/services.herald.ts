@@ -5,7 +5,7 @@
 
 import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
-import { townDragon, townFeast, townHowl, townSeason } from "./services.town";
+import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 
@@ -49,6 +49,7 @@ export function heraldRooms(): void {
   heraldRenown();
   heraldTrade();
   heraldSeason();
+  heraldSky();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (room.controller?.my) {
@@ -212,6 +213,19 @@ function heraldWolves(room: Room): void {
   if (!howl || howl.t !== 0) return;
   roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
   if (howl.n === 0) chronicle(`Wolves howled beneath the full moon outside the walls of ${castleName(room.name)}.`);
+}
+
+// The northern lights hang over the whole realm at once, so the chronicle
+// notes them once, as night falls.
+const AURORA_TIDINGS = [
+  "The northern lights burned green over the realm.",
+  "Green fire danced in the winter sky. The old folk say the dead were dancing.",
+  "Ribbons of light rippled over the battlements all night long.",
+];
+
+function heraldSky(): void {
+  if (Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townAurora(Game.time)) return;
+  chronicle(AURORA_TIDINGS[Math.floor(Game.time / TOWN_DAY_LENGTH) % AURORA_TIDINGS.length]);
 }
 
 // The whole room cheers when the castle reaches a new controller level.
