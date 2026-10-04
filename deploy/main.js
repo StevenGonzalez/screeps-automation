@@ -11629,6 +11629,9 @@ function recordRole(role, used) {
     if (used > s.peak)
         s.peak = used;
 }
+function getRoleStats() {
+    return roleStats;
+}
 
 const ROLE_HANDLERS = {
     [ROLE_HARVESTER]: runHarvester,
@@ -18756,6 +18759,13 @@ function setupConsole() {
             const total = rows.reduce((sum, [, s]) => sum + s.ema, 0);
             console.log(`[CPU] limit=${Game.cpu.limit} bucket=${Game.cpu.bucket} avgTotal=${total.toFixed(2)}`);
             for (const [name, s] of rows) {
+                console.log(`  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`);
+            }
+            const roles = Object.entries(getRoleStats()).sort((a, b) => b[1].ema - a[1].ema);
+            if (roles.length === 0)
+                return;
+            console.log(`[CPU] per creep, by role${Memory.profileRoles ? "" : " (stale: Memory.profileRoles is off)"}`);
+            for (const [name, s] of roles) {
                 console.log(`  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`);
             }
         },
