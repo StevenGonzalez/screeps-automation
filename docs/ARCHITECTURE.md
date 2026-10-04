@@ -264,7 +264,9 @@ Every spawned creep is named by its role title and a given name, such as
 "Mason Aldric" or "Dragon Knight Edric" (`creepName` in
 `orchestrators/orchestrator.spawning.shared.ts`, titles in `ROLE_TITLES` in
 `config/config.roles.ts`). A name is reused only after its bearer has died and
-its entry has left Memory.
+its entry has left Memory. A recruit takes a given name that no living creep of
+any role wears while one is free, so creeps that hail each other by given name
+are rarely mistaken for one another.
 
 Creeps also shout when something happens (`services/services.herald.ts`). A creep
 that lands the killing blow on a hostile shouts a kill cry and adds the kill to

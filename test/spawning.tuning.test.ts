@@ -224,6 +224,24 @@ describe("creep names", () => {
     expect(creepName(ROLE_UPGRADER)).not.toBe(third);
   });
 
+  it("gives a name no creep of another role wears while one is free", () => {
+    storageRoom(0);
+    const given = (name: string) => name.slice(name.lastIndexOf(" ") + 1);
+    const first = creepName(ROLE_UPGRADER);
+    (g.Game as any).creeps[`Miner ${given(first)}`] = {};
+    expect(given(creepName(ROLE_UPGRADER))).not.toBe(given(first));
+  });
+
+  it("shares a given name with another role once every one is worn", () => {
+    storageRoom(0);
+    for (let i = 0; i < 200; i++) {
+      const name = creepName(ROLE_UPGRADER);
+      if (/\d/.test(name)) break;
+      (g.Game as any).creeps[name.replace("Enchanter", "Miner")] = {};
+    }
+    expect(creepName(ROLE_UPGRADER)).toMatch(/^Enchanter [A-Z][a-z]+$/);
+  });
+
   it("skips a name on a fresh grave in the room", () => {
     const room = storageRoom(0);
     const first = creepName(ROLE_UPGRADER, room);

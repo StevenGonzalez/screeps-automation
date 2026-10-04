@@ -99,23 +99,34 @@ const GIVEN_NAMES = [
   "Isolde", "Ivo", "Jocelin", "Kenric", "Leofric", "Lucan", "Maud", "Merek",
   "Mordred", "Morwen", "Osric", "Percival", "Roderick", "Rowena", "Sigmund", "Sybil",
   "Thorne", "Tristan", "Ulric", "Wulfric", "Ysolde", "Varian",
+  "Adela", "Alaric", "Alys", "Amice", "Ansel", "Avice", "Baldwin", "Benedict",
+  "Conrad", "Cuthbert", "Drogo", "Edmund", "Elinor", "Emma", "Eustace", "Felice",
+  "Gervase", "Hamo", "Helewise", "Hereward", "Hugh", "Joan", "Juliana", "Lambert",
+  "Mabel", "Matilda", "Muriel", "Nesta", "Odo", "Osbert", "Oswin", "Piers",
+  "Ralph", "Rohese", "Sabina", "Simon", "Theobald", "Walter", "Warin", "Wystan",
 ];
 
 // A creep is named for its role and a given name: "Mason Aldric". A name worn
 // by a live creep, still in Memory, or handed out this tick is skipped, so
 // names come free again only once their bearer is dead and buried. A name on
 // a grave in the room is skipped too, so a new recruit does not muster under
-// the name on a fresh headstone.
+// the name on a fresh headstone. A given name no creep of any role wears comes
+// first, so a keep does not fill with Sybils who all answer to the same hail.
 export function creepName(role: string, room?: Room): string {
   freshIssued();
   const title = ROLE_TITLES[role] ?? role;
   const graves = new Set(room ? room.find(FIND_TOMBSTONES).map((t) => t.creep.name) : []);
+  const worn = new Set([...Object.keys(Game.creeps), ...issuedNames].map((n) => n.slice(n.lastIndexOf(" ") + 1)));
   const start = Game.time % GIVEN_NAMES.length;
+  let shared: string | undefined;
   for (let i = 0; i < GIVEN_NAMES.length; i++) {
-    const name = `${title} ${GIVEN_NAMES[(start + i) % GIVEN_NAMES.length]}`;
-    if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name) && !graves.has(name)) return name;
+    const given = GIVEN_NAMES[(start + i) % GIVEN_NAMES.length];
+    const name = `${title} ${given}`;
+    if (Game.creeps[name] || Memory.creeps[name] || issuedNames.has(name) || graves.has(name)) continue;
+    if (!worn.has(given)) return name;
+    shared = shared ?? name;
   }
-  return `${title} ${Game.time}`;
+  return shared ?? `${title} ${Game.time}`;
 }
 
 // At most one order per role per room per tick: roles matched by memory (remote
