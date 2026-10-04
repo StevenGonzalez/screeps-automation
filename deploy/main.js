@@ -13919,14 +13919,15 @@ const GIVEN_NAMES = [
     "Mordred", "Morwen", "Osric", "Percival", "Roderick", "Rowena", "Sigmund", "Sybil",
     "Thorne", "Tristan", "Ulric", "Wulfric", "Ysolde", "Varian",
 ];
-function creepName(role) {
+function creepName(role, room) {
     var _a;
     freshIssued();
     const title = (_a = ROLE_TITLES[role]) !== null && _a !== void 0 ? _a : role;
+    const graves = new Set(room ? room.find(FIND_TOMBSTONES).map((t) => t.creep.name) : []);
     const start = Game.time % GIVEN_NAMES.length;
     for (let i = 0; i < GIVEN_NAMES.length; i++) {
         const name = `${title} ${GIVEN_NAMES[(start + i) % GIVEN_NAMES.length]}`;
-        if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name))
+        if (!Game.creeps[name] && !Memory.creeps[name] && !issuedNames.has(name) && !graves.has(name))
             return name;
     }
     return `${title} ${Game.time}`;
@@ -13936,7 +13937,7 @@ function trackedSpawn(room, spawn, body, opts) {
     const role = opts.memory.role;
     if (getIssuedCount(room, role) > 0)
         return ERR_BUSY;
-    const name = creepName(role);
+    const name = creepName(role, room);
     const res = spawn.spawnCreep(body, name, opts);
     if (res === OK) {
         issuedNames.add(name);
