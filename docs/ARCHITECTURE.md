@@ -277,7 +277,9 @@ The room view labels each notable work by its name in the realm (Barracks,
 Watchtower, Treasury with its gold, Trading Post, Alchemy Labs, Workshop,
 Jeweler's Mine, Seeing-stone, Power Shrine, Doom Engine) and the controller
 as the Throne. The names live in `LANDMARKS` (`config/config.structures.ts`),
-which the herald also uses when it tells of new works.
+which the herald also uses when it tells of new works. A work still being
+built stands in scaffolding, its stone filling in from the ground, under a
+label such as `Barracks rising · 11%`.
 
 ---
 

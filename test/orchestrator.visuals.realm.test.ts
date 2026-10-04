@@ -271,7 +271,7 @@ describe("landmarks", () => {
       name: HOME,
       visual,
       controller: { pos: { x: 5, y: 5 } },
-      find: () => structures,
+      find: (type: number) => (type === g.FIND_MY_STRUCTURES ? structures : []),
     } as unknown as Room;
 
     drawLandmarks(room);
@@ -282,6 +282,25 @@ describe("landmarks", () => {
     expect(texts.filter((t) => t === "Alchemy Labs")).toHaveLength(1);
     expect(texts).toContain("Throne");
     expect(texts).toHaveLength(5);
+  });
+
+  it("draws a work still being built in scaffolding with how far it has come", () => {
+    const sites = [
+      { structureType: "spawn", pos: { x: 22, y: 24 }, progress: 1650, progressTotal: 15_000 },
+      { structureType: "road", pos: { x: 21, y: 25 }, progress: 5, progressTotal: 300 },
+    ];
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const room = {
+      name: HOME,
+      visual: { text: record("text"), rect: record("rect"), line: record("line") },
+      find: (type: number) => (type === g.FIND_MY_CONSTRUCTION_SITES ? sites : []),
+    } as unknown as Room;
+
+    drawLandmarks(room);
+
+    expect(drawn.filter((d) => d.kind === "text").map((d) => d.args[0])).toEqual(["Barracks rising · 11%"]);
+    expect(drawn.filter((d) => d.kind === "rect")).toHaveLength(2);
+    expect(drawn.filter((d) => d.kind === "line")).toHaveLength(2);
   });
 });
 

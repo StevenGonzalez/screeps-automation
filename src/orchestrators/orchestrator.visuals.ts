@@ -301,7 +301,8 @@ function titleCase(s: string): string {
 
 // Each notable work of the castle labelled under it by the name the realm
 // knows it by, and the treasury with its gold. Labs stand together, so they
-// share one label under the middle of the group.
+// share one label under the middle of the group. Works still being built are
+// drawn in scaffolding.
 export function drawLandmarks(room: Room): void {
   const v = room.visual;
   const labs: Array<{ x: number; y: number }> = [];
@@ -324,7 +325,26 @@ export function drawLandmarks(room: Room): void {
     const y = Math.max(...labs.map((p) => p.y));
     v.text(titleCase(labs.length === 1 ? one : many), x, y + 0.95, LANDMARK_LABEL);
   }
+  for (const site of room.find(FIND_MY_CONSTRUCTION_SITES)) {
+    const names = LANDMARKS[site.structureType];
+    if (names) drawScaffold(v, site, names[0]);
+  }
   if (room.controller) v.text("Throne", room.controller.pos.x, room.controller.pos.y + 0.95, LANDMARK_LABEL);
+}
+
+const SCAFFOLD: LineStyle = { color: "#8b6b43", width: 0.06, opacity: 0.8 };
+const SCAFFOLD_STONE = "#9a9080";
+
+// A work still being raised stands in scaffolding, its stone climbing from the
+// ground as the work goes in, labelled with how far it has come.
+function drawScaffold(v: RoomVisual, site: ConstructionSite, name: string): void {
+  const { x, y } = site.pos;
+  const share = site.progress / site.progressTotal;
+  v.rect(x - 0.45, y + 0.45 - 0.9 * share, 0.9, 0.9 * share, { fill: SCAFFOLD_STONE, opacity: 0.5 });
+  v.rect(x - 0.45, y - 0.45, 0.9, 0.9, { fill: "transparent", stroke: SCAFFOLD.color, strokeWidth: SCAFFOLD.width, opacity: SCAFFOLD.opacity });
+  v.line(x - 0.45, y - 0.45, x + 0.45, y + 0.45, SCAFFOLD);
+  v.line(x + 0.45, y - 0.45, x - 0.45, y + 0.45, SCAFFOLD);
+  v.text(`${titleCase(name)} rising · ${Math.floor(share * 100)}%`, x, y + 0.95, LANDMARK_LABEL);
 }
 
 // The season over the castle: a faint tint and something drifting down through
