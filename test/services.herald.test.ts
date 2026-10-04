@@ -517,6 +517,7 @@ describe("herald", () => {
       `Villager Aldric, the first born in the barracks of ${castleName(ROOM)}, has died of old age. Its bells ring once more.`,
     ]);
     expect((g.Memory as Memory).rooms[ROOM].firstBorn).toBeUndefined();
+    expect((g.Memory as Memory).gossip?.line).toBe("† Aldric");
   });
 
   it("passes quietly over a new keep that already has creeps of its own", () => {

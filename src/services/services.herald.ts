@@ -362,6 +362,7 @@ function heraldFirstBornRest(name: string): void {
     const mem = Memory.rooms[roomName];
     if (mem.firstBorn !== name) continue;
     delete mem.firstBorn;
+    spreadWord(mourn(name));
     chronicle(`${name}, the first born in the barracks of ${castleName(roomName)}, has died of old age. Its bells ring once more.`);
   }
 }
