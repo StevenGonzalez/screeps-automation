@@ -841,6 +841,12 @@ const TOWN_PHASES = [
 ];
 const TOWN_DAYS_PER_SEASON = 7;
 const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
+const TOWN_FEASTS = {
+    spring: "Sowing Feast",
+    summer: "Midsummer Fair",
+    autumn: "Harvest Home",
+    winter: "Yule Feast",
+};
 const COTTAGE_FAMILIES = [
     "Aldermere",
     "Blackwood",
@@ -866,6 +872,10 @@ function townClock(time) {
 function townSeason(time) {
     const day = Math.floor(time / TOWN_DAY_LENGTH);
     return TOWN_SEASONS[Math.floor(day / TOWN_DAYS_PER_SEASON) % TOWN_SEASONS.length];
+}
+function townFeast(time) {
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    return day % TOWN_DAYS_PER_SEASON === 0 ? TOWN_FEASTS[townSeason(time)] : undefined;
 }
 function isNightfall(phase) {
     return phase === "dusk" || phase === "night";
@@ -11108,6 +11118,8 @@ const SEASON_CALLS = {
     autumn: ["harvest!", "cider time", "leaves down"],
     winter: ["brr!", "snow again", "stoke fires"],
 };
+const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
+const FEAST_CHEER_PERIOD = 100;
 function runTownsfolk(creep) {
     if (creep.memory.job === "lookout")
         runLookout(creep);
@@ -11163,6 +11175,8 @@ function runMilitia(creep) {
         parkIdle(creep, "square");
         return;
     }
+    if (townFeast(Game.time) && parkIdle(creep, "square"))
+        return;
     if (parkIdle(creep, "watch"))
         return;
     parkOn(creep, bedTiles(room.memory.town));
@@ -11170,9 +11184,14 @@ function runMilitia(creep) {
 function callThePhase(creep) {
     const t = Game.time % TOWN_DAY_LENGTH;
     const phase = TOWN_PHASES.find((p) => p.start === t);
-    if (!phase)
+    const feasting = townFeast(Game.time) !== undefined && townClock(Game.time).phase === "day";
+    let lines;
+    if (feasting && t % FEAST_CHEER_PERIOD === 0)
+        lines = FEAST_CALLS;
+    else if (!phase)
         return;
-    const lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
+    else
+        lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
@@ -17976,7 +17995,9 @@ function drawRoomHUD(room) {
         const hh = String(clock.hour).padStart(2, "0");
         const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
         const season = townSeason(Game.time);
-        v.text(`${icon} ${phase}, ${hh}:00 in ${season}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+        const feast = townFeast(Game.time);
+        const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}`;
+        v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
         y += lineH;
     }
     const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) : null;
@@ -18027,10 +18048,27 @@ const SEASON_DRIFT = {
     winter: { count: 30, colours: ["#ffffff"], radius: 0.08, fall: 0.25 },
 };
 const FIREFLIES = 8;
+const LANTERNS = 12;
+const LANTERN_COLOURS = ["#ff6b4a", "#ffd27f", "#7fd4ff"];
 function drawSeason(room, time = Game.time) {
     var _a;
     const v = room.visual;
     const season = townSeason(time);
+    const fountain = (_a = room.memory.town) === null || _a === void 0 ? void 0 : _a.fountain;
+    const feast = townFeast(time);
+    if (feast && fountain) {
+        const { x, y } = parseTile(fountain);
+        const turn = Math.floor(time / 5);
+        for (let i = 0; i < LANTERNS; i++) {
+            const angle = (i * Math.PI * 2) / LANTERNS;
+            v.circle(x + Math.cos(angle) * 2.4, y + Math.sin(angle) * 2.4, {
+                radius: 0.14,
+                fill: LANTERN_COLOURS[(i + turn) % LANTERN_COLOURS.length],
+                opacity: 0.85,
+            });
+        }
+        v.text(feast, x, y + 3.2, { font: 0.5, color: "#ffd27f", stroke: "#000000", strokeWidth: 0.06 });
+    }
     const tint = SEASON_TINT[season];
     if (tint)
         v.rect(-0.5, -0.5, 50, 50, { fill: tint, opacity: 0.05 });
@@ -18044,7 +18082,6 @@ function drawSeason(room, time = Game.time) {
         }
         return;
     }
-    const fountain = (_a = room.memory.town) === null || _a === void 0 ? void 0 : _a.fountain;
     if (!fountain || !isNightfall(townClock(time).phase))
         return;
     const { x, y } = parseTile(fountain);
