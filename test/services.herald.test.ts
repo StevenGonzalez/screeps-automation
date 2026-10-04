@@ -302,6 +302,32 @@ describe("herald", () => {
     );
   });
 
+  it("tells another lord's fallen men by whose they were, not as raiders", () => {
+    (g.Memory as Memory).warbands = { [ROOM]: { name: "Grask One-Eye", at: tick, raids: 2, slain: 4 } };
+    const tomb = (id: string, parts: string[]) => ({
+      creep: { id, owner: { username: "Screps" }, body: parts.map((type) => ({ type, hits: 100 })) },
+    });
+    const inWilds = (events: unknown[], tombs: unknown[]) => ({
+      ...roomWith(events),
+      find: (type: number) => (type === g.FIND_TOMBSTONES ? tombs : []),
+    });
+    const tower = { my: true };
+    const knight = new FakeCreep("Dragon Knight Edric", { name: ROOM });
+
+    setup(inWilds(killed("scout", ["tower"]), [tomb("scout", ["move"])]), { tower });
+    heraldRooms();
+    setup(inWilds(killed("brute", ["knight"]), [tomb("brute", ["attack", "move"])]), { knight });
+    heraldRooms();
+
+    const lord = lordName("Screps");
+    expect((g.Memory as Memory).chronicle!.map((l) => l.text)).toEqual([
+      `A spy of ${lord} fell in the Gallows Forest.`,
+      `A man-at-arms of ${lord} fell to Dragon Knight Edric in the Gallows Forest.`,
+    ]);
+    expect((g.Memory as Memory).warbands![ROOM].broken).toBeUndefined();
+    expect((g.Memory as Memory).annals?.slain).toBe(2);
+  });
+
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
     const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
     const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900, memory: {} };

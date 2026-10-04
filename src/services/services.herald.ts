@@ -642,18 +642,28 @@ function whereIn(roomName: string): string {
 }
 
 // `slayer` is the one creep of ours that struck the foe down, if one did it
-// alone; a lone kill is told as that creep's deed.
-function chronicleKill(room: Room, slayer?: string): void {
+// alone; a lone kill is told as that creep's deed. `dead` is the foe as its
+// tombstone remembers it: another lord's scout was told as a raider.
+function chronicleKill(room: Room, slayer?: string, dead?: AnyCreep): void {
+  const lord = dead && isPlayerCreep(dead as Creep) ? dead.owner.username : undefined;
   const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
   annal("slain", 1);
   // Lair keepers fall every few hundred ticks where their lairs are farmed;
   // that is work, not news.
-  if (foe === "raider") spreadWord("victory!");
-  const band = foe === "raider" ? warbandIn(room.name) : undefined;
-  const one = band ? `A raider of ${band}'s band` : `A ${foe}`;
-  const many = (n: number) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
+  if (lord || foe === "raider") spreadWord("victory!");
+  const band = foe === "raider" && !lord ? warbandIn(room.name) : undefined;
+  let one = band ? `A raider of ${band}'s band` : `A ${foe}`;
+  let many = (n: number) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
+  let key = `slain:${room.name}`;
+  if (lord) {
+    const armed = "body" in dead! && dead.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
+    const [kind, kinds] = armed ? ["man-at-arms", "men-at-arms"] : ["spy", "spies"];
+    one = `A ${kind} of ${lordName(lord)}`;
+    many = (n) => `${n} of ${lordName(lord)}'s ${kinds}`;
+    key += `:${lord}:${kind}`;
+  }
   tally(
-    `slain:${room.name}`,
+    key,
     1,
     (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`,
     BATTLE_WINDOW
@@ -783,7 +793,8 @@ function heraldKills(room: Room): void {
     if (ours.length === 0) continue;
     const creeps = [...new Set(ours.filter((o): o is Creep => o instanceof Creep))];
     const alone = creeps.length === 1 && creeps.length === new Set(ours).size;
-    chronicleKill(room, alone ? creeps[0].name : undefined);
+    const dead = room.find(FIND_TOMBSTONES).find((t) => t.creep.id === e.objectId)?.creep;
+    chronicleKill(room, alone ? creeps[0].name : undefined, dead);
     if (creeps.length === 0) {
       roomCries[room.name] = "Huzzah!";
       continue;
