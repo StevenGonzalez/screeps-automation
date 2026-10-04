@@ -111,6 +111,17 @@ describe("realm map", () => {
     expect(drawn.filter((d) => d.kind === "line")).toHaveLength(1);
   });
 
+  it("shows each castle's level and the gold in its treasury", () => {
+    const room = world([]);
+    drawRealmMap();
+    expect(drawn.map((d) => d.args[0])).toContain("RCL 6");
+
+    drawn = [];
+    (room as unknown as { storage: unknown }).storage = { store: { energy: 34_670 } };
+    drawRealmMap();
+    expect(drawn.map((d) => d.args[0])).toContain("RCL 6 · 34.7K gold");
+  });
+
   it("marks a raided remote and the keep being saved for", () => {
     world(
       [creep(ROLE_REMOTE_MINER, "W2N1", "W2N1")],

@@ -48,10 +48,10 @@ const MAP_GOLD = "#f2c14e";
 const MAP_DANGER = "#e05a5a";
 const MAP_KEEP = "#b06bff";
 
-// The realm on the world map: each castle's name over its room, a road to
-// each remote its peddlers work (red while raiders or rivals hold it), the
-// remote's own name, the name of any rival holding it, and the keep the castle
-// is founding or saving for.
+// The realm on the world map: each castle's name over its room with its level
+// and treasury under it, a road to each remote its peddlers work (red while
+// raiders or rivals hold it), the remote's own name, the name of any rival
+// holding it, and the keep the castle is founding or saving for.
 export function drawRealmMap(): void {
   const mv = Game.map.visual;
   const worked: Record<string, Set<string>> = {};
@@ -71,7 +71,8 @@ export function drawRealmMap(): void {
       stroke: "#000000",
       strokeWidth: 0.6,
     });
-    mv.text(`RCL ${room.controller.level}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
+    const gold = room.storage ? ` · ${formatK(room.storage.store[RESOURCE_ENERGY])} gold` : "";
+    mv.text(`RCL ${room.controller.level}${gold}`, new RoomPosition(25, 45, roomName), { color: "#e8e8e8", fontSize: 4 });
 
     for (const remote of room.memory.remoteRooms ?? []) {
       const ours = worked[roomName]?.has(remote.roomName) ?? false;
