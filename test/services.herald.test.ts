@@ -4,6 +4,7 @@ const g = globalThis as Record<string, unknown>;
 g.EVENT_ATTACK = 1;
 g.EVENT_OBJECT_DESTROYED = 2;
 g.FIND_HOSTILE_CREEPS = 103;
+g.FIND_MY_STRUCTURES = 108;
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
 g.WORK = "work";
@@ -211,6 +212,33 @@ describe("herald", () => {
     ]);
     at(175);
     expect((g.Memory as Memory).chronicle?.[0].text).toBe("Ravenhold sold 1300 oxygen to the merchants of Jumpp.");
+  });
+
+  it("tells of the masons' new works once they stand, and not what stood at the first look", () => {
+    g.Memory = { rooms: { [ROOM]: { townName: "Ravenhold" } } };
+    let built = ["spawn", "tower", "extension"];
+    const room = {
+      name: ROOM,
+      controller: { my: true, level: 7 },
+      memory: {} as RoomMemory,
+      getEventLog: () => "[]",
+      find: (type: number) => (type === 108 ? built.map((structureType) => ({ structureType })) : []),
+    };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {} };
+      heraldRooms();
+    };
+    at(1000);
+    built = [...built, "tower", "lab", "lab", "extension", "spawn"];
+    at(1100);
+    built = [...built, "lab"];
+    at(1200);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "The masons of Ravenhold raise a barracks.",
+      "The masons of Ravenhold raise a watchtower.",
+      "The masons of Ravenhold raise 3 alchemy labs.",
+    ]);
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {
