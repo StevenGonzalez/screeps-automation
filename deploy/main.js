@@ -14885,7 +14885,10 @@ function spawnConqueror(room, spawn) {
             targetRoom: exp.roomName,
         },
     });
-    return res === OK;
+    if (res !== OK)
+        return false;
+    chronicle(`A conqueror rides out from ${castleName(room.name)} for the ${wildsName(exp.roomName)}.`);
+    return true;
 }
 const UNCLAIMER_LEAD = 400;
 function findUnclaimTarget(room) {
