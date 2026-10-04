@@ -213,6 +213,11 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // With one spawn, waiting behind a long repairer or builder body left a source
   // idle for a couple of hundred ticks.
   if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn)) return;
+  // An envoy is a few parts, and one late lets its remote's reservation lapse,
+  // which halves the remote's sources. At the end of the line Grimford's relief
+  // for the Misty Thicket waited behind a merchant, a porter, an enchanter and
+  // another porter while the reservation stayed down.
+  if (!blockaded && shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
   if (shouldSpawnRepairer(room) && spawnRepairer(room, spawn)) return;
   if (shouldSpawnBuilder(room) && spawnBuilder(room, spawn)) return;
   if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn)) return;
@@ -239,9 +244,6 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!blockaded && !economyCritical && spawnUnclaimer(room, spawn)) return;
   if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
-  // An envoy is a few parts, and one late lets its remote's reservation lapse,
-  // so it goes ahead of the merchants, who take the most of the spawn's time.
-  if (!blockaded && shouldSpawnReserver(room) && spawnReserver(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
 
   if (!blockaded && shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;

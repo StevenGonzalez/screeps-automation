@@ -104,16 +104,20 @@ describe("spawn order", () => {
     expect(spawnRemoteHauler).toHaveBeenCalledTimes(1);
   });
 
-  it("raises an envoy ahead of the merchants", () => {
+  it("raises an envoy after the remote miners and ahead of the castle's own workers and the merchants", () => {
     // A late envoy lets its remote's reservation lapse.
-    need.remoteHauler = true;
+    need.remoteMiner = true;
     need.reserver = true;
-    spawnTownsfolk.mockImplementation(() => false);
-    (globalThis as Record<string, unknown>).Memory = {};
-
+    need.repairer = true;
+    need.remoteHauler = true;
     processRoomSpawning(castle(30_000), {} as StructureSpawn);
+    expect(spawnRemoteMiner).toHaveBeenCalledTimes(1);
+    expect(spawnReserver).not.toHaveBeenCalled();
 
+    need.remoteMiner = false;
+    processRoomSpawning(castle(30_000), {} as StructureSpawn);
     expect(spawnReserver).toHaveBeenCalledTimes(1);
+    expect(spawnRepairer).not.toHaveBeenCalled();
     expect(spawnRemoteHauler).not.toHaveBeenCalled();
   });
 });
