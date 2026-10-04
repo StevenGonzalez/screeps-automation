@@ -79,19 +79,48 @@ const NAME_HEADS = [
 ];
 const NAME_TAILS = ["hold", "moor", "keep", "spire", "fell", "gate", "watch", "barrow", "crag", "mere", "ford", "reach"];
 
-/** A castle's name: its town name if one was given, or one drawn from its room name. */
-export function castleName(roomName: string): string {
-  const given = Memory.rooms?.[roomName]?.townName;
-  if (given) return given;
-  // FNV-1a, so neighbouring rooms rarely share a name.
+// FNV-1a, so neighbouring rooms rarely share a name.
+function nameHash(roomName: string): number {
   let h = 2166136261;
   for (let i = 0; i < roomName.length; i++) {
     h ^= roomName.charCodeAt(i);
     h = Math.imul(h, 16777619) >>> 0;
   }
+  return h;
+}
+
+/** A castle's name: its town name if one was given, or one drawn from its room name. */
+export function castleName(roomName: string): string {
+  const given = Memory.rooms?.[roomName]?.townName;
+  if (given) return given;
+  const h = nameHash(roomName);
   const head = NAME_HEADS[h % NAME_HEADS.length];
   let t = (h >>> 8) % NAME_TAILS.length;
   // No "Wolffell": skip a tail that starts with the letter the head ends on.
   if (NAME_TAILS[t][0] === head[head.length - 1]) t = (t + 1) % NAME_TAILS.length;
   return head + NAME_TAILS[t];
+}
+
+const WILD_HEADS = [
+  "Ashen", "Bleak", "Gallows", "Weeping", "Black", "Wolf", "Raven", "Thorn",
+  "Misty", "Grey", "Witch", "Bone", "Sorrow", "Cinder", "Hollow", "Crow",
+  "Blood", "Shadow", "Dread", "Barrow", "Silent", "Rotting", "Howling", "Wither",
+];
+const WILD_LANDS = [
+  "Moor", "Fen", "Wood", "Vale", "Heath", "Marsh", "Waste", "Mire",
+  "Glen", "Weald", "Forest", "March", "Bog", "Reach", "Thicket", "Scar",
+];
+
+/**
+ * A name for the wild country of a room nobody holds a castle in, drawn from
+ * its room name: "Weeping Fen". Callers put "the" before it.
+ */
+export function wildsName(roomName: string): string {
+  // The hash's low bits barely change between neighbouring rooms; mixing it
+  // again keeps the next room over from sharing half its name.
+  let h = nameHash(roomName);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return `${WILD_HEADS[(h >>> 4) % WILD_HEADS.length]} ${WILD_LANDS[(h >>> 12) % WILD_LANDS.length]}`;
 }

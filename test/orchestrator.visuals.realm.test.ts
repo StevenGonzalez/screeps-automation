@@ -121,6 +121,7 @@ describe("realm map", () => {
 
     const texts = drawn.filter((d) => d.kind === "text").map((d) => d.args[0]);
     expect(texts).toContain("raided");
+    expect(texts).toContain("Shadow March");
     expect(texts).toContain("keep planned");
     expect(drawn.filter((d) => d.kind === "circle")).toHaveLength(1);
   });

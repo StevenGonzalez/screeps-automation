@@ -110,7 +110,7 @@ describe("herald", () => {
 
     const log = (g.Memory as Memory).chronicle!;
     expect(log).toHaveLength(1);
-    expect(log[0].text).toBe("2 raiders fell in the wilds of W1N1");
+    expect(log[0].text).toBe("2 raiders fell in the Gallows Forest");
   });
 
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
@@ -124,7 +124,7 @@ describe("herald", () => {
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Merchant Leofric fell to raiders in the wilds of W2N1.",
+      "Merchant Leofric fell to raiders in the Shadow March.",
     ]);
   });
 

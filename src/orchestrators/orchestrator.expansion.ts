@@ -2,7 +2,7 @@ import { getThreatInfo, isSourceKeeperRoom } from "../services/services.combat";
 import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles";
 import { getCpuStats } from "../services/services.profiler";
 import { KEEP_FUND_FLOOR } from "../services/services.treasury";
-import { castleName, chronicle } from "../services/services.chronicle";
+import { castleName, chronicle, wildsName } from "../services/services.chronicle";
 
 const BOOTSTRAP_MIN_RCL = 3;
 const BOOTSTRAP_MIN_STORAGE_ENERGY = 10_000;
@@ -501,7 +501,7 @@ function manageActiveExpansion() {
         // Cool the room down as an expansion target only; it stays minable as a remote.
         if (!Memory.claimFailures) Memory.claimFailures = {};
         Memory.claimFailures[exp.roomName] = Game.time + CLAIM_FAILED_COOLDOWN;
-        chronicle(`The conqueror never reached the throne of ${exp.roomName}. The claim is abandoned.`);
+        chronicle(`The conqueror never reached the throne in the ${wildsName(exp.roomName)}. The claim is abandoned.`);
         clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
         return;
       }
@@ -628,5 +628,5 @@ function planSavings(): void {
   const plan = Memory.expansionSavings;
   if (plan?.room === home && plan.target === next.roomName) return;
   Memory.expansionSavings = { room: home, target: next.roomName };
-  chronicle(`${castleName(home)} fills its coffers to found a keep at ${next.roomName}.`);
+  chronicle(`${castleName(home)} fills its coffers to found a keep in the ${wildsName(next.roomName)}.`);
 }

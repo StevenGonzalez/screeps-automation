@@ -1,6 +1,6 @@
 import { pickSignature } from "../config/signatures";
 import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
-import { chronicle, tally } from "./services.chronicle";
+import { chronicle, tally, wildsName } from "./services.chronicle";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -193,8 +193,8 @@ export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
   if (!fresh) return;
   chronicle(
     findInvaderCore(room)
-      ? `Invaders raised a stronghold in the wilds of ${room.name}. The vendors flee the road.`
-      : `Raiders fell upon the vendors in the wilds of ${room.name}.`
+      ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
+      : `Raiders fell upon the vendors in the ${wildsName(entry.roomName)}.`
   );
 }
 
@@ -220,7 +220,7 @@ export function markRemotePlayerHostile(entry: RemoteRoomData, who?: string): vo
     entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
   if (!avoided) {
     entry.hostileStrikes = (entry.hostileStrikes ?? 0) + 1;
-    const text = `${who ? `The men of ${who}` : "Strangers"} hold the wilds of ${entry.roomName}. The vendors keep away.`;
+    const text = `${who ? `The men of ${who}` : "Strangers"} hold the ${wildsName(entry.roomName)}. The vendors keep away.`;
     tally(`rival:${entry.roomName}`, 1, () => text, RIVAL_CHRONICLE_WINDOW);
   }
   const window = Math.min(
@@ -260,7 +260,7 @@ export function clearRemoteInvader(creep: Creep): void {
   if (!entry) return;
   if (entry.invaderUntil !== undefined) {
     if (entry.invaderUntil > Game.time) {
-      chronicle(`The wilds of ${entry.roomName} are safe again. The vendors take to the road.`);
+      chronicle(`The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`);
     }
     entry.invaderUntil = undefined;
   }

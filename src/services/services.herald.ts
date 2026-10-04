@@ -3,7 +3,7 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { castleName, chronicle, tally } from "./services.chronicle";
+import { castleName, chronicle, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { townSeason } from "./services.town";
 import { TownSeason } from "../config/config.town";
@@ -199,7 +199,7 @@ const BATTLE_WINDOW = 300;
 function whereIn(roomName: string): string {
   return Game.rooms[roomName]?.controller?.my
     ? `before the walls of ${castleName(roomName)}`
-    : `in the wilds of ${roomName}`;
+    : `in the ${wildsName(roomName)}`;
 }
 
 function chronicleKill(room: Room): void {

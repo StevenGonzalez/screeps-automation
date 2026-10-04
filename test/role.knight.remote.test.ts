@@ -64,7 +64,7 @@ describe("remote knight", () => {
     expect(remoteEntry.invaderUntil).toBeUndefined();
     expect(destination(knight)).toBe(HOME);
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "The wilds of W2N1 are safe again. The vendors take to the road.",
+      "The Shadow March is safe again. The vendors take to the road.",
     ]);
   });
 
@@ -86,7 +86,7 @@ describe("raids in the chronicle", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Raiders fell upon the vendors in the wilds of W2N1.",
+      "Raiders fell upon the vendors in the Shadow March.",
     ]);
   });
 });

@@ -4,7 +4,7 @@ import { TownSeason } from "../config/config.town";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
-import { castleName, chronicleDate, recentChronicle } from "../services/services.chronicle";
+import { castleName, chronicleDate, recentChronicle, wildsName } from "../services/services.chronicle";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -48,8 +48,8 @@ const MAP_KEEP = "#b06bff";
 
 // The realm on the world map: each castle's name over its room, a road to
 // each remote its peddlers work (red while raiders or rivals hold it), the
-// name of any rival holding one of its remotes, and the keep it is founding or
-// saving for.
+// remote's own name, the name of any rival holding it, and the keep the castle
+// is founding or saving for.
 export function drawRealmMap(): void {
   const mv = Game.map.visual;
   const worked: Record<string, Set<string>> = {};
@@ -82,6 +82,7 @@ export function drawRealmMap(): void {
         mv.line(centre, new RoomPosition(25, 25, remote.roomName), { color: colour, width: 1, opacity: 0.6, lineStyle: "dashed" });
       }
       const label = held ? `held by ${remote.rival ?? "strangers"}` : raided ? "raided" : "vendors";
+      mv.text(wildsName(remote.roomName), new RoomPosition(25, 34, remote.roomName), { color: "#e8e8e8", fontSize: 4 });
       mv.text(label, new RoomPosition(25, 40, remote.roomName), { color: colour, fontSize: 4 });
     }
   }
