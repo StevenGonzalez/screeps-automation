@@ -1090,6 +1090,13 @@ function castleName(roomName) {
         t = (t + 1) % NAME_TAILS.length;
     return head + NAME_TAILS[t];
 }
+const EPITHETS = [
+    "the Red", "the Grey", "the Bold", "the Pale", "the Grim", "the Silent", "the Wanderer", "the Elder",
+    "the Black", "Ironhand", "the Unbowed", "the Fair", "the Cunning", "the Restless", "the Far-Seeing", "the Stern",
+];
+function lordName(username) {
+    return `${username} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
+}
 const WILD_HEADS = [
     "Ashen", "Bleak", "Gallows", "Weeping", "Black", "Wolf", "Raven", "Thorn",
     "Misty", "Grey", "Witch", "Bone", "Sorrow", "Cinder", "Hollow", "Crow",
@@ -3329,7 +3336,7 @@ function markRemotePlayerHostile(entry, who) {
     const avoided = entry.hostile && entry.hostileUntil !== undefined && entry.hostileUntil > Game.time;
     if (!avoided) {
         entry.hostileStrikes = ((_a = entry.hostileStrikes) !== null && _a !== void 0 ? _a : 0) + 1;
-        const text = `${who ? `The men of ${who}` : "Strangers"} hold the ${wildsName(entry.roomName)}. The vendors keep away.`;
+        const text = `${who ? `The men of ${lordName(who)}` : "Strangers"} hold the ${wildsName(entry.roomName)}. The vendors keep away.`;
         tally(`rival:${entry.roomName}`, 1, () => text, RIVAL_CHRONICLE_WINDOW);
     }
     const window = Math.min(REMOTE_PLAYER_WINDOW * 2 ** (((_b = entry.hostileStrikes) !== null && _b !== void 0 ? _b : 1) - 1), REMOTE_PLAYER_WINDOW_MAX);
@@ -8333,7 +8340,7 @@ function chronicleTrade(t, verb, ours, them, us) {
     if (them !== undefined && them === us)
         return;
     const ware = (_a = WARES[t.resourceType]) !== null && _a !== void 0 ? _a : t.resourceType;
-    const partner = them ? `the merchants of ${them}` : "the free markets";
+    const partner = them ? `the merchants of ${lordName(them)}` : "the free markets";
     const dir = verb === "sold" ? "to" : "from";
     tally(`trade:${verb}:${ours}:${them !== null && them !== void 0 ? them : ""}:${t.resourceType}`, t.amount, (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`, TRADE_WINDOW);
 }
@@ -8345,8 +8352,8 @@ function heraldVisitors(room) {
         const who = c.owner.username;
         const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
         const text = armed
-            ? `A war party of ${who} came in arms to the walls of ${castleName(room.name)}.`
-            : `Spies of ${who} crept about ${castleName(room.name)}.`;
+            ? `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`
+            : `Spies of ${lordName(who)} crept about ${castleName(room.name)}.`;
         tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
     }
 }
@@ -8400,7 +8407,7 @@ function foeIn(roomName) {
     const hostiles = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.find(FIND_HOSTILE_CREEPS)) !== null && _b !== void 0 ? _b : [];
     const player = hostiles.find(isPlayerCreep);
     if (player)
-        return `the men of ${player.owner.username}`;
+        return `the men of ${lordName(player.owner.username)}`;
     if (hostiles.length === 0)
         return undefined;
     return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
