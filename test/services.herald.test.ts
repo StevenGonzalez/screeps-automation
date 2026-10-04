@@ -560,9 +560,11 @@ describe("herald", () => {
     expect((g.Memory as Memory).annals).toEqual({ since: 7_000, gold: 0, slain: 0, fallen: 0, recruits: 0 });
   });
 
-  it("ends the year with the winter and names the new one in spring", () => {
+  it("ends the year with the winter, names the new one in spring and counts the realm's souls", () => {
+    const castle = roomWith([], { my: true, level: 6 });
+    const creeps = { A: { spawning: true }, B: { spawning: true } };
     const at = (time: number) => {
-      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: castle }, creeps };
       heraldRooms();
     };
     at(27_000);
@@ -572,6 +574,7 @@ describe("herald", () => {
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "So ends the winter, and with it the year 1. Since the scribes took up their pens the realm gathered 900 gold, slew no foe and lost none of its own.",
       "Spring comes to the realm. The snow melts from the castle walls. It is the year 2 of the Old Reckoning. The Sowing Feast begins.",
+      "The scribes count 2 souls in the realm and its one castle.",
     ]);
   });
 

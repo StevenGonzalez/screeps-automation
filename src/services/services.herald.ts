@@ -159,6 +159,16 @@ function heraldSeason(): void {
   const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
   const feast = townFeast(Game.time);
   chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
+  if (season === "spring") heraldCensus();
+}
+
+// The scribes count the realm's souls as each year begins.
+function heraldCensus(): void {
+  const souls = Object.keys(Game.creeps).length;
+  let castles = 0;
+  for (const name in Game.rooms) if (Game.rooms[name].controller?.my) castles++;
+  const held = castles === 1 ? "its one castle" : `its ${castles} castles`;
+  chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.`);
 }
 
 function annalsLine(season: string, a: Annals): string {
