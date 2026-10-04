@@ -31,7 +31,7 @@ export {
   isCreepFull,
   transferEnergyTo,
   getClosestContainerOrStorage,
-  findClosestMinerContainerWithEnergy,
+  findFullestMinerContainer,
   findDepositTargetExcludingMiner,
   findEmptiestTower,
   findCoreFillTarget,

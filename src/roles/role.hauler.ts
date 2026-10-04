@@ -5,7 +5,7 @@ import {
   findUnclaimedHaulerAssignment,
   pickupDroppedResource,
   withdrawFromContainer,
-  findClosestMinerContainerWithEnergy,
+  findFullestMinerContainer,
   findDepositTargetExcludingMiner,
   findEmptiestTower,
   findCoreFillTarget,
@@ -238,7 +238,7 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
     const assigned = Game.getObjectById(assignedId as Id<StructureContainer>) as StructureContainer | null;
     if (assigned && assigned.store[RESOURCE_ENERGY] >= 100) container = assigned;
   }
-  if (!container) container = findClosestMinerContainerWithEnergy(creep);
+  if (!container) container = findFullestMinerContainer(creep, 100, nearbyOnly ? DIVERT_RANGE : Infinity);
   if (
     container &&
     container.store[RESOURCE_ENERGY] >= 100 &&

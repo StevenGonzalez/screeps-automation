@@ -278,19 +278,25 @@ export function getClosestContainerOrStorage(creep: Creep): Structure | null {
   return closestByPath(creep.pos, allTargets) as Structure | null;
 }
 
-export function findClosestMinerContainerWithEnergy(
-  creep: Creep
+// The fullest miner container within range holding at least the given
+// energy: the one closest to spilling. Taking the closest with any energy at
+// all sent spare haulers to a near source holding a trickle, too little to
+// fetch, so they stood idle while the far source's container filled and its
+// miner's gold spilled on the ground.
+export function findFullestMinerContainer(
+  creep: Creep,
+  atLeast: number,
+  range = Infinity
 ): StructureContainer | null {
-  const ids = getMinerContainerIds(creep.room);
-  if (!ids || ids.length === 0) return null;
-  const containers = ids
-    .map((id) => Game.getObjectById(id))
-    .filter(Boolean) as StructureContainer[];
-  const withEnergy = containers.filter(
-    (c) => c.store && c.store[RESOURCE_ENERGY] > 0
-  );
-  if (withEnergy.length === 0) return null;
-  return closestByPath(creep.pos, withEnergy) || null;
+  let fullest: StructureContainer | null = null;
+  for (const id of getMinerContainerIds(creep.room)) {
+    const c = Game.getObjectById(id);
+    if (!c || c.store[RESOURCE_ENERGY] < atLeast) continue;
+    if (fullest && c.store[RESOURCE_ENERGY] <= fullest.store[RESOURCE_ENERGY]) continue;
+    if (range !== Infinity && creep.pos.getRangeTo(c) > range) continue;
+    fullest = c;
+  }
+  return fullest;
 }
 
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
