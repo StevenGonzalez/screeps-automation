@@ -9,6 +9,7 @@ g.FIND_MY_SPAWNS = 112;
 g.FIND_STRUCTURES = 107;
 g.FIND_MINERALS = 116;
 g.STRUCTURE_ROAD = "road";
+g.STRUCTURE_CONTAINER = "container";
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
 g.WORK = "work";
@@ -157,6 +158,32 @@ describe("herald", () => {
     setup(room, {});
     heraldRooms();
     expect(((g.Memory as Memory).chronicle ?? []).filter((l) => l.text.includes("stir"))).toEqual([]);
+  });
+
+  it("tells of a remote's waystation razed by raiders, not of one worn away", () => {
+    const castle = { ...roomWith([], { my: true, level: 6 }), name: "W2N1" };
+    castle.memory.remoteRooms = [{ roomName: ROOM } as RemoteRoomData];
+    const look = (events: unknown[]) => {
+      tick++;
+      g.Game = {
+        time: tick,
+        gcl: { level: 1 },
+        market: NO_TRADE,
+        rooms: { W2N1: castle, [ROOM]: roomWith(events) },
+        creeps: {},
+        getObjectById: () => null,
+      };
+      heraldRooms();
+    };
+    look([
+      { event: 1, objectId: "raider", data: { targetId: "box" } },
+      { event: 2, objectId: "box", data: { type: "container" } },
+    ]);
+    look([{ event: 2, objectId: "box2", data: { type: "container" } }]);
+
+    expect(((g.Memory as Memory).chronicle ?? []).map((l) => l.text)).toEqual([
+      `Raiders razed a waystation in the ${wildsName(ROOM)}. ${castleName("W2N1")}'s gold spills into the mud.`,
+    ]);
   });
 
   it("gathers a fight's kills into one chronicle line", () => {

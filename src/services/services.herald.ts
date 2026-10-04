@@ -626,12 +626,30 @@ function heraldRetired(name: string, hauled: number): void {
 // A hostile creep died last tick to something of ours. A creep that struck it
 // shouts a kill cry; a kill by towers alone has the room cheer instead. The
 // raw log is only parsed on a tick something was destroyed.
+// A waystation in one of our remotes knocked down by raiders, as the line
+// telling of its raising was told. One worn away by decay was struck by no one.
+function heraldRazed(room: Room, events: EventItem[], id: string): void {
+  if (room.controller?.my) return;
+  const struck = events.some(
+    (a) => a.event === EVENT_ATTACK && a.data.targetId === id && !Game.getObjectById(a.objectId as Id<Creep>)?.my
+  );
+  if (!struck) return;
+  for (const name in Game.rooms) {
+    const castle = Game.rooms[name];
+    if (!castle.controller?.my || !castle.memory.remoteRooms?.some((r) => r.roomName === room.name)) continue;
+    chronicle(`Raiders razed a waystation in the ${wildsName(room.name)}. ${castleName(name)}'s gold spills into the mud.`);
+    return;
+  }
+}
+
 function heraldKills(room: Room): void {
   const raw = room.getEventLog(true) as unknown as string;
   if (!raw.includes(`"event":${EVENT_OBJECT_DESTROYED},`)) return;
   const events = JSON.parse(raw) as EventItem[];
   for (const e of events) {
-    if (e.event !== EVENT_OBJECT_DESTROYED || e.data.type !== "creep") continue;
+    if (e.event !== EVENT_OBJECT_DESTROYED) continue;
+    if (e.data.type === STRUCTURE_CONTAINER) heraldRazed(room, events, e.objectId);
+    if (e.data.type !== "creep") continue;
     const ours = events
       .filter((a) => a.event === EVENT_ATTACK && a.data.targetId === e.objectId)
       .map((a) => Game.getObjectById(a.objectId as Id<Creep | StructureTower>))
