@@ -81,6 +81,12 @@ export function loop() {
   // three keeps went 200 ticks without planning or placing a site.
   if (!bucketCritical) runSafe("structures", () => structuresSystem.loop());
 
+  // The exchequer reads the event logs on one tick in five and does next to
+  // nothing on the rest. Shed with the heavy systems, it never ran once the
+  // creeps passed 80% of the limit: the books went over a thousand ticks
+  // without closing, and the season's annals counted none of that gold.
+  if (!bucketCritical) runSafe("exchequer", () => exchequer.loop());
+
   if (!heavyShed()) runSafe("labs", () => labsSystem.loop());
   if (!heavyShed()) runSafe("factory", () => factorySystem.loop());
   runSafe("links", () => linksSystem.loop());
@@ -92,7 +98,6 @@ export function loop() {
   runSafe("sourcekeeper", () => sourceKeeperSystem.loop());
   runSafe("powercreep", () => powerCreepSystem.loop());
   if (!heavyShed()) runSafe("observer", () => observerSystem.loop());
-  if (!heavyShed()) runSafe("exchequer", () => exchequer.loop());
   if (!heavyShed()) runSafe("pixels", () => pixelsSystem.loop());
 
   const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
