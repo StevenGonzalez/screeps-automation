@@ -571,21 +571,27 @@ export function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
   return res === OK;
 }
 
-function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[] {
-  const maxWork = 5;
+// Six WORK, one more than a reserved source's refill needs. A container
+// outside a keep loses 5000 hits every 100 ticks, and the miner mends it
+// itself: with five WORK that was ten ticks in every hundred not digging, and
+// a tenth of every remote source was left in the ground when it refilled.
+export function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[] {
+  const maxWork = 6;
   const groupCost = 2 * BODYPART_COST[WORK] + BODYPART_COST[MOVE];
   const maxGroups = Math.max(1, Math.floor(availableEnergy / groupCost));
   const groups = Math.min(maxGroups, Math.ceil(maxWork / 2));
-  const work = Math.min(maxWork, groups * 2);
+  let work = Math.min(maxWork, groups * 2);
   const move = groups;
+  const cost = () => work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
+  // One CARRY so the miner can build and repair its own container. Surplus
+  // harvest still overflows into the container it stands on, so steady-state
+  // mining is unchanged. The sixth WORK is the spare, and gives way to the
+  // CARRY when the energy runs short of both.
+  if (work === maxWork && availableEnergy < cost() + BODYPART_COST[CARRY]) work--;
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < work; i++) body.push(WORK);
   for (let i = 0; i < move; i++) body.push(MOVE);
-  // One CARRY so the miner can build and repair its own container. Surplus
-  // harvest still overflows into the container it stands on, so steady-state
-  // mining is unchanged.
-  const cost = work * BODYPART_COST[WORK] + move * BODYPART_COST[MOVE];
-  if (availableEnergy >= cost + BODYPART_COST[CARRY]) body.push(CARRY);
+  if (availableEnergy >= cost() + BODYPART_COST[CARRY]) body.push(CARRY);
   return body;
 }
 

@@ -10,7 +10,12 @@ import {
   buildRemoteHaulerBody,
   planRemoteSource,
 } from "../src/orchestrators/orchestrator.spawning";
-import { reassignStrayHaulers, shouldSpawnRemoteHauler, spawnRemoteHauler } from "../src/orchestrators/orchestrator.spawning.remote";
+import {
+  buildRemoteMinerBody,
+  reassignStrayHaulers,
+  shouldSpawnRemoteHauler,
+  spawnRemoteHauler,
+} from "../src/orchestrators/orchestrator.spawning.remote";
 import {
   ROLE_KNIGHT,
   ROLE_REMOTE_HAULER,
@@ -265,5 +270,23 @@ describe("stray merchants", () => {
     reassignStrayHaulers(room);
     const [merchant] = Object.values((g.Game as { creeps: Record<string, Creep> }).creeps);
     expect(merchant.memory.targetRoom).toBe("W5N4");
+  });
+});
+
+describe("remote miner body", () => {
+  it("out-digs its source by enough to mend its container as well", () => {
+    const work = buildRemoteMinerBody(2300).filter((p) => p === WORK).length;
+    // A container outside a keep loses 5000 hits every 100 ticks, mended at 100
+    // hits per WORK a tick. The other ticks have to dig the 1000 gold a
+    // reserved source refills in that time.
+    const mending = Math.ceil(5000 / (work * 100));
+    expect(work * 2 * (100 - mending)).toBeGreaterThanOrEqual(1000);
+  });
+
+  it("keeps its CARRY when the gold runs one part short", () => {
+    // A young keep at RCL 3 holds 800 and spawns on anything past 720.
+    const tally = (body: BodyPartConstant[]) => body.filter((p) => p === WORK).length + "W" + body.filter((p) => p === CARRY).length + "C";
+    expect(tally(buildRemoteMinerBody(800))).toBe("6W1C");
+    expect(tally(buildRemoteMinerBody(760))).toBe("5W1C");
   });
 });
