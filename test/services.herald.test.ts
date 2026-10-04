@@ -411,6 +411,25 @@ describe("herald", () => {
     expect(merchant.memory.hauled).toBe(2000);
   });
 
+  it("tells of the gold a castle's merchants bring home from a remote as it passes each mark", () => {
+    const merchant = new FakeCreep("Merchant Leofric", { name: ROOM });
+    merchant.memory = { role: "merchant", homeRoom: ROOM, targetRoom: "W2N1" } as CreepMemory;
+    setup(roomWith([]), {});
+    cryHaul(merchant as unknown as Creep, 6000);
+    cryHaul(merchant as unknown as Creep, 5000);
+    cryHaul(merchant as unknown as Creep, 30000);
+    cryHaul(merchant as unknown as Creep, 9000);
+    (g.Memory as Memory).roadGold![`${ROOM}>W2N1`] = 1_999_000;
+    cryHaul(merchant as unknown as Creep, 2000);
+
+    const from = `the merchants of ${castleName(ROOM)} have brought`;
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      `With Merchant Leofric's load, ${from} ten thousand gold home from the ${wildsName("W2N1")}.`,
+      `With Merchant Leofric's load, ${from} fifty thousand gold home from the ${wildsName("W2N1")}.`,
+      `With Merchant Leofric's load, ${from} 2 million gold home from the ${wildsName("W2N1")}.`,
+    ]);
+  });
+
   it("proclaims a new GCL once, not on the first look", () => {
     setup(roomWith([]), {});
     heraldRooms();

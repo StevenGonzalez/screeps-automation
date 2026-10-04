@@ -55,6 +55,39 @@ export function cryHaul(creep: Creep, amount: number): void {
   creep.memory.hauled = (creep.memory.hauled ?? 0) + amount;
   freshCries();
   creepCries[creep.name] = `+${amount} gold`;
+  heraldRoadGold(creep, amount);
+}
+
+// The gold one castle's merchants have brought home from one remote, told as
+// it passes each mark: a watcher sees which roads carry the realm.
+const ROAD_GOLD_MARKS: [number, string][] = [
+  [10_000, "ten thousand"],
+  [50_000, "fifty thousand"],
+  [100_000, "a hundred thousand"],
+  [250_000, "a quarter of a million"],
+  [500_000, "half a million"],
+  [1_000_000, "a million"],
+];
+
+function roadGoldMark(before: number, after: number): string | undefined {
+  for (const [at, words] of ROAD_GOLD_MARKS) if (before < at && after >= at) return words;
+  const millions = Math.floor(after / 1_000_000);
+  if (millions >= 2 && Math.floor(before / 1_000_000) < millions) return `${millions} million`;
+  return undefined;
+}
+
+function heraldRoadGold(creep: Creep, amount: number): void {
+  const { homeRoom, targetRoom } = creep.memory;
+  if (!homeRoom || !targetRoom) return;
+  const roads = (Memory.roadGold ??= {});
+  const key = `${homeRoom}>${targetRoom}`;
+  const before = roads[key] ?? 0;
+  roads[key] = before + amount;
+  const mark = roadGoldMark(before, before + amount);
+  if (!mark) return;
+  chronicle(
+    `With ${creep.name}'s load, the merchants of ${castleName(homeRoom)} have brought ${mark} gold home from the ${wildsName(targetRoom)}.`
+  );
 }
 
 export function settleFlight(creep: Creep): void {

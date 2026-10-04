@@ -358,6 +358,9 @@ declare global {
     richestHauler?: string;
     // The creep that slew the most foes in its life (services.herald).
     greatestSlayer?: { name: string; kills: number };
+    // Gold the merchants of each castle have brought home from each remote,
+    // keyed "home>remote" (services.herald).
+    roadGold?: Record<string, number>;
     // The warlord who raids each remote: when its last raid began, how many
     // raids it has led there, how many of its raiders have fallen and whether
     // that broke its band (services.chronicle).

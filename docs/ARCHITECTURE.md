@@ -286,7 +286,10 @@ warlord (`Memory.warbands`). A remote peddler or merchant fleeing a
 contested remote shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
 load ("+800 gold"). Each load is added to the merchant's lifetime haul
 (`memory.hauled`), and a merchant who dies of age having brought home more gold
-than any before it is named in the chronicle (`Memory.richestHaul`). A new
+than any before it is named in the chronicle (`Memory.richestHaul`). Each load
+also counts toward what its castle's merchants have brought home from that
+remote (`Memory.roadGold`), and the chronicle marks the count as it passes ten
+thousand, fifty thousand, a hundred thousand and so on up to each million. A new
 keep's first born is remembered by name (`memory.firstBorn`) and its bells ring
 again in the chronicle when it dies of age. The chronicle also notes when a
 castle's mineral vein is dug dry, with the days until it returns, and when it
