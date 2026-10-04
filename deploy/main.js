@@ -33,6 +33,7 @@ const ROLE_SK_HAULER = "packmule";
 const ROLE_SCORE_HUNTER = "seeker";
 const ROLE_UNCLAIMER = "usurper";
 const ROLE_TOWNSFOLK = "townsfolk";
+const ROLE_MINSTREL = "minstrel";
 const ROLE_TITLES = {
     [ROLE_BUILDER]: "Mason",
     [ROLE_HARVESTER]: "Villager",
@@ -65,6 +66,7 @@ const ROLE_TITLES = {
     [ROLE_SCORE_HUNTER]: "Seeker",
     [ROLE_UNCLAIMER]: "Usurper",
     [ROLE_TOWNSFOLK]: "Yeoman",
+    [ROLE_MINSTREL]: "Minstrel",
 };
 const ENERGY_DEPOSIT_PRIORITY = {
     [ROLE_HARVESTER]: [
@@ -11442,6 +11444,94 @@ function lookoutTargets(room, workedRemotes) {
     return out;
 }
 
+const STROLL_TICKS = 10;
+const VERSE_TICKS = 25;
+const HUMS = ["♪ la la ♪", "♪ hey ho ♪", "♪ fa la la", "♪ ♪ ♪"];
+const HUM_PERIOD = 4;
+const FEAST_VERSES = {
+    spring: (feast) => ["Sow the barley, sow the rye,", `the ${feast} drinks the cellars dry!`],
+    summer: (feast) => ["The sun is high, the hay is in,", `so let the ${feast} begin!`],
+    autumn: (feast) => ["The barns are full, the cider's sweet,", `at ${feast} we drink and eat!`],
+    winter: (feast) => ["The snow is deep, the hearth is bright,", `we keep the ${feast} through the night!`],
+};
+function ballad(room, time) {
+    var _a, _b, _c, _d;
+    const home = castleName(room.name);
+    const verses = [[`Sing of ${home}, its walls of stone,`, "that bow to none but the Crown alone!"]];
+    const feast = townFeast(time);
+    if (feast)
+        verses.push(FEAST_VERSES[townSeason(time)](feast));
+    let castles = 0;
+    for (const name in Game.rooms) {
+        if (!((_a = Game.rooms[name].controller) === null || _a === void 0 ? void 0 : _a.my))
+            continue;
+        castles++;
+        if (name === room.name)
+            continue;
+        verses.push([`In the ${wildsName(name)} where the cold winds blow,`, `the banners of ${castleName(name)} stand row on row!`]);
+    }
+    const annals = Memory.annals;
+    const slain = (_b = annals === null || annals === void 0 ? void 0 : annals.slain) !== null && _b !== void 0 ? _b : 0;
+    if (slain === 0) {
+        verses.push([`No raider came to our gates this ${townSeason(time)};`, "they fear our archers, and with reason!"]);
+    }
+    else {
+        verses.push(slain === 1
+            ? ["A raider came to steal our gold;", "now it lies in the earth so cold!"]
+            : [`${slain} raiders came to steal our gold;`, "now they lie in the earth so cold!"]);
+    }
+    const gold = (_c = annals === null || annals === void 0 ? void 0 : annals.gold) !== null && _c !== void 0 ? _c : 0;
+    if (gold > 0)
+        verses.push([`${formatK(gold)} gold the mines have brought,`, "and not a coin of it for naught!"]);
+    const fallen = (_d = annals === null || annals === void 0 ? void 0 : annals.fallen) !== null && _d !== void 0 ? _d : 0;
+    if (fallen > 0) {
+        verses.push([`Pour one out for the ${fallen === 1 ? "one" : fallen} we lost,`, "who held the line and paid the cost."]);
+    }
+    verses.push(["Raise a cup to the Crown so high,", `whose banners over ${castles} ${castles === 1 ? "castle" : "castles"} fly!`]);
+    return verses;
+}
+function currentVerse(room, time) {
+    const verses = ballad(room, time);
+    return verses[Math.floor(time / VERSE_TICKS) % verses.length];
+}
+function runMinstrel(creep) {
+    var _a;
+    if (!townFeast(Game.time)) {
+        creep.suicide();
+        return;
+    }
+    const home = (_a = creep.memory.homeRoom) !== null && _a !== void 0 ? _a : creep.room.name;
+    if (creep.room.name !== home) {
+        creep.moveTo(new RoomPosition(25, 25, home), { reusePath: 20 });
+        return;
+    }
+    const town = creep.room.memory.town;
+    if (!town || town.square.length === 0)
+        return;
+    const ring = squareRing(town);
+    const at = Math.floor(Game.time / STROLL_TICKS) % ring.length;
+    for (let i = 0; i < ring.length; i++) {
+        const tile = ring[(at + i) % ring.length];
+        const holder = spotHolder(creep.room.name, tile);
+        if (holder && holder !== creep.name)
+            continue;
+        parkOn(creep, [tile]);
+        break;
+    }
+    if (Game.time % HUM_PERIOD === 0)
+        creep.say(HUMS[(Game.time / HUM_PERIOD) % HUMS.length], true);
+}
+function squareRing(town) {
+    if (!town.fountain)
+        return town.square;
+    const c = parseTile(town.fountain);
+    const angle = (k) => {
+        const { x, y } = parseTile(k);
+        return Math.atan2(y - c.y, x - c.x);
+    };
+    return [...town.square].sort((a, b) => angle(a) - angle(b));
+}
+
 const STUCK_THRESHOLD = 3;
 const COSTMATRIX_TTL = 1000;
 const originalMoveTo = Creep.prototype.moveTo;
@@ -11686,6 +11776,7 @@ const CIVILIAN_ROLES = new Set([
     ROLE_REPAIRER,
     ROLE_UPGRADER,
     ROLE_MINERAL_MINER,
+    ROLE_MINSTREL,
 ]);
 const RANGED_REACH = 4;
 const MELEE_REACH = 2;
@@ -11872,6 +11963,7 @@ const ROLE_HANDLERS = {
     [ROLE_SCORE_HUNTER]: runScoreHunter,
     [ROLE_UNCLAIMER]: runUnclaimer,
     [ROLE_TOWNSFOLK]: runTownsfolk,
+    [ROLE_MINSTREL]: runMinstrel,
 };
 const GENERAL_CHATTER = ["for Crown!", "gold?", "huzzah!", "long live!", "ale later", "hark!", "onward!", "dragons?!"];
 const ROLE_CHATTER = {
@@ -11896,6 +11988,7 @@ const ROLE_CHATTER = {
     [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
     [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
     [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
+    [ROLE_MINSTREL]: ["encore!", "a coin?", "♪ tra la ♪"],
 };
 const SEASON_CHATTER = {
     spring: ["fresh air", "rain again", "blossoms"],
@@ -14165,6 +14258,7 @@ function spawnReserver(room, spawn) {
 
 const MILITIA_BODY = [RANGED_ATTACK, MOVE];
 const LOOKOUT_BODY = [MOVE];
+const MINSTREL_BODY = [MOVE];
 function townsfolkOf(room) {
     const out = [];
     for (const name in Game.creeps) {
@@ -14185,18 +14279,22 @@ function builtBeds(room) {
     }
     return n;
 }
-function nextTownJob(room) {
-    var _a, _b, _c, _d, _e, _f;
-    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
+function townCanGrow(room) {
+    var _a, _b, _c;
     if (!room.memory.town)
-        return null;
-    if (((_d = (_c = room.storage) === null || _c === void 0 ? void 0 : _c.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0) < TOWN.storageGate)
-        return null;
-    if (((_e = Memory.empire) === null || _e === void 0 ? void 0 : _e.posture) === "RECOVER" || isEnergyEmergency(room))
+        return false;
+    if (((_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) < TOWN.storageGate)
+        return false;
+    return ((_c = Memory.empire) === null || _c === void 0 ? void 0 : _c.posture) !== "RECOVER" && !isEnergyEmergency(room);
+}
+function nextTownJob(room) {
+    var _a, _b, _c;
+    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
+    if (!townCanGrow(room))
         return null;
     const folk = townsfolkOf(room);
     const militia = folk.filter((m) => m.job !== "lookout").length;
-    const wantMilitia = Math.min((_f = TOWN.militiaByRcl[rcl]) !== null && _f !== void 0 ? _f : 0, builtBeds(room));
+    const wantMilitia = Math.min((_c = TOWN.militiaByRcl[rcl]) !== null && _c !== void 0 ? _c : 0, builtBeds(room));
     if (militia < wantMilitia)
         return { job: "militia" };
     if (rcl < TOWN.lookoutRcl)
@@ -14207,10 +14305,30 @@ function nextTownJob(room) {
     const open = lookoutTargets(room, getPickedRemoteRoomNames(room)).find((r) => !posted.has(r));
     return open ? { job: "lookout", targetRoom: open } : null;
 }
+function wantsMinstrel(room) {
+    var _a;
+    if (!((_a = room.memory.town) === null || _a === void 0 ? void 0 : _a.fountain) || !townFeast(Game.time))
+        return false;
+    if (isNightfall(townClock(Game.time).phase) || !townCanGrow(room))
+        return false;
+    for (const name in Game.creeps) {
+        const mem = Game.creeps[name].memory;
+        if (mem.role === ROLE_MINSTREL && mem.homeRoom === room.name)
+            return false;
+    }
+    return true;
+}
+function spawnMinstrel(room, spawn) {
+    const memory = { role: ROLE_MINSTREL, homeRoom: room.name };
+    if (trackedSpawn(room, spawn, MINSTREL_BODY, { memory }) !== OK)
+        return false;
+    chronicle(`A minstrel comes to ${castleName(room.name)} Square for the ${townFeast(Game.time)}.`);
+    return true;
+}
 function spawnTownsfolk(room, spawn) {
     const next = nextTownJob(room);
     if (!next)
-        return false;
+        return wantsMinstrel(room) && spawnMinstrel(room, spawn);
     const body = next.job === "militia" ? MILITIA_BODY : LOOKOUT_BODY;
     const memory = {
         role: ROLE_TOWNSFOLK,
@@ -18288,6 +18406,8 @@ function drawTown(room) {
         v.circle(x, y, { radius: ripple + 0.15, fill: "transparent", stroke: "#66ccff", strokeWidth: 0.05, opacity: 0.6 });
         v.circle(x, y, { radius: 0.25, fill: "#3399ff", opacity: 0.6 });
         v.text(`${castleName(room.name)} Square`, x, y - 1.8, label);
+        if (townFeast(Game.time))
+            drawSong(room, x, y);
     }
     else {
         for (const k of town.square) {
@@ -18295,6 +18415,18 @@ function drawTown(room) {
             v.circle(x, y, { radius: 0.12, fill: "#ffe9a8", opacity: 0.3 });
         }
     }
+}
+const SONG = { font: "italic 0.45 serif", color: "#f5e6a8", stroke: "#000000", strokeWidth: 0.05 };
+function drawSong(room, x, y) {
+    const minstrel = room.find(FIND_MY_CREEPS).find((c) => c.memory.role === ROLE_MINSTREL);
+    if (!minstrel)
+        return;
+    const v = room.visual;
+    const [first, second] = currentVerse(room, Game.time);
+    v.text(first, x, y - 3.8, SONG);
+    v.text(second, x, y - 3.2, SONG);
+    const bob = 0.15 * Math.sin(Game.time / 2);
+    v.text("♪", minstrel.pos.x + 0.5, minstrel.pos.y - 0.5 + bob, { font: 0.6, color: "#ffe9a8" });
 }
 function getRoomPhase(rcl) {
     if (rcl <= 2)
