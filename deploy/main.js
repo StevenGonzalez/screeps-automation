@@ -9538,7 +9538,7 @@ function runRemoteMiner(creep) {
         creep.memory.remoteSourceId = undefined;
         return;
     }
-    if (creep.memory.walk === undefined && creep.pos.isNearTo(source))
+    if (creep.memory.walk === undefined && creep.pos.inRangeTo(source, 2))
         noteWalk(creep, CREEP_LIFE_TIME);
     const container = findOrUpdateContainer(creep, source);
     if (container) {
