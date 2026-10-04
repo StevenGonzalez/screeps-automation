@@ -27,7 +27,6 @@ import "./services/services.movement";
 
 const CPU_WARN_THRESHOLD = 0.85;
 
-const CPU_SKIP_STRUCTURES_THRESHOLD = 0.70;
 const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
 const CPU_SKIP_HEAVY_THRESHOLD = 0.80;
 
@@ -62,10 +61,12 @@ export function loop() {
   runSafe("creeps", () => creepRunnerSystem.loop());
   runSafe("spawning", () => spawningSystem.loop());
 
-  const cpuAfterCore = Game.cpu.getUsed() - tickStart;
-  if (!bucketCritical && cpuFraction(cpuAfterCore) < CPU_SKIP_STRUCTURES_THRESHOLD) {
-    runSafe("structures", () => structuresSystem.loop());
-  }
+  // Structures does its work on fixed ticks (construction every 5th, planning
+  // every 50, remotes every 100) and next to nothing in between, so only a
+  // critical bucket holds it back. Shedding it whenever the tick so far passed
+  // 70% of the limit starved it: the creeps alone use about that much, and all
+  // three keeps went 200 ticks without planning or placing a site.
+  if (!bucketCritical) runSafe("structures", () => structuresSystem.loop());
 
   if (!heavyShed()) runSafe("labs", () => labsSystem.loop());
   if (!heavyShed()) runSafe("factory", () => factorySystem.loop());

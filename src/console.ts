@@ -866,8 +866,11 @@ export function setupConsole() {
         `[CPU] limit=${Game.cpu.limit} bucket=${Game.cpu.bucket} avgTotal=${total.toFixed(2)}`
       );
       for (const [name, s] of rows) {
+        // The guard in main sheds some systems on busy ticks; avg is over the
+        // ticks a system ran, and ran says how many those were.
+        const ran = Math.round((100 * s.runs) / Math.max(1, Game.time - s.since + 1));
         console.log(
-          `  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`
+          `  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)} ran=${ran}%`
         );
       }
       // Roles are timed only while Memory.profileRoles is set: each creep costs
