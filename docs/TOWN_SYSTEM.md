@@ -169,7 +169,10 @@ A town day lasts 1000 ticks:
 
 Seven days make a season, and the year turns through spring, summer, autumn
 and winter, the same in every castle. The Royal Chronicle notes each new
-season.
+season, and first reads out the annals of the season just ended: the gold the
+realm gathered, the foes it slew and how many of its own it buried. The gold
+is counted from the exchequer's books, so it is the same figure the ledger
+shows, summed over the season.
 
 The first day of each season is a feast day: the Sowing Feast, the Midsummer
 Fair, Harvest Home and the Yule Feast.

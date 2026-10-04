@@ -88,6 +88,8 @@ describe("exchequer", () => {
     expect(books.trend).toBe(5);
     expect(ex.totalIn(books)).toBe(20);
     expect(ex.totalOut(books)).toBeCloseTo(55.5);
+    // The season's annals count the window's gold whole, mines and vendors both.
+    expect((g.Memory as Memory).annals?.gold).toBe(2000);
   });
 
   it("closes a full window on the next tick it runs, and blends later windows", () => {

@@ -7,6 +7,8 @@
 // tick, which is plenty for a running average and keeps the JSON parsing off
 // most ticks. Spawning is counted exactly, when the order is placed.
 
+import { annal } from "./services.chronicle";
+
 export type LedgerIncome = "mines" | "vendors";
 export type LedgerSpend = "recruits" | "enchant" | "masonry" | "smithy" | "towers";
 
@@ -147,6 +149,7 @@ function closeBooks(room: Room): void {
   for (const k of SPEND_KEYS) books.out[k] = blend(prev?.out[k], rate(k));
   books.trend = blend(prev?.trend, (storedGold(room) - w.stored) / ticks);
   Memory.exchequer[room.name] = books;
+  annal("gold", Math.round((rate("mines") + rate("vendors")) * ticks));
 
   delete windows[room.name];
   windowFor(room);

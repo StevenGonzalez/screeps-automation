@@ -16,6 +16,7 @@ class FakeCreep {
 g.Creep = FakeCreep;
 
 import { cryFor, cryFlight, heraldRooms, settleFlight } from "../src/services/services.herald";
+import { annal } from "../src/services/services.chronicle";
 
 const ROOM = "W1N1";
 let tick = 100;
@@ -111,6 +112,7 @@ describe("herald", () => {
     const log = (g.Memory as Memory).chronicle!;
     expect(log).toHaveLength(1);
     expect(log[0].text).toBe("2 raiders fell in the Gallows Forest");
+    expect((g.Memory as Memory).annals?.slain).toBe(2);
   });
 
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {
@@ -126,6 +128,7 @@ describe("herald", () => {
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "Merchant Leofric fell to raiders in the Shadow March.",
     ]);
+    expect((g.Memory as Memory).annals?.fallen).toBe(1);
   });
 
   it("does not mourn a creep that died of age or unhurt", () => {
@@ -254,6 +257,39 @@ describe("herald", () => {
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "Summer comes to the realm. The days run long on the vendors' roads. The Midsummer Fair begins.",
     ]);
+  });
+
+  it("reads out the season's annals as the season turns", () => {
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    at(0);
+    annal("gold", 152_300);
+    annal("slain", 7);
+    annal("fallen", 1);
+    at(6_999);
+    at(7_000);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "So ends the spring. This season the realm gathered 152.3K gold, slew 7 foes and buried 1 of its own.",
+      "Summer comes to the realm. The days run long on the vendors' roads. The Midsummer Fair begins.",
+    ]);
+    expect((g.Memory as Memory).annals).toEqual({ since: 7_000, gold: 0, slain: 0, fallen: 0 });
+  });
+
+  it("owns up to annals begun partway through a season", () => {
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    at(3_000);
+    annal("gold", 900);
+    at(7_000);
+
+    expect((g.Memory as Memory).chronicle?.[0].text).toBe(
+      "So ends the spring. Since the scribes took up their pens the realm gathered 900 gold, slew no foe and lost none of its own."
+    );
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {

@@ -16,11 +16,21 @@ export interface ChronicleEntry {
   last?: number;
 }
 
+// What the realm did this season, read out when the season turns.
+export interface Annals {
+  // Tick the scribes began this season's annals.
+  since: number;
+  gold: number;
+  slain: number;
+  fallen: number;
+}
+
 declare global {
   interface Memory {
     chronicle?: ChronicleEntry[];
     // Tick of the chronicle's first day.
     chronicleEpoch?: number;
+    annals?: Annals;
   }
 }
 
@@ -41,6 +51,18 @@ function write(entry: ChronicleEntry): void {
 
 export function chronicle(text: string): void {
   write({ t: Game.time, text });
+}
+
+/** Adds n to this season's annals. */
+export function annal(key: "gold" | "slain" | "fallen", n: number): void {
+  if (!Memory.annals) Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
+  Memory.annals[key] += n;
+}
+
+export function formatK(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(n);
 }
 
 /**

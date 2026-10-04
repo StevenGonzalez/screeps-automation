@@ -5,7 +5,7 @@ import { LANDMARKS } from "../config/config.structures";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
-import { castleName, chronicleDate, recentChronicle, wildsName } from "../services/services.chronicle";
+import { castleName, chronicleDate, formatK, recentChronicle, wildsName } from "../services/services.chronicle";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -490,8 +490,3 @@ function countCreepsByRole(room: Room): Record<string, number> {
   return counts;
 }
 
-function formatK(n: number): string {
-  if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return String(n);
-}

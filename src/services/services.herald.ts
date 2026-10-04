@@ -3,10 +3,10 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { castleName, chronicle, lordName, tally, wildsName } from "./services.chronicle";
+import { Annals, annal, castleName, chronicle, formatK, lordName, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { townFeast, townSeason } from "./services.town";
-import { TownSeason } from "../config/config.town";
+import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
@@ -81,8 +81,19 @@ function heraldSeason(): void {
   const known = Memory.heraldSeason;
   Memory.heraldSeason = season;
   if (known === undefined || known === season) return;
+  const annals = Memory.annals;
+  Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
+  if (annals) chronicle(annalsLine(known, annals));
   const feast = townFeast(Game.time);
   chronicle(feast ? `${SEASON_TIDINGS[season]} The ${feast} begins.` : SEASON_TIDINGS[season]);
+}
+
+function annalsLine(season: string, a: Annals): string {
+  const whole = a.since <= Game.time - TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON;
+  const when = whole ? "This season" : "Since the scribes took up their pens";
+  const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
+  const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
+  return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold, ${slain} and ${fallen}.`;
 }
 
 // Trade with other players, read from the market's own records every few
@@ -194,6 +205,7 @@ function whereIn(roomName: string): string {
 
 function chronicleKill(room: Room): void {
   const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
+  annal("slain", 1);
   tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}`, BATTLE_WINDOW);
 }
 
@@ -227,6 +239,7 @@ function heraldFallen(): void {
     if (next.has(name) || !last.hurt || last.ttl <= 1) continue;
     const foe = foeIn(last.room);
     const by = foe ? ` to ${foe}` : "";
+    annal("fallen", 1);
     tally(
       `fallen:${last.room}`,
       1,
