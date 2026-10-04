@@ -13,7 +13,11 @@ import {
 import { getThreatInfo } from "../services/services.combat";
 import { inPixelRefill } from "./orchestrator.pixels";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
-import { getRemoteSourcePathLength, remoteRoadsEnabled } from "../services/services.remote";
+import {
+  getRemoteSourcePathLength,
+  remoteRoadCoverage,
+  remoteRoadsEnabled,
+} from "../services/services.remote";
 import {
   getUnclaimedScoreTargetCount,
   getScoreScanRooms,
@@ -412,10 +416,15 @@ const REMOTE_HAUL_MARGIN = 1.2;
 // No remote hauler is planned smaller than this many CARRY parts.
 const MIN_REMOTE_HAULER_CARRY = 4;
 
+// A remote whose road is at least this much built counts as paved, and its
+// haulers are raised with one MOVE per two CARRY.
+const PAVED_ROAD_COVERAGE = 0.9;
+
 interface RemoteHaulPlan {
   count: number;
   // CARRY parts in each hauler's body.
   carryEach: number;
+  paved: boolean;
 }
 
 // Haulers each active remote needs and how big, from its sources' path
@@ -427,16 +436,18 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
   // re-deriving it here. The copy this replaces divided by 200 while the body
   // pattern costs 150, so every remote was credited a quarter less carry than it
   // has and over-hauled to match.
-  const carryPerHauler = Math.max(
-    1,
-    buildRemoteHaulerBody(bodyBudget(room, "capacity"), remoteRoadsEnabled(room)).filter(
-      (p) => p === CARRY
-    ).length
-  );
+  const roads = remoteRoadsEnabled(room);
+  const budget = bodyBudget(room, "capacity");
+  const carryOf = (paved: boolean) =>
+    Math.max(1, buildRemoteHaulerBody(budget, roads, paved).filter((p) => p === CARRY).length);
+  const carryOnFoot = carryOf(false);
+  const carryPaved = carryOf(true);
   const output = remoteSourceOutput(room);
 
   const plans: Record<string, RemoteHaulPlan> = {};
   for (const remote of getActiveRemoteRooms(room)) {
+    const paved = roads && remoteRoadCoverage(remote) >= PAVED_ROAD_COVERAGE;
+    const carryPerHauler = paved ? carryPaved : carryOnFoot;
     let requiredCarry = 0;
     for (const src of remote.sources) {
       requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
@@ -449,7 +460,7 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
       carryPerHauler,
       Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil((requiredCarry * REMOTE_HAUL_MARGIN) / count))
     );
-    plans[remote.roomName] = { count, carryEach };
+    plans[remote.roomName] = { count, carryEach, paved };
   }
   return plans;
 }
@@ -538,16 +549,20 @@ export function spawnRemoteHauler(room: Room, spawn: StructureSpawn): boolean {
 
   // Remotes have no roads until the home can lay them, so the body keeps one
   // MOVE per CARRY; once roads are going in it also carries a WORK to build
-  // and repair them on the way home.
+  // and repair them on the way home. Once the road is all but finished it
+  // needs only one MOVE per two CARRY.
   const roads = remoteRoadsEnabled(room);
-  const carryEach = plans[targetRoomName]?.carryEach;
+  const plan = plans[targetRoomName];
+  const paved = plan?.paved ?? false;
   const planEnergy =
-    carryEach === undefined
+    plan === undefined
       ? Infinity
       : (roads ? BODYPART_COST[WORK] + BODYPART_COST[MOVE] : 0) +
-        carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]);
+        (paved
+          ? Math.ceil(plan.carryEach / 2) * (2 * BODYPART_COST[CARRY] + BODYPART_COST[MOVE])
+          : plan.carryEach * (BODYPART_COST[CARRY] + BODYPART_COST[MOVE]));
   const allowedEnergy = Math.min(planEnergy, bodyBudget(room, "available"));
-  const body = buildRemoteHaulerBody(allowedEnergy, roads);
+  const body = buildRemoteHaulerBody(allowedEnergy, roads, paved);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   const res = trackedSpawn(room, spawn, body, {
@@ -579,13 +594,17 @@ function buildRemoteMinerBody(availableEnergy: number): BodyPartConstant[] {
 }
 
 // `withWork` adds one WORK (and its MOVE) for building and repairing remote
-// roads on the way; the CARRY pairs fill whatever is left.
+// roads on the way; the CARRY pairs fill whatever is left. On a `paved` road one
+// MOVE keeps two loaded CARRY going a tile a tick, so the pattern takes half
+// the MOVE and the same gold buys a third more CARRY. Off the road such a
+// hauler walks at half speed when loaded.
 export function buildRemoteHaulerBody(
   availableEnergy: number,
-  withWork = false
+  withWork = false,
+  paved = false
 ): BodyPartConstant[] {
   const head: BodyPartConstant[] = withWork ? [WORK, MOVE] : [];
-  const pattern: BodyPartConstant[] = [CARRY, MOVE];
+  const pattern: BodyPartConstant[] = paved ? [CARRY, CARRY, MOVE] : [CARRY, MOVE];
   const patternCost = calculateBodyPartCost(pattern);
   const maxByParts = Math.floor((MAX_BODY_PART_COUNT - head.length) / pattern.length);
   const maxByEnergy = Math.floor(

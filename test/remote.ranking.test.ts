@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_SPAWNS = 108;
+g.FIND_STRUCTURES = 107;
 g.OK = 0;
 
 import {
@@ -157,6 +158,15 @@ describe("remote hauler body", () => {
 
   it("stays within 50 parts at any energy", () => {
     expect(buildRemoteHaulerBody(12_900, true).length).toBeLessThanOrEqual(50);
+    expect(buildRemoteHaulerBody(12_900, true, true).length).toBeLessThanOrEqual(50);
+  });
+
+  it("takes one MOVE per two CARRY on a paved road, and keeps pace there loaded", () => {
+    const body = buildRemoteHaulerBody(2300, true, true);
+    expect(count(body, "carry")).toBe(28);
+    expect(count(body, "move")).toBe(15);
+    // On a road each part but MOVE makes 1 fatigue loaded, and each MOVE clears 2.
+    expect(count(body, "move") * 2).toBeGreaterThanOrEqual(body.length - count(body, "move"));
   });
 });
 
@@ -179,6 +189,54 @@ describe("remote hauler sizing", () => {
 
     expect(bodies).toHaveLength(1);
     expect(bodies[0].filter((p) => p === "carry")).toHaveLength(10);
+  });
+});
+
+describe("merchants on a paved road", () => {
+  // 60 steps out is 24 CARRY. A 1300-gold home plans merchants of 1170 gold:
+  // with one MOVE per CARRY that holds 10, so the remote needs three; with one
+  // MOVE per two it holds 12, and two will do. The road runs over ten tiles
+  // and the exit, which takes none.
+  function remoteWithRoad(built: number): Room {
+    const tiles = Array.from({ length: 10 }, (_, i) => `${10 + i},20`);
+    const r = remote("W4N5", [60]);
+    r.sources[0].containerId = "box" as Id<StructureContainer>;
+    r.sources[0].roadTiles = ["0,20", ...tiles].join(";");
+    const merchants = [1, 2].map(() => creep(ROLE_REMOTE_HAULER, 22, { targetRoom: "W4N5" }));
+    const room = home({ remotes: [r], storage: true, creeps: merchants });
+    const roads = tiles.slice(0, built).map((t) => {
+      const [x, y] = t.split(",").map(Number);
+      return { structureType: "road", pos: { x, y } };
+    });
+    (g.Game as { rooms: Record<string, unknown> }).rooms.W4N5 = {
+      name: "W4N5",
+      find: (type: number) => (type === g.FIND_STRUCTURES ? roads : []),
+    };
+    return room;
+  }
+
+  it("needs fewer merchants once the road is all but built", () => {
+    expect(shouldSpawnRemoteHauler(remoteWithRoad(8))).toBe(true);
+    clock += 1;
+    expect(shouldSpawnRemoteHauler(remoteWithRoad(9))).toBe(false);
+  });
+
+  it("raises a merchant with one MOVE per two CARRY there", () => {
+    const bodies: string[][] = [];
+    const spawn = {
+      name: "Spawn1",
+      spawning: null,
+      spawnCreep(body: string[]) {
+        bodies.push(body);
+        return g.OK;
+      },
+    } as unknown as StructureSpawn;
+
+    spawnRemoteHauler(remoteWithRoad(10), spawn);
+
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].filter((p) => p === "carry")).toHaveLength(12);
+    expect(bodies[0].filter((p) => p === "move")).toHaveLength(7);
   });
 });
 

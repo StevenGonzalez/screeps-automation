@@ -88,3 +88,26 @@ export function getRemoteSourcePathLength(
   }
   return src.pathLength;
 }
+
+// Share of a remote's road built, over the tiles out to each source with a
+// container (the only sources merchants haul from and roads are laid to).
+// Exit tiles take no road, so they are left out. A remote out of sight counts
+// as unpaved.
+export function remoteRoadCoverage(remote: RemoteRoomData): number {
+  const room = Game.rooms[remote.roomName];
+  if (!room) return 0;
+  const tiles = new Set<string>();
+  for (const src of remote.sources) {
+    if (!src.containerId || !src.roadTiles) continue;
+    for (const tile of src.roadTiles.split(";")) {
+      const [x, y] = tile.split(",").map(Number);
+      if (x > 0 && y > 0 && x < 49 && y < 49) tiles.add(tile);
+    }
+  }
+  if (tiles.size === 0) return 0;
+  let built = 0;
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_ROAD && tiles.has(`${s.pos.x},${s.pos.y}`)) built++;
+  }
+  return built / tiles.size;
+}
