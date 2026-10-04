@@ -290,6 +290,9 @@ declare global {
     heraldBorn?: boolean;
     // That first creep's name while it lives, so its death is told (services.herald).
     firstBorn?: string;
+    // Set once the herald has seen the castle's vendors on the road, whether or
+    // not it told of their setting out (services.herald).
+    heraldVendors?: boolean;
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];

@@ -24,7 +24,7 @@ g.Creep = FakeCreep;
 
 import { cryFor, cryFlight, cryHaul, heraldRival, heraldRooms, settleFlight } from "../src/services/services.herald";
 import { annal, castleName, lordName, wildsName } from "../src/services/services.chronicle";
-import { townAurora, townDragon } from "../src/services/services.town";
+import { NIGHT_START, townAurora, townDragon } from "../src/services/services.town";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
 const ROOM = "W1N1";
@@ -147,6 +147,53 @@ describe("herald", () => {
     expect(lines()[1]).toContain("rises to level 7");
     expect(lines()[2]).toContain("Level 8 is near");
     expect(lines()[3]).toContain("rises to level 8");
+  });
+
+  describe("a castle's first vendors", () => {
+    const peddler = (homeRoom: string, ticksToLive: number | undefined) =>
+      ({
+        name: `Peddler ${homeRoom}${ticksToLive}`,
+        room: { name: "W2N1" },
+        pos: { roomName: "W2N1" },
+        hits: 100,
+        hitsMax: 100,
+        memory: { role: "peddler", homeRoom, targetRoom: "W2N1" },
+        ticksToLive,
+      }) as unknown as Creep;
+    const check = (room: ReturnType<typeof roomWith>, creeps: Creep[]) => {
+      tick = Math.ceil((tick + 1) / 100) * 100 - 1;
+      // Not as night falls, when the wisps have every castle cry out.
+      if ((tick + 1) % TOWN_DAY_LENGTH === NIGHT_START) tick += 100;
+      setup(room, {});
+      (g.Game as { creeps: Record<string, Creep> }).creeps = Object.fromEntries(creeps.map((c) => [c.name, c]));
+      heraldRooms();
+    };
+    const lines = () =>
+      ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("first vendors"));
+
+    it("tells once of the first setting out", () => {
+      const room = roomWith([], { my: true, level: 3 });
+      const mason = new FakeCreep("Mason Aldric", { name: ROOM });
+      check(room, [peddler(ROOM, undefined)]);
+      expect(lines()).toEqual([`${castleName(ROOM)} sends its first vendors out into the ${wildsName("W2N1")}.`]);
+      expect(cryFor(mason as unknown as Creep)).toBe("Godspeed!");
+
+      check(room, [peddler(ROOM, 1400)]);
+      expect(lines()).toHaveLength(1);
+    });
+
+    it("names the castle whose vendors already dig in the same wilds", () => {
+      const room = roomWith([], { my: true, level: 3 });
+      check(room, [peddler(ROOM, 1450), peddler("W3N1", 300)]);
+      expect(lines()[0]).toContain(`${castleName("W3N1")}'s vendors already dig there.`);
+    });
+
+    it("passes quietly over a castle whose vendors were already out", () => {
+      const room = roomWith([], { my: true, level: 3 });
+      check(room, [peddler(ROOM, 1450), peddler(ROOM, 900)]);
+      check(room, [peddler(ROOM, 1450)]);
+      expect(lines()).toEqual([]);
+    });
   });
 
   it("does not tell of a throne stirring at level 1 or between checks", () => {
@@ -685,7 +732,7 @@ describe("herald", () => {
 
   it("ends the year with the winter, names the new one in spring and counts the realm's souls", () => {
     const castle = roomWith([], { my: true, level: 6 });
-    const creeps = { A: { spawning: true }, B: { spawning: true } };
+    const creeps = { A: { spawning: true, memory: {} }, B: { spawning: true, memory: {} } };
     const at = (time: number) => {
       g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: castle }, creeps };
       heraldRooms();

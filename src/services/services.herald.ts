@@ -9,6 +9,7 @@ import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, t
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 import { remotePaved } from "./services.remote";
+import { ROLE_REMOTE_MINER } from "../config/config.roles";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 
@@ -147,6 +148,7 @@ export function heraldRooms(): void {
       heraldVisitors(room);
       heraldWorks(room);
       heraldRoads(room);
+      heraldVendors(room);
       heraldVein(room);
     }
     heraldKills(room);
@@ -431,6 +433,30 @@ function heraldRoads(room: Room): void {
       `The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`
     );
   }
+}
+
+// A castle's first vendors setting out for the wilds, told once. A castle
+// whose vendors were already on the road when the herald first looked has a
+// peddler older than a couple of checks, and is passed over quietly.
+const VENDOR_NEWS_AGE = 2 * WORKS_CHECK_PERIOD;
+
+function heraldVendors(room: Room): void {
+  if (room.memory.heraldVendors || Game.time % WORKS_CHECK_PERIOD !== 0) return;
+  const peddlers: Creep[] = [];
+  for (const name in Game.creeps) {
+    const c = Game.creeps[name];
+    if (c.memory.role === ROLE_REMOTE_MINER && c.memory.targetRoom) peddlers.push(c);
+  }
+  const ours = peddlers.filter((c) => c.memory.homeRoom === room.name);
+  if (ours.length === 0) return;
+  room.memory.heraldVendors = true;
+  if (ours.some((c) => (c.ticksToLive ?? CREEP_LIFE_TIME) < CREEP_LIFE_TIME - VENDOR_NEWS_AGE)) return;
+  const target = ours[0].memory.targetRoom!;
+  const neighbour = peddlers.find((c) => c.memory.homeRoom !== room.name && c.memory.targetRoom === target);
+  const shared = neighbour?.memory.homeRoom ? ` ${castleName(neighbour.memory.homeRoom)}'s vendors already dig there.` : "";
+  roomCries[room.name] = "Godspeed!";
+  spreadWord("vendors!");
+  chronicle(`${castleName(room.name)} sends its first vendors out into the ${wildsName(target)}.${shared}`);
 }
 
 // A castle's mineral vein, told when its jewelers dig it dry and again when it
