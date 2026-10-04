@@ -12,6 +12,7 @@ import { cottageLayout, parseTile, spotHolder, townClock } from "../services/ser
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
+import { castleName, chronicleDate, recentChronicle } from "../services/services.chronicle";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -25,6 +26,7 @@ export function loop() {
     const room = Game.rooms[roomName];
     if (!room.controller?.my) continue;
     drawRoomHUD(room);
+    drawChronicle(room);
     drawTown(room);
     drawBlueprint(room);
   }
@@ -85,7 +87,7 @@ function drawRoomHUD(room: Room) {
   const dimStyle: TextStyle = { ...style, color: "#aaaaaa" };
   const warnStyle: TextStyle = { ...style, color: "#ff6644" };
 
-  v.text(`RCL ${rcl}  ${PHASE_LABEL[phase]}`, x, y, { ...style, font: 0.6, color: "#ffffff" });
+  v.text(`${castleName(room.name)}  ·  RCL ${rcl}  ${PHASE_LABEL[phase]}`, x, y, { ...style, font: 0.6, color: "#ffffff" });
   y += lineH;
 
   if (rcl < 8 && total > 0) {
@@ -188,6 +190,24 @@ function describeKeepPlan(room: Room, stored: number): string | undefined {
   return undefined;
 }
 
+const CHRONICLE_LINES = 4;
+
+// The latest entries of the Royal Chronicle, newest at the bottom, in the
+// room's lower-left corner.
+function drawChronicle(room: Room): void {
+  const entries = recentChronicle(CHRONICLE_LINES);
+  if (entries.length === 0) return;
+  const v = room.visual;
+  const style: TextStyle = { font: 0.45, align: "left", stroke: "#000000", strokeWidth: 0.06 };
+  let y = 48.6 - entries.length * 0.65;
+  v.text("Royal Chronicle", 0.5, y - 0.15, { ...style, font: 0.5, color: "#f2c14e" });
+  entries.forEach((e, i) => {
+    y += 0.65;
+    const fresh = i === entries.length - 1;
+    v.text(`${chronicleDate(e.t)}: ${e.text}`, 0.5, y, { ...style, color: fresh ? "#ffe9a8" : "#b8a88a" });
+  });
+}
+
 const PHASE_ICON: Record<string, string> = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
 
 // How dark the town gets through the day.
@@ -231,8 +251,7 @@ function drawTown(room: Room): void {
     const ripple = 0.3 + 0.1 * Math.sin(Game.time / 3);
     v.circle(x, y, { radius: ripple + 0.15, fill: "transparent", stroke: "#66ccff", strokeWidth: 0.05, opacity: 0.6 });
     v.circle(x, y, { radius: 0.25, fill: "#3399ff", opacity: 0.6 });
-    const name = room.memory.townName ?? room.name;
-    v.text(`${name} Square`, x, y - 1.8, label);
+    v.text(`${castleName(room.name)} Square`, x, y - 1.8, label);
   } else {
     for (const k of town.square) {
       const { x, y } = parseTile(k);

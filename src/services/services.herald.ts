@@ -1,6 +1,10 @@
 // Battle cries and proclamations: things creeps shout because something happened,
 // as opposed to the idle chatter they repeat on a timer. Cries live on the heap
-// for the tick they were raised; a cry lost to a global reset is no loss.
+// for the tick they were raised; a cry lost to a global reset is no loss. What
+// is worth remembering also goes into the Royal Chronicle.
+
+import { castleName, chronicle, tally } from "./services.chronicle";
+import { isSourceKeeperRoom } from "./services.combat";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 
@@ -52,7 +56,16 @@ function heraldRise(room: Room): void {
   room.memory.heraldLevel = level;
   if (known === undefined || level <= known) return;
   roomCries[room.name] = "Long live!";
-  console.log(`[Herald] Hear ye! ${room.name} rises to level ${level}. Long live the Crown!`);
+  chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+}
+
+// A fight's kills in one room gather into one line while it lasts.
+const BATTLE_WINDOW = 300;
+
+function chronicleKill(room: Room): void {
+  const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
+  const where = room.controller?.my ? `before the walls of ${castleName(room.name)}` : `in the wilds of ${room.name}`;
+  tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${where}`, BATTLE_WINDOW);
 }
 
 // A hostile creep died last tick to something of ours. A creep that struck it
@@ -69,6 +82,7 @@ function heraldKills(room: Room): void {
       .map((a) => Game.getObjectById(a.objectId as Id<Creep | StructureTower>))
       .filter((o): o is Creep | StructureTower => !!o && o.my);
     if (ours.length === 0) continue;
+    chronicleKill(room);
     const creeps = ours.filter((o): o is Creep => o instanceof Creep);
     if (creeps.length === 0) {
       roomCries[room.name] = "Huzzah!";

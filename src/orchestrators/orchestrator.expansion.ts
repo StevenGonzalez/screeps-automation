@@ -2,6 +2,7 @@ import { getThreatInfo, isSourceKeeperRoom } from "../services/services.combat";
 import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles";
 import { getCpuStats } from "../services/services.profiler";
 import { KEEP_FUND_FLOOR } from "../services/services.treasury";
+import { castleName, chronicle } from "../services/services.chronicle";
 
 const BOOTSTRAP_MIN_RCL = 3;
 const BOOTSTRAP_MIN_STORAGE_ENERGY = 10_000;
@@ -500,6 +501,7 @@ function manageActiveExpansion() {
         // Cool the room down as an expansion target only; it stays minable as a remote.
         if (!Memory.claimFailures) Memory.claimFailures = {};
         Memory.claimFailures[exp.roomName] = Game.time + CLAIM_FAILED_COOLDOWN;
+        chronicle(`The conqueror never reached the throne of ${exp.roomName}. The claim is abandoned.`);
         clearExpansion(`claim timed out after ${CLAIM_TIMEOUT} ticks`);
         return;
       }
@@ -509,6 +511,7 @@ function manageActiveExpansion() {
   if (exp.phase === "bootstrapping") {
     if (exp.bootstrapStartedAt === undefined) exp.bootstrapStartedAt = Game.time;
     if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
+      chronicle(`The settlers of ${castleName(exp.roomName)} could not make it stand. The keep is abandoned.`);
       if (child?.controller?.my && child.find(FIND_MY_SPAWNS).length === 0) {
         child.controller.unclaim();
         clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks - no spawn, unclaimed`);
@@ -537,6 +540,7 @@ function manageActiveExpansion() {
           `[Expansion] ${exp.roomName} is self-sufficient (RCL ${child.controller!.level}, ` +
           `own spawn built) - established.`
         );
+        chronicle(`${castleName(exp.roomName)} stands on its own, with a spawn of its own. The realm grows.`);
       }
     }
     return;
@@ -624,5 +628,5 @@ function planSavings(): void {
   const plan = Memory.expansionSavings;
   if (plan?.room === home && plan.target === next.roomName) return;
   Memory.expansionSavings = { room: home, target: next.roomName };
-  console.log(`[Expansion] ${home} saves ${KEEP_FUND_FLOOR} gold to found a keep at ${next.roomName}`);
+  chronicle(`${castleName(home)} fills its coffers to found a keep at ${next.roomName}.`);
 }

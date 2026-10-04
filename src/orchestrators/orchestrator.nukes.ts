@@ -1,4 +1,5 @@
 import { ROLE_REPAIRER } from "../config/config.roles";
+import { castleName, chronicle } from "../services/services.chronicle";
 
 const NUKE_IMPACT_DAMAGE = 10_000_000;
 const NUKE_SPLASH_DAMAGE = 5_000_000;
@@ -49,6 +50,8 @@ function notify(room: Room, nukes: Nuke[]): void {
   const msg = `[Nuke] ${room.name}: ${nukes.length} inbound - first impact in ${earliest} ticks (tick ${land})`;
   console.log(msg);
   Game.notify(msg, 60);
+  const count = nukes.length === 1 ? "A nuke falls" : `${nukes.length} nukes fall`;
+  chronicle(`Doom from the sky! ${count} toward ${castleName(room.name)}, landing in ${earliest} ticks.`);
 }
 
 function reinforce(room: Room, nukes: Nuke[]): void {

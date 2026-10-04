@@ -1,4 +1,8 @@
 import { getThreatInfo } from "../services/services.combat";
+import { tally } from "../services/services.chronicle";
+
+// Pixels distilled within this long of the last one share a chronicle line.
+const PIXEL_TALLY_WINDOW = 5000;
 
 declare global {
   interface Memory {
@@ -33,6 +37,7 @@ function processPixelGeneration() {
   if (Game.cpu.generatePixel() === OK) {
     Memory.lastPixelTick = Game.time;
     Memory.pixelRefillPeak = 0;
+    tally("pixels", 1, (n) => `The alchemists distilled ${n === 1 ? "a pixel" : `${n} pixels`} from the realm's idle thought.`, PIXEL_TALLY_WINDOW);
   }
 }
 

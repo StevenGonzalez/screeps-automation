@@ -3,6 +3,7 @@ import { TOWN, COTTAGE_FAMILIES } from "../config/config.town";
 import { cottageLayout, parseTile, townBarrierTiles, townFootprint } from "../services/services.town";
 import { CASTLE_STAMP, MERCHANT_RING_EXTENSION_OFFSETS } from "./planner.stamp";
 import { readBlueprint } from "./planner.blueprint";
+import { castleName } from "../services/services.chronicle";
 
 // The town quarter. Laid out once the perimeter mostly stands:
 //
@@ -587,7 +588,7 @@ export function townProtectedRects(room: Room): Array<{ x1: number; y1: number; 
 /** Lines for Game.arca.town(): the quarter's layout, folk and the hour. */
 export function describeTown(room: Room): string[] {
   const town = room.memory.town;
-  const name = room.memory.townName ?? room.name;
+  const name = castleName(room.name);
   if (!town) {
     const rcl = room.controller?.level ?? 0;
     return [

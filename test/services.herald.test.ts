@@ -43,6 +43,7 @@ function killed(victim: string, by: string[]) {
 describe("herald", () => {
   beforeEach(() => {
     vi.spyOn(console, "log").mockImplementation(() => {});
+    g.Memory = {};
   });
 
   it("has the creep that struck a raider down shout a kill cry", () => {
@@ -85,6 +86,22 @@ describe("herald", () => {
     setup(room, {});
     heraldRooms();
     expect(cryFor(mason as unknown as Creep)).toBeUndefined();
+
+    const log = (g.Memory as Memory).chronicle!;
+    expect(log).toHaveLength(1);
+    expect(log[0].text).toContain("rises to level 7");
+  });
+
+  it("gathers a fight's kills into one chronicle line", () => {
+    const tower = { my: true };
+    setup(roomWith(killed("raider1", ["tower"])), { tower });
+    heraldRooms();
+    setup(roomWith(killed("raider2", ["tower"])), { tower });
+    heraldRooms();
+
+    const log = (g.Memory as Memory).chronicle!;
+    expect(log).toHaveLength(1);
+    expect(log[0].text).toBe("2 raiders fell in the wilds of W1N1");
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {

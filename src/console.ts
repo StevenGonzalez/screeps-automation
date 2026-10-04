@@ -16,6 +16,7 @@ import {
 } from "./orchestrators/orchestrator.military";
 import { getThreatInfo, getThreatSeverity, isBlockaded } from "./services/services.combat";
 import { getCpuStats } from "./services/services.profiler";
+import { castleName, chronicleDate, recentChronicle } from "./services/services.chronicle";
 import {
   launchSkOp,
   cancelSkOp,
@@ -884,6 +885,27 @@ export function setupConsole() {
         for (const line of describeBooks(books)) console.log(`  ${line}`);
         if (books.trend !== undefined) console.log(`  treasury ${books.trend >= 0 ? "+" : ""}${books.trend}/t`);
       }
+    },
+
+    chronicle: (count = 20) => {
+      const entries = recentChronicle(count);
+      if (entries.length === 0) {
+        console.log("[Chronicle] Nothing worth writing down has happened yet");
+        return;
+      }
+      console.log("[Chronicle] The Royal Chronicle, newest last:");
+      for (const e of entries) console.log(`  ${chronicleDate(e.t)}: ${e.text}`);
+    },
+
+    name: (roomName: string, name?: string) => {
+      const mem = Memory.rooms[roomName];
+      if (!mem) {
+        console.log(`[ARCA] No memory for ${roomName}`);
+        return;
+      }
+      if (name) mem.townName = name;
+      else delete mem.townName;
+      console.log(`[ARCA] ${roomName} is now known as ${castleName(roomName)}`);
     },
 
     powercreeps: () => {
