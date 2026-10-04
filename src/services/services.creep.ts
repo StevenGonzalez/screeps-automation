@@ -1,6 +1,7 @@
 import { keepSignature, remoteSignature } from "../config/signatures";
 import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
-import { lordName, ordinal, raiseWarband, tally, wildsName, warbandIn } from "./services.chronicle";
+import { WARBAND_BOUNTY_RAIDS, lordName, ordinal, raiseWarband, tally, wildsName, warbandIn } from "./services.chronicle";
+import { spreadWord } from "./services.herald";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
 
 export {
@@ -208,9 +209,11 @@ export function markRemoteInvader(entry: RemoteRoomData, room: Room): void {
 function raidLine(roomName: string): string {
   const band = raiseWarband(roomName);
   const wilds = wildsName(roomName);
-  return band.raids === 1
-    ? `Raiders under ${band.name} fell upon the vendors in the ${wilds}.`
-    : `${band.name} comes back to the ${wilds} for a ${ordinal(band.raids)} raid on the vendors.`;
+  if (band.raids === 1) return `Raiders under ${band.name} fell upon the vendors in the ${wilds}.`;
+  const back = `${band.name} comes back to the ${wilds} for a ${ordinal(band.raids)} raid on the vendors.`;
+  if (band.raids !== WARBAND_BOUNTY_RAIDS) return back;
+  spreadWord("a bounty!");
+  return `${back} The Crown puts a price on the warlord's head.`;
 }
 
 // Damage taken in the assigned remote. Only a player there earns a strike;

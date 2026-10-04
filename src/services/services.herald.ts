@@ -3,7 +3,7 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { Annals, annal, castleName, chronicle, formatK, lordName, tally, warbandIn, warbandLoss, wildsName } from "./services.chronicle";
+import { Annals, annal, castleName, chronicle, formatK, lordName, tally, warbandBounty, warbandIn, warbandLoss, wildsName } from "./services.chronicle";
 import { isArmedHostile, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, TownSeason } from "../config/config.town";
@@ -616,8 +616,9 @@ function chronicleKill(room: Room, slayer?: string): void {
   if (band && warbandLoss(room.name)) {
     spreadWord("routed!");
     Memory.lastRout = { band, room: room.name, slayer };
+    const bounty = slayer && warbandBounty(room.name) ? " and claims the Crown's bounty" : "";
     chronicle(
-      `${slayer ? `${slayer} broke ${band}'s band` : `${band}'s band is broken`} ${whereIn(room.name)}. The warlord is heard of no more.`
+      `${slayer ? `${slayer} broke ${band}'s band` : `${band}'s band is broken`} ${whereIn(room.name)}${bounty}. The warlord is heard of no more.`
     );
   }
 }

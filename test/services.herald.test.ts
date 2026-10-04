@@ -226,7 +226,7 @@ describe("herald", () => {
   });
 
   it("tells of a warlord's band broken once its fifth raider falls", () => {
-    (g.Memory as Memory).warbands = { [ROOM]: { name: "Grask One-Eye", at: tick, raids: 3, slain: 3 } };
+    (g.Memory as Memory).warbands = { [ROOM]: { name: "Grask One-Eye", at: tick, raids: 2, slain: 3 } };
     const knight = new FakeCreep("Dragon Knight Edric", { name: ROOM });
     setup(roomWith(killed("raider1", ["knight"])), { knight });
     heraldRooms();
@@ -242,6 +242,17 @@ describe("herald", () => {
     expect((g.Memory as Memory).warbands![ROOM].broken).toBe(true);
     expect((g.Memory as Memory).gossip?.line).toBe("routed!");
     expect((g.Memory as Memory).lastRout).toEqual({ band: "Grask One-Eye", room: ROOM, slayer: "Dragon Knight Edric" });
+  });
+
+  it("has the knight who breaks a warlord's band claim the bounty on its head", () => {
+    (g.Memory as Memory).warbands = { [ROOM]: { name: "Vulk the Gaunt", at: tick, raids: 3, slain: 4 } };
+    const knight = new FakeCreep("Dragon Knight Edric", { name: ROOM });
+    setup(roomWith(killed("raider", ["knight"])), { knight });
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle!.at(-1)!.text).toBe(
+      "Dragon Knight Edric broke Vulk the Gaunt's band in the Gallows Forest and claims the Crown's bounty. The warlord is heard of no more."
+    );
   });
 
   it("mourns one of ours who fell wounded, naming the foe still in the room", () => {

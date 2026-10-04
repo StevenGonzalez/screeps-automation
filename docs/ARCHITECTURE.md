@@ -280,9 +280,12 @@ every creep there shouts "To arms!". A knight riding out against raiders in a
 remote shouts "Ride out!" and the chronicle tells of it, once for each raid. Each
 remote's raids come under a named warlord ("Raiders under Grask One-Eye fell upon
 the vendors in the Crow Glen."), who comes back raid after raid ("for a third raid
-on the vendors") until five of its raiders have fallen. The fifth breaks its band,
-the chronicle tells who broke it, and the next raid there comes under a new
-warlord (`Memory.warbands`). A remote peddler or merchant fleeing a
+on the vendors") until five of its raiders have fallen. On its third raid the
+Crown puts a price on its head. The fifth raider slain breaks its band, the
+chronicle tells who broke it (and, for a warlord with a price on its head, that
+they claim the bounty), the minstrels sing of it at the next feast
+(`Memory.lastRout`), and the next raid there comes under a new warlord
+(`Memory.warbands`). A remote peddler or merchant fleeing a
 contested remote shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
 load ("+800 gold"). Each load is added to the merchant's lifetime haul
 (`memory.hauled`), and a merchant who dies of age having brought home more gold
@@ -296,7 +299,7 @@ castle's mineral vein is dug dry, with the days until it returns, and when it
 runs full again (`memory.heraldVeinDry`).
 
 News outlives its cry. For 600 ticks after a level, new renown, a keep's
-firstborn, a war party at the walls, a raider slain, a warband routed, one of ours fallen ("† Wulfric"), the dragon, the
+firstborn, a war party at the walls, a raider slain, a bounty on a warlord, a warband routed, one of ours fallen ("† Wulfric"), the dragon, the
 wolves or the wisps, every creep in the realm now and then repeats it in its idle
 chatter (`Memory.gossip`). Newer news replaces older. A creep just out of the
 spawn speaks its first words ("reporting!", "first day!"). In its last 150 ticks a

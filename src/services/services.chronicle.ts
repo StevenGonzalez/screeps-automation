@@ -212,6 +212,15 @@ export function raiseWarband(roomName: string): { name: string; raids: number } 
   return { name, raids: 1 };
 }
 
+// A warlord back for this many raids on the same remote has a price put on
+// its head, claimed by whoever breaks its band.
+export const WARBAND_BOUNTY_RAIDS = 3;
+
+/** Whether the Crown has put a price on the head of the warlord who raids `roomName`. */
+export function warbandBounty(roomName: string): boolean {
+  return (Memory.warbands?.[roomName]?.raids ?? 1) >= WARBAND_BOUNTY_RAIDS;
+}
+
 /** The warlord who raids `roomName`, if one has. */
 export function warbandIn(roomName: string): string | undefined {
   return Memory.warbands?.[roomName]?.name;

@@ -152,8 +152,9 @@ describe("raids in the chronicle", () => {
     expect((g.Memory as Memory).chronicle?.map((l) => l.text).filter((t) => !t.includes(" is rid of "))).toEqual([
       "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
       "Brakka the Gaunt comes back to the Shadow March for a second raid on the vendors.",
-      "Brakka the Gaunt comes back to the Shadow March for a third raid on the vendors.",
+      "Brakka the Gaunt comes back to the Shadow March for a third raid on the vendors. The Crown puts a price on the warlord's head.",
     ]);
+    expect((g.Memory as Memory).gossip?.line).toBe("a bounty!");
   });
 
   it("draws a new warlord once the last one's band is broken", () => {
