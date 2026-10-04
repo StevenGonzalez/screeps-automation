@@ -61,7 +61,11 @@ Run order each tick (from `main.ts`):
 20. `visuals` - room visuals *(CPU-gated)*
 
 A side-effect import of `services/services.movement` installs a traffic-managed
-`moveTo` override on `Creep.prototype` before the loop runs.
+`moveTo` override on `Creep.prototype` before the loop runs. A walk to a target
+in the creep's own room is kept inside that room (`maxRooms: 1`), and a
+home-economy creep (harvester, miner, hauler, filler, builder, repairer,
+upgrader, mineral miner, minstrel) that still ends up in another room walks
+back to its `homeRoom` before it does any work.
 
 ---
 

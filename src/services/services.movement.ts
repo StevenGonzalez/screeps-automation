@@ -226,16 +226,20 @@ function restrictToRoute(creep: Creep, tpos: RoomPosition, opts: MoveToOpts): vo
   const tpos = (target as { pos?: RoomPosition })?.pos ?? (target as RoomPosition);
   const sameRoom = tpos instanceof RoomPosition && tpos.roomName === this.pos.roomName;
   const range = (opts?.range as number | undefined) ?? 1;
+  // A walk to somewhere in this room stays in it. Left free, the path could cut
+  // through a neighbour when that is shorter, and a home worker that steps out
+  // takes up work in whatever room it lands in.
+  const roomBound: MoveToOpts = sameRoom ? { maxRooms: 1 } : {};
 
   // Traffic handling can be switched off on its own; the danger-aware route
   // still applies, since walking into a towered room is never a traffic choice.
   if (Memory.trafficDisabled) {
-    const plainOpts: MoveToOpts = { ...(opts ?? {}) };
+    const plainOpts: MoveToOpts = { ...roomBound, ...(opts ?? {}) };
     if (!sameRoom) restrictToRoute(this, tpos, plainOpts);
     return originalMoveTo.call(this, target as never, plainOpts as never);
   }
 
-  const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...(opts ?? {}) };
+  const effectiveOpts: MoveToOpts = { plainCost: 2, swampCost: 10, ...roomBound, ...(opts ?? {}) };
   if (!effectiveOpts.costCallback) {
     effectiveOpts.costCallback = sameRoom ? roadCostCallback : creepAwareIn(this.pos.roomName);
   }
@@ -365,6 +369,18 @@ export function shelterFromHostiles(creep: Creep): boolean {
   }
 
   return fleeFrom(creep, threats, SHELTER_DISTANCE);
+}
+
+/**
+ * Walks a home-economy creep back to the castle that raised it if it has
+ * strayed into another room, say off an exit tile. Returns true while it is on
+ * its way.
+ */
+export function walkHome(creep: Creep): boolean {
+  const home = creep.memory.homeRoom;
+  if (!home || creep.room.name === home || !CIVILIAN_ROLES.has(creep.memory.role)) return false;
+  creep.moveTo(new RoomPosition(25, 25, home), { range: 20 });
+  return true;
 }
 
 function shelterBed(creep: Creep, beds: string[], threats: RoomPosition[]): string | null {

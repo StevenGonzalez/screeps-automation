@@ -92,6 +92,22 @@ describe("stuck detection", () => {
   });
 });
 
+describe("room-bound walks", () => {
+  it("keeps a walk to somewhere in this room inside it, and lets a walk to another room leave", () => {
+    const a = creep("a", 10);
+    setTick(tick);
+    g.ERR_NO_PATH = -2;
+    (Game as unknown as { map: unknown }).map = { findRoute: () => -2 };
+    a.moveTo(new FakePos(20, 10, "W1N1") as unknown as RoomPosition);
+    expect((originalMoveTo.mock.calls[0] as unknown[])[1]).toMatchObject({ maxRooms: 1 });
+
+    setTick(tick + 1);
+    (Game as unknown as { map: unknown }).map = { findRoute: () => -2 };
+    a.moveTo(new FakePos(20, 10, "W1N2") as unknown as RoomPosition);
+    expect((originalMoveTo.mock.calls[1] as unknown[])[1]).not.toHaveProperty("maxRooms");
+  });
+});
+
 describe("traffic shove", () => {
   it("steps the stuck creep into its blocker's tile so the two swap", () => {
     const a = creep("a", 10);

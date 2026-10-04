@@ -25,11 +25,12 @@ g.Creep = FakeCreep;
 const search = vi.fn();
 g.PathFinder = { CostMatrix: FakeMatrix, search };
 
-import { ROLE_BUILDER, ROLE_KNIGHT } from "../src/config/config.roles";
+import { ROLE_BUILDER, ROLE_KNIGHT, ROLE_REPAIRER } from "../src/config/config.roles";
 
 let shelterFromHostiles: (c: Creep) => boolean;
+let walkHome: (c: Creep) => boolean;
 beforeAll(async () => {
-  ({ shelterFromHostiles } = await import("../src/services/services.movement"));
+  ({ shelterFromHostiles, walkHome } = await import("../src/services/services.movement"));
 });
 
 function pos(x: number, under: unknown[] = []) {
@@ -153,5 +154,24 @@ describe("shelterFromHostiles", () => {
     const c = civilian(ROLE_BUILDER, 10);
     expect(shelterFromHostiles(c)).toBe(true);
     expect(search).toHaveBeenCalled();
+  });
+});
+
+describe("walkHome", () => {
+  it("walks a home worker that strayed into another room back to its castle", () => {
+    const c = civilian(ROLE_REPAIRER, 10);
+    c.memory.homeRoom = "W1N2";
+    expect(walkHome(c)).toBe(true);
+    expect((c.moveTo as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({ roomName: "W1N2" });
+  });
+
+  it("leaves a worker at home, one with no home on record, and military roles alone", () => {
+    const home = civilian(ROLE_REPAIRER, 10);
+    home.memory.homeRoom = "W1N1";
+    expect(walkHome(home)).toBe(false);
+    expect(walkHome(civilian(ROLE_REPAIRER, 10))).toBe(false);
+    const knight = civilian(ROLE_KNIGHT, 10);
+    knight.memory.homeRoom = "W1N2";
+    expect(walkHome(knight)).toBe(false);
   });
 });

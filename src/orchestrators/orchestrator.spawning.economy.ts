@@ -519,7 +519,7 @@ export function spawnEmergencyHarvester(room: Room, spawn: StructureSpawn): bool
   const body: BodyPartConstant[] = [];
   for (let i = 0; i < sets; i++) body.push(WORK, CARRY, MOVE);
   const res = trackedSpawn(room, spawn, body, {
-    memory: { role: ROLE_HARVESTER },
+    memory: { role: ROLE_HARVESTER, homeRoom: room.name },
   });
   return res === OK;
 }
@@ -550,7 +550,7 @@ export function spawnRepairer(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_REPAIRER, allowedEnergy);
   const res = trackedSpawn(room, spawn, body, {
-    memory: { role: ROLE_REPAIRER },
+    memory: { role: ROLE_REPAIRER, homeRoom: room.name },
   });
   return res === OK;
 }
@@ -585,7 +585,7 @@ export function spawnMineralMiner(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildMineralMinerBody(allowedEnergy);
   const res = trackedSpawn(room, spawn, body, {
-    memory: { role: ROLE_MINERAL_MINER },
+    memory: { role: ROLE_MINERAL_MINER, homeRoom: room.name },
   });
   return res === OK;
 }
@@ -594,7 +594,7 @@ export function spawnHarvester(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_HARVESTER, allowedEnergy);
   const res = trackedSpawn(room, spawn, body, {
-    memory: { role: ROLE_HARVESTER },
+    memory: { role: ROLE_HARVESTER, homeRoom: room.name },
   });
   return res === OK;
 }
@@ -642,7 +642,7 @@ export function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   }
 
   const res = trackedSpawn(room, spawn, body, {
-    memory: { role: ROLE_UPGRADER, ...boostMemory(queue) },
+    memory: { role: ROLE_UPGRADER, homeRoom: room.name, ...boostMemory(queue) },
   });
   return res === OK;
 }
@@ -651,7 +651,7 @@ export function spawnBuilder(room: Room, spawn: StructureSpawn): boolean {
   const allowedEnergy = bodyBudget(room, "available");
   const body = buildScaledBody(ROLE_BUILDER, allowedEnergy);
   const res = trackedSpawn(room, spawn, body, {
-    memory: { role: ROLE_BUILDER },
+    memory: { role: ROLE_BUILDER, homeRoom: room.name },
   });
   return res === OK;
 }
@@ -689,12 +689,12 @@ export function spawnMiner(room: Room, spawn: StructureSpawn): boolean {
     if (existingMiners > 0 && hasCoreRefiller(room) && holdSpawnFor(room, ROLE_MINER)) return true;
     const affordable = buildMinerBody(bodyBudget(room, "available"));
     return trackedSpawn(room, spawn, affordable, {
-      memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
+      memory: { role: ROLE_MINER, homeRoom: room.name, ...inheritMinerPost(room) },
     }) === OK;
   }
 
   return trackedSpawn(room, spawn, body, {
-    memory: { role: ROLE_MINER, ...inheritMinerPost(room) },
+    memory: { role: ROLE_MINER, homeRoom: room.name, ...inheritMinerPost(room) },
   }) === OK;
 }
 

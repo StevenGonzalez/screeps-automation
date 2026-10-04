@@ -64,7 +64,7 @@ import { runScoreHunter } from "../roles/role.scoreHunter";
 import { runUnclaimer } from "../roles/role.unclaimer";
 import { runTownsfolk } from "../roles/role.townsfolk";
 import { runMinstrel } from "../roles/role.minstrel";
-import { resolveTraffic, shelterFromHostiles } from "../services/services.movement";
+import { resolveTraffic, shelterFromHostiles, walkHome } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 import { cryFor, heraldRooms } from "../services/services.herald";
 import { townFeast, townSeason, townStorm } from "../services/services.town";
@@ -181,9 +181,9 @@ export function loop() {
       try {
         if (profile) {
           const start = Game.cpu.getUsed();
-          if (!shelterFromHostiles(creep)) handler(creep);
+          if (!shelterFromHostiles(creep) && !walkHome(creep)) handler(creep);
           recordRole(creep.memory.role, Game.cpu.getUsed() - start);
-        } else if (!shelterFromHostiles(creep)) {
+        } else if (!shelterFromHostiles(creep) && !walkHome(creep)) {
           handler(creep);
         }
         maybeChatter(creep);
