@@ -234,6 +234,16 @@ describe("auto production planning", () => {
     expect((room.memory.labSystem as LabSystemMemory).plannedTarget).toBe("XUH2O");
   });
 
+  it("does not buy hydrogen to stock up OH, which only a boost chain uses", () => {
+    const room = makeRoom({ name: "R", storage: { O: 20_000 }, queue: [] });
+    const h = { id: "sellH", type: "sell", resourceType: "H", price: 1, amount: 50_000, roomName: "W9N9" };
+    setGame([room], 600, [h]);
+    planAutoProduction(room as unknown as Room);
+    const ls = room.memory.labSystem as LabSystemMemory;
+    expect(ls.plannedTarget).toBeUndefined();
+    expect(ls.queue).toEqual([]);
+  });
+
   it("skips a benched target so the ones after it get a turn", () => {
     const room = makeRoom({ name: "R", storage: minerals, queue: [] });
     const ls = room.memory.labSystem as LabSystemMemory;

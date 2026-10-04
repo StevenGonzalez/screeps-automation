@@ -25,6 +25,10 @@ const LAB_PLAN_INTERVAL = 100;
 // it get the labs instead of the same stalled chain being planned again.
 const LAB_TARGET_BENCH_TICKS = 10_000;
 
+// OH is not a target of its own: no creep is boosted with it, and the chains
+// that need it make it as a step. Stocking 10,000 of it ahead of them bought
+// Embercrag about 10,000 hydrogen at over 600 credits each, some six million
+// credits, for OH that sat in storage.
 export const AUTO_PRODUCTION_TARGETS: Record<string, number> = {
   XUH2O: 3000,
   XKHO2: 3000,
@@ -33,7 +37,6 @@ export const AUTO_PRODUCTION_TARGETS: Record<string, number> = {
   XZHO2: 2000,
   XGH2O: 3000,
   XGHO2: 2000,
-  OH:    10000,
   G:     5000,
 };
 

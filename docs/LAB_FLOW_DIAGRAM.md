@@ -26,7 +26,7 @@
          |                    |  compound (have < target)|
          |                    |  - XUH2O: 3000          |
          |                    |  - XUHO2: 3000          |
-         |                    |  - OH:    10000         |
+         |                    |  - G:     5000          |
          |                    +------------+------------+
          |                                 |
          |                                 v
@@ -130,7 +130,7 @@
 |  REACTION TIER PYRAMID                                              |
 +---------------------------------------------------------------------+
 
- Auto-production targets the T4 boosts (+ OH, G); lower tiers are made
+ Auto-production targets the T4 boosts (+ G); lower tiers are made
  only as chain intermediates. The planner walks AUTO_PRODUCTION_TARGETS
  in list order and tops up the first under-stocked compound.
 
@@ -158,7 +158,7 @@
                                  |
                     +------------+------------+
                     |   TIER 1 (Base)         |
-                    |   OH, G, ZK, UL         |  OH auto 10k, G auto 5k
+                    |   OH, G, ZK, UL         |  G auto 5k
                     |                         |
                     +------------+------------+
                                  |
