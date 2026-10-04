@@ -7214,6 +7214,22 @@ function settleFlight(creep) {
     if (creep.memory.fled)
         delete creep.memory.fled;
 }
+const GOSSIP_TICKS = 600;
+function spreadWord(line) {
+    Memory.gossip = { line: line.slice(0, 10), until: Game.time + GOSSIP_TICKS };
+}
+function gossip() {
+    const word = Memory.gossip;
+    if (!word)
+        return undefined;
+    if (word.until > Game.time)
+        return word.line;
+    delete Memory.gossip;
+    return undefined;
+}
+function mourn(name) {
+    return `† ${name.slice(name.lastIndexOf(" ") + 1)}`;
+}
 function heraldRooms() {
     var _a;
     freshCries();
@@ -7249,6 +7265,7 @@ function heraldRenown() {
     Memory.heraldGcl = level;
     if (known === undefined || level <= known)
         return;
+    spreadWord("renown!");
     chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
 }
 const SEASON_TIDINGS = {
@@ -7366,8 +7383,10 @@ function heraldDragon(castles) {
         return;
     for (const room of castles)
         roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
-    if (dragon.t === 0)
-        chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleList(castles)));
+    if (dragon.t !== 0)
+        return;
+    spreadWord("a dragon!");
+    chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleList(castles)));
 }
 const HOWL_CRIES = ["Wolves!", "Hark!", "Hear that?", "Awoo?!"];
 function heraldWolves(castles) {
@@ -7376,10 +7395,12 @@ function heraldWolves(castles) {
         return;
     for (const room of castles)
         roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
-    if (howl.n === 0)
-        chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
+    if (howl.n !== 0)
+        return;
+    spreadWord("wolves...");
+    chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
 }
-const WISP_CRIES = ["Wisps!", "Don't follow!", "Spirits..."];
+const WISP_CRIES = ["Wisps!", "Don't go!", "Spirits..."];
 const WISP_TIDINGS = [
     "Under the dark moon, will-o'-the-wisps drifted over the marshes. None who followed them came back.",
     "Pale lights wandered the bogs all night beneath the new moon.",
@@ -7390,6 +7411,7 @@ function heraldWisps(castles) {
         return;
     castles.forEach((room, i) => (roomCries[room.name] = WISP_CRIES[i % WISP_CRIES.length]));
     const moon = Math.floor(Game.time / (TOWN_DAY_LENGTH * TOWN_MOON_DAYS));
+    spreadWord("the wisps");
     chronicle(WISP_TIDINGS[moon % WISP_TIDINGS.length]);
 }
 const AURORA_TIDINGS = [
@@ -7426,6 +7448,7 @@ function heraldRise(room) {
     if (known === undefined || level <= known)
         return;
     roomCries[room.name] = "Long live!";
+    spreadWord(`level ${level}!`);
     chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
 }
 function heraldFirstBorn(room) {
@@ -7441,6 +7464,7 @@ function heraldFirstBorn(room) {
             return;
     }
     roomCries[room.name] = "Huzzah!";
+    spreadWord("firstborn!");
     chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
 }
 const BATTLE_WINDOW = 300;
@@ -7453,6 +7477,8 @@ function whereIn(roomName) {
 function chronicleKill(room) {
     const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
     annal("slain", 1);
+    if (foe === "raider")
+        spreadWord("victory!");
     tally(`slain:${room.name}`, 1, (n) => `${n === 1 ? "A" : n} ${foe}${n === 1 ? "" : "s"} fell ${whereIn(room.name)}.`, BATTLE_WINDOW);
 }
 let muster = new Map();
@@ -7467,25 +7493,35 @@ function foeIn(roomName) {
     return isSourceKeeperRoom(roomName) ? "a lair keeper" : "raiders";
 }
 function heraldFallen() {
-    var _a;
+    var _a, _b;
     const next = new Map();
     for (const name in Game.creeps) {
         const c = Game.creeps[name];
         if (c.spawning)
             continue;
-        next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0 });
+        next.set(name, { room: c.pos.roomName, hurt: c.hits < c.hitsMax, ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0, kills: (_b = c.memory.kills) !== null && _b !== void 0 ? _b : 0 });
     }
     for (const [name, last] of muster) {
-        if (next.has(name) || !last.hurt || last.ttl <= 1)
+        if (next.has(name))
             continue;
+        const slew = last.kills > 0 ? `, who slew ${last.kills},` : "";
+        if (!last.hurt || last.ttl <= 1) {
+            if (slew) {
+                spreadWord(mourn(name));
+                chronicle(`${name}${slew} was laid to rest with honours.`);
+            }
+            continue;
+        }
         const foe = foeIn(last.room);
         const by = foe ? ` to ${foe}` : "";
         annal("fallen", 1);
-        tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
+        spreadWord(mourn(name));
+        tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
     }
     muster = next;
 }
 function heraldKills(room) {
+    var _a;
     const raw = room.getEventLog(true);
     if (!raw.includes(`"event":${EVENT_OBJECT_DESTROYED},`))
         return;
@@ -7500,13 +7536,18 @@ function heraldKills(room) {
         if (ours.length === 0)
             continue;
         chronicleKill(room);
-        const creeps = ours.filter((o) => o instanceof Creep);
+        const creeps = [...new Set(ours.filter((o) => o instanceof Creep))];
         if (creeps.length === 0) {
             roomCries[room.name] = "Huzzah!";
             continue;
         }
-        for (const c of creeps)
+        for (const c of creeps) {
             creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
+            c.memory.kills = ((_a = c.memory.kills) !== null && _a !== void 0 ? _a : 0) + 1;
+            const m = muster.get(c.name);
+            if (m)
+                m.kills = c.memory.kills;
+        }
     }
 }
 
@@ -9394,10 +9435,13 @@ function runSettler(creep) {
         }
         return;
     }
-    const spawn = creep.room.find(FIND_MY_SPAWNS)[0];
-    if (spawn && spawn.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        if (creep.transfer(spawn, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-            creep.moveTo(spawn, { reusePath: 20 });
+    const store = creep.pos.findClosestByRange(FIND_MY_STRUCTURES, {
+        filter: (s) => (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION) &&
+            s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
+    });
+    if (store) {
+        if (creep.transfer(store, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(store, { reusePath: 20 });
         }
         return;
     }
@@ -11380,16 +11424,16 @@ const LOOKOUT_DANGER_RANGE = 6;
 const LOOKOUT_RETREAT_TICKS = 300;
 const LOOKOUT_DEPTH = 3;
 const PHASE_CALLS = {
-    dawn: ["cock-a-doo!", "morning!", "to the watch"],
+    dawn: ["cock-a-doo", "morning!", "on watch!"],
     day: ["all's well", "quiet day", "eyes open"],
     dusk: ["lamps lit", "home time", "supper!"],
-    night: ["zzz", "g'night", "bar the door"],
+    night: ["zzz", "g'night", "bolt door"],
 };
 const SEASON_CALLS = {
     spring: ["blossoms!", "lambs out", "mud again"],
     summer: ["hot one", "hay to cut", "long day"],
-    autumn: ["harvest!", "cider time", "leaves down"],
-    winter: ["brr!", "snow again", "stoke fires"],
+    autumn: ["harvest!", "cider time", "leaf fall"],
+    winter: ["brr!", "snow again", "stoke fire"],
 };
 const STORM_CALLS = ["storm!", "bar doors", "rain again"];
 const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
@@ -12265,6 +12309,9 @@ function chatterLine(creep) {
                 : SEASON_CHATTER[townSeason(Game.time)];
         return weather[(pick / WEATHER_EVERY) % weather.length];
     }
+    const news = pick % WEATHER_EVERY === WEATHER_EVERY / 2 ? gossip() : undefined;
+    if (news)
+        return news;
     const lines = (_a = ROLE_CHATTER[creep.memory.role]) !== null && _a !== void 0 ? _a : GENERAL_CHATTER;
     return lines[pick % lines.length];
 }
@@ -16713,6 +16760,10 @@ const PERIMETER_PRIORITY = 12;
 const TOWN_PRIORITY = 13;
 const MAX_REMOTE_CONTAINER_SITES = 2;
 const MAX_REMOTE_ROAD_SITES = 10;
+function hasOwnTower(ownBuiltCount) {
+    var _a;
+    return ((_a = ownBuiltCount.get(STRUCTURE_TOWER)) !== null && _a !== void 0 ? _a : 0) > 0;
+}
 function buildPriority(key) {
     var _a;
     if (key === PLANNER_KEYS.STAMP_RAMPART_KEY || key === PLANNER_KEYS.STAMP_WALL_KEY)
@@ -16817,6 +16868,7 @@ function applyPlannedConstruction(room) {
             roadSiteByPos.set(`${s.pos.x},${s.pos.y}`, s);
     }
     const rampOnTopTypes = new Set(STRUCTURE_PLANNER.rampartOnTopFor);
+    const holdsRamparts = hasOwnTower(ownBuiltCount);
     const roadCompatible = new Set([
         STRUCTURE_ROAD,
         STRUCTURE_RAMPART,
@@ -16926,7 +16978,7 @@ function applyPlannedConstruction(room) {
                     addPlannedStructureToMemory(room, PLANNER_KEYS.RAMPARTS_KEY, new RoomPosition(x, y, room.name));
                     const rampartSites = (_d = sitesByType.get(STRUCTURE_RAMPART)) !== null && _d !== void 0 ? _d : new Set();
                     const covered = ((_e = builtByType.get(STRUCTURE_RAMPART)) === null || _e === void 0 ? void 0 : _e.has(posStr)) || rampartSites.has(posStr);
-                    if (!covered && budget > 0 && room.createConstructionSite(x, y, STRUCTURE_RAMPART) === OK) {
+                    if (!covered && holdsRamparts && budget > 0 && room.createConstructionSite(x, y, STRUCTURE_RAMPART) === OK) {
                         budget--;
                         rampartSites.add(posStr);
                         sitesByType.set(STRUCTURE_RAMPART, rampartSites);
@@ -16941,6 +16993,8 @@ function applyPlannedConstruction(room) {
                 continue;
             keep.push(posStr);
             if (sites === null || sites === void 0 ? void 0 : sites.has(posStr))
+                continue;
+            if (type === STRUCTURE_RAMPART && !holdsRamparts)
                 continue;
             if (atStructureLimit(type))
                 continue;
@@ -17012,6 +17066,8 @@ function ensureRampartsForExistingStructures(room) {
     const rampTypes = (STRUCTURE_PLANNER.rampartOnTopFor ||
         []);
     const structures = room.find(FIND_STRUCTURES);
+    if (!structures.some((s) => s.structureType === STRUCTURE_TOWER && s.my !== false))
+        return;
     const existingRampSet = new Set();
     for (const s of structures) {
         if (s.structureType === STRUCTURE_RAMPART)
