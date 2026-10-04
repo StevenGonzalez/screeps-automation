@@ -264,6 +264,8 @@ declare global {
     heraldLevel?: number;
     // Count of each notable structure type the herald last saw (services.herald).
     heraldWorks?: Record<string, number>;
+    // Remotes whose paved road the herald has told of (services.herald).
+    heraldRoads?: string[];
     // Set once a new keep's first creep of its own was proclaimed (services.herald).
     heraldBorn?: boolean;
     sourceIds?: Id<Source>[];

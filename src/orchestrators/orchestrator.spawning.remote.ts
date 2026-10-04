@@ -15,7 +15,7 @@ import { inPixelRefill } from "./orchestrator.pixels";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import {
   getRemoteSourcePathLength,
-  remoteRoadCoverage,
+  remotePaved,
   remoteRoadsEnabled,
 } from "../services/services.remote";
 import {
@@ -416,10 +416,6 @@ const REMOTE_HAUL_MARGIN = 1.2;
 // No remote hauler is planned smaller than this many CARRY parts.
 const MIN_REMOTE_HAULER_CARRY = 4;
 
-// A remote whose road is at least this much built counts as paved, and its
-// haulers are raised with one MOVE per two CARRY.
-const PAVED_ROAD_COVERAGE = 0.9;
-
 interface RemoteHaulPlan {
   count: number;
   // CARRY parts in each hauler's body.
@@ -446,7 +442,7 @@ function getRemoteHaulPlans(room: Room): Record<string, RemoteHaulPlan> {
 
   const plans: Record<string, RemoteHaulPlan> = {};
   for (const remote of getActiveRemoteRooms(room)) {
-    const paved = roads && remoteRoadCoverage(remote) >= PAVED_ROAD_COVERAGE;
+    const paved = roads && remotePaved(remote);
     const carryPerHauler = paved ? carryPaved : carryOnFoot;
     let requiredCarry = 0;
     for (const src of remote.sources) {

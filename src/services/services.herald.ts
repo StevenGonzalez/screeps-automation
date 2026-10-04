@@ -8,6 +8,7 @@ import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
+import { remotePaved } from "./services.remote";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 
@@ -89,6 +90,7 @@ export function heraldRooms(): void {
       heraldFirstBorn(room);
       heraldVisitors(room);
       heraldWorks(room);
+      heraldRoads(room);
     }
     heraldKills(room);
   }
@@ -225,6 +227,20 @@ function heraldWorks(room: Room): void {
       gained,
       (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`,
       WORKS_WINDOW
+    );
+  }
+}
+
+// The road out to a remote, told once when it is first mostly built.
+function heraldRoads(room: Room): void {
+  if (Game.time % WORKS_CHECK_PERIOD !== 0) return;
+  for (const remote of room.memory.remoteRooms ?? []) {
+    const told = room.memory.heraldRoads ?? [];
+    if (told.includes(remote.roomName) || !remotePaved(remote)) continue;
+    room.memory.heraldRoads = [...told, remote.roomName];
+    spreadWord("new road!");
+    chronicle(
+      `The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`
     );
   }
 }

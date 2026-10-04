@@ -6,6 +6,8 @@ g.EVENT_OBJECT_DESTROYED = 2;
 g.FIND_HOSTILE_CREEPS = 103;
 g.FIND_MY_STRUCTURES = 108;
 g.FIND_MY_SPAWNS = 112;
+g.FIND_STRUCTURES = 107;
+g.STRUCTURE_ROAD = "road";
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
 g.WORK = "work";
@@ -185,6 +187,30 @@ describe("herald", () => {
       "Dragon Knight Edric, who slew 2, was laid to rest with honours.",
     ]);
     expect((g.Memory as Memory).annals?.fallen).toBeUndefined();
+  });
+
+  it("tells once of a vendors' road that is paved", () => {
+    const home = roomWith([], { my: true, level: 4 });
+    home.memory.remoteRooms = [
+      { roomName: "W2N1", sources: [{ sourceId: "s", containerId: "c", roadTiles: "5,5;6,6" }] },
+    ] as unknown as RemoteRoomData[];
+    const roads = [{ structureType: "road", pos: { x: 5, y: 5 } }];
+    const wilds = { name: "W2N1", find: (type: number) => (type === g.FIND_STRUCTURES ? roads : []), getEventLog: () => "[]" };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: home, W2N1: wilds }, getObjectById: () => null };
+      heraldRooms();
+    };
+    at(1000);
+    roads.push({ structureType: "road", pos: { x: 6, y: 6 } });
+    at(1050);
+    at(1100);
+    at(1200);
+
+    const told = (g.Memory as Memory).chronicle?.map((l) => l.text).filter((t) => t.includes("road"));
+    expect(told).toEqual([
+      `The road from ${castleName(ROOM)} to the ${wildsName("W2N1")} is paved. Its merchants travel light.`,
+    ]);
+    expect((g.Memory as Memory).gossip?.line).toBe("new road!");
   });
 
   it("proclaims a new GCL once, not on the first look", () => {

@@ -111,3 +111,11 @@ export function remoteRoadCoverage(remote: RemoteRoomData): number {
   }
   return built / tiles.size;
 }
+
+// A remote whose road is at least this much built counts as paved: its
+// haulers are raised with one MOVE per two CARRY, and the herald tells of it.
+const PAVED_ROAD_COVERAGE = 0.9;
+
+export function remotePaved(remote: RemoteRoomData): boolean {
+  return remoteRoadCoverage(remote) >= PAVED_ROAD_COVERAGE;
+}
