@@ -5,7 +5,7 @@
 
 import { castleName, chronicle, lordName, tally, wildsName } from "./services.chronicle";
 import { isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
-import { townSeason } from "./services.town";
+import { townFeast, townSeason } from "./services.town";
 import { TownSeason } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 
@@ -81,7 +81,8 @@ function heraldSeason(): void {
   const known = Memory.heraldSeason;
   Memory.heraldSeason = season;
   if (known === undefined || known === season) return;
-  chronicle(SEASON_TIDINGS[season]);
+  const feast = townFeast(Game.time);
+  chronicle(feast ? `${SEASON_TIDINGS[season]} The ${feast} begins.` : SEASON_TIDINGS[season]);
 }
 
 // Trade with other players, read from the market's own records every few

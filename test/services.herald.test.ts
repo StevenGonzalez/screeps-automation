@@ -252,7 +252,7 @@ describe("herald", () => {
     at(7_001);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Summer comes to the realm. The days run long on the vendors' roads.",
+      "Summer comes to the realm. The days run long on the vendors' roads. The Midsummer Fair begins.",
     ]);
   });
 
