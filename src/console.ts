@@ -52,6 +52,7 @@ import { describeTown, razeTown } from "./planning/planner.town";
 import { describeBlueprint } from "./planning/planner.blueprint";
 import { showBlueprint } from "./orchestrators/orchestrator.visuals";
 import { townClock } from "./services/services.town";
+import { describeBooks } from "./services/services.exchequer";
 
 const VALID_FORMATIONS: SquadFormation[] = ["line", "box", "wedge", "scatter"];
 const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "retreat"];
@@ -866,6 +867,21 @@ export function setupConsole() {
         console.log(
           `  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`
         );
+      }
+    },
+
+    ledger: () => {
+      const all = Memory.exchequer ?? {};
+      const names = Object.keys(all);
+      if (names.length === 0) {
+        console.log("[Exchequer] The books are not closed yet - check back in 100 ticks");
+        return;
+      }
+      for (const name of names) {
+        const books = all[name];
+        console.log(`[Exchequer] ${name}, gold a tick as of tick ${books.at}:`);
+        for (const line of describeBooks(books)) console.log(`  ${line}`);
+        if (books.trend !== undefined) console.log(`  treasury ${books.trend >= 0 ? "+" : ""}${books.trend}/t`);
       }
     },
 

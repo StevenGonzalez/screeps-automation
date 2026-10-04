@@ -2,6 +2,7 @@ import { getStockForCompound } from "../services/services.labs";
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { ROLE_TITLES } from "../config/config.roles";
+import { recordSpend } from "../services/services.exchequer";
 
 export function buildScaledBody(
   role: string,
@@ -131,6 +132,7 @@ export function trackedSpawn(
     issuedNames.add(name);
     const byRole = issuedThisTick[room.name] ?? (issuedThisTick[room.name] = {});
     byRole[role] = (byRole[role] ?? 0) + 1;
+    recordSpend(room.name, "recruits", calculateBodyPartCost(body));
   }
   return res;
 }

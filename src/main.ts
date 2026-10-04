@@ -19,6 +19,7 @@ import * as powerCreepSystem from "./orchestrators/orchestrator.powercreep";
 import * as observerSystem from "./orchestrators/orchestrator.observer";
 import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { runAllies } from "./services/services.allies";
+import * as exchequer from "./services/services.exchequer";
 import { migrateRoleNames } from "./services/services.rebrand";
 import { setupConsole } from "./console";
 import { recordCpu } from "./services/services.profiler";
@@ -77,6 +78,7 @@ export function loop() {
   runSafe("sourcekeeper", () => sourceKeeperSystem.loop());
   runSafe("powercreep", () => powerCreepSystem.loop());
   if (!heavyShed()) runSafe("observer", () => observerSystem.loop());
+  if (!heavyShed()) runSafe("exchequer", () => exchequer.loop());
   if (!heavyShed()) runSafe("pixels", () => pixelsSystem.loop());
 
   const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;

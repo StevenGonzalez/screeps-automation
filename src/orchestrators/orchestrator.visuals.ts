@@ -10,6 +10,7 @@ import {
 } from "../config/config.roles";
 import { cottageLayout, parseTile, spotHolder, townClock } from "../services/services.town";
 import { readBlueprint } from "../planning/planner.blueprint";
+import { describeBooks } from "../services/services.exchequer";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -102,9 +103,22 @@ function drawRoomHUD(room: Room) {
   v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
   y += lineH;
 
+  const books = Memory.exchequer?.[room.name];
   if (room.storage) {
     const stored = room.storage.store[RESOURCE_ENERGY];
-    v.text(`Treasury: ${formatK(stored)}`, x, y, dimStyle);
+    const trend = books?.trend;
+    const trendText = trend === undefined ? "" : `  (${trend >= 0 ? "+" : ""}${trend.toFixed(1)}/t)`;
+    v.text(`Treasury: ${formatK(stored)}${trendText}`, x, y, dimStyle);
+    y += lineH;
+  }
+
+  if (books) {
+    const [headline, income, spend] = describeBooks(books);
+    v.text(headline, x, y, { ...style, color: "#f2c14e" });
+    y += lineH;
+    v.text(income.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
+    y += lineH * 0.8;
+    v.text(spend.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
     y += lineH;
   }
 
