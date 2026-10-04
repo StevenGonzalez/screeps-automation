@@ -14,6 +14,8 @@ import {
   putSurplusEnergyToWork,
 } from "../services/services.creep";
 import { meetIncomingHandoff } from "../services/services.coordination";
+import { upgradingFunded } from "../services/services.treasury";
+import { parkIdle } from "../services/services.town";
 
 export function runBuilder(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
@@ -68,5 +70,13 @@ export function runBuilder(creep: Creep) {
     if (r !== ERR_NO_PATH) return;
   }
 
+  // Nothing to build or mend. With the treasury at its floor the mason keeps
+  // its load and waits on the square, as the blacksmith does, rather than
+  // fetch gold from storage again and again to hand the throne what the
+  // enchanters are holding back.
+  if (!upgradingFunded(creep.room) && !site) {
+    parkIdle(creep, "square");
+    return;
+  }
   putSurplusEnergyToWork(creep);
 }

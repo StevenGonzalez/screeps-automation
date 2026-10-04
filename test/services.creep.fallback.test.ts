@@ -175,3 +175,52 @@ describe("runHauler with nothing to deposit", () => {
     expect(calls).toContain("moveTo");
   });
 });
+
+import { runBuilder } from "../src/roles/role.builder";
+
+describe("runBuilder with nothing to build or mend", () => {
+  const masonIn = (storageGold: number) => {
+    g.Game = { time: clock++, getObjectById: () => null, creeps: {} };
+    const room = {
+      name: `W1N1-mason-${clock}`,
+      controller: { my: true, id: "controller", ticksToDowngrade: 100_000, pos: { x: 9, y: 5 } },
+      memory: {} as RoomMemory,
+      storage: { store: { [g.RESOURCE_ENERGY as string]: storageGold } },
+      energyAvailable: 1800,
+      energyCapacityAvailable: 1800,
+      find: () => [],
+    } as unknown as Room;
+    const calls: string[] = [];
+    const creep = {
+      room,
+      id: "mason1",
+      name: "mason1",
+      owner: { username: "me" },
+      memory: { working: true } as CreepMemory,
+      pos: { x: 25, y: 25, getRangeTo: () => 10, inRangeTo: () => false, findInRange: () => [] },
+      store: {
+        getFreeCapacity: () => 0,
+        getUsedCapacity: () => 100,
+        [g.RESOURCE_ENERGY as string]: 100,
+      },
+      getActiveBodyparts: (part: string) => (part === g.WORK ? 2 : 1),
+      moveTo: () => g.OK as number,
+      upgradeController: () => {
+        calls.push("upgradeController");
+        return g.OK as number;
+      },
+      signController: () => g.OK as number,
+      say: () => g.OK as number,
+    } as unknown as Creep;
+    runBuilder(creep);
+    return calls;
+  };
+
+  it("keeps its load while the treasury is at its floor", () => {
+    expect(masonIn(5_000)).not.toContain("upgradeController");
+  });
+
+  it("enchants with gold to spare", () => {
+    expect(masonIn(200_000)).toContain("upgradeController");
+  });
+});
