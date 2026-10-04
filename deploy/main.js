@@ -14950,6 +14950,7 @@ function getRemoteHaulPlans(room) {
     const carryOf = (paved) => Math.max(1, buildRemoteHaulerBody(budget, roads, paved).filter((p) => p === CARRY).length);
     const carryOnFoot = carryOf(false);
     const carryPaved = carryOf(true);
+    const fullSizeCarry = (paved) => buildRemoteHaulerBody(Infinity, roads, paved).filter((p) => p === CARRY).length;
     const output = remoteSourceOutput(room);
     const plans = {};
     for (const remote of getActiveRemoteRooms(room)) {
@@ -14959,7 +14960,7 @@ function getRemoteHaulPlans(room) {
         for (const src of remote.sources) {
             requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
         }
-        const count = Math.min(MAX_REMOTE_HAULERS_PER_ROOM, Math.max(1, Math.ceil(requiredCarry / carryPerHauler)));
+        const count = Math.min(Math.ceil((MAX_REMOTE_HAULERS_PER_ROOM * fullSizeCarry(paved)) / carryPerHauler), Math.max(1, Math.ceil(requiredCarry / carryPerHauler)));
         const carryEach = Math.min(carryPerHauler, Math.max(MIN_REMOTE_HAULER_CARRY, Math.ceil((requiredCarry * REMOTE_HAUL_MARGIN) / count)));
         plans[remote.roomName] = { count, carryEach, paved };
     }
