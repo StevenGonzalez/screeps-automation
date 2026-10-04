@@ -41,9 +41,9 @@ describe("reserver", () => {
   function reserverIn(controller: unknown) {
     return {
       owner: { username: ME },
-      room: { name: REMOTE, controller, memory: {} as RoomMemory },
+      room: { name: REMOTE, controller, memory: {} as RoomMemory, find: (): unknown[] => [] },
       pos: { getRangeTo: () => 1 },
-      memory: { role: "reserver", homeRoom: HOME, targetRoom: REMOTE },
+      memory: { role: "reserver", homeRoom: HOME, targetRoom: REMOTE } as CreepMemory,
       reserveController: vi.fn(() => 0),
       signController: vi.fn(() => 0),
       attackController: vi.fn(() => 0),
@@ -92,6 +92,33 @@ describe("reserver", () => {
     const c = Object.assign(reserverIn({ reservation: { username: ME } }), { ticksToLive: 520 });
     runReserver(c as unknown as Creep);
     expect((c.memory as CreepMemory).walk).toBe(80);
+  });
+
+  it("leaves for home when raiders come, and calls the knights", () => {
+    // A fresh tick, so no threat cached by another test is read back.
+    (g.Game as any).time = 2001;
+    const c = reserverIn({ reservation: { username: ME } });
+    const raider = { owner: { username: "Invader" }, body: [{ type: "attack", hits: 100 }] };
+    c.room.find = () => [raider];
+    runReserver(c as unknown as Creep);
+    expect(c.reserveController).not.toHaveBeenCalled();
+    expect(c.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: HOME }), expect.anything());
+    expect(remote.invaderUntil).toBeGreaterThan(2001);
+    expect(cryFor(c as unknown as Creep)).toBe("Bandits!");
+  });
+
+  it("waits at home until the raid on its remote is over", () => {
+    remote.invaderUntil = 1100;
+    const c = Object.assign(reserverIn(undefined), { ticksToLive: 400 });
+    c.room = { ...c.room, name: HOME };
+    runReserver(c as unknown as Creep);
+    expect(c.moveTo).not.toHaveBeenCalled();
+    expect(c.memory.walk).toBe(0);
+
+    (g.Game as any).time = 1100;
+    runReserver(c as unknown as Creep);
+    expect(c.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: REMOTE }), expect.anything());
+    expect(c.memory.fled).toBeUndefined();
   });
 
   it("stands down once the remote has become one of our own keeps", () => {

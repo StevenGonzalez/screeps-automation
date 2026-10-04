@@ -285,8 +285,8 @@ Crown puts a price on its head. The fifth raider slain breaks its band, the
 chronicle tells who broke it (and, for a warlord with a price on its head, that
 they claim the bounty), the minstrels sing of it at the next feast
 (`Memory.lastRout`), and the next raid there comes under a new warlord
-(`Memory.warbands`). A remote peddler or merchant fleeing a
-contested remote shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
+(`Memory.warbands`). A remote peddler, merchant or envoy fleeing
+a contested remote shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
 load ("+800 gold"). Each load is added to the merchant's lifetime haul
 (`memory.hauled`), and a merchant who dies of age having brought home more gold
 than any before it is named in the chronicle (`Memory.richestHaul`). Each load

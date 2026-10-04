@@ -1,4 +1,12 @@
-import { noteWalk, signControllerIfNeeded } from "../services/services.creep";
+import { isInvaderCreep, isPlayerCreep, remoteThreats } from "../services/services.combat";
+import {
+  flagRemoteInvader,
+  flagRemotePlayer,
+  isAssignedRemoteContested,
+  noteWalk,
+  signControllerIfNeeded,
+} from "../services/services.creep";
+import { cryFlight, settleFlight } from "../services/services.herald";
 
 export function runReserver(creep: Creep) {
   const { targetRoom, homeRoom } = creep.memory;
@@ -7,6 +15,21 @@ export function runReserver(creep: Creep) {
     creep.suicide();
     return;
   }
+
+  // An envoy bears no arms, so it waits out a raid at home as the vendors do,
+  // and the reservation runs down a tick at a time while it is gone. Envoy
+  // Thorne stood reserving the Misty Thicket while raiders cut him down.
+  const threats = creep.room.name === targetRoom ? remoteThreats(creep.room) : [];
+  if (threats.some(isInvaderCreep)) flagRemoteInvader(creep);
+  else if (threats.some(isPlayerCreep)) flagRemotePlayer(creep);
+  if (threats.length > 0 || isAssignedRemoteContested(creep)) {
+    cryFlight(creep);
+    // A walk out broken off to wait at home is no measure of the road.
+    creep.memory.walk ??= 0;
+    if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
+    return;
+  }
+  settleFlight(creep);
 
   if (creep.room.name !== targetRoom) {
     moveToRoom(creep, targetRoom);
