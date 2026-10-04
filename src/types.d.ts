@@ -236,6 +236,8 @@ declare global {
     remoteBackoffUntil?: number;
     // Set once a remote creep has cried out and turned for home; cleared when the remote is safe.
     fled?: boolean;
+    // The remote a knight has ridden out to defend; cleared once it is safe.
+    sortie?: string;
     fillTargetId?: string;
     coreRelief?: boolean;
     constructionSiteId?: Id<ConstructionSite>;

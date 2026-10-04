@@ -51,6 +51,16 @@ export function settleFlight(creep: Creep): void {
   if (creep.memory.fled) delete creep.memory.fled;
 }
 
+// A knight riding out against raiders in a remote cries out, and the chronicle
+// tells of it, once for each raid rather than on every tick of the ride.
+export function crySortie(creep: Creep, roomName: string): void {
+  if (creep.memory.sortie === roomName) return;
+  creep.memory.sortie = roomName;
+  freshCries();
+  creepCries[creep.name] = "Ride out!";
+  chronicle(`${creep.name} rides out against the raiders in the ${wildsName(roomName)}.`);
+}
+
 // How long the realm talks of a piece of news.
 const GOSSIP_TICKS = 600;
 

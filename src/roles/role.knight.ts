@@ -3,6 +3,7 @@ import { isAlly } from "../services/services.allies";
 import { clearRemoteInvader, isAssignedRemoteInvaded } from "../services/services.creep";
 import { ROLE_CLERIC } from "../config/config.roles";
 import { parkIdle } from "../services/services.town";
+import { crySortie } from "../services/services.herald";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
 
 const RETREAT_THRESHOLD = 0.2;
@@ -42,7 +43,10 @@ export function runKnight(creep: Creep) {
   // back and forth across the border for the rest of its life.
   const target = creep.memory.targetRoom;
   const home = creep.memory.homeRoom;
-  if (target && creep.room.name !== target && isAssignedRemoteInvaded(creep)) {
+  const invaded = isAssignedRemoteInvaded(creep);
+  if (!invaded) delete creep.memory.sortie;
+  if (target && creep.room.name !== target && invaded) {
+    crySortie(creep, target);
     creep.moveTo(new RoomPosition(25, 25, target), { reusePath: 20 });
     return;
   }

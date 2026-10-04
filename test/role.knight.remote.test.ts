@@ -18,6 +18,7 @@ vi.mock("../src/orchestrators/orchestrator.military", () => ({
 
 import { runKnight } from "../src/roles/role.knight";
 import { markRemoteInvader } from "../src/services/services.creep";
+import { cryFor } from "../src/services/services.herald";
 import { ROLE_KNIGHT } from "../src/config/config.roles";
 
 const HOME = "W1N1";
@@ -55,6 +56,28 @@ describe("remote knight", () => {
     const knight = knightIn(HOME);
     runKnight(knight);
     expect(destination(knight)).toBe(REMOTE);
+  });
+
+  it("cries out and is chronicled riding out, once for each raid", () => {
+    remoteEntry.invaderUntil = 1500;
+    const knight = knightIn(HOME);
+    runKnight(knight);
+    expect(cryFor(knight)).toBe("Ride out!");
+    g.Game = { time: 1001 };
+    runKnight(knight);
+    expect(cryFor(knight)).toBeUndefined();
+
+    // The raid ends, and another comes.
+    remoteEntry.invaderUntil = undefined;
+    g.Game = { time: 1002 };
+    runKnight(knight);
+    remoteEntry.invaderUntil = 3000;
+    g.Game = { time: 2000 };
+    runKnight(knight);
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Dragon Knight Godric rides out against the raiders in the Shadow March.",
+      "Dragon Knight Godric rides out against the raiders in the Shadow March.",
+    ]);
   });
 
   it("heads home once its remote is clear, instead of loitering at the border", () => {
