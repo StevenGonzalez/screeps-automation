@@ -296,10 +296,13 @@ thousand, fifty thousand, a hundred thousand and so on up to each million. A new
 keep's first born is remembered by name (`memory.firstBorn`) and its bells ring
 again in the chronicle when it dies of age. The chronicle also notes when a
 castle's mineral vein is dug dry, with the days until it returns, and when it
-runs full again (`memory.heraldVeinDry`).
+runs full again (`memory.heraldVeinDry`). A castle's first vendors setting out
+for the wilds have the castle shout "Godspeed!", and the chronicle names the
+remote and any other castle whose vendors already dig there
+(`memory.heraldVendors`).
 
 News outlives its cry. For 600 ticks after a level, new renown, a keep's
-firstborn, a war party at the walls, a raider slain, a bounty on a warlord, a warband routed, one of ours fallen ("† Wulfric"), the dragon, the
+firstborn, a war party at the walls, a raider slain, a bounty on a warlord, a warband routed, one of ours fallen ("† Wulfric"), a castle's first vendors, the dragon, the
 wolves or the wisps, every creep in the realm now and then repeats it in its idle
 chatter (`Memory.gossip`). Newer news replaces older. A creep just out of the
 spawn speaks its first words ("reporting!", "first day!"). In its last 150 ticks a

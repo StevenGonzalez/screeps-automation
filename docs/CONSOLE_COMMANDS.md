@@ -26,7 +26,7 @@ Arguments in `'quotes'` are room names like `'W1N1'`. `?` marks an optional argu
 | `Game.arca.threat()` | Per-room: threat level, hostiles, tower gold, safe mode, **blockade** | Anytime you suspect you're under attack |
 | `Game.arca.network()` | Gold in every room's treasury (storage) and terminal, plus minerals | Checking economic health |
 | `Game.arca.expand()` | Ranked list of good rooms to claim next | When you're ready to grow |
-| `Game.arca.cpu()` | Per-subsystem CPU usage, highest first; with `Memory.profileRoles = true` also CPU per creep by role | If the game feels slow / you're near your CPU limit |
+| `Game.arca.cpu()` | Per-subsystem CPU usage, highest first, with the share of ticks each ran; the total counts a system that runs one tick in ten at a tenth of its average. With `Memory.profileRoles = true` also CPU per creep by role | If the game feels slow / you're near your CPU limit |
 
 ---
 
