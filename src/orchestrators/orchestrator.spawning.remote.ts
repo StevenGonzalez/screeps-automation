@@ -272,16 +272,18 @@ function pickRemoteSources(room: Room): Map<string, number> {
   plans.sort((a, b) => b.profit - a.profit);
 
   // The budget counts live creeps, so it breathes as home creeps die and are
-  // replaced. A source mined or picked of late stays while it fits; one not yet
-  // worked has to fit with REMOTE_PICK_HEADROOM to spare, so that breathing
-  // does not keep adding and dropping the marginal one.
+  // replaced. A source picked of late stays while it fits; any other has to fit
+  // with REMOTE_PICK_HEADROOM to spare, so that breathing does not keep adding
+  // and dropping the marginal one. A peddler left on a source that was dropped
+  // does not hold it. Only after a global reset, with no recent picks, do the
+  // miners stand in for them.
   const recent = cached && Game.time - cached.tick <= REMOTE_PICK_HOLD ? cached.picked : undefined;
   const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
   let budget = remoteSpawnBudget(room);
   const picked = new Map<string, number>();
   for (const p of plans) {
     if (picked.size >= MAX_REMOTE_SOURCES) break;
-    const held = mined.has(p.sourceId as Id<Source>) || recent?.has(p.sourceId);
+    const held = recent ? recent.has(p.sourceId) : mined.has(p.sourceId as Id<Source>);
     const reserve = held ? 0 : headroom;
     if (p.spawnTime > budget - reserve) continue;
     budget -= p.spawnTime;

@@ -152,6 +152,16 @@ describe("remote source ranking", () => {
     expect(sourceIds(getActiveRemoteRooms(fuller))).toEqual(["W4N5-s0"]);
   });
 
+  it("does not take back a dropped remote on its peddler's account", () => {
+    const remotes = [remote("W4N5", [30])];
+    const peddler = creep(ROLE_REMOTE_MINER, 9, { targetRoom: "W4N5", remoteSourceId: "W4N5-s0" as Id<Source> });
+    const busy = (n: number) => Array.from({ length: n }, () => creep(ROLE_UPGRADER, 16));
+    expect(getActiveRemoteRooms(home({ remotes, creeps: [...busy(22), peddler] }))).toEqual([]);
+    // Spare enough for the source, but not with the headroom a new one needs.
+    clock += 1;
+    expect(getActiveRemoteRooms(home({ remotes, creeps: [...busy(18), peddler] }))).toEqual([]);
+  });
+
   it("never works more than six sources, however much spawn time there is", () => {
     const remotes = ["W4N5", "W6N5", "W5N4", "W5N6"].map((rn) => remote(rn, [20, 25]));
     const room = home({ remotes, spawns: 3 });
