@@ -23,6 +23,7 @@ export function runUpgrader(creep: Creep) {
 
   if (creep.memory.working) {
     upgradeController(creep);
+    topUp(creep);
     return;
   }
 
@@ -71,6 +72,18 @@ export function runUpgrader(creep: Creep) {
   if (storage && !nearDowngrade(creep.room)) return;
 
   acquireEnergy(creep);
+}
+
+// An enchanter that ran dry spent the next tick on the withdraw alone, one tick
+// in every load lost to the controller. One about to run dry takes its next
+// load from the link or container beside it in the same tick it upgrades.
+function topUp(creep: Creep): void {
+  if (creep.store[RESOURCE_ENERGY] > creep.getActiveBodyparts(WORK)) return;
+  const link = findControllerLink(creep);
+  const upgradeId = creep.room.memory.upgradeContainerId;
+  const cont = upgradeId ? (Game.getObjectById(upgradeId) as StructureContainer | null) : null;
+  const from = [link, cont].find((s) => s && s.store[RESOURCE_ENERGY] > 0 && creep.pos.getRangeTo(s) <= 1);
+  if (from) creep.withdraw(from, RESOURCE_ENERGY);
 }
 
 const CONTROLLER_LINK_SCAN_TTL = 200;

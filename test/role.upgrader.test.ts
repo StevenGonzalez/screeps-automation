@@ -56,6 +56,7 @@ function runFullUpgraderIn(room: Room): string[] {
       [g.RESOURCE_ENERGY as string]: 50,
     },
     owner: { username: "Me" },
+    getActiveBodyparts: () => 4,
     moveTo: () => g.OK as number,
     upgradeController: () => {
       calls.push("upgradeController");
@@ -255,5 +256,59 @@ describe("runUpgrader", () => {
 
     expect(calls).toContain("upgradeController");
     expect(calls).not.toContain("repair");
+  });
+});
+
+describe("upgrader top-up", () => {
+  function upgraderBesideContainer(energy: number, stocked: number): string[] {
+    const calls: string[] = [];
+    const upgradeCont = {
+      id: "upgradeCont",
+      structureType: "container",
+      store: { [g.RESOURCE_ENERGY as string]: stocked },
+      pos: { x: 35, y: 20 },
+    };
+    g.WORK = "work";
+    g.Game = { time: clock, getObjectById: (id: string) => (id === "upgradeCont" ? upgradeCont : null) };
+    const room = {
+      name: `W47S7-${clock}`,
+      controller: { ...controller, pos: { x: 35, y: 17, getRangeTo: () => 2, findInRange: () => [] } },
+      memory: { upgradeContainerId: "upgradeCont", lastSigned: clock } as RoomMemory,
+      find: () => [],
+    } as unknown as Room;
+    const creep = {
+      room,
+      name: "Enchanter Sybil",
+      memory: { working: true } as CreepMemory,
+      pos: { x: 35, y: 19, getRangeTo: () => 1 },
+      store: { getFreeCapacity: () => 50 - energy, [g.RESOURCE_ENERGY as string]: energy },
+      owner: { username: "Me" },
+      getActiveBodyparts: () => 4,
+      moveTo: () => g.OK as number,
+      upgradeController: () => {
+        calls.push("upgradeController");
+        return g.OK as number;
+      },
+      withdraw: (target: { id: string }) => {
+        calls.push(`withdraw:${target.id}`);
+        return g.OK as number;
+      },
+    } as unknown as Creep;
+    runUpgrader(creep);
+    return calls;
+  }
+
+  it("takes its next load in the same tick it spends its last", () => {
+    // Running dry first and withdrawing the tick after left the controller
+    // one tick in every load without an upgrade.
+    expect(upgraderBesideContainer(2, 900)).toEqual(["upgradeController", "withdraw:upgradeCont"]);
+  });
+
+  it("does not top up while it still has gold for more than this tick", () => {
+    expect(upgraderBesideContainer(30, 900)).toEqual(["upgradeController"]);
+  });
+
+  it("does not reach for an empty container", () => {
+    expect(upgraderBesideContainer(2, 0)).toEqual(["upgradeController"]);
   });
 });
