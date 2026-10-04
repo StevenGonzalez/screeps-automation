@@ -3905,8 +3905,14 @@ function runMiner(creep) {
         if (source && container) {
             if (!creep.pos.isEqualTo(container.pos)) {
                 creep.moveTo(container.pos, { reusePath: 50 });
-                if (creep.pos.isNearTo(source))
+                if (creep.pos.isNearTo(source)) {
+                    const dug = creep.getActiveBodyparts(WORK) * HARVEST_POWER;
+                    const full = creep.store[RESOURCE_ENERGY] > 0 && creep.store.getFreeCapacity() < dug;
+                    if (full && creep.pos.isNearTo(container)) {
+                        creep.transfer(container, RESOURCE_ENERGY);
+                    }
                     creep.harvest(source);
+                }
                 return;
             }
             if (container.hits < container.hitsMax * CONTAINER_REPAIR_THRESHOLD &&
@@ -14862,10 +14868,6 @@ function getMinerTravelTicks(room) {
 function minerBudget(room) {
     return room.energyCapacityAvailable;
 }
-function getMinerPopulationTarget(room) {
-    var _a;
-    return ((_a = room.memory.minerContainerIds) !== null && _a !== void 0 ? _a : []).length;
-}
 function getMinerReplacementLead(room) {
     const allowed = minerBudget(room);
     return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room));
@@ -15115,12 +15117,24 @@ function getMinerWorkTarget(room) {
     return buildMinerBody(allowed).filter((p) => p === WORK).length;
 }
 function shouldSpawnMiner(room) {
+    var _a, _b;
     const workTarget = getMinerWorkTarget(room);
     const lead = getMinerReplacementLead(room);
-    const adequate = getCreepsByRoleInRoom(ROLE_MINER, room).filter((c) => !c.spawning &&
-        c.body.filter((p) => p.type === WORK).length >= workTarget &&
-        !isRetiring(c, lead)).length + getRoomSpawningCount(room, ROLE_MINER);
-    return adequate < getMinerPopulationTarget(room);
+    const workAt = {};
+    let unposted = 0;
+    for (const c of getCreepsByRoleInRoom(ROLE_MINER, room)) {
+        if (c.spawning || isRetiring(c, lead))
+            continue;
+        const work = c.body.filter((p) => p.type === WORK).length;
+        const post = c.memory.assignedContainerId;
+        if (post)
+            workAt[post] = ((_a = workAt[post]) !== null && _a !== void 0 ? _a : 0) + work;
+        else if (work >= workTarget)
+            unposted++;
+    }
+    const posts = (_b = room.memory.minerContainerIds) !== null && _b !== void 0 ? _b : [];
+    const manned = posts.filter((id) => { var _a; return ((_a = workAt[id]) !== null && _a !== void 0 ? _a : 0) >= workTarget; }).length;
+    return manned + unposted + getRoomSpawningCount(room, ROLE_MINER) < posts.length;
 }
 function shouldSpawnHarvester(room) {
     const count = countByRoleInRoom(ROLE_HARVESTER, room);
