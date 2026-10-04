@@ -15459,6 +15459,11 @@ function shouldSpawnBuilder(room) {
     return needed;
 }
 const repairerTargetCache = {};
+const WALL_SMITH_SPARE = 10000;
+function wallSmithFunded(room) {
+    const storage = room.storage;
+    return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) + WALL_SMITH_SPARE;
+}
 function getRepairerPopulationTarget(room) {
     var _a, _b;
     if (isEnergyEmergency(room))
@@ -15484,7 +15489,7 @@ function getRepairerPopulationTarget(room) {
             if (rcl >= 3 && worn.length > 0)
                 value = Math.max(value, 1);
             const barrierTarget = barrierTargetFn(room);
-            const wallsNeedRepair = wallsFunded(room) && room.find(FIND_STRUCTURES, {
+            const wallsNeedRepair = wallSmithFunded(room) && room.find(FIND_STRUCTURES, {
                 filter: (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
                     s.hits < barrierTarget(s),
             }).length > 0;
