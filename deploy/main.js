@@ -1156,8 +1156,10 @@ function chronicle(text) {
 }
 function annal(key, n) {
     if (!Memory.annals)
-        Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
-    Memory.annals[key] += n;
+        Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
+    const count = Memory.annals[key];
+    if (count !== undefined)
+        Memory.annals[key] = count + n;
 }
 function formatK(n) {
     if (n >= 1000000)
@@ -7491,7 +7493,7 @@ function heraldSeason() {
     if (known === undefined || known === season)
         return;
     const annals = Memory.annals;
-    Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0 };
+    Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
     if (annals)
         chronicle(annalsLine(known, annals));
     const feast = townFeast(Game.time);
@@ -7502,7 +7504,8 @@ function annalsLine(season, a) {
     const when = whole ? "This season" : "Since the scribes took up their pens";
     const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
     const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
-    return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold, ${slain} and ${fallen}.`;
+    const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
+    return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
 }
 const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
@@ -12035,7 +12038,7 @@ const FEAST_VERSES = {
     winter: (feast) => ["The snow is deep, the hearth is bright,", `we keep the ${feast} through the night!`],
 };
 function ballad(room, time) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     const home = castleName(room.name);
     const verses = [[`Sing of ${home}, its walls of stone,`, "that bow to none but the Crown alone!"]];
     const feast = townFeast(time);
@@ -12063,7 +12066,11 @@ function ballad(room, time) {
     const gold = (_c = annals === null || annals === void 0 ? void 0 : annals.gold) !== null && _c !== void 0 ? _c : 0;
     if (gold > 0)
         verses.push([`${formatK(gold)} gold the mines have brought,`, "and not a coin of it for naught!"]);
-    const fallen = (_d = annals === null || annals === void 0 ? void 0 : annals.fallen) !== null && _d !== void 0 ? _d : 0;
+    const recruits = (_d = annals === null || annals === void 0 ? void 0 : annals.recruits) !== null && _d !== void 0 ? _d : 0;
+    if (recruits > 0) {
+        verses.push([`${recruits === 1 ? "One recruit" : `${recruits} recruits`} marched out the barracks door,`, "to serve the Crown as those before!"]);
+    }
+    const fallen = (_e = annals === null || annals === void 0 ? void 0 : annals.fallen) !== null && _e !== void 0 ? _e : 0;
     if (fallen > 0) {
         verses.push([`Pour one out for the ${fallen === 1 ? "one" : fallen} we lost,`, "who held the line and paid the cost."]);
     }
@@ -14455,6 +14462,7 @@ function trackedSpawn(room, spawn, body, opts) {
         const byRole = (_a = issuedThisTick[room.name]) !== null && _a !== void 0 ? _a : (issuedThisTick[room.name] = {});
         byRole[role] = ((_b = byRole[role]) !== null && _b !== void 0 ? _b : 0) + 1;
         recordSpend(room.name, "recruits", calculateBodyPartCost(body));
+        annal("recruits", 1);
     }
     return res;
 }
