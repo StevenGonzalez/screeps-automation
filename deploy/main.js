@@ -14925,14 +14925,16 @@ function pickRemoteSources(room) {
         return cached.picked;
     }
     const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
-    const mined = new Set(getCreepsByRole(ROLE_REMOTE_MINER)
-        .filter((c) => c.memory.homeRoom === room.name)
-        .map((c) => c.memory.remoteSourceId));
+    const peddlers = getCreepsByRole(ROLE_REMOTE_MINER);
+    const mined = new Set(peddlers.filter((c) => c.memory.homeRoom === room.name).map((c) => c.memory.remoteSourceId));
+    const minedElsewhere = new Set(peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId));
     const plans = [];
     for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
         if (!isRemoteEligible(room, r, "reserve", true))
             continue;
         for (const s of r.sources) {
+            if (minedElsewhere.has(s.sourceId))
+                continue;
             if (lowCpu && !mined.has(s.sourceId))
                 continue;
             const plan = planRemoteSource(room, r, s);
@@ -20795,7 +20797,7 @@ function replayKept() {
         Game.map.visual.import(kept.map);
 }
 
-const CPU_WARN_THRESHOLD = 0.85;
+const CPU_WARN_THRESHOLD = 1;
 const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
 const VISUALS_MIN_INTERVAL = 10;
 const CPU_SKIP_HEAVY_THRESHOLD = 0.80;
