@@ -10673,6 +10673,24 @@ function wantedCottages(room) {
         return 0;
     return (_e = TOWN.cottagesByRcl[rcl]) !== null && _e !== void 0 ? _e : 0;
 }
+function besideDoors(room, ring) {
+    var _a, _b;
+    const mem = ((_a = room.memory.plannedStructures) !== null && _a !== void 0 ? _a : {});
+    const walls = new Set((_b = mem[PLANNER_KEYS.STAMP_WALL_KEY]) !== null && _b !== void 0 ? _b : []);
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_WALL)
+            walls.add(tileKey(s.pos.x, s.pos.y));
+    }
+    const out = new Set();
+    for (const k of ring) {
+        if (walls.has(k))
+            continue;
+        const { x, y } = parseTile(k);
+        for (const [dx, dy] of NEIGHBOURS$1)
+            out.add(tileKey(x + dx, y + dy));
+    }
+    return out;
+}
 function squareStillClear(room, town) {
     var _a, _b, _c;
     if (town.square.length === 0)
@@ -10713,7 +10731,10 @@ function planTown(room) {
         town = { posts: [], square: [], cottages: [] };
     }
     const perimeterAt = (_d = (_c = room.memory.plannedStructuresMeta) === null || _c === void 0 ? void 0 : _c[PLANNER_KEYS.STAMP_RAMPART_KEY]) === null || _d === void 0 ? void 0 : _d.createdAt;
-    const replanWatch = town.perimeterAt !== perimeterAt || !squareStillClear(room, town);
+    const nearDoors = besideDoors(room, ring);
+    const replanWatch = town.perimeterAt !== perimeterAt ||
+        !squareStillClear(room, town) ||
+        town.posts.some((p) => nearDoors.has(p));
     const wantMore = town.cottages.length < wantedCottages(room) &&
         (town.failedAt === undefined || Game.time - town.failedAt >= TOWN.retryInterval);
     if (replanWatch || wantMore) {
@@ -10747,7 +10768,7 @@ function planTown(room) {
             }
         }
         if (replanWatch) {
-            const avoid = new Set();
+            const avoid = new Set(nearDoors);
             for (const c of town.cottages) {
                 for (let dy = -1; dy <= 5; dy++) {
                     for (let dx = -1; dx <= 5; dx++)
@@ -11232,6 +11253,9 @@ function roadCostCallback(roomName) {
     creepAwareCache[roomName] = cm;
     return cm;
 }
+function creepAwareIn(here) {
+    return (roomName) => (roomName === here ? roadCostCallback(roomName) : getRoomCostMatrix(roomName));
+}
 const ROUTE_TTL = 500;
 const DANGER_ROUTE_COST = 10;
 const routeCache = new Map();
@@ -11347,7 +11371,7 @@ Creep.prototype.moveTo = function (...args) {
     }
     const effectiveOpts = { plainCost: 2, swampCost: 10, ...(opts !== null && opts !== void 0 ? opts : {}) };
     if (!effectiveOpts.costCallback) {
-        effectiveOpts.costCallback = roadCostCallback;
+        effectiveOpts.costCallback = sameRoom ? roadCostCallback : creepAwareIn(this.pos.roomName);
     }
     if (!sameRoom)
         restrictToRoute(this, tpos, effectiveOpts);
