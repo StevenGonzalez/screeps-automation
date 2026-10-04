@@ -350,9 +350,20 @@ function heraldFirstBorn(room: Room): void {
   for (const name in Game.creeps) {
     if (name !== birth.name && Game.creeps[name].memory.homeRoom === room.name) return;
   }
+  room.memory.firstBorn = birth.name;
   roomCries[room.name] = "Huzzah!";
   spreadWord("firstborn!");
   chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
+}
+
+// The bells that rang for a keep's first born ring again when it dies of age.
+function heraldFirstBornRest(name: string): void {
+  for (const roomName in Memory.rooms) {
+    const mem = Memory.rooms[roomName];
+    if (mem.firstBorn !== name) continue;
+    delete mem.firstBorn;
+    chronicle(`${name}, the first born in the barracks of ${castleName(roomName)}, has died of old age. Its bells ring once more.`);
+  }
 }
 
 // A fight's kills in one room gather into one line while it lasts.
@@ -417,6 +428,7 @@ function heraldFallen(): void {
         chronicle(`${name}${slew} was laid to rest with honours.`);
       }
       heraldRetired(name, last.hauled);
+      if (last.ttl <= 1) heraldFirstBornRest(name);
       continue;
     }
     const foe = foeIn(last.room);

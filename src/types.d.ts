@@ -270,6 +270,8 @@ declare global {
     heraldRoads?: string[];
     // Set once a new keep's first creep of its own was proclaimed (services.herald).
     heraldBorn?: boolean;
+    // That first creep's name while it lives, so its death is told (services.herald).
+    firstBorn?: string;
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];

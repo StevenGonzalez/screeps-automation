@@ -500,6 +500,23 @@ describe("herald", () => {
 
     const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("bells"));
     expect(lines).toEqual([`The bells of ${castleName(ROOM)} ring for the first born in its own barracks: Villager Aldric.`]);
+    expect(room.memory.firstBorn).toBe("Villager Aldric");
+  });
+
+  it("rings the bells again when a keep's first born dies of old age", () => {
+    (g.Memory as Memory).rooms = { [ROOM]: { firstBorn: "Villager Aldric" } } as Memory["rooms"];
+    const elder = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 1, memory: {} };
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: { "Villager Aldric": elder } };
+    heraldRooms();
+    tick++;
+    g.Game = { time: tick, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      `Villager Aldric, the first born in the barracks of ${castleName(ROOM)}, has died of old age. Its bells ring once more.`,
+    ]);
+    expect((g.Memory as Memory).rooms[ROOM].firstBorn).toBeUndefined();
   });
 
   it("passes quietly over a new keep that already has creeps of its own", () => {

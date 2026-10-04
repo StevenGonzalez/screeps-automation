@@ -278,7 +278,9 @@ new controller level, every creep there shouts "Long live!" and the console logs
 shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
 load ("+800 gold"). Each load is added to the merchant's lifetime haul
 (`memory.hauled`), and a merchant who dies of age having brought home more gold
-than any before it is named in the chronicle (`Memory.richestHaul`).
+than any before it is named in the chronicle (`Memory.richestHaul`). A new
+keep's first born is remembered by name (`memory.firstBorn`) and its bells ring
+again in the chronicle when it dies of age.
 
 News outlives its cry. For 600 ticks after a level, new renown, a keep's
 firstborn, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the
