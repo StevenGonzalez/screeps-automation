@@ -54,4 +54,17 @@ describe("repairer population", () => {
     g.Memory = { expansionSavings: { room: `W1N1-${tick}`, target: "W1N2" } };
     expect(getRepairerPopulationTarget(plannedRoom([rampart], 30_000))).toBe(0);
   });
+
+  it("sends none to raise the walls on a few hundred gold above the floor", () => {
+    // Storage sat on the 45K savings floor. One look above it sent a blacksmith
+    // that took the few hundred and stood on the square for the rest of its life.
+    const rampart = { id: "r", structureType: "rampart", pos: { x: 20, y: 20 }, hits: 15_000, hitsMax: 10_000_000 };
+    g.Memory = { expansionSavings: { room: `W1N1-${tick}`, target: "W1N2" } };
+    expect(getRepairerPopulationTarget(plannedRoom([rampart], 45_500))).toBe(0);
+
+    tick += 100;
+    g.Game = { time: tick };
+    g.Memory = { expansionSavings: { room: `W1N1-${tick}`, target: "W1N2" } };
+    expect(getRepairerPopulationTarget(plannedRoom([rampart], 60_000))).toBe(1);
+  });
 });

@@ -13,7 +13,7 @@ import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { countOpenTilesAround, getSources } from "../services/services.creep";
-import { upgraderStorageFloor, wallsFunded } from "../services/services.treasury";
+import { upgraderStorageFloor } from "../services/services.treasury";
 import { labsNeedTending } from "../services/services.labs";
 import {
   buildScaledBody,
@@ -477,6 +477,16 @@ export function shouldSpawnBuilder(room: Room): boolean {
 
 const repairerTargetCache: Record<string, { value: number; tick: number }> = {};
 
+// A blacksmith sent to the walls draws only on the gold above the treasury
+// floor. Sent while storage sat a few hundred above it, one took those and
+// stood on the square for the rest of its life.
+const WALL_SMITH_SPARE = 10_000;
+
+function wallSmithFunded(room: Room): boolean {
+  const storage = room.storage;
+  return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) + WALL_SMITH_SPARE;
+}
+
 export function getRepairerPopulationTarget(room: Room): number {
   if (isEnergyEmergency(room)) return 0;
   const cached = repairerTargetCache[room.name];
@@ -503,7 +513,7 @@ export function getRepairerPopulationTarget(room: Room): number {
     if (hasEnergyBuffer) {
       if (rcl >= 3 && worn.length > 0) value = Math.max(value, 1);
       const barrierTarget = barrierTargetFn(room);
-      const wallsNeedRepair = wallsFunded(room) && room.find(FIND_STRUCTURES, {
+      const wallsNeedRepair = wallSmithFunded(room) && room.find(FIND_STRUCTURES, {
         filter: (s): s is AnyStructure =>
           (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
           (s as AnyStructure).hits < barrierTarget(s as AnyStructure),
