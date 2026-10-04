@@ -29,6 +29,7 @@ g.FIND_CONSTRUCTION_SITES = 111;
 g.OK = 0;
 
 import { processRoomSpawning } from "../src/orchestrators/orchestrator.spawning";
+import { spawnApothecary } from "../src/orchestrators/orchestrator.spawning.economy";
 import {
   ROLE_MINER,
   ROLE_HAULER,
@@ -186,5 +187,18 @@ describe("hauler sizing", () => {
     const body = spawnCalls[0].body;
     expect(body.filter((p) => p === g.CARRY).length).toBe(12);
     expect(body.filter((p) => p === g.MOVE).length).toBe(6);
+  });
+});
+
+describe("apothecary sizing", () => {
+  it("caps the apothecary well short of the room's capacity", () => {
+    const { room, spawn } = makeRoom([], 2300);
+
+    spawnApothecary(room, spawn as unknown as StructureSpawn);
+
+    expect(spawnCalls).toHaveLength(1);
+    const body = spawnCalls[0].body;
+    expect(body.filter((p) => p === g.CARRY).length).toBe(10);
+    expect(body.filter((p) => p === g.MOVE).length).toBe(5);
   });
 });

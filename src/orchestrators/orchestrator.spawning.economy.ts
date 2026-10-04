@@ -730,8 +730,17 @@ export function shouldSpawnApothecary(room: Room): boolean {
   return countByRoleInRoom(ROLE_APOTHECARY, room) < 1;
 }
 
+// The apothecary's body is capped at this many CARRY:CARRY:MOVE sets. Its
+// walks are a few steps between storage, terminal and labs, and an RCL 6 lab
+// block reacts under a unit a tick: a 45-part apothecary stood idle beside
+// storage most of its life, at 1.5 gold a tick.
+const APOTHECARY_MAX_SETS = 5;
+
 export function spawnApothecary(room: Room, spawn: StructureSpawn): boolean {
-  const allowedEnergy = bodyBudget(room, "available");
+  const allowedEnergy = Math.min(
+    APOTHECARY_MAX_SETS * calculateBodyPartCost(BODY_PATTERNS[ROLE_APOTHECARY]),
+    bodyBudget(room, "available")
+  );
   const body = buildScaledBody(ROLE_APOTHECARY, allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const res = trackedSpawn(room, spawn, body, {
