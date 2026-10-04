@@ -20797,10 +20797,12 @@ function replayKept() {
 
 const CPU_WARN_THRESHOLD = 0.85;
 const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
+const VISUALS_MIN_INTERVAL = 10;
 const CPU_SKIP_HEAVY_THRESHOLD = 0.80;
 const CPU_BUCKET_CRITICAL = 2000;
 const CPU_BUCKET_FLOOR = 500;
 let lastTickUsed = 0;
+let lastVisualsDrawn = -Infinity;
 function loop() {
     setupConsole();
     const tickStart = Game.cpu.getUsed();
@@ -20841,7 +20843,9 @@ function loop() {
     if (!heavyShed())
         runSafe("pixels", () => loop$b());
     const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
-    if (!bucketCritical && cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD) {
+    const visualsDue = Game.time - lastVisualsDrawn >= VISUALS_MIN_INTERVAL;
+    if (!bucketCritical && (visualsDue || cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD)) {
+        lastVisualsDrawn = Game.time;
         runSafe("visuals", () => drawAndKeep(() => loop$1()));
     }
     else {
