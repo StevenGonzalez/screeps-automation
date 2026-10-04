@@ -3927,7 +3927,7 @@ function pickSink(sinks, src) {
 
 const CONTAINER_REPAIR_THRESHOLD = 0.9;
 function runMiner(creep) {
-    var _a;
+    var _a, _b;
     if (!creep.memory.assignedSourceId || !creep.memory.assignedContainerId) {
         const assignment = findUnclaimedMinerAssignment(creep.room);
         if (assignment) {
@@ -3950,8 +3950,12 @@ function runMiner(creep) {
         }
         if (source && container) {
             if (!creep.pos.isEqualTo(container.pos)) {
-                const held = !creep.pos.isNearTo(source) && container.pos.lookFor(LOOK_CREEPS).length > 0;
-                creep.moveTo((held && freeSeat(source, container)) || container.pos, { reusePath: 50 });
+                const held = container.pos.lookFor(LOOK_CREEPS).length > 0;
+                if (!held)
+                    creep.moveTo(container.pos, { reusePath: 50 });
+                else if (!creep.pos.isNearTo(source)) {
+                    creep.moveTo((_a = freeSeat(source, container)) !== null && _a !== void 0 ? _a : container.pos, { reusePath: 50 });
+                }
                 if (creep.pos.isNearTo(source)) {
                     const dug = creep.getActiveBodyparts(WORK) * HARVEST_POWER;
                     const full = creep.store[RESOURCE_ENERGY] > 0 && creep.store.getFreeCapacity() < dug;
@@ -3996,7 +4000,7 @@ function runMiner(creep) {
         }
     }
     if (sources.length > 0) {
-        const source = (_a = creep.pos.findClosestByRange(sources)) !== null && _a !== void 0 ? _a : sources[0];
+        const source = (_b = creep.pos.findClosestByRange(sources)) !== null && _b !== void 0 ? _b : sources[0];
         harvestFromSource(creep, source);
     }
 }
@@ -9571,7 +9575,7 @@ const MIN_STOCK = 100;
 const PROVISION_FLOOR = 30000;
 function takeProvisions(creep) {
     const storage = creep.room.storage;
-    if (!(storage === null || storage === void 0 ? void 0 : storage.my) || storage.store[RESOURCE_ENERGY] < PROVISION_FLOOR)
+    if (!storage || !canProvision(creep.room))
         return false;
     if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0)
         return false;
@@ -9580,6 +9584,7 @@ function takeProvisions(creep) {
     return true;
 }
 function harvest(creep) {
+    var _a, _b;
     const pile = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
         filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount >= MIN_STOCK,
     });
@@ -9597,6 +9602,14 @@ function harvest(creep) {
         }
         return;
     }
+    const homeRoom = (_a = creep.memory.homeRoom) !== null && _a !== void 0 ? _a : (_b = Memory.expansion) === null || _b === void 0 ? void 0 : _b.homeRoom;
+    if (homeRoom && keepMined(creep.room) && canProvision(Game.rooms[homeRoom])) {
+        if (creep.store[RESOURCE_ENERGY] > 0)
+            creep.memory.working = true;
+        else
+            moveToRoom$3(creep, homeRoom);
+        return;
+    }
     const source = creep.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
     if (!source) {
         if (creep.store[RESOURCE_ENERGY] > 0) {
@@ -9611,6 +9624,15 @@ function harvest(creep) {
     if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
         creep.moveTo(source, { reusePath: 10 });
     }
+}
+function keepMined(room) {
+    return room
+        .find(FIND_MY_CREEPS)
+        .some((c) => c.memory.role === ROLE_MINER && c.memory.assignedContainerId !== undefined);
+}
+function canProvision(home) {
+    const storage = home === null || home === void 0 ? void 0 : home.storage;
+    return !!(storage === null || storage === void 0 ? void 0 : storage.my) && storage.store[RESOURCE_ENERGY] >= PROVISION_FLOOR;
 }
 function holdAwayFromEdge(creep) {
     const { x, y } = creep.pos;
@@ -12412,9 +12434,20 @@ function chatterLine(creep) {
     const news = pick % WEATHER_EVERY === WEATHER_EVERY / 2 ? gossip() : undefined;
     if (news)
         return news;
+    const hail = pick % WEATHER_EVERY === 1 ? greeting(creep, pick) : undefined;
+    if (hail)
+        return hail;
     const elder = ((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : Infinity) <= ELDER_TICKS;
     const lines = elder ? ELDER_CHATTER : ((_b = ROLE_CHATTER[creep.memory.role]) !== null && _b !== void 0 ? _b : GENERAL_CHATTER);
     return lines[pick % lines.length];
+}
+function greeting(creep, pick) {
+    const other = creep.pos.findInRange(FIND_MY_CREEPS, 1).find((c) => c.name !== creep.name);
+    const given = other === null || other === void 0 ? void 0 : other.name.split(" ").pop();
+    if (!given)
+        return undefined;
+    const lines = [`hail ${given}`, `ho ${given}!`, `${given}!`].filter((l) => l.length <= 10);
+    return lines.length > 0 ? lines[(pick >> 2) % lines.length] : undefined;
 }
 function maybeChatter(creep) {
     var _a;
