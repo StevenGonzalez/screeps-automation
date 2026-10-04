@@ -10,7 +10,7 @@ const g = vi.hoisted(() => {
 });
 
 import { chatterLine } from "../src/orchestrators/orchestrator.creep";
-import { ROLE_MINER } from "../src/config/config.roles";
+import { ROLE_APOTHECARY, ROLE_MINER } from "../src/config/config.roles";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
 // Every line a creep says over a stretch of ticks in the same season.
@@ -89,6 +89,19 @@ describe("chatter", () => {
     const long = linesFrom(start, undefined, undefined, ["Porter Wilhelmina"]);
     expect(long.some((l) => l.includes("Wilhelmina"))).toBe(false);
     for (const l of [...lines, ...long]) expect(l.length).toBeLessThanOrEqual(10);
+  });
+
+  it("gives the goblin of the labs talk of its own brews", () => {
+    const goblin = { name: "Goblin Snik", memory: { role: ROLE_APOTHECARY }, pos: { findInRange: () => [] } } as unknown as Creep;
+    g.Memory = {};
+    const lines: string[] = [];
+    for (let t = 23 * TOWN_DAY_LENGTH; t < 23 * TOWN_DAY_LENGTH + 3_000; t++) {
+      g.Game = { time: t };
+      const line = chatterLine(goblin);
+      if (line) lines.push(line);
+    }
+    expect(lines).toContain("potions!");
+    expect(lines).not.toContain("for Crown!");
   });
 
   it("talks of the feast on a feast day", () => {

@@ -128,6 +128,7 @@ const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_CONQUEROR]: ["kneel!", "my castle", "bow!"],
   [ROLE_UNCLAIMER]: ["begone!", "usurped", "no king!"],
   [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
+  [ROLE_APOTHECARY]: ["hee hee!", "potions!", "bubbling"],
   [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
   [ROLE_MINSTREL]: ["encore!", "a coin?", "♪ tra la ♪"],
 };
