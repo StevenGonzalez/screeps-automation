@@ -109,12 +109,14 @@ it is doing.
 In peace it follows the town clock:
 
 - **Dawn and day:** stand the watch posts. With every post taken, wait in the
-  square, then in a bed.
+  square, then in a bed. On a feast day they gather in the square instead,
+  and only overflow to the posts.
 - **Dusk and night:** sleep in a cottage bed, or wait in the square if every
   bed is taken.
 - On the first tick of each phase the whole town calls it out ("cock-a-doo!",
   "lamps lit", "zzz"). At daybreak the talk is of the season ("blossoms!",
-  "hay to cut", "cider time", "snow again").
+  "hay to cut", "cider time", "snow again"). On a feast day the square
+  cheers every hundred ticks while the sun is up ("Huzzah!", "ale!").
 
 When raiders are in the room and safe mode is off:
 
@@ -169,8 +171,11 @@ Seven days make a season, and the year turns through spring, summer, autumn
 and winter, the same in every castle. The Royal Chronicle notes each new
 season.
 
-The room HUD shows the part of the day, the hour and the season:
-`Night, 19:00 in winter  8 townsfolk`.
+The first day of each season is a feast day: the Sowing Feast, the Midsummer
+Fair, Harvest Home and the Yule Feast.
+
+The room HUD shows the part of the day, the hour, the season and any feast:
+`Day, 10:00 in autumn, Harvest Home  8 townsfolk`.
 
 ---
 
@@ -185,7 +190,8 @@ When room visuals are on, the town draws itself:
 - rippling water in the fountain and a "... Square" sign;
 - the season: a faint green tint and drifting petals in spring, fireflies
   round the fountain on a summer night, an amber tint and falling leaves in
-  autumn, and a pale tint and falling snow in winter.
+  autumn, and a pale tint and falling snow in winter;
+- on a feast day, a ring of lanterns round the fountain with the feast's name.
 
 ---
 

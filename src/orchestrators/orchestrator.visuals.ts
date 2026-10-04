@@ -1,5 +1,5 @@
 import { ROLE_REMOTE_MINER, ROLE_TITLES, ROLE_TOWNSFOLK } from "../config/config.roles";
-import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townSeason } from "../services/services.town";
+import { cottageLayout, isNightfall, parseTile, spotHolder, townClock, townFeast, townSeason } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
@@ -225,7 +225,9 @@ function drawRoomHUD(room: Room) {
     const hh = String(clock.hour).padStart(2, "0");
     const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
     const season = townSeason(Game.time);
-    v.text(`${icon} ${phase}, ${hh}:00 in ${season}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
+    const feast = townFeast(Game.time);
+    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}`;
+    v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
     y += lineH;
   }
 
@@ -298,10 +300,31 @@ const SEASON_DRIFT: Partial<Record<TownSeason, Drift>> = {
 };
 
 const FIREFLIES = 8;
+const LANTERNS = 12;
+const LANTERN_COLOURS = ["#ff6b4a", "#ffd27f", "#7fd4ff"];
 
 export function drawSeason(room: Room, time = Game.time): void {
   const v = room.visual;
   const season = townSeason(time);
+  const fountain = room.memory.town?.fountain;
+
+  // A feast day hangs a ring of lanterns round the fountain, their colours
+  // turning slowly, with the feast's name under it.
+  const feast = townFeast(time);
+  if (feast && fountain) {
+    const { x, y } = parseTile(fountain);
+    const turn = Math.floor(time / 5);
+    for (let i = 0; i < LANTERNS; i++) {
+      const angle = (i * Math.PI * 2) / LANTERNS;
+      v.circle(x + Math.cos(angle) * 2.4, y + Math.sin(angle) * 2.4, {
+        radius: 0.14,
+        fill: LANTERN_COLOURS[(i + turn) % LANTERN_COLOURS.length],
+        opacity: 0.85,
+      });
+    }
+    v.text(feast, x, y + 3.2, { font: 0.5, color: "#ffd27f", stroke: "#000000", strokeWidth: 0.06 });
+  }
+
   const tint = SEASON_TINT[season];
   if (tint) v.rect(-0.5, -0.5, 50, 50, { fill: tint, opacity: 0.05 });
 
@@ -317,7 +340,6 @@ export function drawSeason(room: Room, time = Game.time): void {
     return;
   }
 
-  const fountain = room.memory.town?.fountain;
   if (!fountain || !isNightfall(townClock(time).phase)) return;
   const { x, y } = parseTile(fountain);
   for (let i = 0; i < FIREFLIES; i++) {

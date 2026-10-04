@@ -175,9 +175,20 @@ describe("seasons", () => {
   });
 
   it("brings out fireflies by the fountain on a summer night, and nothing on a summer day", () => {
-    drawSeason(townRoom(), 7_300);
+    drawSeason(townRoom(), 8_300);
     expect(drawn).toHaveLength(0);
-    drawSeason(townRoom(), 7_800);
+    drawSeason(townRoom(), 8_800);
     expect(drawn.filter((d) => d.kind === "circle").length).toBeGreaterThan(0);
+  });
+
+  it("hangs a garland of lanterns round the fountain on a feast day", () => {
+    drawSeason(townRoom(), 7_300);
+    const lanterns = drawn.filter((d) => d.kind === "circle");
+    expect(lanterns.length).toBeGreaterThanOrEqual(8);
+    for (const l of lanterns) {
+      const [x, y] = l.args as number[];
+      expect(Math.hypot(x - 25, y - 25)).toBeLessThan(4);
+    }
+    expect(drawn.some((d) => d.kind === "text" && d.args[0] === "Midsummer Fair")).toBe(true);
   });
 });

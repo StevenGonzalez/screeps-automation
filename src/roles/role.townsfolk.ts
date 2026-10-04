@@ -8,6 +8,7 @@ import {
   parkOn,
   parseTile,
   townClock,
+  townFeast,
   townSeason,
 } from "../services/services.town";
 import { floodInterior } from "../planning/planner.town";
@@ -46,6 +47,10 @@ const SEASON_CALLS: Record<TownSeason, string[]> = {
   autumn: ["harvest!", "cider time", "leaves down"],
   winter: ["brr!", "snow again", "stoke fires"],
 };
+
+// On a feast day the square cheers every hundred ticks while the sun is up.
+const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
+const FEAST_CHEER_PERIOD = 100;
 
 export function runTownsfolk(creep: Creep): void {
   if (creep.memory.job === "lookout") runLookout(creep);
@@ -104,6 +109,9 @@ function runMilitia(creep: Creep): void {
     parkIdle(creep, "square");
     return;
   }
+  // A feast day by daylight is spent in the square; raiders still call the
+  // militia to the walls above.
+  if (townFeast(Game.time) && parkIdle(creep, "square")) return;
   if (parkIdle(creep, "watch")) return;
   parkOn(creep, bedTiles(room.memory.town));
 }
@@ -112,8 +120,11 @@ function runMilitia(creep: Creep): void {
 function callThePhase(creep: Creep): void {
   const t = Game.time % TOWN_DAY_LENGTH;
   const phase = TOWN_PHASES.find((p) => p.start === t);
-  if (!phase) return;
-  const lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
+  const feasting = townFeast(Game.time) !== undefined && townClock(Game.time).phase === "day";
+  let lines: string[];
+  if (feasting && t % FEAST_CHEER_PERIOD === 0) lines = FEAST_CALLS;
+  else if (!phase) return;
+  else lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
   creep.say(lines[Math.abs(hash) % lines.length], true);

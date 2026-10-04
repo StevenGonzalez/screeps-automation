@@ -25,7 +25,7 @@ vi.mock("../src/services/services.combat", () => ({
 }));
 
 import { runTownsfolk, lookoutTargets } from "../src/roles/role.townsfolk";
-import { claimSpot, townClock, townSeason } from "../src/services/services.town";
+import { claimSpot, townClock, townFeast, townSeason } from "../src/services/services.town";
 import { nextTownJob } from "../src/orchestrators/orchestrator.spawning.town";
 import { ROLE_TOWNSFOLK } from "../src/config/config.roles";
 import { TOWN, TOWN_DAY_LENGTH } from "../src/config/config.town";
@@ -142,6 +142,18 @@ describe("the town's calls", () => {
   });
 });
 
+describe("townFeast", () => {
+  it("holds a feast on the first day of each season, and no other", () => {
+    expect(townFeast(0)).toBe("Sowing Feast");
+    expect(townFeast(999)).toBe("Sowing Feast");
+    expect(townFeast(1_000)).toBeUndefined();
+    expect(townFeast(7_500)).toBe("Midsummer Fair");
+    expect(townFeast(14_000)).toBe("Harvest Home");
+    expect(townFeast(21_000)).toBe("Yule Feast");
+    expect(townFeast(27_999)).toBeUndefined();
+  });
+});
+
 describe("claimSpot", () => {
   it("gives each tile to one creep and frees a tile its holder stopped using", () => {
     const a = folk("a", 10, 10);
@@ -170,6 +182,19 @@ describe("militia", () => {
     expect(x).toBeLessThanOrEqual(33);
     expect(y).toBeGreaterThanOrEqual(31);
     expect(y).toBeLessThanOrEqual(33);
+  });
+
+  it("leaves the watch for the square on a feast day, and still runs to the walls for raiders", () => {
+    (g.Game as { time: number }).time = 7 * TOWN_DAY_LENGTH + 200;
+    const m = folk("m", 25, 25);
+    runTownsfolk(m as unknown as Creep);
+    expect(TOWN_MEM.square).toContain(movedTo(m));
+
+    ramparts = [{ structureType: "rampart", pos: { x: 20, y: 11 } }];
+    hostiles = [{ pos: { x: 22, y: 9 }, hits: 500 }];
+    m.moveTo.mockClear();
+    runTownsfolk(m as unknown as Creep);
+    expect(movedTo(m)).toBe("20,11");
   });
 
   it("runs to the rampart nearest the raiders and shoots anything in reach", () => {

@@ -58,6 +58,13 @@ export type TownPhase = "dawn" | "day" | "dusk" | "night";
 export const TOWN_DAYS_PER_SEASON = 7;
 export type TownSeason = "spring" | "summer" | "autumn" | "winter";
 export const TOWN_SEASONS: ReadonlyArray<TownSeason> = ["spring", "summer", "autumn", "winter"];
+// The first day of each season is a feast day.
+export const TOWN_FEASTS: Record<TownSeason, string> = {
+  spring: "Sowing Feast",
+  summer: "Midsummer Fair",
+  autumn: "Harvest Home",
+  winter: "Yule Feast",
+};
 
 // Families of the town. A cottage takes the name at its index.
 export const COTTAGE_FAMILIES = [

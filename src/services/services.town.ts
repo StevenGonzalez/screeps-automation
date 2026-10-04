@@ -1,6 +1,7 @@
 import {
   TOWN_DAY_LENGTH,
   TOWN_DAYS_PER_SEASON,
+  TOWN_FEASTS,
   TOWN_PHASES,
   TOWN_SEASONS,
   TownPhase,
@@ -26,6 +27,12 @@ export function townClock(time: number): TownClock {
 export function townSeason(time: number): TownSeason {
   const day = Math.floor(time / TOWN_DAY_LENGTH);
   return TOWN_SEASONS[Math.floor(day / TOWN_DAYS_PER_SEASON) % TOWN_SEASONS.length];
+}
+
+/** The feast held today, if today is the first day of a season. */
+export function townFeast(time: number): string | undefined {
+  const day = Math.floor(time / TOWN_DAY_LENGTH);
+  return day % TOWN_DAYS_PER_SEASON === 0 ? TOWN_FEASTS[townSeason(time)] : undefined;
 }
 
 export function isNightfall(phase: TownPhase): boolean {
