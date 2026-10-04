@@ -1,0 +1,20 @@
+{
+  // Type-checks the page and what it shares with the server. The server half
+  // runs in Node through Vite and is left to Vite, as no Node typings are
+  // installed. The page draws the bot's own lore, so the bot's typings come
+  // along.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable", "WebWorker.ImportScripts"],
+    "types": ["screeps"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "include": ["client/**/*.ts", "shared/**/*.ts", "../src/types.d.ts"]
+}

@@ -30,6 +30,8 @@ lib/
 .env.local
 .env.production
 screeps.json
+# The realm viewer's terrain cache
+viewer/.cache/
 
 # IDE and editor files
 .vscode/settings.json

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kingdom of Arca</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        touch-action: none;
+      }
+      /*
+       * The picture is a stack of layers the browser blends: the world (graded
+       * by an SVG filter, see grade.ts), its fog, the light of the hour (see
+       * lighting.ts), the vignette and film grain, and over all the omens, the
+       * bot's overlays and the cinema's frame. Blended in the canvas instead,
+       * they would push it off the GPU.
+       */
+      .layer {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none;
+      }
+      #light {
+        mix-blend-mode: hard-light;
+      }
+      #vignette {
+        background: radial-gradient(circle farthest-corner at 50% 50%, rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.62) 100%);
+      }
+      #grain {
+        mix-blend-mode: overlay;
+        opacity: 0.07;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="realm"></canvas>
+    <div id="fog" class="layer"></div>
+    <canvas id="light" class="layer"></canvas>
+    <div id="vignette" class="layer"></div>
+    <div id="grain" class="layer"></div>
+    <canvas id="top" class="layer"></canvas>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

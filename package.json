@@ -8,7 +8,8 @@
     "deploy": "rollup -c && node scripts/deploy.mjs",
     "deploy:sim": "rollup -c && node scripts/deploy.mjs",
     "watch": "rollup -cw",
-    "test": "vitest run"
+    "test": "vitest run",
+    "realm": "vite --config viewer/vite.config.ts"
   },
   "repository": {
     "type": "git",
