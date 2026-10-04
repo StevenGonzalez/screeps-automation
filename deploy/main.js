@@ -7700,6 +7700,38 @@ function cryHaul(creep, amount) {
     creep.memory.hauled = ((_a = creep.memory.hauled) !== null && _a !== void 0 ? _a : 0) + amount;
     freshCries();
     creepCries[creep.name] = `+${amount} gold`;
+    heraldRoadGold(creep, amount);
+}
+const ROAD_GOLD_MARKS = [
+    [10000, "ten thousand"],
+    [50000, "fifty thousand"],
+    [100000, "a hundred thousand"],
+    [250000, "a quarter of a million"],
+    [500000, "half a million"],
+    [1000000, "a million"],
+];
+function roadGoldMark(before, after) {
+    for (const [at, words] of ROAD_GOLD_MARKS)
+        if (before < at && after >= at)
+            return words;
+    const millions = Math.floor(after / 1000000);
+    if (millions >= 2 && Math.floor(before / 1000000) < millions)
+        return `${millions} million`;
+    return undefined;
+}
+function heraldRoadGold(creep, amount) {
+    var _a, _b;
+    const { homeRoom, targetRoom } = creep.memory;
+    if (!homeRoom || !targetRoom)
+        return;
+    const roads = ((_a = Memory.roadGold) !== null && _a !== void 0 ? _a : (Memory.roadGold = {}));
+    const key = `${homeRoom}>${targetRoom}`;
+    const before = (_b = roads[key]) !== null && _b !== void 0 ? _b : 0;
+    roads[key] = before + amount;
+    const mark = roadGoldMark(before, before + amount);
+    if (!mark)
+        return;
+    chronicle(`With ${creep.name}'s load, the merchants of ${castleName(homeRoom)} have brought ${mark} gold home from the ${wildsName(targetRoom)}.`);
 }
 function settleFlight(creep) {
     if (creep.memory.fled)
@@ -8166,7 +8198,7 @@ function foeIn(roomName) {
     return band ? `${band}'s raiders` : "raiders";
 }
 function heraldFallen() {
-    var _a, _b, _c;
+    var _a, _b, _c, _d;
     const next = new Map();
     for (const name in Game.creeps) {
         const c = Game.creeps[name];
@@ -8176,21 +8208,21 @@ function heraldFallen() {
             room: c.pos.roomName,
             hurt: c.hits < c.hitsMax,
             ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0,
-            kills: (_b = c.memory.kills) !== null && _b !== void 0 ? _b : 0,
-            hauled: (_c = c.memory.hauled) !== null && _c !== void 0 ? _c : 0,
         });
     }
     for (const [name, last] of muster) {
         if (next.has(name))
             continue;
-        const slew = last.kills > 0 ? `, who slew ${last.kills === 1 ? "a foe" : `${last.kills} foes`},` : "";
+        const mem = (_b = Memory.creeps) === null || _b === void 0 ? void 0 : _b[name];
+        const kills = (_c = mem === null || mem === void 0 ? void 0 : mem.kills) !== null && _c !== void 0 ? _c : 0;
+        const slew = kills > 0 ? `, who slew ${kills === 1 ? "a foe" : `${kills} foes`},` : "";
         if (!last.hurt || last.ttl <= 1) {
             if (slew) {
                 spreadWord(mourn(name));
                 chronicle(`${name}${slew} was laid to rest with honours.`);
-                heraldSlayer(name, last.kills);
+                heraldSlayer(name, kills);
             }
-            heraldRetired(name, last.hauled);
+            heraldRetired(name, (_d = mem === null || mem === void 0 ? void 0 : mem.hauled) !== null && _d !== void 0 ? _d : 0);
             if (last.ttl <= 1)
                 heraldFirstBornRest(name);
             continue;
@@ -8200,7 +8232,7 @@ function heraldFallen() {
         annal("fallen", 1);
         spreadWord(mourn(name));
         tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
-        heraldSlayer(name, last.kills);
+        heraldSlayer(name, kills);
     }
     muster = next;
 }
@@ -8263,9 +8295,6 @@ function heraldKills(room) {
         for (const c of creeps) {
             creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
             c.memory.kills = ((_a = c.memory.kills) !== null && _a !== void 0 ? _a : 0) + 1;
-            const m = muster.get(c.name);
-            if (m)
-                m.kills = c.memory.kills;
         }
     }
 }
