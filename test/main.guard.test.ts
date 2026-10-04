@@ -7,7 +7,7 @@ const g = globalThis as Record<string, unknown>;
 const systems = [
   "creep", "labs", "factory", "links", "memory", "strategy", "expansion", "spawning", "score",
   "structures", "tower", "terminal", "military", "nukes", "nuker", "sourcekeeper", "powercreep",
-  "observer", "visuals", "exchequer",
+  "observer", "visuals", "exchequer", "herald",
 ] as const;
 const loops = Object.fromEntries(systems.map((s) => [s, vi.fn()])) as Record<(typeof systems)[number], ReturnType<typeof vi.fn>>;
 
@@ -34,6 +34,7 @@ vi.mock("../src/orchestrators/orchestrator.visuals", () => ({ loop: () => loops.
 vi.mock("../src/services/services.allies", () => ({ runAllies: vi.fn() }));
 vi.mock("../src/services/services.exchequer", () => ({ loop: () => loops.exchequer() }));
 vi.mock("../src/services/services.rebrand", () => ({ migrateRoleNames: vi.fn() }));
+vi.mock("../src/services/services.herald", () => ({ heraldRooms: () => loops.herald() }));
 vi.mock("../src/console", () => ({ setupConsole: vi.fn() }));
 vi.mock("../src/services/services.movement", () => ({}));
 const replay = vi.fn();
@@ -66,6 +67,14 @@ describe("CPU guard in main", () => {
   it("keeps the exchequer's books on a busy tick while the bucket is healthy", () => {
     tick(5000);
     expect(loops.exchequer).toHaveBeenCalled();
+  });
+
+  it("hears the herald before the memory system marks raids over", () => {
+    const order: string[] = [];
+    loops.herald.mockImplementation(() => order.push("herald"));
+    loops.memory.mockImplementation(() => order.push("memory"));
+    tick(5000);
+    expect(order).toEqual(["herald", "memory"]);
   });
 
   it("closes the exchequer when the bucket is critical", () => {

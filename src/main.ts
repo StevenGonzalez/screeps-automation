@@ -21,6 +21,7 @@ import * as visualsSystem from "./orchestrators/orchestrator.visuals";
 import { runAllies } from "./services/services.allies";
 import * as exchequer from "./services/services.exchequer";
 import { migrateRoleNames } from "./services/services.rebrand";
+import { heraldRooms } from "./services/services.herald";
 import { setupConsole } from "./console";
 import { recordCpu } from "./services/services.profiler";
 import { drawAndKeep, replayKept } from "./services/services.visualreplay";
@@ -65,6 +66,10 @@ export function loop() {
   const heavyShed = (): boolean =>
     bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
 
+  // The herald reads last tick's battles before the memory system marks a
+  // remote clear of raiders, so the chronicle tells of the killing blow before
+  // the raid's end.
+  runSafe("herald", () => heraldRooms());
   runSafe("memory", () => memorySystem.loop());
   runSafe("rebrand", () => migrateRoleNames());
   runSafe("strategy", () => strategySystem.loop());

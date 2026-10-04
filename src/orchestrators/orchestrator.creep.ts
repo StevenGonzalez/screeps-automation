@@ -66,7 +66,7 @@ import { runTownsfolk } from "../roles/role.townsfolk";
 import { runMinstrel } from "../roles/role.minstrel";
 import { resolveTraffic, shelterFromHostiles, walkHome } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
-import { cryFor, gossip, heraldRooms } from "../services/services.herald";
+import { cryFor, gossip } from "../services/services.herald";
 import { townClock, townFeast, townSeason, townStorm } from "../services/services.town";
 import { TownSeason } from "../config/config.town";
 
@@ -236,7 +236,6 @@ function maybeChatter(creep: Creep): void {
 
 export function loop() {
   const profile = Memory.profileRoles === true;
-  heraldRooms();
   for (const name in Game.creeps) {
     const creep = Game.creeps[name];
     if (creep.spawning) continue;
