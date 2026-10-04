@@ -49,6 +49,7 @@ export function loop() {
     drawSeason(room);
     drawLandmarks(room);
     drawSky(room);
+    drawCamp(room);
     drawTown(room);
     drawDragon(room);
     drawBlueprint(room);
@@ -531,6 +532,46 @@ export function drawSky(room: Room): void {
       v.circle(x, y, { radius: 1.4, fill: "#ffb347", opacity: 0.12 });
     }
   }
+}
+
+// Tiles round the barracks a camp may use, in order of preference: the fire
+// takes the first open one and the tents the next three.
+const CAMP_RING: Array<[number, number]> = [
+  [0, 2], [-2, 2], [2, 2], [-2, 0], [2, 0], [0, -2], [-2, -2], [2, -2],
+];
+
+// A keep with no town yet is a camp: the settlers' tents pitched round the
+// barracks, or round the ground marked out for it, and a campfire that burns
+// after dark and smoulders by day.
+export function drawCamp(room: Room): void {
+  if (room.memory.town) return;
+  const anchor =
+    room.find(FIND_MY_SPAWNS)[0]?.pos ??
+    room.find(FIND_MY_CONSTRUCTION_SITES).find((s) => s.structureType === STRUCTURE_SPAWN)?.pos;
+  if (!anchor) return;
+  const terrain = room.getTerrain();
+  const open = CAMP_RING.map(([dx, dy]) => [anchor.x + dx, anchor.y + dy]).filter(
+    ([x, y]) => x > 0 && x < 49 && y > 0 && y < 49 && terrain.get(x, y) !== TERRAIN_MASK_WALL
+  );
+  if (open.length === 0) return;
+  const v = room.visual;
+  const [[fx, fy], ...tents] = open;
+  for (const [x, y] of tents.slice(0, 3)) {
+    v.poly([[x - 0.45, y + 0.35], [x, y - 0.45], [x + 0.45, y + 0.35], [x - 0.45, y + 0.35]], {
+      fill: "#7a5a32",
+      stroke: "#c8a060",
+      strokeWidth: 0.04,
+      opacity: 0.75,
+    });
+  }
+  if (isNightfall(townClock(Game.time).phase)) {
+    const flicker = 0.5 + 0.5 * Math.sin(Game.time * 1.9 + fx);
+    v.circle(fx, fy, { radius: 1.6, fill: "#ff8a33", opacity: 0.1 + 0.05 * flicker });
+    v.circle(fx, fy, { radius: 0.22 + 0.08 * flicker, fill: "#ffcf66", opacity: 0.75 + 0.2 * flicker });
+  } else {
+    v.circle(fx, fy, { radius: 0.18, fill: "#6a6058", opacity: 0.7 });
+  }
+  v.text("Pilgrims' Camp", fx, fy + 1.1, LANDMARK_LABEL);
 }
 
 export function drawTown(room: Room): void {

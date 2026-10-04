@@ -7,6 +7,7 @@ g.FIND_MY_SPAWNS = 112;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.STRUCTURE_SPAWN = "spawn";
 g.STRUCTURE_TOWER = "tower";
+g.TERRAIN_MASK_WALL = 1;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -14,6 +15,7 @@ g.RoomPosition = class {
 import {
   describeCensus,
   drawAurora,
+  drawCamp,
   drawDragon,
   drawGraves,
   drawLandmarks,
@@ -240,6 +242,36 @@ describe("town at night", () => {
     drawTown(room);
     expect(drawn.filter((d) => d.kind === "rect")).toHaveLength(1);
     expect(drawn.filter((d) => d.kind === "circle" && (d.args[0] as number) < 40)).toHaveLength(2);
+  });
+
+  it("pitches a pilgrims' camp round a young keep's barracks, its fire lit after dark", () => {
+    const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
+    const spawn = { pos: { x: 20, y: 20 } };
+    const room = {
+      name: HOME,
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly"), line: record("line") },
+      memory: {},
+      // The tile two south of the barracks is rock, so the fire moves along.
+      getTerrain: () => ({ get: (x: number, y: number) => (x === 20 && y === 22 ? 1 : 0) }),
+      find: (type: number) => (type === g.FIND_MY_SPAWNS ? [spawn] : []),
+    } as unknown as Room;
+    const camp = (time: number) => {
+      drawn = [];
+      g.Game = { time, creeps: {}, rooms: {} };
+      drawCamp(room);
+      return drawn;
+    };
+    const night = camp(3_800);
+    expect(night.filter((d) => d.kind === "poly")).toHaveLength(3);
+    const fire = night.filter((d) => d.kind === "circle");
+    expect(fire).toHaveLength(2);
+    expect(fire[0].args.slice(0, 2)).toEqual([18, 22]);
+    expect(night.some((d) => d.kind === "text" && d.args[0] === "Pilgrims' Camp")).toBe(true);
+    expect(camp(3_300).filter((d) => d.kind === "circle")).toHaveLength(1);
+
+    // A keep with a town has no camp.
+    (room.memory as RoomMemory).town = { posts: [], square: [], cottages: [] };
+    expect(camp(3_800)).toHaveLength(0);
   });
 
   it("hangs the moon in the sky after dark, lit as it is tonight", () => {

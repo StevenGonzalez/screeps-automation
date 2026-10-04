@@ -236,7 +236,12 @@ lights, then how many townsfolk there are, if any: `Day, 10:00 in autumn, Harves
 
 When room visuals are on, the town draws itself. The sky, the watchtower
 braziers and the barracks' hearth are drawn over every castle, so a young keep
-with no town yet shares the realm's nights, moon and wolves:
+with no town yet shares the realm's nights, moon and wolves. Until its town is
+planned, such a keep is a pilgrims' camp: three tents pitched round its
+barracks (or the ground marked out for it) and a campfire that burns after
+dark and smoulders by day.
+
+In full, sky and town together:
 
 - the whole room darkens at night, and a little at dawn and dusk;
 - each cottage gets a roof and a "House of ..." sign, and a lamp is lit in
