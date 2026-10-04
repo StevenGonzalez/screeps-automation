@@ -14766,7 +14766,7 @@ function pickRemoteSources(room) {
     for (const p of plans) {
         if (picked.size >= MAX_REMOTE_SOURCES)
             break;
-        const held = mined.has(p.sourceId) || (recent === null || recent === void 0 ? void 0 : recent.has(p.sourceId));
+        const held = recent ? recent.has(p.sourceId) : mined.has(p.sourceId);
         const reserve = held ? 0 : headroom;
         if (p.spawnTime > budget - reserve)
             continue;
