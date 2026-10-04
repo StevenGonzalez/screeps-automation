@@ -7625,6 +7625,13 @@ function cryFlight(creep) {
     freshCries();
     creepCries[creep.name] = "Bandits!";
 }
+const GLUT_CRY_PERIOD = 25;
+function cryGlut(creep) {
+    if (Game.time % GLUT_CRY_PERIOD !== 0)
+        return;
+    freshCries();
+    creepCries[creep.name] = "no buyers";
+}
 function cryHaul(creep, amount) {
     var _a;
     creep.memory.hauled = ((_a = creep.memory.hauled) !== null && _a !== void 0 ? _a : 0) + amount;
@@ -7755,13 +7762,13 @@ const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
 const WARES = {
     energy: "gold",
-    H: "hydrogen",
-    O: "oxygen",
+    H: "brimstone",
+    O: "quicksilver",
     U: "utrium",
     L: "lemergium",
     K: "keanium",
     Z: "zynthium",
-    X: "catalyst",
+    X: "philosopher's salt",
 };
 function heraldTrade() {
     var _a, _b, _c, _d;
@@ -7803,7 +7810,7 @@ const BREW_VIRTUES = {
     GO: "iron skin",
 };
 const REAGENTS = {
-    OH: "hydroxide",
+    OH: "cinnabar",
     ZK: "zynthium keanite",
     UL: "utrium lemergite",
     G: "ghodium",
@@ -9420,8 +9427,10 @@ function runRemoteMiner(creep) {
             creep.repair(container);
             return;
         }
-        if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && pileAt(creep.pos) >= GLUT_PILE)
+        if (container.store.getFreeCapacity(RESOURCE_ENERGY) === 0 && pileAt(creep.pos) >= GLUT_PILE) {
+            cryGlut(creep);
             return;
+        }
         harvest$1(creep, source);
     }
     else {
@@ -13160,7 +13169,6 @@ const AUTO_PRODUCTION_TARGETS = {
     XZHO2: 2000,
     XGH2O: 3000,
     XGHO2: 2000,
-    OH: 10000,
     G: 5000,
 };
 function loop$d() {
@@ -20974,6 +20982,8 @@ function loop() {
     runSafe("spawning", () => loop$7());
     if (!bucketCritical)
         runSafe("structures", () => loop$6());
+    if (!bucketCritical)
+        runSafe("exchequer", () => loop$8());
     if (!heavyShed())
         runSafe("labs", () => loop$d());
     if (!heavyShed())
@@ -20989,8 +20999,6 @@ function loop() {
     runSafe("powercreep", () => loop$3());
     if (!heavyShed())
         runSafe("observer", () => loop$2());
-    if (!heavyShed())
-        runSafe("exchequer", () => loop$8());
     if (!heavyShed())
         runSafe("pixels", () => loop$b());
     const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
