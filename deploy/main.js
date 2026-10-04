@@ -12587,8 +12587,22 @@ const WEATHER_EVERY = 4;
 const ELDER_TICKS = 150;
 const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
 const SAY_PERIOD = 30;
+let replyTick = -1;
+let repliesDue = {};
+let repliesQueued = {};
+function turnReplies() {
+    if (replyTick === Game.time)
+        return;
+    repliesDue = replyTick === Game.time - 1 ? repliesQueued : {};
+    repliesQueued = {};
+    replyTick = Game.time;
+}
 function chatterLine(creep) {
     var _a, _b;
+    turnReplies();
+    const reply = repliesDue[creep.name];
+    if (reply)
+        return reply;
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
@@ -12619,10 +12633,15 @@ function chatterLine(creep) {
 function greeting(creep, pick) {
     const other = creep.pos.findInRange(FIND_MY_CREEPS, 1).find((c) => c.name !== creep.name);
     const given = other === null || other === void 0 ? void 0 : other.name.split(" ").pop();
-    if (!given)
+    if (!other || !given)
         return undefined;
     const lines = [`hail ${given}`, `ho ${given}!`, `${given}!`].filter((l) => l.length <= 10);
-    return lines.length > 0 ? lines[(pick >> 2) % lines.length] : undefined;
+    if (lines.length === 0)
+        return undefined;
+    const own = creep.name.split(" ").pop();
+    const answers = [`aye ${own}!`, `ho ${own}!`, "well met!"].filter((l) => l.length <= 10);
+    repliesQueued[other.name] = answers[(pick >> 3) % answers.length];
+    return lines[(pick >> 2) % lines.length];
 }
 function maybeChatter(creep) {
     var _a;
