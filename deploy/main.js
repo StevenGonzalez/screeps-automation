@@ -15014,6 +15014,7 @@ function remoteSpawnBudget(room) {
 const remotePickCache = {};
 function pickRemoteSources(room) {
     var _a, _b;
+    var _c;
     const cached = remotePickCache[room.name];
     if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
         return cached.picked;
@@ -15023,6 +15024,7 @@ function pickRemoteSources(room) {
     const peddlers = getCreepsByRole(ROLE_REMOTE_MINER);
     const mined = new Set(peddlers.filter((c) => c.memory.homeRoom === room.name).map((c) => c.memory.remoteSourceId));
     const minedElsewhere = new Set(peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId));
+    const held = (s) => s.pickedAt === undefined ? mined.has(s.sourceId) : Game.time - s.pickedAt <= REMOTE_PICK_HOLD;
     const plans = [];
     for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
         if (!isRemoteEligible(room, r, "reserve", true))
@@ -15030,33 +15032,30 @@ function pickRemoteSources(room) {
         for (const s of r.sources) {
             if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId))
                 continue;
-            if (lowCpu && !mined.has(s.sourceId))
+            if (lowCpu && !mined.has(s.sourceId) && !held(s))
                 continue;
             const plan = planRemoteSource(room, r, s);
             if (plan.profit > 0)
-                plans.push({ sourceId: s.sourceId, ...plan });
+                plans.push({ source: s, ...plan });
         }
     }
     plans.sort((a, b) => b.profit - a.profit);
-    const fresh = cached !== undefined && Game.time - cached.tick <= REMOTE_PICK_HOLD;
-    const pickedAt = fresh ? cached.pickedAt : {};
     const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
     let budget = remoteSpawnBudget(room);
     const picked = new Map();
     for (const p of plans) {
         if (picked.size >= MAX_REMOTE_SOURCES)
             break;
-        const held = fresh
-            ? Game.time - ((_b = pickedAt[p.sourceId]) !== null && _b !== void 0 ? _b : -Infinity) <= REMOTE_PICK_HOLD
-            : mined.has(p.sourceId);
-        const reserve = held ? 0 : headroom;
-        if (p.spawnTime > budget - reserve)
+        const reserve = held(p.source) ? 0 : headroom;
+        if (p.spawnTime > budget - reserve) {
+            (_b = (_c = p.source).pickedAt) !== null && _b !== void 0 ? _b : (_c.pickedAt = 0);
             continue;
+        }
         budget -= p.spawnTime;
-        picked.set(p.sourceId, picked.size);
-        pickedAt[p.sourceId] = Game.time;
+        picked.set(p.source.sourceId, picked.size);
+        p.source.pickedAt = Game.time;
     }
-    remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked, pickedAt };
+    remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
     return picked;
 }
 function getScoutsForRoom(room) {
