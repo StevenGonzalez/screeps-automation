@@ -13721,7 +13721,7 @@ function pickRemoteSources(room) {
     if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
         return cached.picked;
     }
-    const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR;
+    const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
     const mined = new Set(getCreepsByRole(ROLE_REMOTE_MINER)
         .filter((c) => c.memory.homeRoom === room.name)
         .map((c) => c.memory.remoteSourceId));
