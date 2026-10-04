@@ -232,8 +232,8 @@ When room visuals are on, the town draws itself:
 - the whole room darkens at night, and a little at dawn and dusk;
 - each cottage gets a roof and a "House of ..." sign, and a lamp is lit in
   every occupied bed;
-- a flag at each watch post, turned red when someone stands there, and a
-  flickering torch on each post after dark;
+- a pennant in the castle's colours at each watch post, run up when someone
+  stands there, and a flickering torch on each post after dark;
 - after dark, a brazier burning atop each watchtower and the barracks' hearth
   glowing;
 - rippling water in the fountain and a "... Square" sign;

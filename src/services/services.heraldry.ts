@@ -190,6 +190,12 @@ function cutArms(a: Arms): ArmsPiece[] {
   }
 }
 
+/** The castle's two tinctures as colours: its field, and the one set against it. */
+export function armsColours(roomName: string): { field: string; other: string } {
+  const a = castleArmsOf(roomName);
+  return { field: a.field.hex, other: a.other.hex };
+}
+
 export function shieldOutline(): Point[] {
   return SHIELD;
 }

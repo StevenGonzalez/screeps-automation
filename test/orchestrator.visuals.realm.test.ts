@@ -23,6 +23,7 @@ import {
   drawTown,
 } from "../src/orchestrators/orchestrator.visuals";
 import { townDragon } from "../src/services/services.town";
+import { armsColours } from "../src/services/services.heraldry";
 import {
   ROLE_FILLER,
   ROLE_HAULER,
@@ -199,7 +200,7 @@ describe("town at night", () => {
     const tower = { structureType: "tower", pos: { x: 20, y: 20 } };
     const room = {
       name: HOME,
-      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly"), line: record("line") },
       memory: { town: { posts: ["10,10", "12,10", "14,10"], square: [], cottages: [] } },
       find: () => [tower],
     } as unknown as Room;
@@ -213,6 +214,14 @@ describe("town at night", () => {
     expect(torches(3_300)).toBe(0);
     // Two circles to a torch, and two to the brazier.
     expect(torches(3_800)).toBe(8);
+
+    // Every post flies the castle's colours; nobody stands there, so the
+    // pennants are furled. The moon is a poly too, off in the corner.
+    const pennants = drawn
+      .filter((d) => d.kind === "poly" && (d.args[0] as Array<[number, number]>)[0][0] < 40)
+      .map((d) => d.args[1] as PolyStyle);
+    expect(pennants).toHaveLength(3);
+    for (const p of pennants) expect(p).toMatchObject({ stroke: armsColours(HOME).other, fill: "transparent" });
   });
 
   it("hangs the moon in the sky after dark, lit as it is tonight", () => {
@@ -246,7 +255,7 @@ describe("town at night", () => {
     const record = (kind: string) => (...args: unknown[]) => drawn.push({ kind, args });
     const room = {
       name: HOME,
-      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly"), line: record("line") },
       memory: { town: { posts: [], square: [], cottages: [] } },
       find: () => [],
     } as unknown as Room;
@@ -289,7 +298,7 @@ describe("minstrel's song", () => {
     const room = {
       name: HOME,
       controller: { my: true },
-      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly") },
+      visual: { text: record("text"), rect: record("rect"), circle: record("circle"), poly: record("poly"), line: record("line") },
       memory: { town: { posts: [], square: ["25,24"], fountain: "25,25", cottages: [] } },
       find: () => folk,
     } as unknown as Room;

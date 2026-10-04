@@ -29,7 +29,7 @@ import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
 import { castleName, chronicleDate, formatK, recentChronicle, wildsName } from "../services/services.chronicle";
-import { armsPieces, shieldOutline } from "../services/services.heraldry";
+import { armsColours, armsPieces, shieldOutline } from "../services/services.heraldry";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -531,12 +531,16 @@ export function drawTown(room: Room): void {
     v.text(`House of ${c.name}`, c.x + 2, c.y - 0.3, label);
   }
 
+  // Each post flies the castle's colours, the pennant run up while the post
+  // is manned.
+  const colours = armsColours(room.name);
   town.posts.forEach((p, i) => {
     const { x, y } = parseTile(p);
     const manned = spotHolder(room.name, p) !== undefined;
+    v.line(x, y + 0.35, x, y - 0.4, { color: "#8a7a66", width: 0.05, opacity: 0.8 });
     v.poly(
-      [[x, y + 0.35], [x, y - 0.4], [x + 0.35, y - 0.25], [x, y - 0.1]],
-      { stroke: manned ? "#ff5544" : "#aa6655", strokeWidth: 0.06, fill: manned ? "#ff5544" : "transparent", opacity: 0.8 }
+      [[x, y - 0.4], [x + 0.4, y - 0.27], [x, y - 0.12]],
+      { stroke: colours.other, strokeWidth: 0.04, fill: manned ? colours.field : "transparent", opacity: manned ? 0.9 : 0.5 }
     );
     // A torch burns on every post after dark, flickering on its own beat.
     if (lit) {
