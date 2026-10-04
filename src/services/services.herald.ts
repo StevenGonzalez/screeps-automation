@@ -235,6 +235,9 @@ function heraldWorks(room: Room): void {
   const known = room.memory.heraldWorks;
   room.memory.heraldWorks = counts;
   if (!known) return;
+  // A keep still being founded is built by the pilgrims sent to it.
+  const exp = Memory.expansion;
+  const builders = exp?.roomName === room.name && exp.phase === "bootstrapping" ? "pilgrims" : "masons";
   for (const type of Object.keys(LANDMARKS) as StructureConstant[]) {
     const gained = (counts[type] ?? 0) - (known[type] ?? 0);
     if (gained <= 0) continue;
@@ -243,7 +246,7 @@ function heraldWorks(room: Room): void {
     tally(
       `works:${room.name}:${type}`,
       gained,
-      (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`,
+      (n) => `The ${builders} of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`,
       WORKS_WINDOW
     );
   }

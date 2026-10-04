@@ -374,6 +374,30 @@ describe("herald", () => {
     ]);
   });
 
+  it("gives the pilgrims the credit for the works of a keep they are still founding", () => {
+    g.Memory = {
+      rooms: { [ROOM]: { townName: "Ravenhold" } },
+      expansion: { roomName: ROOM, homeRoom: "W2N2", phase: "bootstrapping", startedAt: 0 },
+    };
+    let built: string[] = [];
+    const room = {
+      name: ROOM,
+      controller: { my: true, level: 1 },
+      memory: {} as RoomMemory,
+      getEventLog: () => "[]",
+      find: (type: number) => (type === 108 ? built.map((structureType) => ({ structureType })) : []),
+    };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {} };
+      heraldRooms();
+    };
+    at(1000);
+    built = ["spawn"];
+    at(1100);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual(["The pilgrims of Ravenhold raise a barracks."]);
+  });
+
   it("tells when a castle's vein is dug dry and when it runs full again, not what it was at the first look", () => {
     g.Memory = { rooms: { [ROOM]: { townName: "Ravenhold" } } };
     const mineral = { mineralType: "O", mineralAmount: 0, ticksToRegeneration: 49_800 as number | undefined };
