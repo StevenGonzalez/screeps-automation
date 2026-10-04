@@ -7729,6 +7729,18 @@ function heraldSeason() {
     const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
     const feast = townFeast(Game.time);
     chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
+    if (season === "spring")
+        heraldCensus();
+}
+function heraldCensus() {
+    var _a;
+    const souls = Object.keys(Game.creeps).length;
+    let castles = 0;
+    for (const name in Game.rooms)
+        if ((_a = Game.rooms[name].controller) === null || _a === void 0 ? void 0 : _a.my)
+            castles++;
+    const held = castles === 1 ? "its one castle" : `its ${castles} castles`;
+    chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.`);
 }
 function annalsLine(season, a) {
     const whole = a.since <= Game.time - TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON;
@@ -8116,6 +8128,21 @@ function heraldRetired(name, hauled) {
     Memory.richestHaul = hauled;
     chronicle(`${name} retired from the road with ${formatK(hauled)} gold brought home, the most of any merchant yet.`);
 }
+function heraldRazed(room, events, id) {
+    var _a, _b, _c;
+    if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
+        return;
+    const struck = events.some((a) => { var _a; return a.event === EVENT_ATTACK && a.data.targetId === id && !((_a = Game.getObjectById(a.objectId)) === null || _a === void 0 ? void 0 : _a.my); });
+    if (!struck)
+        return;
+    for (const name in Game.rooms) {
+        const castle = Game.rooms[name];
+        if (!((_b = castle.controller) === null || _b === void 0 ? void 0 : _b.my) || !((_c = castle.memory.remoteRooms) === null || _c === void 0 ? void 0 : _c.some((r) => r.roomName === room.name)))
+            continue;
+        chronicle(`Raiders razed a waystation in the ${wildsName(room.name)}. ${castleName(name)}'s gold spills into the mud.`);
+        return;
+    }
+}
 function heraldKills(room) {
     var _a;
     const raw = room.getEventLog(true);
@@ -8123,7 +8150,11 @@ function heraldKills(room) {
         return;
     const events = JSON.parse(raw);
     for (const e of events) {
-        if (e.event !== EVENT_OBJECT_DESTROYED || e.data.type !== "creep")
+        if (e.event !== EVENT_OBJECT_DESTROYED)
+            continue;
+        if (e.data.type === STRUCTURE_CONTAINER)
+            heraldRazed(room, events, e.objectId);
+        if (e.data.type !== "creep")
             continue;
         const ours = events
             .filter((a) => a.event === EVENT_ATTACK && a.data.targetId === e.objectId)
