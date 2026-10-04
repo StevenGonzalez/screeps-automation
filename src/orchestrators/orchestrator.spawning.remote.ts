@@ -266,15 +266,22 @@ function pickRemoteSources(room: Room): Map<string, number> {
   }
 
   const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
+  const peddlers = getCreepsByRole(ROLE_REMOTE_MINER);
   const mined = new Set(
-    getCreepsByRole(ROLE_REMOTE_MINER)
-      .filter((c) => c.memory.homeRoom === room.name)
-      .map((c) => c.memory.remoteSourceId)
+    peddlers.filter((c) => c.memory.homeRoom === room.name).map((c) => c.memory.remoteSourceId)
+  );
+  // A remote next to two castles is in both their lists. A source the other
+  // castle's peddler already works is left to it: only the peddler was kept
+  // from being sent twice, so both castles would have raised merchants and an
+  // envoy for the one source and split its gold between them.
+  const minedElsewhere = new Set(
+    peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId)
   );
   const plans: Array<{ sourceId: string; profit: number; spawnTime: number }> = [];
   for (const r of room.memory.remoteRooms ?? []) {
     if (!isRemoteEligible(room, r, "reserve", true)) continue;
     for (const s of r.sources) {
+      if (minedElsewhere.has(s.sourceId)) continue;
       if (lowCpu && !mined.has(s.sourceId)) continue;
       const plan = planRemoteSource(room, r, s);
       if (plan.profit > 0) plans.push({ sourceId: s.sourceId, ...plan });

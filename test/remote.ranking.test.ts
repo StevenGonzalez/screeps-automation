@@ -187,6 +187,16 @@ describe("remote source ranking", () => {
     expect(getActiveRemoteRooms(home({ remotes, creeps: [...busy(18), peddler] }))).toEqual([]);
   });
 
+  it("leaves a source to the castle whose peddler already works it", () => {
+    const remotes = [remote("W4N5", [30, 40])];
+    const theirs = creep(ROLE_REMOTE_MINER, 9, {
+      homeRoom: "W3N5",
+      targetRoom: "W4N5",
+      remoteSourceId: "W4N5-s0" as Id<Source>,
+    });
+    expect(sourceIds(getActiveRemoteRooms(home({ remotes, creeps: [theirs] })))).toEqual(["W4N5-s1"]);
+  });
+
   it("never works more than six sources, however much spawn time there is", () => {
     const remotes = ["W4N5", "W6N5", "W5N4", "W5N6"].map((rn) => remote(rn, [20, 25]));
     const room = home({ remotes, spawns: 3 });
