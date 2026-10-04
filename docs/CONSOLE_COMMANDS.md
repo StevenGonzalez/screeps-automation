@@ -54,7 +54,7 @@ area.
 | `Game.arca.claim('W2N1')` | Immediately claims a room (needs a free GCL slot) | You picked a target and want it now |
 | `Game.arca.queueExpand('W2N1')` | Adds a room to the expansion pipeline (claims it when a slot frees) | Lining up several expansions |
 | `Game.arca.dequeueExpand('W2N1')` | Removes a queued target | Changed your mind |
-| `Game.arca.autoexpand(true)` | Bot claims the best candidate automatically whenever GCL allows | You want fully hands-off growth |
+| `Game.arca.autoexpand(false)` | Stops the bot claiming the best candidate whenever GCL allows (on by default; `true` turns it back on) | You want to pick every new room yourself |
 | `Game.arca.status()` | Current expansion + the queued pipeline | Tracking an in-progress claim |
 | `Game.arca.cancel()` | Aborts the active expansion | An expansion is going badly |
 

@@ -1,5 +1,7 @@
 import { getThreatInfo, isSourceKeeperRoom } from "../services/services.combat";
 import { ROLE_MINER, ROLE_HAULER, ROLE_CONQUEROR } from "../config/config.roles";
+import { getCpuStats } from "../services/services.profiler";
+import { KEEP_FUND_FLOOR } from "../services/services.treasury";
 
 const BOOTSTRAP_MIN_RCL = 3;
 const BOOTSTRAP_MIN_STORAGE_ENERGY = 10_000;
@@ -44,8 +46,12 @@ const MAX_CLAIM_ROUTE = 10;
 const AUTO_EXPAND_CHECK_INTERVAL = 50;
 
 const MIN_HOME_RCL = 4;
-const MIN_HOME_STORAGE_ENERGY = 50_000;
+// Below the floor a saving castle keeps, so one sitting on its floor qualifies.
+export const MIN_HOME_STORAGE_ENERGY = KEEP_FUND_FLOOR - 5_000;
 const MIN_BUCKET = 5_000;
+// Every keep costs CPU each tick for good. Auto-expansion stops queueing new
+// ones once the empire's average use passes this share of the limit.
+const MAX_CPU_SHARE_TO_EXPAND = 0.55;
 
 export interface ExpansionCandidate {
   room: string;
@@ -90,7 +96,7 @@ export function rankExpansionCandidates(): ExpansionCandidate[] {
 
   const homeNames: string[] = [];
   for (const rn in Game.rooms) {
-    if (isHomeRoomHealthy(Game.rooms[rn])) homeNames.push(rn);
+    if (canFundKeeps(Game.rooms[rn])) homeNames.push(rn);
   }
   if (homeNames.length > 0 && Memory.intel) {
     let intelSeen = 0;
@@ -330,12 +336,16 @@ function findRemoteRecord(roomName: string): RemoteRoomData | undefined {
   return undefined;
 }
 
-function isHomeRoomHealthy(room: Room): boolean {
+// A castle that can fund a new keep once its treasury holds enough.
+function canFundKeeps(room: Room): boolean {
   if (!room.controller?.my) return false;
   if ((room.controller.level ?? 0) < MIN_HOME_RCL) return false;
-  if ((room.storage?.store[RESOURCE_ENERGY] ?? 0) < MIN_HOME_STORAGE_ENERGY) return false;
-  if (getThreatInfo(room).score > 0) return false;
-  return true;
+  if (!room.storage) return false;
+  return getThreatInfo(room).score === 0;
+}
+
+function isHomeRoomHealthy(room: Room): boolean {
+  return canFundKeeps(room) && room.storage!.store[RESOURCE_ENERGY] >= MIN_HOME_STORAGE_ENERGY;
 }
 
 function isChildSelfSufficient(child: Room | undefined): boolean {
@@ -387,9 +397,11 @@ function advanceExpansionQueue(): void {
       continue;
     }
 
+    // No castle can fund this keep, so none can fund any other either. Keep
+    // the queue's order, which planSavings saves toward.
     const home = resolveFundingHome(next.roomName, next.homeRoom);
     if (!home) {
-      queue.push(next);
+      queue.unshift(next);
       return;
     }
 
@@ -407,16 +419,20 @@ function advanceExpansionQueue(): void {
   }
 }
 
-export function resolveFundingHome(roomName: string, preferred?: string): string | undefined {
+export function resolveFundingHome(
+  roomName: string,
+  preferred?: string,
+  eligible: (room: Room) => boolean = isHomeRoomHealthy
+): string | undefined {
   if (preferred) {
     const room = Game.rooms[preferred];
-    if (room && isHomeRoomHealthy(room)) return preferred;
+    if (room && eligible(room)) return preferred;
   }
   let best: Room | undefined;
   let bestDist = Infinity;
   for (const rn in Game.rooms) {
     const room = Game.rooms[rn];
-    if (!isHomeRoomHealthy(room)) continue;
+    if (!eligible(room)) continue;
     const d = Game.map.getRoomLinearDistance(rn, roomName);
     if (d < bestDist) {
       bestDist = d;
@@ -546,13 +562,23 @@ export function loop() {
 
   if (!Memory.expansion) advanceExpansionQueue();
 
-  if (Memory.autoExpand !== true) return;
-
-  if (!isExpansionPostureAllowed()) return;
-
   if (Game.time % AUTO_EXPAND_CHECK_INTERVAL !== 0) return;
 
+  if (Memory.autoExpand !== false && isExpansionPostureAllowed()) autoQueue();
+
+  planSavings();
+}
+
+function cpuShareUsed(): number {
+  let total = 0;
+  const stats = getCpuStats();
+  for (const name in stats) total += stats[name].ema;
+  return Game.cpu.limit ? total / Game.cpu.limit : 0;
+}
+
+function autoQueue(): void {
   if (Game.cpu.bucket < MIN_BUCKET) return;
+  if (cpuShareUsed() > MAX_CPU_SHARE_TO_EXPAND) return;
 
   const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
   const activeCount = Memory.expansion ? 1 : 0;
@@ -568,8 +594,10 @@ export function loop() {
     if (enqueued >= slotsFree) break;
     if (Memory.expansion?.roomName === cand.room) continue;
     if (Memory.expansionQueue.some((q) => q.roomName === cand.room)) continue;
+    // A castle short of gold still queues the keep; planSavings then has it
+    // save toward the gate.
     const home = Game.rooms[cand.homeRoom];
-    if (!home || !isHomeRoomHealthy(home)) continue;
+    if (!home || !canFundKeeps(home)) continue;
 
     Memory.expansionQueue.push({ roomName: cand.room, homeRoom: cand.homeRoom, queuedAt: Game.time });
     enqueued++;
@@ -580,4 +608,21 @@ export function loop() {
   }
 
   if (enqueued > 0 && !Memory.expansion) advanceExpansionQueue();
+}
+
+// The castle that will fund the next keep in the queue saves for it: its
+// enchanters leave KEEP_FUND_FLOOR in the treasury instead of the usual floor
+// (see services.treasury). A castle funding the active expansion holds the same
+// floor without a plan.
+function planSavings(): void {
+  const next = Memory.expansionQueue?.[0];
+  const home = next ? resolveFundingHome(next.roomName, next.homeRoom, canFundKeeps) : undefined;
+  if (!next || !home) {
+    delete Memory.expansionSavings;
+    return;
+  }
+  const plan = Memory.expansionSavings;
+  if (plan?.room === home && plan.target === next.roomName) return;
+  Memory.expansionSavings = { room: home, target: next.roomName };
+  console.log(`[Expansion] ${home} saves ${KEEP_FUND_FLOOR} gold to found a keep at ${next.roomName}`);
 }

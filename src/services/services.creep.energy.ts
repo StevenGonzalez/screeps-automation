@@ -7,6 +7,7 @@ import {
   getMinerContainerIds,
 } from "./services.creep.room";
 import { energyClaimedByOthers } from "./services.coordination";
+import { upgradingFunded } from "./services.treasury";
 
 export function findEnergyDepositTarget(
   creep: Creep,
@@ -326,6 +327,7 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
   if (
     upgradeIsDropTarget &&
     coreFull &&
+    upgradingFunded(creep.room) &&
     (upgradeCont!.store[RESOURCE_ENERGY] ?? 0) < UPGRADE_CONTAINER_REFILL_BELOW &&
     getUpgradeContainerFillerIds(creep.room).has(creep.id)
   ) {

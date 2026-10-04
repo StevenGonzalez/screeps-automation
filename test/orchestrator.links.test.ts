@@ -86,6 +86,7 @@ function makeRoom(sinkCooldown: number) {
 beforeEach(() => {
   clock += 1;
   transfers = [];
+  g.Memory = {};
 });
 
 describe("link transfers", () => {

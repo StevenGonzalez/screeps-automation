@@ -41,6 +41,7 @@ import {
   dequeueExpansion,
   getExpansionQueue,
   resolveFundingHome,
+  MIN_HOME_STORAGE_ENERGY,
 } from "./orchestrators/orchestrator.expansion";
 import {
   describeFactories,
@@ -98,7 +99,7 @@ export function setupConsole() {
 
     autoexpand: (enabled?: boolean) => {
       if (enabled === undefined) {
-        console.log(`[AutoExpand] ${Memory.autoExpand ? "ON" : "OFF"}`);
+        console.log(`[AutoExpand] ${Memory.autoExpand !== false ? "ON" : "OFF"}`);
         return;
       }
       Memory.autoExpand = enabled;
@@ -144,7 +145,7 @@ export function setupConsole() {
 
       const homeRoom = resolveFundingHome(roomName);
       if (!homeRoom) {
-        console.log("[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, 50k gold in the treasury, no threats)");
+        console.log(`[ARCA] No owned room is healthy enough to fund expansion (needs RCL 4+, ${MIN_HOME_STORAGE_ENERGY / 1000}k gold in the treasury, no threats)`);
         return;
       }
 

@@ -1,4 +1,4 @@
-import { upgradingFunded } from "../roles/role.upgrader";
+import { upgradingFunded } from "../services/services.treasury";
 
 const LINK_TRANSFER_THRESHOLD = 400;
 const LINK_MIN_TRANSFER = 150;

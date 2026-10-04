@@ -11,6 +11,7 @@ import {
 import { cottageLayout, parseTile, spotHolder, townClock } from "../services/services.town";
 import { readBlueprint } from "../planning/planner.blueprint";
 import { describeBooks } from "../services/services.exchequer";
+import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
 
 const PHASE_LABEL: Record<string, string> = {
   bootstrap: "Bootstrap",
@@ -110,6 +111,11 @@ function drawRoomHUD(room: Room) {
     const trendText = trend === undefined ? "" : `  (${trend >= 0 ? "+" : ""}${trend.toFixed(1)}/t)`;
     v.text(`Treasury: ${formatK(stored)}${trendText}`, x, y, dimStyle);
     y += lineH;
+    const keep = describeKeepPlan(room, stored);
+    if (keep) {
+      v.text(keep, x, y, { ...style, color: "#f2c14e" });
+      y += lineH;
+    }
   }
 
   if (books) {
@@ -165,6 +171,21 @@ function drawRoomHUD(room: Room) {
     const remaining = spawn.spawning.remainingTime;
     v.text(`Spawning: ${spawn.spawning.name} (${remaining}t)`, x, y, dimStyle);
   }
+}
+
+// The keep this castle is founding, or saving the gold to found.
+function describeKeepPlan(room: Room, stored: number): string | undefined {
+  const exp = Memory.expansion;
+  if (exp?.homeRoom === room.name && exp.phase !== "established") {
+    const child = Game.rooms[exp.roomName]?.controller;
+    const level = child?.my ? ` (RCL ${child.level})` : "";
+    return `Founding a keep at ${exp.roomName}: ${exp.phase}${level}`;
+  }
+  const plan = Memory.expansionSavings;
+  if (plan?.room === room.name) {
+    return `Saving for a keep at ${plan.target}: ${formatK(stored)}/${formatK(MIN_HOME_STORAGE_ENERGY)}`;
+  }
+  return undefined;
 }
 
 const PHASE_ICON: Record<string, string> = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };

@@ -349,7 +349,10 @@ declare global {
     nextSkOpId?: number;
     trafficDisabled?: boolean;
     debugHaulers?: string;
+    // Auto-expansion runs unless this is false.
     autoExpand?: boolean;
+    // The castle saving for the next keep in the queue, and that keep.
+    expansionSavings?: { room: string; target: string };
     empire?: EmpireMemory;
     profileRoles?: boolean;
   }

@@ -23,10 +23,11 @@ produces is exactly what the expander ranks candidates from:
 ## Autonomous Claiming
 
 Two ways an expansion starts:
-- **Auto** (`Memory.autoExpand`, toggled by `Game.arca.autoexpand(true)`,
-  **off by default**): every 50 ticks the orchestrator ranks scouted candidates and
-  enqueues the best ones whose funding room is healthy, up to GCL headroom and a
-  max queue depth of 3.
+- **Auto** (`Memory.autoExpand`, **on unless set to false** with
+  `Game.arca.autoexpand(false)`): every 50 ticks the orchestrator ranks scouted
+  candidates and enqueues the best ones a castle could fund, up to GCL headroom and
+  a max queue depth of 3. It queues nothing while the empire's average CPU use is
+  above 55% of the limit, since every keep costs CPU for good.
 - **Manual**: `Game.arca.claim('W5N5')` sets the active expansion directly, or
   `Game.arca.queueExpand('W5N5')` lines one up in the queue.
 
@@ -49,10 +50,21 @@ present right now).
 
 A room may only seed a colony when it is healthy:
 - RCL >= 4 (storage + >=1300 energy capacity),
-- storage energy >= 50,000,
+- storage energy >= 40,000,
 - not itself under threat.
 
 The CPU bucket must also be >= 5,000 before a multi-hundred-tick op starts.
+
+### Saving for a keep
+
+A castle normally lets its enchanters (upgraders) spend everything in storage
+above 10,000. That left no castle ever reaching the gate above, so the castle
+that would fund the head of the queue saves for it: `Memory.expansionSavings`
+names it, and its upgrade floor rises to 45,000 (`KEEP_FUND_FLOOR` in
+`services/services.treasury.ts`). The castle funding the active expansion holds
+the same floor until the new keep is established, which keeps the conqueror and
+settlers clear of the 25,000 economy-critical stop on spawning them. The HUD
+shows the plan under the treasury line.
 
 ### Phases (`Memory.expansion`)
 

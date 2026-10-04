@@ -111,7 +111,7 @@ Game.arca.expand()                  // ranked expansion candidates from scout da
 Game.arca.claim('W5N5')             // claim now
 Game.arca.queueExpand('W5N5')       // add to the expansion pipeline
 Game.arca.dequeueExpand('W5N5')     // remove a queued target
-Game.arca.autoexpand(true)          // toggle auto-expansion
+Game.arca.autoexpand(false)         // stop auto-expansion (on by default)
 Game.arca.status()                  // active expansion + queue
 Game.arca.cancel()                  // abort the active expansion
 Game.arca.ops()                     // overview of all pipelines

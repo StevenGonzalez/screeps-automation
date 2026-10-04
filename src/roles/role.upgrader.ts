@@ -6,27 +6,7 @@ import {
   upgradeController,
 } from "../services/services.creep";
 import { seekBoost } from "../services/services.combat";
-
-export const UPGRADER_STORAGE_FLOOR = 10_000;
-
-const UPGRADER_DOWNGRADE_GUARD = 5000;
-
-function nearDowngrade(room: Room): boolean {
-  const ctrl = room.controller;
-  return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
-}
-
-/**
- * Whether the room can afford to spend energy on upgrading: it has no storage
- * yet, storage is above the floor, or the controller is close to downgrading.
- * Every route energy takes to the controller checks this, the controller link
- * included, so no route slips past the floor.
- */
-export function upgradingFunded(room: Room): boolean {
-  const storage = room.storage;
-  if (!storage) return true;
-  return storage.store[RESOURCE_ENERGY] > UPGRADER_STORAGE_FLOOR || nearDowngrade(room);
-}
+import { nearDowngrade, upgradingFunded } from "../services/services.treasury";
 
 export function runUpgrader(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;

@@ -13,7 +13,7 @@ import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { getSources } from "../services/services.creep";
-import { UPGRADER_STORAGE_FLOOR } from "../roles/role.upgrader";
+import { upgraderStorageFloor } from "../services/services.treasury";
 import {
   buildScaledBody,
   calculateBodyPartCost,
@@ -185,11 +185,13 @@ export function getUpgraderPopulationTarget(room: Room): number {
     return Math.min(NO_STORAGE_MAX_UPGRADERS, base + extra);
   }
 
-  // Upgraders stop drawing at UPGRADER_STORAGE_FLOOR, so count only what sits
+  // Upgraders stop drawing at the storage floor, so count only what sits
   // above it. Stepping from zero in 50k units kept a fresh RCL 4-5 storage on a
-  // single upgrader while it filled.
+  // single upgrader while it filled. At or below the floor an upgrader would
+  // only stand idle, so none is kept; a downgrade is covered above.
   const cap = phase === "powerhouse" ? 4 : 3;
-  const spare = Math.max(0, storage.store[RESOURCE_ENERGY] - UPGRADER_STORAGE_FLOOR);
+  const spare = storage.store[RESOURCE_ENERGY] - upgraderStorageFloor(room);
+  if (spare <= 0) return 0;
   return Math.min(cap, 1 + Math.floor(spare / STORAGE_ENERGY_PER_UPGRADER));
 }
 

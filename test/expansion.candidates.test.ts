@@ -8,6 +8,7 @@ g.TERRAIN_MASK_SWAMP = 2;
 g.RESOURCE_CATALYST = "X";
 
 import { rankExpansionCandidates, loop } from "../src/orchestrators/orchestrator.expansion";
+import { recordCpu } from "../src/services/services.profiler";
 
 const HOME = "W1N1";
 const ME = "Me";
@@ -82,5 +83,51 @@ describe("claim timeout", () => {
     expect((g.Memory as any).claimFailures.W1N2).toBeGreaterThan(50_000);
     const rec = (g.Memory as any).rooms[HOME].remoteRooms.find((r: RemoteRoomData) => r.roomName === "W1N2");
     expect(rec.hostile).toBe(false);
+  });
+});
+
+describe("saving for a keep", () => {
+  const home = () => (g.Game as any).rooms[HOME];
+
+  it("queues the best keep while the castle is short of gold, and saves for it", () => {
+    home().storage.store.energy = 20_000;
+    loop();
+    const queue = (g.Memory as any).expansionQueue as QueuedExpansion[];
+    expect(queue.map((q) => q.roomName).sort()).toEqual(["W1N2", "W2N1"]);
+    expect((g.Memory as any).expansion).toBeUndefined();
+    expect((g.Memory as any).expansionSavings).toEqual({ room: HOME, target: queue[0].roomName });
+
+    // Waiting on the gold does not shuffle the queue the castle is saving toward.
+    const head = queue[0].roomName;
+    (g.Game as any).time = 50_001;
+    loop();
+    expect((g.Memory as any).expansionQueue[0].roomName).toBe(head);
+  });
+
+  it("starts the claim once the treasury reaches the gate", () => {
+    home().storage.store.energy = 40_000;
+    loop();
+    expect((g.Memory as any).expansion).toMatchObject({ homeRoom: HOME, phase: "claiming" });
+    // The castle now saves toward the keep after this one.
+    const next = (g.Memory as any).expansionQueue[0].roomName;
+    expect((g.Memory as any).expansionSavings).toEqual({ room: HOME, target: next });
+  });
+
+  it("neither queues nor saves when auto-expansion is switched off", () => {
+    (g.Memory as any).autoExpand = false;
+    home().storage.store.energy = 20_000;
+    loop();
+    expect((g.Memory as any).expansionQueue).toBeUndefined();
+    expect((g.Memory as any).expansionSavings).toBeUndefined();
+  });
+});
+
+// Last in the file: the profiler's averages live on the module and persist.
+describe("CPU headroom", () => {
+  it("queues no keep while the empire already uses most of its CPU", () => {
+    recordCpu("creeps", 15);
+    (g.Game as any).cpu.limit = 20;
+    loop();
+    expect((g.Memory as any).expansionQueue).toBeUndefined();
   });
 });
