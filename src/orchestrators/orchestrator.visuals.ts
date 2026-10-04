@@ -48,6 +48,7 @@ export function loop() {
     drawChronicle(room);
     drawSeason(room);
     drawLandmarks(room);
+    drawSky(room);
     drawTown(room);
     drawDragon(room);
     drawBlueprint(room);
@@ -263,22 +264,20 @@ function drawRoomHUD(room: Room) {
     y += lineH;
   }
 
-  if (room.memory.town) {
-    const clock = townClock(Game.time);
-    const icon = PHASE_ICON[clock.phase];
-    const folk = counts[ROLE_TOWNSFOLK] ?? 0;
-    const hh = String(clock.hour).padStart(2, "0");
-    const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
-    const season = townSeason(Game.time);
-    const feast = townFeast(Game.time);
-    const storm = townStorm(Game.time) ? ", storm" : "";
-    const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
-    const aurora = townAurora(Game.time) ? ", northern lights" : "";
-    const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}${aurora}`;
-    const people = folk > 0 ? `  ·  ${folk} townsfolk` : "";
-    v.text(`${icon} ${when}${people}`, x, y, { ...style, color: "#ffe9a8" });
-    y += lineH;
-  }
+  const clock = townClock(Game.time);
+  const icon = PHASE_ICON[clock.phase];
+  const folk = counts[ROLE_TOWNSFOLK] ?? 0;
+  const hh = String(clock.hour).padStart(2, "0");
+  const timeOfDay = clock.phase[0].toUpperCase() + clock.phase.slice(1);
+  const season = townSeason(Game.time);
+  const feast = townFeast(Game.time);
+  const storm = townStorm(Game.time) ? ", storm" : "";
+  const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
+  const aurora = townAurora(Game.time) ? ", northern lights" : "";
+  const when = `${timeOfDay}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}${aurora}`;
+  const people = folk > 0 ? `  ·  ${folk} townsfolk` : "";
+  v.text(`${icon} ${when}${people}`, x, y, { ...style, color: "#ffe9a8" });
+  y += lineH;
 
   const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) as StructureSpawn | null : null;
   if (spawn?.spawning) {
@@ -504,21 +503,44 @@ function drawStorm(v: RoomVisual, time: number): void {
   v.poly(bolt, { stroke: "#fffbe0", strokeWidth: 0.15, opacity: 0.9 });
 }
 
-export function drawTown(room: Room): void {
-  const town = room.memory.town;
-  if (!town) return;
+// The sky every castle shares, town or none: the dark of night, the moon and
+// the northern lights, falling stars, the wolves, and after dark a brazier
+// burning atop each watchtower and the barracks' hearth glowing through its
+// doors.
+export function drawSky(room: Room): void {
   const v = room.visual;
   const clock = townClock(Game.time);
 
   const shade = NIGHT_SHADE[clock.phase];
   if (shade > 0) v.rect(-0.5, -0.5, 50, 50, { fill: "#0a1030", opacity: shade });
 
-  const label: TextStyle = { font: 0.45, color: "#ffe9a8", stroke: "#000000", strokeWidth: 0.06 };
   const lit = clock.phase === "dusk" || clock.phase === "night";
   if (townAurora(Game.time)) drawAurora(v, Game.time);
   if (lit && !townStorm(Game.time)) drawMoon(v, townMoon(Game.time));
   drawFallingStar(v, Game.time);
   drawHowl(v, Game.time);
+
+  if (!lit) return;
+  for (const s of room.find(FIND_MY_STRUCTURES)) {
+    const { x, y } = s.pos;
+    if (s.structureType === STRUCTURE_TOWER) {
+      const flicker = 0.5 + 0.5 * Math.sin(Game.time * 2.1 + x * 1.3 + y);
+      v.circle(x, y - 0.1, { radius: 0.9, fill: "#ff7a22", opacity: 0.1 + 0.06 * flicker });
+      v.circle(x, y - 0.1, { radius: 0.16 + 0.06 * flicker, fill: "#ffd27a", opacity: 0.7 + 0.25 * flicker });
+    } else if (s.structureType === STRUCTURE_SPAWN) {
+      v.circle(x, y, { radius: 1.4, fill: "#ffb347", opacity: 0.12 });
+    }
+  }
+}
+
+export function drawTown(room: Room): void {
+  const town = room.memory.town;
+  if (!town) return;
+  const v = room.visual;
+  const clock = townClock(Game.time);
+
+  const label: TextStyle = { font: 0.45, color: "#ffe9a8", stroke: "#000000", strokeWidth: 0.06 };
+  const lit = clock.phase === "dusk" || clock.phase === "night";
 
   for (const c of town.cottages) {
     const l = cottageLayout(c);
@@ -559,21 +581,6 @@ export function drawTown(room: Room): void {
     const sway = 0.06 * Math.sin(Game.time * 0.9);
     v.circle(x + 0.3 + sway, y - 0.25, { radius: 1.3, fill: "#ffb347", opacity: 0.1 });
     v.circle(x + 0.3 + sway, y - 0.25, { radius: 0.13, fill: "#ffe39a", opacity: 0.9 });
-  }
-
-  // After dark a brazier burns atop each watchtower and the barracks' hearth
-  // glows through its doors.
-  if (lit) {
-    for (const s of room.find(FIND_MY_STRUCTURES)) {
-      const { x, y } = s.pos;
-      if (s.structureType === STRUCTURE_TOWER) {
-        const flicker = 0.5 + 0.5 * Math.sin(Game.time * 2.1 + x * 1.3 + y);
-        v.circle(x, y - 0.1, { radius: 0.9, fill: "#ff7a22", opacity: 0.1 + 0.06 * flicker });
-        v.circle(x, y - 0.1, { radius: 0.16 + 0.06 * flicker, fill: "#ffd27a", opacity: 0.7 + 0.25 * flicker });
-      } else if (s.structureType === STRUCTURE_SPAWN) {
-        v.circle(x, y, { radius: 1.4, fill: "#ffb347", opacity: 0.12 });
-      }
-    }
   }
 
   if (town.fountain) {

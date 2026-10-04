@@ -331,6 +331,27 @@ describe("herald", () => {
     expect(lines).toEqual([`Wolves howled beneath the full moon outside the walls of ${castleName(ROOM)}.`]);
   });
 
+  it("tells of the wolves once for the whole realm, naming every castle", () => {
+    const night = 12 * TOWN_DAY_LENGTH + 700;
+    const other = { ...roomWith([], { my: true, level: 3 }), name: "W2N1" };
+    const scout = new FakeCreep("Raven Ysolde", { name: "W2N1" });
+    g.Game = {
+      time: night,
+      gcl: { level: 2 },
+      market: NO_TRADE,
+      rooms: { [ROOM]: roomWith([], { my: true, level: 6 }), W2N1: other },
+      creeps: {},
+      getObjectById: () => null,
+    };
+    heraldRooms();
+    expect(cryFor(scout as unknown as Creep)).toBe("Wolves!");
+
+    const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("Wolves"));
+    expect(lines).toEqual([
+      `Wolves howled beneath the full moon outside the walls of ${castleName(ROOM)} and ${castleName("W2N1")}.`,
+    ]);
+  });
+
   it("chronicles the northern lights once, as night falls", () => {
     let day = 0;
     while (!townAurora(day * TOWN_DAY_LENGTH + 800)) day++;

@@ -50,17 +50,26 @@ export function heraldRooms(): void {
   heraldTrade();
   heraldSeason();
   heraldSky();
+  const castles: Room[] = [];
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
     if (room.controller?.my) {
+      castles.push(room);
       heraldRise(room);
-      heraldDragon(room);
-      heraldWolves(room);
       heraldVisitors(room);
       heraldWorks(room);
     }
     heraldKills(room);
   }
+  heraldDragon(castles);
+  heraldWolves(castles);
+}
+
+// "Embercrag", "Embercrag and Grimford", "Embercrag, Grimford and Ashford".
+function castleList(castles: Room[]): string {
+  const names = castles.map((r) => castleName(r.name));
+  const last = names.pop()!;
+  return names.length ? `${names.join(", ")} and ${last}` : last;
 }
 
 // A new GCL is one more castle the realm may hold.
@@ -187,8 +196,8 @@ function heraldWorks(room: Room): void {
   }
 }
 
-// While a dragon is overhead the whole castle cries out every few ticks, and
-// the chronicle notes its passing.
+// While a dragon is overhead every castle cries out every few ticks, and the
+// chronicle notes its passing in one line.
 const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
 const DRAGON_CRY_PERIOD = 8;
 const DRAGON_TIDINGS = [
@@ -197,22 +206,22 @@ const DRAGON_TIDINGS = [
   (c: string) => `The shadow of a dragon fell across ${c}.`,
 ];
 
-function heraldDragon(room: Room): void {
+function heraldDragon(castles: Room[]): void {
   const dragon = townDragon(Game.time);
-  if (!dragon || dragon.t % DRAGON_CRY_PERIOD !== 0) return;
-  roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
-  if (dragon.t === 0) chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleName(room.name)));
+  if (castles.length === 0 || !dragon || dragon.t % DRAGON_CRY_PERIOD !== 0) return;
+  for (const room of castles) roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
+  if (dragon.t === 0) chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleList(castles)));
 }
 
 const HOWL_CRIES = ["Wolves!", "Hark!", "Hear that?", "Awoo?!"];
 
-// Everyone in the castle starts at each howl on a full-moon night, and the
-// chronicle notes the first.
-function heraldWolves(room: Room): void {
+// Every castle starts at each howl on a full-moon night, and the chronicle
+// notes the first in one line.
+function heraldWolves(castles: Room[]): void {
   const howl = townHowl(Game.time);
-  if (!howl || howl.t !== 0) return;
-  roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
-  if (howl.n === 0) chronicle(`Wolves howled beneath the full moon outside the walls of ${castleName(room.name)}.`);
+  if (castles.length === 0 || !howl || howl.t !== 0) return;
+  for (const room of castles) roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
+  if (howl.n === 0) chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
 }
 
 // The northern lights hang over the whole realm at once, so the chronicle

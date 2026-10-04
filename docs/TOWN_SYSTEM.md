@@ -208,32 +208,35 @@ castle has the same weather.
 On about one day in six, never a feast day, a dragon crosses the realm's skies.
 It flies over every castle at once, some time between morning and dusk, and
 takes 48 ticks to cross a room from one edge to the other. While it is
-overhead the whole castle cries out every 8 ticks ("Dragon!", "Look up!",
-"Hide!"), and the chronicle notes its passing ("The shadow of a dragon fell
-across Embercrag."). Like the weather, the dragon's days follow from the day's
+overhead every castle cries out every 8 ticks ("Dragon!", "Look up!",
+"Hide!"), and the chronicle notes its passing in one line naming them all
+("The shadow of a dragon fell across Embercrag and Grimford."). Like the weather, the dragon's days follow from the day's
 number alone.
 
 The moon waxes and wanes over eight days, so its full moon falls on a
 different day of each season. On a full-moon night the wolves howl from the
-dark beyond the walls every 50 ticks; the whole castle starts at each howl
-("Wolves!", "Hark!", "Hear that?"), and the chronicle notes the first ("Wolves
-howled beneath the full moon outside the walls of Embercrag.").
+dark beyond the walls every 50 ticks; every castle starts at each howl
+("Wolves!", "Hark!", "Hear that?"), and the chronicle notes the first in one
+line ("Wolves howled beneath the full moon outside the walls of Embercrag and
+Grimford.").
 
 On about one winter night in three the northern lights hang over the realm,
 and the chronicle notes them as night falls ("The northern lights burned green
 over the realm."). On any clear night a star falls now and then. Both follow from the day's
 number and the tick alone, so every castle sees the same sky.
 
-The room HUD shows the part of the day, the hour, the season, any feast, any
-storm and, after dark, the moon and any northern lights, then how many
-townsfolk there are: `Day, 10:00 in autumn, Harvest Home · 8 townsfolk`, or
+Every castle's room HUD, town or none, shows the part of the day, the hour,
+the season, any feast, any storm and, after dark, the moon and any northern
+lights, then how many townsfolk there are, if any: `Day, 10:00 in autumn, Harvest Home · 8 townsfolk`, or
 `Night, 23:00 in winter, full moon, northern lights · 8 townsfolk`.
 
 ---
 
 ## Visuals
 
-When room visuals are on, the town draws itself:
+When room visuals are on, the town draws itself. The sky, the watchtower
+braziers and the barracks' hearth are drawn over every castle, so a young keep
+with no town yet shares the realm's nights, moon and wolves:
 
 - the whole room darkens at night, and a little at dawn and dusk;
 - each cottage gets a roof and a "House of ..." sign, and a lamp is lit in
