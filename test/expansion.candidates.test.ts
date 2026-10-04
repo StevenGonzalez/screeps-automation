@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.ERR_NO_PATH = -2;
@@ -6,6 +6,7 @@ g.FIND_MINERALS = 116;
 g.FIND_HOSTILE_CREEPS = 103;
 g.TERRAIN_MASK_SWAMP = 2;
 g.RESOURCE_CATALYST = "X";
+g.FIND_MY_SPAWNS = 112;
 
 import { rankExpansionCandidates, loop } from "../src/orchestrators/orchestrator.expansion";
 import { recordCpu } from "../src/services/services.profiler";
@@ -83,6 +84,45 @@ describe("claim timeout", () => {
     expect((g.Memory as any).claimFailures.W1N2).toBeGreaterThan(50_000);
     const rec = (g.Memory as any).rooms[HOME].remoteRooms.find((r: RemoteRoomData) => r.roomName === "W1N2");
     expect(rec.hostile).toBe(false);
+  });
+});
+
+describe("bootstrap timeout", () => {
+  function keep(spawns: unknown[]) {
+    const unclaim = vi.fn();
+    (g.Game as any).time = 50_001;
+    (g.Game as any).rooms.W1N2 = {
+      name: "W1N2",
+      controller: { my: true, level: 2, unclaim },
+      memory: {},
+      find: (type: number) => (type === 112 ? spawns : []),
+    };
+    (g.Memory as any).expansion = {
+      roomName: "W1N2",
+      homeRoom: HOME,
+      phase: "bootstrapping",
+      startedAt: 0,
+      bootstrapStartedAt: 40_000,
+    };
+    return unclaim;
+  }
+  const lastLine = () => ((g.Memory as any).chronicle ?? []).at(-1)?.text as string;
+
+  it("gives up a keep that never raised its spawn", () => {
+    const unclaim = keep([]);
+    loop();
+    expect(unclaim).toHaveBeenCalled();
+    expect((g.Memory as any).expansion).toBeUndefined();
+    expect(lastLine()).toMatch(/The keep is abandoned\.$/);
+  });
+
+  it("leaves a keep with a spawn of its own to grow by itself, and does not call it abandoned", () => {
+    const unclaim = keep([{ id: "s1" }]);
+    loop();
+    expect(unclaim).not.toHaveBeenCalled();
+    expect((g.Memory as any).expansion).toBeUndefined();
+    expect(lastLine()).not.toMatch(/abandoned/);
+    expect(lastLine()).toMatch(/must stand on its own now\.$/);
   });
 });
 

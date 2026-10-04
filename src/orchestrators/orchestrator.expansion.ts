@@ -511,13 +511,15 @@ function manageActiveExpansion() {
   if (exp.phase === "bootstrapping") {
     if (exp.bootstrapStartedAt === undefined) exp.bootstrapStartedAt = Game.time;
     if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
-      chronicle(`The settlers of ${castleName(exp.roomName)} could not make it stand. The keep is abandoned.`);
-      if (child?.controller?.my && child.find(FIND_MY_SPAWNS).length === 0) {
-        child.controller.unclaim();
-        clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks - no spawn, unclaimed`);
-      } else {
+      if (child?.controller?.my && child.find(FIND_MY_SPAWNS).length > 0) {
+        // The keep has a spawn and stays ours; only the settlers stop coming.
+        chronicle(`${castleName(exp.homeRoom)} sends no more settlers. ${castleName(exp.roomName)} must stand on its own now.`);
         clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks`);
+        return;
       }
+      chronicle(`The settlers of ${castleName(exp.roomName)} could not make it stand. The keep is abandoned.`);
+      if (child?.controller?.my) child.controller.unclaim();
+      clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks - no spawn, unclaimed`);
       return;
     }
 
