@@ -207,6 +207,11 @@ const FULL_BODY_MAX_WAIT = 40;
 // nothing was needed would use up the wait before the real need arrived. Giving
 // up clears the timer, so the next creep of a role still short several gets its
 // own wait instead of spawning as a runt straight away.
+//
+// The wait is timed from the last tick the extensions gained energy, not from
+// when it began: the roles below spawn while it holds and empty the extensions,
+// and a fixed wait then ran out mid-refill and sent out a runt. Only a room
+// whose energy has stopped rising is one that will not reach the mark.
 export function waitForFullBody(room: Room, role: string, needed: boolean): boolean {
   const memory = getRoomMemory(room);
   if (!needed || room.energyAvailable >= room.energyCapacityAvailable * FULL_BODY_ENERGY_RATIO) {
@@ -214,12 +219,15 @@ export function waitForFullBody(room: Room, role: string, needed: boolean): bool
     return false;
   }
   if (!memory.bodyWait) memory.bodyWait = {};
-  const since = memory.bodyWait[role];
-  if (since === undefined) {
-    memory.bodyWait[role] = Game.time;
+  const wait = memory.bodyWait[role];
+  const energy = room.energyAvailable;
+  // A bare number is a wait started before waits tracked energy.
+  if (typeof wait !== "object" || energy > wait.energy) {
+    memory.bodyWait[role] = { since: Game.time, energy };
     return true;
   }
-  if (Game.time - since < FULL_BODY_MAX_WAIT) return true;
+  wait.energy = energy;
+  if (Game.time - wait.since < FULL_BODY_MAX_WAIT) return true;
   delete memory.bodyWait[role];
   return false;
 }

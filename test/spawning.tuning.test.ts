@@ -90,6 +90,23 @@ describe("waitForFullBody", () => {
     g.Game = { time: clock + 41 };
     expect(waitForFullBody(room, ROLE_UPGRADER, true)).toBe(true);
   });
+
+  it("keeps waiting while the extensions still fill, even after other spawns drew on them", () => {
+    const room = lowRoom();
+    const at = (time: number, energy: number) => {
+      g.Game = { time };
+      (room as { energyAvailable: number }).energyAvailable = energy;
+      return waitForFullBody(room, ROLE_UPGRADER, true);
+    };
+    expect(at(clock, 900)).toBe(true);
+    // A cheaper role below it spawned and emptied the extensions.
+    expect(at(clock + 30, 50)).toBe(true);
+    // Refilling: the wait runs from the last rise, not from when it began.
+    expect(at(clock + 60, 600)).toBe(true);
+    expect(at(clock + 99, 600)).toBe(true);
+    // Stuck short of the mark for the whole wait: settle for a smaller body.
+    expect(at(clock + 100, 600)).toBe(false);
+  });
 });
 
 describe("remote picks look past invaders", () => {

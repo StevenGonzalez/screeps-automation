@@ -299,7 +299,9 @@ declare global {
       guards?: number;
     };
     spawnHold?: { role: string; since: number; lastTick: number };
-    bodyWait?: Record<string, number>;
+    // Per role: tick the extensions last gained energy while it waited for a
+    // full body, and the energy seen then (orchestrator.spawning.shared).
+    bodyWait?: Record<string, { since: number; energy: number }>;
     town?: TownMemory;
     blueprint?: BlueprintMemory;
   }
