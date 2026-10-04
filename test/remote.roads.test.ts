@@ -111,11 +111,12 @@ describe("remote source path cache", () => {
 });
 
 describe("remote road placement", () => {
-  function remoteRoom(roads: string[], sites: string[]) {
+  function remoteRoom(roads: string[], sites: string[], name = REMOTE) {
     const created: string[] = [];
     const room = {
-      name: REMOTE,
+      name,
       controller: {},
+      find: () => sites.map(() => ({ structureType: "road" })),
       lookForAt: (type: string, x: number, y: number) => {
         const k = `${x},${y}`;
         if (type === g.LOOK_STRUCTURES) return roads.includes(k) ? [{ structureType: "road" }] : [];
@@ -123,15 +124,16 @@ describe("remote road placement", () => {
       },
       createConstructionSite: (x: number, y: number, type: string) => {
         created.push(`${x},${y}:${type}`);
+        sites.push(`${x},${y}`);
         return 0;
       },
     };
-    g.Game = { time: clock, rooms: { [REMOTE]: room } };
+    g.Game = { time: clock, rooms: { [name]: room } };
     return created;
   }
   const home = { controller: { owner: { username: ME } } } as unknown as Room;
-  const withRoad = (containerId?: string): RemoteRoomData => ({
-    roomName: REMOTE,
+  const withRoad = (containerId?: string, roomName = REMOTE): RemoteRoomData => ({
+    roomName,
     lastSeen: 0,
     hostile: false,
     sources: [{ sourceId: "src1", containerId, roadTiles: "25,49;25,48;25,47;25,46" } as unknown as RemoteSourceData],
@@ -148,6 +150,27 @@ describe("remote road placement", () => {
     const created = remoteRoom([], []);
     expect(planRemoteRoads(home, [withRoad("cont1")], 1)).toBe(0);
     expect(created).toHaveLength(1);
+  });
+
+  it("gives each remote its own share of road sites, so one's slow sites hold back no other", () => {
+    const busy = Array.from({ length: 10 }, (_, i) => `30,${i + 1}`);
+    const crowdedCreated = remoteRoom([], busy);
+    const crowded = (g.Game as Game).rooms[REMOTE];
+    const created = remoteRoom([], [], "W2N2");
+    (g.Game as Game).rooms[REMOTE] = crowded;
+    const left = planRemoteRoads(home, [withRoad("cont1"), withRoad("cont2", "W2N2")], 30);
+    expect(crowdedCreated).toEqual([]);
+    expect(created).toHaveLength(4);
+    expect(left).toBe(26);
+  });
+
+  it("opens no more than ten road sites in one remote", () => {
+    const tiles = Array.from({ length: 12 }, (_, i) => `25,${i + 1}`).join(";");
+    const created = remoteRoom([], []);
+    const remote = withRoad("cont1");
+    remote.sources[0].roadTiles = tiles;
+    expect(planRemoteRoads(home, [remote], 30)).toBe(20);
+    expect(created).toHaveLength(10);
   });
 
   it("waits for the source's container first", () => {

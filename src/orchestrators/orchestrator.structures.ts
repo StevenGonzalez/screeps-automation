@@ -44,10 +44,16 @@ const TOWN_PRIORITY = 13;
 
 // How many remote container sites may be open at once, across all rooms.
 const MAX_REMOTE_CONTAINER_SITES = 2;
-// How many remote road sites may be open at once, across all rooms. Haulers
-// build them a tick at a time as they pass, so a handful keeps them busy
-// without holding the global site cap against the owned rooms.
-const MAX_REMOTE_ROAD_SITES = 10;
+// How many road sites may be open at once in one remote, and across all of
+// them. Only a remote's own haulers build its road, a tick at a time as they
+// pass, so a handful in each keeps them busy. The overall bound keeps remote
+// roads from holding the global site cap against the owned rooms. With only
+// the overall bound, at ten, one remote's slow sites held every slot:
+// Embercrag's road to one remote stood ten tiles short of paved, its haulers
+// still built a third too heavy in MOVE, while its other remote's ten sites
+// crept along.
+const MAX_REMOTE_ROAD_SITES_EACH = 10;
+const MAX_REMOTE_ROAD_SITES = 30;
 
 function hasOwnTower(ownBuiltCount: Map<StructureConstant, number>): boolean {
   return (ownBuiltCount.get(STRUCTURE_TOWER) ?? 0) > 0;
@@ -541,16 +547,23 @@ export function planRemoteRoads(
   for (const remote of remotes) {
     const remoteRoom = Game.rooms[remote.roomName];
     if (!remoteRoom || !canBuildInRemote(remoteRoom, myName)) continue;
+    let open = remoteRoom.find(FIND_MY_CONSTRUCTION_SITES, {
+      filter: (s) => s.structureType === STRUCTURE_ROAD,
+    }).length;
     for (const src of remote.sources) {
       if (!src.containerId || !src.roadTiles) continue;
       for (const tile of src.roadTiles.split(";")) {
         if (budget <= 0) return budget;
+        if (open >= MAX_REMOTE_ROAD_SITES_EACH) break;
         const [x, y] = tile.split(",").map(Number);
         const hasRoad = remoteRoom
           .lookForAt(LOOK_STRUCTURES, x, y)
           .some((s) => s.structureType === STRUCTURE_ROAD);
         if (hasRoad || remoteRoom.lookForAt(LOOK_CONSTRUCTION_SITES, x, y).length > 0) continue;
-        if (remoteRoom.createConstructionSite(x, y, STRUCTURE_ROAD) === OK) budget--;
+        if (remoteRoom.createConstructionSite(x, y, STRUCTURE_ROAD) === OK) {
+          budget--;
+          open++;
+        }
       }
     }
   }
