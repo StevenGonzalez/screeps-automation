@@ -292,7 +292,8 @@ firstborn, a war party at the walls, a raider slain, one of ours fallen ("† Wu
 wolves or the wisps, every creep in the realm now and then repeats it in its idle
 chatter (`Memory.gossip`). Newer news replaces older. A creep just out of the
 spawn speaks its first words ("reporting!", "first day!"). In its last 150 ticks a
-creep talks of its end instead of its work ("old bones", "farewell"), and after
+creep talks of its end instead of its work ("old bones", "farewell"), and one left
+with less than half its hits talks of its wounds ("my wounds", "a healer?"). After
 dark its talk of the weather turns to the night ("torches!", "owls hoot"). Now
 and then a creep hails another standing beside it by its given name ("hail
 Edith"), and the creep it hails answers on the next tick ("aye Bran!").
