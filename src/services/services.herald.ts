@@ -67,7 +67,7 @@ const GOSSIP_TICKS = 600;
 // News outlives its cry: for a while after it happens, every creep now and then
 // repeats it in its idle chatter. Newer news replaces older. Kept in Memory so
 // a global reset does not cut the talk short.
-function spreadWord(line: string): void {
+export function spreadWord(line: string): void {
   Memory.gossip = { line: line.slice(0, 10), until: Game.time + GOSSIP_TICKS };
 }
 

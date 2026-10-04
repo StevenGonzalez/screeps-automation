@@ -229,6 +229,7 @@ describe("CPU governor", () => {
     game.cpu.bucket = bucket;
   };
   const lastLine = () => (g.Memory as Memory).chronicle?.at(-1)?.text;
+  const talk = () => (g.Memory as Memory).gossip?.line;
 
   it("sets aside the source earning least per creep while the bucket keeps falling", () => {
     const room = realm(4500);
@@ -236,6 +237,7 @@ describe("CPU governor", () => {
     later(500, 4000);
     expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
     expect(lastLine()).toContain("give up a digging");
+    expect(talk()).toBe("road shut");
     later(500, 3800);
     expect(sourceIds(getActiveRemoteRooms(room))).toEqual([]);
   });
@@ -262,6 +264,7 @@ describe("CPU governor", () => {
     later(500, 6000);
     expect(sourceIds(getActiveRemoteRooms(room))).toHaveLength(2);
     expect(lastLine()).toContain("return to a digging");
+    expect(talk()).toBe("road open");
   });
 });
 

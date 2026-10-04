@@ -12,6 +12,7 @@ import {
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
 import { castleName, chronicle, wildsName } from "../services/services.chronicle";
+import { spreadWord } from "../services/services.herald";
 import { inPixelRefill } from "./orchestrator.pixels";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import {
@@ -168,6 +169,7 @@ function remoteShedSources(): Set<string> {
       chronicle(
         `The scribes have caught up with their ledgers. ${castleName(back.home)}'s vendors return to a digging in the ${wildsName(back.room)}.`
       );
+      spreadWord("road open");
     }
   }
   return new Set(state.ids.map((s) => s.id));
@@ -192,6 +194,7 @@ function shedWorstRemoteSource(shed: Array<{ id: string; home: string; room: str
   chronicle(
     `The Crown's scribes cannot keep the ledgers of so many roads. ${castleName(worst.home)}'s vendors give up a digging in the ${wildsName(worst.room)}.`
   );
+  spreadWord("road shut");
 }
 
 const REMOTE_ECONOMY_ROLES = new Set<string>([
