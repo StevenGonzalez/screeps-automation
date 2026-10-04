@@ -204,6 +204,20 @@ function depositEnergy(creep: Creep, homeRoom: string) {
     return;
   }
 
+  // A keep with no storage yet feeds its enchanters through the container by
+  // the throne. A merchant has no WORK to build or upgrade with, so with the
+  // spawn, extensions and towers full it had nowhere to unload: Grimford's
+  // stood by the spawn holding their loads while that container stood empty,
+  // and the gold at their remotes spilt from full containers meanwhile.
+  const upgradeId = creep.room.memory.upgradeContainerId;
+  const upgradeContainer = upgradeId ? Game.getObjectById(upgradeId) : null;
+  if (upgradeContainer && upgradeContainer.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+    if (creep.transfer(upgradeContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(upgradeContainer, { reusePath: 50 });
+    }
+    return;
+  }
+
   putSurplusEnergyToWork(creep);
 }
 

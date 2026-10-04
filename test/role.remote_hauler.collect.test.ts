@@ -11,6 +11,9 @@ g.FIND_HOSTILE_STRUCTURES = 109;
 g.FIND_SOURCES = 105;
 g.FIND_STRUCTURES = 107;
 g.RESOURCE_ENERGY = "energy";
+g.STRUCTURE_SPAWN = "spawn";
+g.STRUCTURE_EXTENSION = "extension";
+g.STRUCTURE_TOWER = "tower";
 g.ERR_NOT_IN_RANGE = -9;
 g.OK = 0;
 g.RoomPosition = class {
@@ -150,5 +153,30 @@ describe("remote hauler at home", () => {
     runRemoteHauler(c as unknown as Creep);
     expect(c.transfer).toHaveBeenCalledWith(storage, "energy");
     expect(cryFor(c as unknown as Creep)).toBe("+800 gold");
+  });
+
+  it("unloads at the throne's container once a keep without storage is full", () => {
+    const full = { getFreeCapacity: () => 0 };
+    const core = [
+      { structureType: "spawn", store: full },
+      { structureType: "extension", store: full },
+      { structureType: "tower", store: full },
+    ];
+    const throne = { id: "up1", store: { getFreeCapacity: () => 1500 } };
+    (g.Game as any).getObjectById = (id: string) => (id === "up1" ? throne : null);
+    const c = hauler() as unknown as Record<string, unknown>;
+    Object.assign(c, {
+      room: {
+        name: HOME,
+        memory: { upgradeContainerId: "up1" },
+        find: (_type: number, opts?: { filter: (s: unknown) => boolean }) => core.filter((s) => !opts || opts.filter(s)),
+      },
+      memory: { ...(c.memory as CreepMemory), working: true },
+      store: { energy: 350, getFreeCapacity: () => 0 },
+      transfer: vi.fn(() => g.ERR_NOT_IN_RANGE),
+    });
+    runRemoteHauler(c as unknown as Creep);
+    expect(c.transfer).toHaveBeenCalledWith(throne, "energy");
+    expect(c.moveTo).toHaveBeenCalledWith(throne, expect.anything());
   });
 });
