@@ -8769,7 +8769,7 @@ function runReserver(creep) {
         return;
     }
     const controller = creep.room.controller;
-    if (!controller || (controller.owner && !controller.my)) {
+    if (!controller || controller.owner) {
         creep.suicide();
         return;
     }
@@ -9197,7 +9197,25 @@ function runSettler(creep) {
         }
     }
 }
+const MIN_STOCK = 100;
 function harvest(creep) {
+    const pile = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
+        filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount >= MIN_STOCK,
+    });
+    if (pile) {
+        if (creep.pickup(pile) === ERR_NOT_IN_RANGE)
+            creep.moveTo(pile, { reusePath: 10 });
+        return;
+    }
+    const container = creep.pos.findClosestByRange(FIND_STRUCTURES, {
+        filter: (s) => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] >= MIN_STOCK,
+    });
+    if (container) {
+        if (creep.withdraw(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(container, { reusePath: 10 });
+        }
+        return;
+    }
     const source = creep.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
     if (!source) {
         const ctrl = creep.room.controller;
