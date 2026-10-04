@@ -14,8 +14,9 @@ export function runReserver(creep: Creep) {
   }
 
   const controller = creep.room.controller;
-  // Nothing to reserve in a room another player owns.
-  if (!controller || (controller.owner && !controller.my)) {
+  // Nothing to reserve in an owned room: another player's, or a remote we
+  // have since claimed as a keep.
+  if (!controller || controller.owner) {
     creep.suicide();
     return;
   }

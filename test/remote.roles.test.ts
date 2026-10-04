@@ -80,6 +80,13 @@ describe("reserver", () => {
     expect(c.suicide).toHaveBeenCalled();
     expect(c.attackController).not.toHaveBeenCalled();
   });
+
+  it("stands down once the remote has become one of our own keeps", () => {
+    const c = reserverIn({ my: true, owner: { username: ME } });
+    runReserver(c as unknown as Creep);
+    expect(c.suicide).toHaveBeenCalled();
+    expect(c.reserveController).not.toHaveBeenCalled();
+  });
 });
 
 describe("remote miner", () => {

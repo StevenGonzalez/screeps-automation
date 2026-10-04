@@ -98,7 +98,29 @@ export function runSettler(creep: Creep) {
   }
 }
 
+// Smaller stocks are not worth the walk over harvesting.
+const MIN_STOCK = 100;
+
 function harvest(creep: Creep) {
+  // A keep founded on a remote inherits the vendors' container and whatever
+  // they dropped; taking that is far quicker than harvesting by hand.
+  const pile = creep.pos.findClosestByRange(FIND_DROPPED_RESOURCES, {
+    filter: (r) => r.resourceType === RESOURCE_ENERGY && r.amount >= MIN_STOCK,
+  });
+  if (pile) {
+    if (creep.pickup(pile) === ERR_NOT_IN_RANGE) creep.moveTo(pile, { reusePath: 10 });
+    return;
+  }
+  const container = creep.pos.findClosestByRange(FIND_STRUCTURES, {
+    filter: (s) => s.structureType === STRUCTURE_CONTAINER && s.store[RESOURCE_ENERGY] >= MIN_STOCK,
+  });
+  if (container) {
+    if (creep.withdraw(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+      creep.moveTo(container, { reusePath: 10 });
+    }
+    return;
+  }
+
   const source = creep.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
   if (!source) {
     const ctrl = creep.room.controller;
