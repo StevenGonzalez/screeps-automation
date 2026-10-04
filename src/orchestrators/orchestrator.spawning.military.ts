@@ -277,7 +277,9 @@ export function shouldSpawnSettler(room: Room): boolean {
   const settlers = getCreepsByRole(ROLE_SETTLER).filter(
     (c) => c.memory.targetRoom === exp.roomName
   );
-  return settlers.length < MAX_SETTLERS;
+  const needed = settlers.length < MAX_SETTLERS;
+  if (waitForFullBody(room, ROLE_SETTLER, needed)) return false;
+  return needed;
 }
 
 export function spawnSettler(room: Room, spawn: StructureSpawn): boolean {
