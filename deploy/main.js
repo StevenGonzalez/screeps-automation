@@ -506,27 +506,47 @@ const WARLORD_EPITHETS = [
     "the Flayer", "One-Eye", "the Gaunt", "Black-Tooth", "the Burner", "Red-Hand",
     "the Unwashed", "Ironjaw", "the Hungry", "Crow-Feeder", "Half-Ear", "the Fen-Rat",
 ];
-const WARBAND_LIFE = 1500;
 const WARBAND_MUSTER = 10;
+const WARBAND_BREAK = 5;
 function raiseWarband(roomName) {
-    var _a, _b;
-    const known = (_a = Memory.warbands) === null || _a === void 0 ? void 0 : _a[roomName];
+    var _a, _b, _c;
+    const bands = ((_a = Memory.warbands) !== null && _a !== void 0 ? _a : (Memory.warbands = {}));
+    const known = bands[roomName];
     if (known && Game.time - known.at <= WARBAND_MUSTER)
-        return known.name;
+        return { name: known.name, raids: (_b = known.raids) !== null && _b !== void 0 ? _b : 1 };
+    if (known && !known.broken) {
+        known.raids = ((_c = known.raids) !== null && _c !== void 0 ? _c : 1) + 1;
+        known.at = Game.time;
+        return { name: known.name, raids: known.raids };
+    }
     const h = mixedHash(`${roomName}:${Game.time}`);
     const name = `${WARLORDS[h % WARLORDS.length]} ${WARLORD_EPITHETS[(h >>> 8) % WARLORD_EPITHETS.length]}`;
-    ((_b = Memory.warbands) !== null && _b !== void 0 ? _b : (Memory.warbands = {}))[roomName] = { name, at: Game.time };
-    return name;
+    bands[roomName] = { name, at: Game.time, raids: 1 };
+    return { name, raids: 1 };
 }
 function warbandIn(roomName) {
-    var _a;
+    var _a, _b;
+    return (_b = (_a = Memory.warbands) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.name;
+}
+function warbandLoss(roomName) {
+    var _a, _b;
     const band = (_a = Memory.warbands) === null || _a === void 0 ? void 0 : _a[roomName];
-    if (!band)
-        return undefined;
-    if (Game.time - band.at <= WARBAND_LIFE)
-        return band.name;
-    delete Memory.warbands[roomName];
-    return undefined;
+    if (!band || band.broken)
+        return false;
+    band.slain = ((_b = band.slain) !== null && _b !== void 0 ? _b : 0) + 1;
+    if (band.slain < WARBAND_BREAK)
+        return false;
+    band.broken = true;
+    return true;
+}
+const ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+function ordinal(n) {
+    var _a;
+    if (ORDINALS[n - 1])
+        return ORDINALS[n - 1];
+    const tens = n % 100;
+    const suffix = tens >= 11 && tens <= 13 ? "th" : (_a = ["th", "st", "nd", "rd"][n % 10]) !== null && _a !== void 0 ? _a : "th";
+    return `${n}${suffix}`;
 }
 
 const METALS = [
@@ -3685,8 +3705,15 @@ function markRemoteInvader(entry, room) {
         return;
     const text = findInvaderCore(room)
         ? `Invaders raised a stronghold in the ${wildsName(entry.roomName)}. The vendors flee the road.`
-        : `Raiders under ${raiseWarband(entry.roomName)} fell upon the vendors in the ${wildsName(entry.roomName)}.`;
+        : raidLine(entry.roomName);
     tally(`raid:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
+}
+function raidLine(roomName) {
+    const band = raiseWarband(roomName);
+    const wilds = wildsName(roomName);
+    return band.raids === 1
+        ? `Raiders under ${band.name} fell upon the vendors in the ${wilds}.`
+        : `${band.name} comes back to the ${wilds} for a ${ordinal(band.raids)} raid on the vendors.`;
 }
 function flagRemoteDamage(creep) {
     const hostiles = creep.room.find(FIND_HOSTILE_CREEPS);
@@ -8119,6 +8146,10 @@ function chronicleKill(room, slayer) {
     const one = band ? `A raider of ${band}'s band` : `A ${foe}`;
     const many = (n) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
     tally(`slain:${room.name}`, 1, (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
+    if (band && warbandLoss(room.name)) {
+        spreadWord("routed!");
+        chronicle(`${slayer ? `${slayer} broke ${band}'s band` : `${band}'s band is broken`} ${whereIn(room.name)}. The warlord is heard of no more.`);
+    }
 }
 let muster = new Map();
 function foeIn(roomName) {
@@ -13222,7 +13253,6 @@ function maybeChatter(creep) {
 }
 function loop$e() {
     const profile = Memory.profileRoles === true;
-    heraldRooms();
     for (const name in Game.creeps) {
         const creep = Game.creeps[name];
         if (creep.spawning)
@@ -21070,6 +21100,7 @@ function loop() {
                 !(inPixelRefill() && lastTickUsed <= limit)));
     const cpuFraction = (used) => (limit ? used / limit : 0);
     const heavyShed = () => bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
+    runSafe("herald", () => heraldRooms());
     runSafe("memory", () => loop$h());
     runSafe("rebrand", () => migrateRoleNames());
     runSafe("strategy", () => loop$a());
