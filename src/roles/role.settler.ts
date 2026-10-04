@@ -1,6 +1,7 @@
 import { getThreatInfo } from "../services/services.combat";
 import { pickSignature } from "../config/signatures";
 import { getRoomBuildTarget } from "../services/services.creep.maintenance";
+import { ROLE_MINER } from "../config/config.roles";
 
 const RETREAT_HOLD_TICKS = 50;
 
@@ -133,7 +134,7 @@ const PROVISION_FLOOR = 30_000;
 // instead of a wait at the source.
 function takeProvisions(creep: Creep): boolean {
   const storage = creep.room.storage;
-  if (!storage?.my || storage.store[RESOURCE_ENERGY] < PROVISION_FLOOR) return false;
+  if (!storage || !canProvision(creep.room)) return false;
   if (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) return false;
   if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 10 });
   return true;
@@ -159,6 +160,16 @@ function harvest(creep: Creep) {
     return;
   }
 
+  // Once the keep's own miners work its sources, a pilgrim harvesting beside
+  // them only takes their seats and their gold. It builds with what it carries,
+  // or fetches a load from home while the treasury there can spare one.
+  const homeRoom = creep.memory.homeRoom ?? Memory.expansion?.homeRoom;
+  if (homeRoom && keepMined(creep.room) && canProvision(Game.rooms[homeRoom])) {
+    if (creep.store[RESOURCE_ENERGY] > 0) creep.memory.working = true;
+    else moveToRoom(creep, homeRoom);
+    return;
+  }
+
   const source = creep.pos.findClosestByRange(FIND_SOURCES_ACTIVE);
   if (!source) {
     // Every source is dry until it regenerates: build with what is carried
@@ -174,6 +185,17 @@ function harvest(creep: Creep) {
   if (creep.harvest(source) === ERR_NOT_IN_RANGE) {
     creep.moveTo(source, { reusePath: 10 });
   }
+}
+
+function keepMined(room: Room): boolean {
+  return room
+    .find(FIND_MY_CREEPS)
+    .some((c) => c.memory.role === ROLE_MINER && c.memory.assignedContainerId !== undefined);
+}
+
+function canProvision(home: Room | undefined): boolean {
+  const storage = home?.storage;
+  return !!storage?.my && storage.store[RESOURCE_ENERGY] >= PROVISION_FLOOR;
 }
 
 function holdAwayFromEdge(creep: Creep) {

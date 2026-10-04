@@ -15,6 +15,7 @@ g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_MY_SPAWNS = 112;
 g.FIND_MY_STRUCTURES = 108;
 g.FIND_HOSTILE_CREEPS = 103;
+g.FIND_MY_CREEPS = 102;
 g.STRUCTURE_KEEPER_LAIR = "keeperLair";
 g.STRUCTURE_RAMPART = "rampart";
 g.FIND_SOURCES = 105;
@@ -80,6 +81,40 @@ describe("settler", () => {
     runSettler(c as unknown as Creep);
     expect(c.harvest).toHaveBeenCalledWith(source);
     expect(c.withdraw).not.toHaveBeenCalled();
+  });
+
+  describe("at a keep whose miners work its sources", () => {
+    const miner = { memory: { role: "miner", assignedContainerId: "box" } };
+    function atMinedKeep(treasury: number) {
+      g.Game = { time: 100, rooms: { W1N1: { storage: { my: true, store: { energy: treasury } } } } };
+      const c = settlerBeside({ 104: [{ id: "s" }] });
+      Object.assign(c.room, {
+        find: (type: number) => (type === g.FIND_MY_CREEPS ? [miner] : []),
+        findExitTo: () => 1,
+      });
+      return c;
+    }
+
+    it("fetches a load from home rather than take the miners' seats", () => {
+      const c = atMinedKeep(40_000);
+      runSettler(c as unknown as Creep);
+      expect(c.harvest).not.toHaveBeenCalled();
+      expect(c.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: "W1N1" }), expect.anything());
+    });
+
+    it("builds with what it carries first", () => {
+      const c = atMinedKeep(40_000);
+      c.store.energy = 150;
+      runSettler(c as unknown as Creep);
+      expect(c.memory.working).toBe(true);
+      expect(c.moveTo).not.toHaveBeenCalled();
+    });
+
+    it("harvests still when the treasury at home has little to spare", () => {
+      const c = atMinedKeep(20_000);
+      runSettler(c as unknown as Creep);
+      expect(c.harvest).toHaveBeenCalled();
+    });
   });
 
   it("builds with what it carries when every source is dry", () => {

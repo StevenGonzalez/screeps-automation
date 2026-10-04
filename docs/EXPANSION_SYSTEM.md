@@ -77,7 +77,9 @@ shows the plan under the treasury line.
    fills its packs from the funding castle's treasury before setting out (while
    it holds 30,000 or more), so it starts building on arrival instead of
    queueing at the keep's sources, and when every source there is dry it builds
-   with what it carries. Its work goes barracks first, then the throne to level
+   with what it carries. Once the keep's own miners work its sources, a pilgrim
+   that runs dry goes home for another load instead of harvesting beside them,
+   while the treasury there can spare one. Its work goes barracks first, then the throne to level
    2 (only 200 gold, and it opens the extensions), then the other construction
    sites (all pilgrims on the same one, in the masons' order: extensions before
    containers, ramparts and roads), then gold for the barracks and extensions,
