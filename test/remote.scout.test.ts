@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.FIND_HOSTILE_CREEPS = 103;
+g.ATTACK_POWER = 30;
+g.RANGED_ATTACK_POWER = 10;
+g.DISMANTLE_POWER = 50;
+g.HEAL_POWER = 12;
 g.FIND_SOURCES = 105;
 g.EVENT_OBJECT_DESTROYED = 1;
 g.FIND_HOSTILE_STRUCTURES = 109;
@@ -95,6 +99,12 @@ describe("scout survey", () => {
     expect(homeMem.remoteRooms![0].hostile).toBe(false);
   });
 
+  it("does not mark a remote hostile over another player's workers", () => {
+    const hostiles = [{ owner: { username: "Stranger" }, body: body("work", "carry", "move") }];
+    runScout(scoutIn("W1N2", { hostiles }));
+    expect(homeMem.remoteRooms![0].hostile).toBe(false);
+  });
+
   it("marks a remote hostile over an armed player creep", () => {
     const hostiles = [{ owner: { username: "Stranger" }, body: body("attack", "move") }];
     runScout(scoutIn("W1N2", { hostiles }));
@@ -162,8 +172,11 @@ describe("refreshVisibleRemoteRooms", () => {
       hostileStrikes: 1,
     } as RemoteRoomData;
     const invader = { owner: { username: "Invader" }, body: body("work", "move") };
+    // A tick apart from the test above, so its cached threat is not read back.
+    (g.Game as any).time = 5001;
     (g.Game as any).rooms = {
       W1N2: {
+        name: "W1N2",
         controller: { reservation: { username: ME } },
         find: (type: number) => (type === g.FIND_HOSTILE_CREEPS ? [invader] : []),
       },
@@ -172,6 +185,37 @@ describe("refreshVisibleRemoteRooms", () => {
     refreshVisibleRemoteRooms(room as unknown as Room);
     expect(entry.invaderUntil).toBeGreaterThan(5000);
     expect(entry.hostile).toBe(false);
+  });
+
+  describe("with another player's creeps in the remote", () => {
+    let tick = 6000;
+
+    function refreshAmong(...parts: string[]) {
+      // A fresh tick, so no threat cached by another test is read back.
+      (g.Game as any).time = ++tick;
+      const entry = { roomName: "W1N2", sources: [], lastSeen: 0, hostile: false } as RemoteRoomData;
+      const stranger = { owner: { username: "Stranger" }, body: body(...parts) };
+      (g.Game as any).rooms = {
+        W1N2: {
+          name: "W1N2",
+          controller: { reservation: { username: ME } },
+          find: (type: number) => (type === g.FIND_HOSTILE_CREEPS ? [stranger] : []),
+        },
+      };
+      const room = { name: HOME, controller: { owner: { username: ME } }, memory: { remoteRooms: [entry] } };
+      refreshVisibleRemoteRooms(room as unknown as Room);
+      return entry;
+    }
+
+    it("does not mark it hostile over workers passing through", () => {
+      expect(refreshAmong("work", "work", "carry", "move").hostile).toBe(false);
+    });
+
+    it("marks it hostile over an armed creep", () => {
+      const entry = refreshAmong("attack", "move");
+      expect(entry.hostile).toBe(true);
+      expect(entry.rival).toBe("Stranger");
+    });
   });
 });
 

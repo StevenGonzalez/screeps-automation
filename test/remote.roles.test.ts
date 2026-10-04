@@ -5,6 +5,10 @@ g.OK = 0;
 g.ERR_NOT_OWNER = -1;
 g.ERR_NOT_IN_RANGE = -9;
 g.FIND_HOSTILE_CREEPS = 103;
+g.ATTACK_POWER = 30;
+g.RANGED_ATTACK_POWER = 10;
+g.DISMANTLE_POWER = 50;
+g.HEAL_POWER = 12;
 g.FIND_SOURCES = 105;
 g.FIND_STRUCTURES = 107;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
@@ -189,6 +193,37 @@ describe("remote miner", () => {
       const lines = (g.Memory as any).chronicle;
       expect(lines).toHaveLength(1);
       expect(lines[0].text).toMatch(/^Peddler Edric raised a waystation in the /);
+    });
+  });
+
+  // Another player's workers passing through cannot hurt a vendor. Taking them
+  // for raiders cost Embercrag the Witch Weald's gold for thousands of ticks.
+  describe("meeting another player's creeps in the remote", () => {
+    let tick = 3000;
+
+    function minerAmong(...parts: string[]) {
+      // A fresh tick, so no threat cached by another test is read back.
+      (g.Game as any).time = ++tick;
+      const source = { id: "src", pos: { findInRange: () => [] } };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
+      const stranger = { owner: { username: "Stranger" }, body: parts.map((type) => ({ type, hits: 100 })) };
+      const creep = minerIn(REMOTE);
+      creep.memory._hp = 100;
+      creep.room.find = ((type: number) => (type === g.FIND_HOSTILE_CREEPS ? [stranger] : [])) as any;
+      runRemoteMiner(creep as unknown as Creep);
+      return creep;
+    }
+
+    it("keeps digging past unarmed workers", () => {
+      const creep = minerAmong("work", "work", "carry", "move");
+      expect(remote.hostile).toBe(false);
+      expect(creep.harvest).toHaveBeenCalled();
+    });
+
+    it("flees an armed creep and marks the remote hostile", () => {
+      const creep = minerAmong("ranged_attack", "move");
+      expect(remote.hostile).toBe(true);
+      expect(creep.harvest).not.toHaveBeenCalled();
     });
   });
 });

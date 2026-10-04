@@ -227,9 +227,18 @@ export function getThreatInfo(room: Room): ThreatInfo {
 const BLOCKADE_STICKY_TICKS = 1500;
 const BLOCKADE_BORDER_BAND = 3;
 
-function isArmedHostile(c: Creep): boolean {
+export function isArmedHostile(c: Creep): boolean {
   if (!isPlayerCreep(c)) return false;
   return c.body.some((p) => p.hits > 0 && (p.type === ATTACK || p.type === RANGED_ATTACK));
+}
+
+// Hostiles in a remote that put its vendors to flight: anything that can do
+// damage, except another player's workers passing through, which cannot hurt
+// a creep.
+export function remoteThreats(room: Room): Creep[] {
+  return getThreatInfo(room).hostiles.filter(
+    (c) => canDealDamage(c) && (!isPlayerCreep(c) || isArmedHostile(c))
+  );
 }
 
 function inBorderBandFacingHome(exitDir: string, x: number, y: number): boolean {

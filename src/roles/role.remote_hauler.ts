@@ -7,7 +7,7 @@ import {
   clearRemoteInvader,
 } from "../services/services.creep";
 import { cryFlight, cryHaul, settleFlight } from "../services/services.herald";
-import { getThreatInfo, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
+import { remoteThreats, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -33,15 +33,13 @@ export function runRemoteHauler(creep: Creep) {
   }
 
   const inTarget = creep.room.name === targetRoom;
-  const threat = inTarget ? getThreatInfo(creep.room) : null;
+  const threats = inTarget ? remoteThreats(creep.room) : [];
   const core = inTarget ? findInvaderCore(creep.room) : null;
   if (core) flagRemoteInvader(creep);
-  else if (threat && threat.score > 0) {
-    if (threat.hostiles.some(isInvaderCreep)) flagRemoteInvader(creep);
-    else if (threat.hostiles.some(isPlayerCreep)) flagRemotePlayer(creep);
-  }
+  else if (threats.some(isInvaderCreep)) flagRemoteInvader(creep);
+  else if (threats.some(isPlayerCreep)) flagRemotePlayer(creep);
 
-  if (isAssignedRemoteContested(creep) || (threat && threat.score > 0)) {
+  if (isAssignedRemoteContested(creep) || threats.length > 0) {
     cryFlight(creep);
     if (creep.store[RESOURCE_ENERGY] > 0) {
       depositEnergy(creep, homeRoom);

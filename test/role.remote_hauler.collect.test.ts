@@ -2,6 +2,10 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.FIND_HOSTILE_CREEPS = 103;
+g.ATTACK_POWER = 30;
+g.RANGED_ATTACK_POWER = 10;
+g.DISMANTLE_POWER = 50;
+g.HEAL_POWER = 12;
 g.FIND_DROPPED_RESOURCES = 106;
 g.FIND_HOSTILE_STRUCTURES = 109;
 g.FIND_SOURCES = 105;
@@ -9,6 +13,9 @@ g.FIND_STRUCTURES = 107;
 g.RESOURCE_ENERGY = "energy";
 g.ERR_NOT_IN_RANGE = -9;
 g.OK = 0;
+g.RoomPosition = class {
+  constructor(public x: number, public y: number, public roomName: string) {}
+};
 
 import { runRemoteHauler } from "../src/roles/role.remote_hauler";
 import { ROLE_REMOTE_HAULER } from "../src/config/config.roles";
@@ -32,10 +39,13 @@ function pos(x: number, y: number) {
 let dropped: { amount: number; resourceType: string; pos: ReturnType<typeof pos> }[];
 let container: { id: string; pos: ReturnType<typeof pos>; store: Record<string, number> };
 
+let strangers: unknown[];
+
 function hauler(): Creep {
   const room = {
     name: REMOTE,
-    find: (type: number) => (type === g.FIND_DROPPED_RESOURCES ? dropped : []),
+    find: (type: number) =>
+      type === g.FIND_DROPPED_RESOURCES ? dropped : type === g.FIND_HOSTILE_CREEPS ? strangers : [],
   };
   return {
     name: "Merchant Aldo",
@@ -63,6 +73,7 @@ function hauler(): Creep {
 beforeEach(() => {
   container = { id: "cont1", pos: pos(30, 30), store: { energy: 2000 } };
   dropped = [];
+  strangers = [];
   g.Game = {
     time: 1000,
     getObjectById: (id: string) => (id === "cont1" ? container : null),
@@ -97,6 +108,32 @@ describe("remote hauler pickup", () => {
 
     expect(creep.withdraw).toHaveBeenCalledWith(container, "energy");
     expect(creep.pickup).not.toHaveBeenCalled();
+  });
+});
+
+describe("remote hauler among another player's creeps", () => {
+  function stranger(...parts: string[]) {
+    return { owner: { username: "Stranger" }, body: parts.map((type) => ({ type, hits: 100 })) };
+  }
+  const remote = () => (g.Memory as any).rooms[HOME].remoteRooms[0] as RemoteRoomData;
+
+  it("keeps collecting past unarmed workers", () => {
+    // Ticks apart from the other tests', so no threat cached by them is read back.
+    (g.Game as any).time = 2001;
+    strangers = [stranger("work", "carry", "move")];
+    const creep = hauler();
+    runRemoteHauler(creep);
+    expect(creep.withdraw).toHaveBeenCalledWith(container, "energy");
+    expect(remote().hostile).toBe(false);
+  });
+
+  it("flees an armed creep and marks the remote hostile", () => {
+    (g.Game as any).time = 2002;
+    strangers = [stranger("attack", "move")];
+    const creep = hauler();
+    runRemoteHauler(creep);
+    expect(creep.withdraw).not.toHaveBeenCalled();
+    expect(remote().hostile).toBe(true);
   });
 });
 

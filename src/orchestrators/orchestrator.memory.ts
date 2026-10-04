@@ -2,7 +2,7 @@ import {
   isSourceKeeperRoom,
   isPlayerCreep,
   isInvaderCreep,
-  canDealDamage,
+  remoteThreats,
   findInvaderCore,
 } from "../services/services.combat";
 import {
@@ -357,7 +357,7 @@ export function refreshVisibleRemoteRooms(room: Room) {
     }
     // An Invader core reserves the room and blocks harvesting; a knight has to clear it.
     if (findInvaderCore(visible)) markRemoteInvader(remote, visible);
-    const hostiles = visible.find(FIND_HOSTILE_CREEPS).filter(canDealDamage);
+    const hostiles = remoteThreats(visible);
     const player = hostiles.find(isPlayerCreep);
     if (player) {
       markRemotePlayerHostile(remote, player.owner.username);

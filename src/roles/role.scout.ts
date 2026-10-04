@@ -4,7 +4,7 @@ import {
 } from "../services/services.creep";
 import { recordRoomIntel } from "../orchestrators/orchestrator.military";
 import { applyRemoteControllerStatus } from "../orchestrators/orchestrator.memory";
-import { isPlayerCreep, canDealDamage } from "../services/services.combat";
+import { isArmedHostile } from "../services/services.combat";
 
 const SCOUT_HOSTILE_DURATION = 2000;
 const SCOUT_TRAVEL_BUDGET = 150;
@@ -130,8 +130,9 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
   const sourceKeepers = hostiles.filter(
     (c) => c.owner.username === "Source Keeper"
   );
-  // Unarmed or allied creeps (other players' scouts) don't make a room hostile.
-  const player = hostiles.find((c) => isPlayerCreep(c) && canDealDamage(c));
+  // Unarmed or allied creeps (other players' scouts and workers) don't make a
+  // room hostile.
+  const player = hostiles.find(isArmedHostile);
 
   if (player) {
     markRemotePlayerHostile(entry, player.owner.username);
