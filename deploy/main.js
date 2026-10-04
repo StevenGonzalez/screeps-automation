@@ -8370,6 +8370,7 @@ function heraldRooms() {
     heraldRenown();
     heraldTrade();
     heraldSeason();
+    heraldSky();
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
         if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
@@ -8515,6 +8516,16 @@ function heraldWolves(room) {
     roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
     if (howl.n === 0)
         chronicle(`Wolves howled beneath the full moon outside the walls of ${castleName(room.name)}.`);
+}
+const AURORA_TIDINGS = [
+    "The northern lights burned green over the realm.",
+    "Green fire danced in the winter sky. The old folk say the dead were dancing.",
+    "Ribbons of light rippled over the battlements all night long.",
+];
+function heraldSky() {
+    if (Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townAurora(Game.time))
+        return;
+    chronicle(AURORA_TIDINGS[Math.floor(Game.time / TOWN_DAY_LENGTH) % AURORA_TIDINGS.length]);
 }
 function heraldRise(room) {
     const level = room.controller.level;
