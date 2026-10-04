@@ -13952,7 +13952,7 @@ function manageActiveExpansion() {
             exp.bootstrapStartedAt = Game.time;
         if (Game.time - exp.bootstrapStartedAt > BOOTSTRAP_TIMEOUT && !isChildSelfSufficient(child)) {
             if (((_b = child === null || child === void 0 ? void 0 : child.controller) === null || _b === void 0 ? void 0 : _b.my) && child.find(FIND_MY_SPAWNS).length > 0) {
-                chronicle(`${castleName(exp.homeRoom)} sends no more settlers. ${castleName(exp.roomName)} must stand on its own now.`);
+                chronicle(`${castleName(exp.homeRoom)} sends no more settlers. ${castleName(exp.roomName)} must stand on its own now, under arms of its own: ${blazon(exp.roomName)}.`);
                 clearExpansion(`bootstrap timed out after ${BOOTSTRAP_TIMEOUT} ticks`);
                 return;
             }
@@ -15524,6 +15524,9 @@ function buildMinerBody(availableEnergy) {
     const workParts = Math.min(maxWork, Math.floor((availableEnergy - moveCost - carryCost) / workCost));
     if (workParts <= 0)
         return [WORK, MOVE];
+    if (workParts < maxWork && availableEnergy >= maxWork * workCost + moveCost) {
+        return [...Array(maxWork).fill(WORK), MOVE];
+    }
     const body = [];
     for (let i = 0; i < workParts; i++)
         body.push(WORK);
