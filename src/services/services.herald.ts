@@ -333,16 +333,21 @@ function heraldWorks(room: Room): void {
 
 // A peddler laying the last of the container at its source. Until then its
 // dig lies on the ground, where it rots before the merchants carry it home.
-// Told once per site, even if two peddlers finish it together.
+// Told once per site, even if two peddlers finish it together. The second
+// waystation in a remote is told as such: the Bleak Vale's two each said no
+// more gold rotted in the mud, and the second read as the first told again.
 export function heraldWaystation(creep: Creep, site: ConstructionSite): void {
   const home = creep.memory.homeRoom;
   if (!home) return;
+  const wilds = wildsName(site.pos.roomName);
+  const second = creep.room.find(FIND_STRUCTURES).some((s) => s.structureType === STRUCTURE_CONTAINER);
   const fresh = tally(
     `waystation:${site.id}`,
     0,
     () =>
-      `${creep.name} raised a waystation in the ${wildsName(site.pos.roomName)}. ` +
-      `No more of ${castleName(home)}'s gold rots in the mud.`,
+      second
+        ? `${creep.name} raised a second waystation in the ${wilds}, so the merchants of ${castleName(home)} load at both its diggings.`
+        : `${creep.name} raised a waystation in the ${wilds}. No more of ${castleName(home)}'s gold rots in the mud.`,
     CREEP_LIFE_TIME
   );
   if (fresh) spreadWord("waystation");

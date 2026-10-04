@@ -194,6 +194,32 @@ describe("remote miner", () => {
       expect(lines).toHaveLength(1);
       expect(lines[0].text).toMatch(/^Peddler Edric raised a waystation in the /);
     });
+
+    it("tells the second waystation in a remote as the second", () => {
+      const last = { id: "c2", structureType: "container", progress: 4980, progressTotal: 5000, pos: { roomName: REMOTE } };
+      (g.Memory as any).chronicle = [];
+      const first = { structureType: "container" };
+      (g.Game as any).time = ++tick;
+      const source = {
+        id: "src",
+        pos: { findInRange: (type: number) => (type === g.FIND_MY_CONSTRUCTION_SITES ? [last] : []) },
+      };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
+      const creep = minerIn(REMOTE, {
+        store: { energy: 20, getFreeCapacity: () => 30 },
+        build: vi.fn(() => 0),
+        pickup: vi.fn(() => 0),
+        name: "Peddler Lucan",
+        getActiveBodyparts: () => 6,
+      });
+      creep.pos = { ...creep.pos, findInRange: () => [pile] } as any;
+      creep.room.find = ((type: number) => (type === g.FIND_STRUCTURES ? [first] : [])) as any;
+      creep.memory._hp = 100;
+      runRemoteMiner(creep as unknown as Creep);
+      const lines = (g.Memory as any).chronicle;
+      expect(lines).toHaveLength(1);
+      expect(lines[0].text).toMatch(/^Peddler Lucan raised a second waystation in the .*, so the merchants of .* load at both its diggings\.$/);
+    });
   });
 
   // Another player's workers passing through cannot hurt a vendor. Taking them
