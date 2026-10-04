@@ -8,9 +8,11 @@ g.FIND_SOURCES = 105;
 g.FIND_STRUCTURES = 107;
 g.RESOURCE_ENERGY = "energy";
 g.ERR_NOT_IN_RANGE = -9;
+g.OK = 0;
 
 import { runRemoteHauler } from "../src/roles/role.remote_hauler";
 import { ROLE_REMOTE_HAULER } from "../src/config/config.roles";
+import { cryFor } from "../src/services/services.herald";
 
 const HOME = "W1N1";
 const REMOTE = "W2N1";
@@ -95,5 +97,21 @@ describe("remote hauler pickup", () => {
 
     expect(creep.withdraw).toHaveBeenCalledWith(container, "energy");
     expect(creep.pickup).not.toHaveBeenCalled();
+  });
+});
+
+describe("remote hauler at home", () => {
+  it("calls out the gold it unloads at the treasury", () => {
+    const storage = { store: { getFreeCapacity: () => 50_000 } };
+    const c = hauler() as unknown as Record<string, unknown>;
+    Object.assign(c, {
+      room: { name: HOME, storage, find: () => [] },
+      memory: { ...(c.memory as CreepMemory), working: true },
+      store: { energy: 800, getFreeCapacity: () => 200 },
+      transfer: vi.fn(() => 0),
+    });
+    runRemoteHauler(c as unknown as Creep);
+    expect(c.transfer).toHaveBeenCalledWith(storage, "energy");
+    expect(cryFor(c as unknown as Creep)).toBe("+800 gold");
   });
 });

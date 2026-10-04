@@ -273,7 +273,8 @@ room shout "Huzzah!". When a creep with kills to its name dies, the chronicle
 names its tally, whether it fell in a fight or was laid to rest. When an owned room reaches a
 new controller level, every creep there shouts "Long live!" and the console logs a
 `[Herald]` proclamation. A remote peddler or merchant fleeing a contested remote
-shouts "Bandits!" once.
+shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
+load ("+800 gold").
 
 News outlives its cry. For 600 ticks after a level, new renown, a keep's
 firstborn, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the

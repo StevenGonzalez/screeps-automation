@@ -38,6 +38,13 @@ export function cryFlight(creep: Creep): void {
   creepCries[creep.name] = "Bandits!";
 }
 
+// A merchant unloading at the treasury calls out what it brought home. A load
+// is at most a few thousand, so the line fits in what creep.say shows.
+export function cryHaul(creep: Creep, amount: number): void {
+  freshCries();
+  creepCries[creep.name] = `+${amount} gold`;
+}
+
 export function settleFlight(creep: Creep): void {
   if (creep.memory.fled) delete creep.memory.fled;
 }

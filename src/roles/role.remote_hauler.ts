@@ -6,7 +6,7 @@ import {
   flagRemoteDamage,
   clearRemoteInvader,
 } from "../services/services.creep";
-import { cryFlight, settleFlight } from "../services/services.herald";
+import { cryFlight, cryHaul, settleFlight } from "../services/services.herald";
 import { getThreatInfo, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
@@ -173,8 +173,10 @@ function depositEnergy(creep: Creep, homeRoom: string) {
 
   const storage = creep.room.storage;
   if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+    const load = Math.min(creep.store[RESOURCE_ENERGY], storage.store.getFreeCapacity(RESOURCE_ENERGY));
     const res = creep.transfer(storage, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 50 });
+    else if (res === OK) cryHaul(creep, load);
     return;
   }
 
