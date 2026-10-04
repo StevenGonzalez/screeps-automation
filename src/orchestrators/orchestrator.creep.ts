@@ -65,6 +65,8 @@ import { runTownsfolk } from "../roles/role.townsfolk";
 import { resolveTraffic, shelterFromHostiles } from "../services/services.movement";
 import { recordRole } from "../services/services.profiler";
 import { cryFor, heraldRooms } from "../services/services.herald";
+import { townFeast, townSeason } from "../services/services.town";
+import { TownSeason } from "../config/config.town";
 
 const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_HARVESTER]: runHarvester,
@@ -126,19 +128,37 @@ const ROLE_CHATTER: Record<string, string[]> = {
   [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
 };
 
+// Every creep talks of the weather now and then, and of the feast on a feast day.
+const SEASON_CHATTER: Record<TownSeason, string[]> = {
+  spring: ["fresh air", "rain again", "blossoms"],
+  summer: ["hot!", "thirsty", "sunburnt"],
+  autumn: ["leaves!", "chilly", "harvest!"],
+  winter: ["brr!", "cold feet", "snow!"],
+};
+const FEAST_CHATTER = ["feast!", "ale!", "fair day!"];
+const WEATHER_EVERY = 4;
+
 const SAY_PERIOD = 30;
-function maybeChatter(creep: Creep): void {
-  const cry = cryFor(creep);
-  if (cry) {
-    creep.say(cry, true);
-    return;
-  }
+
+// What a creep says this tick unprompted, if anything: a line every
+// SAY_PERIOD ticks, staggered by name so the room does not speak at once.
+export function chatterLine(creep: Creep): string | undefined {
   let hash = 0;
   for (let i = 0; i < creep.name.length; i++) hash = (hash + creep.name.charCodeAt(i)) | 0;
-  if ((Game.time + hash) % SAY_PERIOD !== 0) return;
-  const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;
+  if ((Game.time + hash) % SAY_PERIOD !== 0) return undefined;
   const eventNo = (Game.time + hash) / SAY_PERIOD;
-  creep.say(lines[Math.abs(eventNo + hash) % lines.length], true);
+  const pick = Math.abs(eventNo + hash);
+  if (pick % WEATHER_EVERY === 0) {
+    const weather = townFeast(Game.time) ? FEAST_CHATTER : SEASON_CHATTER[townSeason(Game.time)];
+    return weather[(pick / WEATHER_EVERY) % weather.length];
+  }
+  const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;
+  return lines[pick % lines.length];
+}
+
+function maybeChatter(creep: Creep): void {
+  const line = cryFor(creep) ?? chatterLine(creep);
+  if (line) creep.say(line, true);
 }
 
 export function loop() {
