@@ -26,7 +26,6 @@ import {
   TOWN_DAY_LENGTH,
   TOWN_HOWL_TICKS,
   TOWN_MOON_DAYS,
-  TOWN_MOON_NAMES,
   TOWN_STAR_TICKS,
   SCENERY_BEGIN,
   SCENERY_END,
@@ -34,7 +33,6 @@ import {
 } from "../config/config.town";
 import { LANDMARKS } from "../config/config.structures";
 import { readBlueprint } from "../planning/planner.blueprint";
-import { describeBooks } from "../services/services.exchequer";
 import { MIN_HOME_STORAGE_ENERGY } from "./orchestrator.expansion";
 import { castleName, chronicleDate, formatK, recentChronicle, wildsName } from "../services/services.chronicle";
 import { armsColours, armsPieces, shieldOutline } from "../services/services.heraldry";
@@ -51,8 +49,6 @@ export function loop() {
     const room = Game.rooms[roomName];
     drawGraves(room);
     if (!room.controller?.my) continue;
-    drawRoomHUD(room);
-    drawChronicle(room);
     scenery(room, () => drawSeason(room));
     drawLandmarks(room);
     scenery(room, () => {
@@ -63,6 +59,7 @@ export function loop() {
     });
     drawBlueprint(room);
   }
+  writeDigest();
   drawRealmMap();
 }
 
@@ -209,101 +206,47 @@ function drawBlueprint(room: Room): void {
   }
 }
 
-function drawRoomHUD(room: Room) {
-  const v = room.visual;
-  const rcl = room.controller!.level;
-  const progress = room.controller!.progress;
-  const total = room.controller!.progressTotal;
-  const phase = getRoomPhase(rcl);
+const CHRONICLE_LINES = 4;
 
-  const x = 0.5;
-  let y = 0.8;
-  const lineH = 0.85;
-  const style: TextStyle = { font: 0.55, align: "left", color: "#e8e8e8", stroke: "#000000", strokeWidth: 0.08 };
-  const dimStyle: TextStyle = { ...style, color: "#aaaaaa" };
-  const warnStyle: TextStyle = { ...style, color: "#ff6644" };
-
-  v.text(`${castleName(room.name)}  ·  RCL ${rcl}  ${PHASE_LABEL[phase]}`, x, y, { ...style, font: 0.6, color: "#ffffff" });
-  y += lineH;
-
-  if (rcl < 8 && total > 0) {
-    const pct = progress / total;
-    const barW = 6;
-    v.rect(x, y - 0.6, barW, 0.55, { fill: "#333333", opacity: 0.7, stroke: "#555555", strokeWidth: 0.05 });
-    v.rect(x, y - 0.6, barW * pct, 0.55, { fill: "#44aaff", opacity: 0.85, stroke: "transparent" });
-    v.text(`${(pct * 100).toFixed(1)}%`, x + barW / 2, y, { ...style, align: "center", color: "#ffffff" });
-    y += lineH;
+/**
+ * Writes every castle's state and the latest of the chronicle to
+ * Memory.digest, from which the realm viewer shows them in a style of its own.
+ */
+export function writeDigest(): void {
+  const castles: Record<string, CastleDigest> = {};
+  for (const name in Game.rooms) {
+    const room = Game.rooms[name];
+    if (room.controller?.my) castles[name] = castleDigest(room);
   }
+  const chronicle = recentChronicle(CHRONICLE_LINES).map((e) => ({ when: chronicleDate(e.t), text: e.text }));
+  const digest: RealmDigest = { time: Game.time, castles, chronicle };
+  Memory.digest = JSON.stringify(digest);
+}
 
-  const energy = room.energyAvailable;
-  const energyCap = room.energyCapacityAvailable;
-  const energyPct = energyCap > 0 ? energy / energyCap : 0;
-  const energyColor = energyPct < 0.3 ? "#ff6644" : energyPct < 0.6 ? "#ffcc44" : "#88ff88";
-  if (energyCap > 0) v.text(`Gold: ${energy}/${energyCap}`, x, y, { ...style, color: energyColor });
-  else v.text("Gold: no barracks yet", x, y, dimStyle);
-  y += lineH;
-
+export function castleDigest(room: Room): CastleDigest {
+  const controller = room.controller!;
   const books = Memory.exchequer?.[room.name];
-  if (room.storage) {
-    const stored = room.storage.store[RESOURCE_ENERGY];
-    const trend = books?.trend;
-    const trendText = trend === undefined ? "" : `  (${trend >= 0 ? "+" : ""}${trend.toFixed(1)}/t)`;
-    v.text(`Treasury: ${formatK(stored)}${trendText}`, x, y, dimStyle);
-    y += lineH;
-    const keep = describeKeepPlan(room, stored);
-    if (keep) {
-      v.text(keep, x, y, { ...style, color: "#f2c14e" });
-      y += lineH;
-    }
-  }
-
-  if (books) {
-    const [headline, income, spend] = describeBooks(books);
-    v.text(headline, x, y, { ...style, color: "#f2c14e" });
-    y += lineH;
-    v.text(income.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
-    y += lineH * 0.8;
-    v.text(spend.trim(), x + 0.4, y, { ...dimStyle, font: 0.45 });
-    y += lineH;
-  }
-
-  const counts = countCreepsByRole(room);
-  const [atHome, abroad] = describeCensus(room);
-  if (atHome) {
-    v.text(atHome, x, y, dimStyle);
-    y += lineH;
-  }
-  if (abroad) {
-    v.text(`Abroad: ${abroad}`, x, y, dimStyle);
-    y += lineH;
-  }
-
-  const hostiles = room.find(FIND_HOSTILE_CREEPS);
-  if (hostiles.length > 0) {
-    v.text(`RAIDERS: ${hostiles.length} about the castle`, x, y, warnStyle);
-    y += lineH;
-  }
-
-  const clock = townClock(Game.time);
-  const icon = PHASE_ICON[clock.phase];
-  const folk = counts[ROLE_TOWNSFOLK] ?? 0;
-  const hh = String(clock.hour).padStart(2, "0");
-  const timeOfDay = clock.phase[0].toUpperCase() + clock.phase.slice(1);
-  const season = townSeason(Game.time);
-  const feast = townFeast(Game.time);
-  const storm = townStorm(Game.time) ? ", storm" : "";
-  const moon = isNightfall(clock.phase) ? `, ${TOWN_MOON_NAMES[townMoon(Game.time)]}` : "";
-  const aurora = townAurora(Game.time) ? ", northern lights" : "";
-  const when = `${timeOfDay}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}${moon}${aurora}`;
-  const people = folk > 0 ? `  ·  ${folk} townsfolk` : "";
-  v.text(`${icon} ${when}${people}`, x, y, { ...style, color: "#ffe9a8" });
-  y += lineH;
-
-  const spawn = room.memory.spawnId ? Game.getObjectById(room.memory.spawnId) as StructureSpawn | null : null;
-  if (spawn?.spawning) {
-    const remaining = spawn.spawning.remainingTime;
-    v.text(`Mustering: ${spawn.spawning.name} (${remaining}t)`, x, y, dimStyle);
-  }
+  const stored = room.storage ? room.storage.store[RESOURCE_ENERGY] : null;
+  const [home, abroad] = describeCensus(room);
+  const spawn = room.memory.spawnId ? (Game.getObjectById(room.memory.spawnId) as StructureSpawn | null) : null;
+  return {
+    name: castleName(room.name),
+    level: controller.level,
+    phase: PHASE_LABEL[getRoomPhase(controller.level)],
+    progress: controller.level < 8 && controller.progressTotal > 0 ? controller.progress / controller.progressTotal : null,
+    gold: room.energyAvailable,
+    goldCap: room.energyCapacityAvailable,
+    treasury: stored,
+    trend: books?.trend ?? null,
+    income: books?.in ?? {},
+    spend: books?.out ?? {},
+    keep: (stored !== null && describeKeepPlan(room, stored)) || null,
+    home,
+    abroad,
+    townsfolk: countCreepsByRole(room)[ROLE_TOWNSFOLK] ?? 0,
+    raiders: room.find(FIND_HOSTILE_CREEPS).length,
+    mustering: spawn?.spawning ? { name: spawn.spawning.name, ticks: spawn.spawning.remainingTime } : null,
+  };
 }
 
 // The keep this castle is founding, or saving the gold to found.
@@ -318,26 +261,6 @@ function describeKeepPlan(room: Room, stored: number): string | undefined {
   }
   return undefined;
 }
-
-const CHRONICLE_LINES = 4;
-
-// The latest entries of the Royal Chronicle, newest at the bottom, in the
-// room's lower-left corner.
-function drawChronicle(room: Room): void {
-  const entries = recentChronicle(CHRONICLE_LINES);
-  if (entries.length === 0) return;
-  const v = room.visual;
-  const style: TextStyle = { font: 0.45, align: "left", stroke: "#000000", strokeWidth: 0.06 };
-  let y = 48.6 - entries.length * 0.65;
-  v.text("Royal Chronicle", 0.5, y - 0.15, { ...style, font: 0.5, color: "#f2c14e" });
-  entries.forEach((e, i) => {
-    y += 0.65;
-    const fresh = i === entries.length - 1;
-    v.text(`${chronicleDate(e.t)}: ${e.text}`, 0.5, y, { ...style, color: fresh ? "#ffe9a8" : "#b8a88a" });
-  });
-}
-
-const PHASE_ICON: Record<string, string> = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
 
 // How dark the town gets through the day.
 const NIGHT_SHADE: Record<string, number> = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };

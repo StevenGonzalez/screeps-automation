@@ -27,6 +27,7 @@ import {
   drawMist,
   drawTown,
   scenery,
+  writeDigest,
 } from "../src/orchestrators/orchestrator.visuals";
 import { townDragon, townStorm } from "../src/services/services.town";
 import { SCENERY_BEGIN, SCENERY_END } from "../src/config/config.town";
@@ -92,6 +93,48 @@ describe("census", () => {
     ]);
 
     expect(describeCensus(room)).toEqual(["2 Porters · 1 Barmaid", "1 Dragon Knight · 1 Merchant"]);
+  });
+});
+
+describe("digest", () => {
+  it("writes each castle's state and the latest of the chronicle as JSON for the realm viewer", () => {
+    g.RESOURCE_ENERGY = "energy";
+    g.FIND_HOSTILE_CREEPS = 103;
+    const room = world([creep(ROLE_HAULER, HOME), creep(ROLE_TOWNSFOLK, HOME), creep(ROLE_REMOTE_HAULER, HOME, "W2N1")]);
+    Object.assign(room, {
+      controller: { my: true, level: 6, progress: 300, progressTotal: 1200 },
+      energyAvailable: 1800,
+      energyCapacityAvailable: 2300,
+      storage: { store: { energy: 148200 } },
+      find: () => [{}],
+    });
+    Object.assign(Memory, {
+      exchequer: { [HOME]: { at: 990, in: { mines: 20 }, out: { recruits: 12 }, trend: 3.1 } },
+      chronicle: [{ t: 900, text: "The bells ring" }],
+    });
+
+    writeDigest();
+
+    const digest = JSON.parse(Memory.digest!);
+    expect(digest.castles[HOME]).toEqual({
+      name: "Ravenhold",
+      level: 6,
+      phase: "Established",
+      progress: 0.25,
+      gold: 1800,
+      goldCap: 2300,
+      treasury: 148200,
+      trend: 3.1,
+      income: { mines: 20 },
+      spend: { recruits: 12 },
+      keep: null,
+      home: "1 Porter",
+      abroad: "1 Merchant",
+      townsfolk: 1,
+      raiders: 1,
+      mustering: null,
+    });
+    expect(digest.chronicle).toEqual([{ when: expect.stringMatching(/^Day 1, /), text: "The bells ring" }]);
   });
 });
 

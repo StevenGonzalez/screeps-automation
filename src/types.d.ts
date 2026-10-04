@@ -391,6 +391,42 @@ declare global {
     expansionSavings?: { room: string; target: string };
     empire?: EmpireMemory;
     profileRoles?: boolean;
+    // The castles and chronicle summed up for the realm viewer, as JSON: the
+    // server streams a Memory path only as a string or a number.
+    digest?: string;
+  }
+
+  /** A castle as the realm viewer shows it (see writeDigest). */
+  interface CastleDigest {
+    name: string;
+    level: number;
+    phase: string;
+    // Toward the next level, 0 to 1, or null at the last.
+    progress: number | null;
+    // Gold in the barracks and its stores, and the most they hold.
+    gold: number;
+    goldCap: number;
+    // Gold in the treasury and its change a tick, null without one.
+    treasury: number | null;
+    trend: number | null;
+    // Gold a tick by where it came from and where it went (services.exchequer).
+    income: Partial<Record<string, number>>;
+    spend: Partial<Record<string, number>>;
+    // The keep this castle is founding or saving for, if any.
+    keep: string | null;
+    // The castle's people by title, at home and abroad (describeCensus).
+    home: string;
+    abroad: string;
+    townsfolk: number;
+    raiders: number;
+    mustering: { name: string; ticks: number } | null;
+  }
+
+  interface RealmDigest {
+    time: number;
+    castles: Record<string, CastleDigest>;
+    // The latest entries of the Royal Chronicle, newest last.
+    chronicle: Array<{ when: string; text: string }>;
   }
 
   interface UnclaimTarget {
