@@ -9610,6 +9610,14 @@ function depositEnergy(creep, homeRoom) {
             creep.moveTo(tower, { reusePath: 50 });
         return;
     }
+    const upgradeId = creep.room.memory.upgradeContainerId;
+    const upgradeContainer = upgradeId ? Game.getObjectById(upgradeId) : null;
+    if (upgradeContainer && upgradeContainer.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+        if (creep.transfer(upgradeContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            creep.moveTo(upgradeContainer, { reusePath: 50 });
+        }
+        return;
+    }
     putSurplusEnergyToWork(creep);
 }
 function moveToRoom$5(creep, targetRoom) {
