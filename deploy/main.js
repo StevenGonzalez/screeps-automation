@@ -11013,6 +11013,8 @@ function getRemoteHaulPlans(room) {
         const carryPerHauler = paved ? carryPaved : carryOnFoot;
         let requiredCarry = 0;
         for (const src of remote.sources) {
+            if (raisingWaystation(src))
+                continue;
             requiredCarry += remoteHaulCarry(output, getRemoteSourceDistance(room, remote, src));
         }
         const carry = requiredCarry * REMOTE_HAUL_MARGIN;
@@ -11021,6 +11023,16 @@ function getRemoteHaulPlans(room) {
         plans[remote.roomName] = { count, carryEach, paved };
     }
     return plans;
+}
+function raisingWaystation(src) {
+    if (src.containerId && Game.getObjectById(src.containerId))
+        return false;
+    const source = Game.getObjectById(src.sourceId);
+    if (!source)
+        return false;
+    return (source.pos.findInRange(FIND_MY_CONSTRUCTION_SITES, 1, {
+        filter: (s) => s.structureType === STRUCTURE_CONTAINER,
+    }).length > 0);
 }
 function getRemoteHaulerTarget(room) {
     return Object.values(getRemoteHaulPlans(room)).reduce((a, p) => a + p.count, 0);
