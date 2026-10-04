@@ -171,10 +171,7 @@ function depositEnergy(creep: Creep, homeRoom: string) {
 
   const storage = creep.room.storage;
   if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-    const load = Math.min(creep.store[RESOURCE_ENERGY], storage.store.getFreeCapacity(RESOURCE_ENERGY));
-    const res = creep.transfer(storage, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) creep.moveTo(storage, { reusePath: 50 });
-    else if (res === OK) cryHaul(creep, load);
+    unload(creep, storage);
     return;
   }
 
@@ -186,9 +183,7 @@ function depositEnergy(creep: Creep, homeRoom: string) {
       (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > 0,
   });
   if (fillTargets.length > 0) {
-    const target = creep.pos.findClosestByRange(fillTargets)!;
-    const res = creep.transfer(target, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) creep.moveTo(target, { reusePath: 50 });
+    unload(creep, creep.pos.findClosestByRange(fillTargets)! as AnyStoreStructure);
     return;
   }
 
@@ -198,9 +193,7 @@ function depositEnergy(creep: Creep, homeRoom: string) {
       s.store.getFreeCapacity(RESOURCE_ENERGY) > 0,
   }) as StructureTower[];
   if (towers.length > 0) {
-    const tower = creep.pos.findClosestByRange(towers)!;
-    const res = creep.transfer(tower, RESOURCE_ENERGY);
-    if (res === ERR_NOT_IN_RANGE) creep.moveTo(tower, { reusePath: 50 });
+    unload(creep, creep.pos.findClosestByRange(towers)!);
     return;
   }
 
@@ -212,13 +205,22 @@ function depositEnergy(creep: Creep, homeRoom: string) {
   const upgradeId = creep.room.memory.upgradeContainerId;
   const upgradeContainer = upgradeId ? Game.getObjectById(upgradeId) : null;
   if (upgradeContainer && upgradeContainer.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-    if (creep.transfer(upgradeContainer, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
-      creep.moveTo(upgradeContainer, { reusePath: 50 });
-    }
+    unload(creep, upgradeContainer);
     return;
   }
 
   putSurplusEnergyToWork(creep);
+}
+
+// Hands over the load and calls out the gold brought home once it lands. Only
+// a load put in storage used to be called out and counted, so the merchants of
+// a keep with no storage yet were never heard, and none of them could ever
+// retire with the richest haul.
+function unload(creep: Creep, target: AnyStoreStructure): void {
+  const load = Math.min(creep.store[RESOURCE_ENERGY], target.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0);
+  const res = creep.transfer(target, RESOURCE_ENERGY);
+  if (res === ERR_NOT_IN_RANGE) creep.moveTo(target, { reusePath: 50 });
+  else if (res === OK) cryHaul(creep, load);
 }
 
 function moveToRoom(creep: Creep, targetRoom: string) {

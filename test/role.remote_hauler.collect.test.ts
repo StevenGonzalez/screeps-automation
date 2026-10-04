@@ -179,4 +179,25 @@ describe("remote hauler at home", () => {
     expect(c.transfer).toHaveBeenCalledWith(throne, "energy");
     expect(c.moveTo).toHaveBeenCalledWith(throne, expect.anything());
   });
+
+  it("calls out and counts the gold it hands to a keep with no storage", () => {
+    const extension = { structureType: "extension", store: { getFreeCapacity: () => 50 } };
+    const c = hauler() as unknown as Record<string, unknown>;
+    Object.assign(c, {
+      room: {
+        name: HOME,
+        memory: {},
+        find: (_type: number, opts?: { filter: (s: unknown) => boolean }) =>
+          [extension].filter((s) => !opts || opts.filter(s)),
+      },
+      pos: { findClosestByRange: (targets: unknown[]) => targets[0] },
+      memory: { ...(c.memory as CreepMemory), working: true, hauled: 1000 },
+      store: { energy: 350, getFreeCapacity: () => 0 },
+      transfer: vi.fn(() => g.OK),
+    });
+    runRemoteHauler(c as unknown as Creep);
+    expect(c.transfer).toHaveBeenCalledWith(extension, "energy");
+    expect(cryFor(c as unknown as Creep)).toBe("+50 gold");
+    expect((c.memory as CreepMemory).hauled).toBe(1050);
+  });
 });
