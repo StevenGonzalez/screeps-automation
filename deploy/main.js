@@ -840,6 +840,7 @@ const TOWN_PHASES = [
     { name: "night", start: 700 },
 ];
 const TOWN_DAYS_PER_SEASON = 7;
+const TOWN_STORM_ODDS = 5;
 const TOWN_SEASONS = ["spring", "summer", "autumn", "winter"];
 const TOWN_FEASTS = {
     spring: "Sowing Feast",
@@ -876,6 +877,12 @@ function townSeason(time) {
 function townFeast(time) {
     const day = Math.floor(time / TOWN_DAY_LENGTH);
     return day % TOWN_DAYS_PER_SEASON === 0 ? TOWN_FEASTS[townSeason(time)] : undefined;
+}
+function townStorm(time) {
+    if (townFeast(time) || townSeason(time) === "winter")
+        return false;
+    const day = Math.floor(time / TOWN_DAY_LENGTH);
+    return (Math.imul(day, 2654435761) >>> 16) % TOWN_STORM_ODDS === 0;
 }
 function isNightfall(phase) {
     return phase === "dusk" || phase === "night";
@@ -11170,6 +11177,7 @@ const SEASON_CALLS = {
     autumn: ["harvest!", "cider time", "leaves down"],
     winter: ["brr!", "snow again", "stoke fires"],
 };
+const STORM_CALLS = ["storm!", "bar doors", "rain again"];
 const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
 const FEAST_CHEER_PERIOD = 100;
 function runTownsfolk(creep) {
@@ -11242,8 +11250,10 @@ function callThePhase(creep) {
         lines = FEAST_CALLS;
     else if (!phase)
         return;
+    else if (phase.name !== "day")
+        lines = PHASE_CALLS[phase.name];
     else
-        lines = phase.name === "day" ? SEASON_CALLS[townSeason(Game.time)] : PHASE_CALLS[phase.name];
+        lines = townStorm(Game.time) ? STORM_CALLS : SEASON_CALLS[townSeason(Game.time)];
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
@@ -11894,6 +11904,7 @@ const SEASON_CHATTER = {
     winter: ["brr!", "cold feet", "snow!"],
 };
 const FEAST_CHATTER = ["feast!", "ale!", "fair day!"];
+const STORM_CHATTER = ["rain!", "soaked!", "thunder!"];
 const WEATHER_EVERY = 4;
 const SAY_PERIOD = 30;
 function chatterLine(creep) {
@@ -11906,7 +11917,11 @@ function chatterLine(creep) {
     const eventNo = (Game.time + hash) / SAY_PERIOD;
     const pick = Math.abs(eventNo + hash);
     if (pick % WEATHER_EVERY === 0) {
-        const weather = townFeast(Game.time) ? FEAST_CHATTER : SEASON_CHATTER[townSeason(Game.time)];
+        const weather = townFeast(Game.time)
+            ? FEAST_CHATTER
+            : townStorm(Game.time)
+                ? STORM_CHATTER
+                : SEASON_CHATTER[townSeason(Game.time)];
         return weather[(pick / WEATHER_EVERY) % weather.length];
     }
     const lines = (_a = ROLE_CHATTER[creep.memory.role]) !== null && _a !== void 0 ? _a : GENERAL_CHATTER;
@@ -18073,7 +18088,8 @@ function drawRoomHUD(room) {
         const phase = clock.phase[0].toUpperCase() + clock.phase.slice(1);
         const season = townSeason(Game.time);
         const feast = townFeast(Game.time);
-        const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}`;
+        const storm = townStorm(Game.time) ? ", storm" : "";
+        const when = `${phase}, ${hh}:00 in ${season}${feast ? `, ${feast}` : ""}${storm}`;
         v.text(`${icon} ${when}  ${folk} townsfolk`, x, y, { ...style, color: "#ffe9a8" });
         y += lineH;
     }
@@ -18154,6 +18170,9 @@ const SEASON_DRIFT = {
     autumn: { count: 14, colours: ["#d9822b", "#a0522d", "#c9a227"], radius: 0.13, fall: 0.18 },
     winter: { count: 30, colours: ["#ffffff"], radius: 0.08, fall: 0.25 },
 };
+const RAINDROPS = 40;
+const RAIN_FALL = 1.4;
+const LIGHTNING_EVERY = 37;
 const FIREFLIES = 8;
 const LANTERNS = 12;
 const LANTERN_COLOURS = ["#ff6b4a", "#ffd27f", "#7fd4ff"];
@@ -18175,6 +18194,10 @@ function drawSeason(room, time = Game.time) {
             });
         }
         v.text(feast, x, y + 3.2, { font: 0.5, color: "#ffd27f", stroke: "#000000", strokeWidth: 0.06 });
+    }
+    if (townStorm(time)) {
+        drawStorm(v, time);
+        return;
     }
     const tint = SEASON_TINT[season];
     if (tint)
@@ -18202,6 +18225,24 @@ function drawSeason(room, time = Game.time) {
             opacity: 0.2 + 0.7 * glow,
         });
     }
+}
+function drawStorm(v, time) {
+    v.rect(-0.5, -0.5, 50, 50, { fill: "#334455", opacity: 0.12 });
+    for (let i = 0; i < RAINDROPS; i++) {
+        const x = ((i * 0.7548776662) % 1) * 49 + 0.5;
+        const y = ((time * RAIN_FALL + ((i * 0.5698402910) % 1) * 52) % 52) - 1;
+        v.line(x, y, x - 0.25, y + 0.7, { color: "#9fb8d0", width: 0.04, opacity: 0.5 });
+    }
+    if (time % LIGHTNING_EVERY !== 0)
+        return;
+    v.rect(-0.5, -0.5, 50, 50, { fill: "#ffffff", opacity: 0.15 });
+    let x = 5 + ((time * 7) % 40);
+    const bolt = [[x, -0.5]];
+    for (let y = 4; y <= 20; y += 4) {
+        x += ((time + y) % 3) - 1;
+        bolt.push([x, y]);
+    }
+    v.poly(bolt, { stroke: "#fffbe0", strokeWidth: 0.15, opacity: 0.9 });
 }
 function drawTown(room) {
     const town = room.memory.town;
