@@ -144,6 +144,10 @@ const FEAST_CHATTER = ["feast!", "ale!", "fair day!"];
 const STORM_CHATTER = ["rain!", "soaked!", "thunder!"];
 const WEATHER_EVERY = 4;
 
+// In its last ticks a creep talks of little but its end.
+const ELDER_TICKS = 150;
+const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
+
 const SAY_PERIOD = 30;
 
 // What a creep says this tick unprompted, if anything: a line every
@@ -165,7 +169,8 @@ export function chatterLine(creep: Creep): string | undefined {
   // As often again, the realm's latest news while it is fresh.
   const news = pick % WEATHER_EVERY === WEATHER_EVERY / 2 ? gossip() : undefined;
   if (news) return news;
-  const lines = ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER;
+  const elder = (creep.ticksToLive ?? Infinity) <= ELDER_TICKS;
+  const lines = elder ? ELDER_CHATTER : (ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER);
   return lines[pick % lines.length];
 }
 
