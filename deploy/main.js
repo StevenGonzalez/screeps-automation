@@ -1963,7 +1963,15 @@ function heraldWaystation(creep, site) {
     if (!home)
         return;
     const wilds = wildsName(site.pos.roomName);
-    const second = creep.room.find(FIND_STRUCTURES).some((s) => s.structureType === STRUCTURE_CONTAINER);
+    const theirs = new Set();
+    for (const name in Game.creeps) {
+        const mem = Game.creeps[name].memory;
+        if (mem.homeRoom !== home && mem.assignedContainerId)
+            theirs.add(mem.assignedContainerId);
+    }
+    const second = creep.room
+        .find(FIND_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_CONTAINER && !theirs.has(s.id));
     const fresh = tally(`waystation:${site.id}`, 0, () => second
         ? `${creep.name} raised a second waystation in the ${wilds}, so the merchants of ${castleName(home)} load at both its diggings.`
         : `${creep.name} raised a waystation in the ${wilds}. No more of ${castleName(home)}'s gold rots in the mud.`, CREEP_LIFE_TIME);
@@ -15667,7 +15675,7 @@ function needsReservation(room, roomName) {
         return true;
     return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
 }
-function reservedByAnotherCastle(room, roomName) {
+function sharedWithBiggerCastle(room, roomName) {
     var _a;
     for (const name in Game.rooms) {
         const other = Game.rooms[name];
@@ -15675,7 +15683,7 @@ function reservedByAnotherCastle(room, roomName) {
             continue;
         const bigger = other.energyCapacityAvailable > room.energyCapacityAvailable ||
             (other.energyCapacityAvailable === room.energyCapacityAvailable && other.name < room.name);
-        if (bigger && getActiveRemoteRooms(other, "reserve").some((r) => r.roomName === roomName))
+        if (bigger && getPickedRemoteRoomNames(other).has(roomName))
             return true;
     }
     return false;
@@ -15690,7 +15698,7 @@ function findReserverTarget(room) {
     for (const r of getActiveRemoteRooms(room, "reserve")) {
         if (covered.has(r.roomName) || !needsReservation(room, r.roomName))
             continue;
-        if (!reservedByAnotherCastle(room, r.roomName))
+        if (!sharedWithBiggerCastle(room, r.roomName))
             return r.roomName;
     }
     return null;
@@ -16882,7 +16890,7 @@ function findRemoteInvaderTarget(room) {
     for (const r of remotes) {
         if (r.invaderUntil === undefined || r.invaderUntil <= Game.time)
             continue;
-        if (!worked.has(r.roomName))
+        if (!worked.has(r.roomName) || sharedWithBiggerCastle(room, r.roomName))
             continue;
         const defending = getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName).length;
         if (defending < remoteKnightsNeeded(room, r))
