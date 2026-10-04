@@ -262,6 +262,8 @@ declare global {
     heraldLevel?: number;
     // Count of each notable structure type the herald last saw (services.herald).
     heraldWorks?: Record<string, number>;
+    // Set once a new keep's first creep of its own was proclaimed (services.herald).
+    heraldBorn?: boolean;
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];

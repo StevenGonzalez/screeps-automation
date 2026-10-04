@@ -5,6 +5,7 @@ g.EVENT_ATTACK = 1;
 g.EVENT_OBJECT_DESTROYED = 2;
 g.FIND_HOSTILE_CREEPS = 103;
 g.FIND_MY_STRUCTURES = 108;
+g.FIND_MY_SPAWNS = 112;
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
 g.WORK = "work";
@@ -368,6 +369,59 @@ describe("herald", () => {
       `${lordName("Tigga")} seizes ${wilds} from ${lordName("Jumpp")}.`,
       `The keep of ${lordName("Tigga")} in ${wilds} lies abandoned.`,
     ]);
+  });
+
+  it("rings the bells once for the first creep a new keep raises itself", () => {
+    const spawn: { spawning: { name: string } | null } = { spawning: null };
+    const room = {
+      ...roomWith([], { my: true, level: 1 }),
+      find: (type: number) => (type === g.FIND_MY_SPAWNS ? [spawn] : []),
+    };
+    // Marked spawning so the fallen roll call leaves them be.
+    const pilgrim = Object.assign(new FakeCreep("Pilgrim Osric", { name: ROOM }), {
+      spawning: true,
+      memory: { role: "pilgrim", homeRoom: "W2N1" } as CreepMemory,
+    });
+    const born = Object.assign(new FakeCreep("Villager Aldric", { name: ROOM }), {
+      spawning: true,
+      memory: { role: "villager", homeRoom: ROOM } as CreepMemory,
+    });
+    (g.Memory as Memory).expansion = { roomName: ROOM, homeRoom: "W2N1", phase: "bootstrapping" } as Memory["expansion"];
+    const run = (time: number) => {
+      g.Game = {
+        time,
+        gcl: { level: 1 },
+        market: NO_TRADE,
+        rooms: { [ROOM]: room },
+        creeps: spawn.spawning ? { [pilgrim.name]: pilgrim, [born.name]: born } : { [pilgrim.name]: pilgrim },
+        getObjectById: () => null,
+      };
+      heraldRooms();
+    };
+    run(900);
+    spawn.spawning = { name: born.name };
+    run(901);
+    expect(cryFor(pilgrim as unknown as Creep)).toBe("Huzzah!");
+    run(902);
+
+    const lines = ((g.Memory as Memory).chronicle ?? []).map((l) => l.text).filter((t) => t.includes("bells"));
+    expect(lines).toEqual([`The bells of ${castleName(ROOM)} ring for the first born in its own barracks: Villager Aldric.`]);
+  });
+
+  it("passes quietly over a new keep that already has creeps of its own", () => {
+    const room = {
+      ...roomWith([], { my: true, level: 2 }),
+      find: (type: number) => (type === g.FIND_MY_SPAWNS ? [{ spawning: { name: "Porter Bran" } }] : []),
+    };
+    const elder = Object.assign(new FakeCreep("Villager Aldric", { name: ROOM }), {
+      spawning: true,
+      memory: { role: "villager", homeRoom: ROOM } as CreepMemory,
+    });
+    (g.Memory as Memory).expansion = { roomName: ROOM, homeRoom: "W2N1", phase: "bootstrapping" } as Memory["expansion"];
+    g.Game = { time: 950, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: { [elder.name]: elder }, getObjectById: () => null };
+    heraldRooms();
+    expect(((g.Memory as Memory).chronicle ?? []).filter((l) => l.text.includes("bells"))).toEqual([]);
+    expect(room.memory.heraldBorn).toBe(true);
   });
 
   it("chronicles the northern lights once, as night falls", () => {

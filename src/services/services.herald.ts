@@ -56,6 +56,7 @@ export function heraldRooms(): void {
     if (room.controller?.my) {
       castles.push(room);
       heraldRise(room);
+      heraldFirstBorn(room);
       heraldVisitors(room);
       heraldWorks(room);
     }
@@ -264,6 +265,22 @@ function heraldRise(room: Room): void {
   if (known === undefined || level <= known) return;
   roomCries[room.name] = "Long live!";
   chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+}
+
+// Until a new keep's barracks raises a creep of its own, everyone in it was sent
+// from elsewhere. Its first is proclaimed once; a keep whose firstborn came
+// before this was proclaimed (another of its own is already alive) passes
+// quietly.
+function heraldFirstBorn(room: Room): void {
+  if (Memory.expansion?.roomName !== room.name || room.memory.heraldBorn) return;
+  const birth = room.find(FIND_MY_SPAWNS).find((s) => s.spawning)?.spawning;
+  if (!birth) return;
+  room.memory.heraldBorn = true;
+  for (const name in Game.creeps) {
+    if (name !== birth.name && Game.creeps[name].memory.homeRoom === room.name) return;
+  }
+  roomCries[room.name] = "Huzzah!";
+  chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
 }
 
 // A fight's kills in one room gather into one line while it lasts.
