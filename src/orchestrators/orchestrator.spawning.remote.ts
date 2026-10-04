@@ -315,8 +315,6 @@ const remotePickCache: Record<
     tick: number;
     remotes: RemoteRoomData[] | undefined;
     picked: Map<string, number>;
-    // Tick each source was last picked.
-    pickedAt: Record<string, number>;
   }
 > = {};
 
@@ -324,8 +322,8 @@ const remotePickCache: Record<
 // eligible source is ranked by net energy per tick and taken best first while
 // the home's spawn time covers it, up to MAX_REMOTE_SOURCES. A source that
 // costs more than it earns is never taken. On a low CPU bucket only sources
-// that already have a miner stay in, and the CPU governor's set-aside sources
-// are left out altogether.
+// already worked stay in, and the CPU governor's set-aside sources are left out
+// altogether.
 function pickRemoteSources(room: Room): Map<string, number> {
   const cached = remotePickCache[room.name];
   if (cached && cached.tick === Game.time && cached.remotes === room.memory.remoteRooms) {
@@ -345,43 +343,46 @@ function pickRemoteSources(room: Room): Map<string, number> {
   const minedElsewhere = new Set(
     peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId)
   );
-  const plans: Array<{ sourceId: string; profit: number; spawnTime: number }> = [];
-  for (const r of room.memory.remoteRooms ?? []) {
-    if (!isRemoteEligible(room, r, "reserve", true)) continue;
-    for (const s of r.sources) {
-      if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId)) continue;
-      if (lowCpu && !mined.has(s.sourceId)) continue;
-      const plan = planRemoteSource(room, r, s);
-      if (plan.profit > 0) plans.push({ sourceId: s.sourceId, ...plan });
-    }
-  }
-  plans.sort((a, b) => b.profit - a.profit);
-
   // The budget counts live creeps, so it breathes as home creeps die and are
   // replaced. A source picked in the last REMOTE_PICK_HOLD ticks stays while it
   // fits; any other has to fit with REMOTE_PICK_HEADROOM to spare, so that
   // breathing does not keep adding and dropping the marginal one. Only the tick
   // before used to count, and fifty ticks of rivals in the Witch Weald lost it
   // to Embercrag, whose spare spawn time fell short of the headroom. A peddler
-  // left on a source that was dropped does not hold it. Only after a global
-  // reset, with no recent picks, do the miners stand in for them.
-  const fresh = cached !== undefined && Game.time - cached.tick <= REMOTE_PICK_HOLD;
-  const pickedAt = fresh ? cached.pickedAt : {};
+  // left on a source that was dropped does not hold it. The tick of the last
+  // pick is kept in memory: kept on the heap, it was lost on every global
+  // reset, and a source whose peddler raiders had just killed lost its place
+  // with it. Grimford and Embercrag each lost a source of a remote that way.
+  const held = (s: RemoteSourceData) =>
+    s.pickedAt === undefined ? mined.has(s.sourceId) : Game.time - s.pickedAt <= REMOTE_PICK_HOLD;
+  const plans: Array<{ source: RemoteSourceData; profit: number; spawnTime: number }> = [];
+  for (const r of room.memory.remoteRooms ?? []) {
+    if (!isRemoteEligible(room, r, "reserve", true)) continue;
+    for (const s of r.sources) {
+      if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId)) continue;
+      if (lowCpu && !mined.has(s.sourceId) && !held(s)) continue;
+      const plan = planRemoteSource(room, r, s);
+      if (plan.profit > 0) plans.push({ source: s, ...plan });
+    }
+  }
+  plans.sort((a, b) => b.profit - a.profit);
+
   const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
   let budget = remoteSpawnBudget(room);
   const picked = new Map<string, number>();
   for (const p of plans) {
     if (picked.size >= MAX_REMOTE_SOURCES) break;
-    const held = fresh
-      ? Game.time - (pickedAt[p.sourceId] ?? -Infinity) <= REMOTE_PICK_HOLD
-      : mined.has(p.sourceId as Id<Source>);
-    const reserve = held ? 0 : headroom;
-    if (p.spawnTime > budget - reserve) continue;
+    const reserve = held(p.source) ? 0 : headroom;
+    if (p.spawnTime > budget - reserve) {
+      // Marked as weighed and not picked, so its peddler no longer stands in.
+      p.source.pickedAt ??= 0;
+      continue;
+    }
     budget -= p.spawnTime;
-    picked.set(p.sourceId, picked.size);
-    pickedAt[p.sourceId] = Game.time;
+    picked.set(p.source.sourceId, picked.size);
+    p.source.pickedAt = Game.time;
   }
-  remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked, pickedAt };
+  remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
   return picked;
 }
 

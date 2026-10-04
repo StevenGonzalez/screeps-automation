@@ -172,6 +172,8 @@ declare global {
     pathTick?: number;
     // The path's tiles inside the remote room, "x,y" joined by ";".
     roadTiles?: string;
+    // The last tick this home picked the source to work.
+    pickedAt?: number;
   }
 
   interface RemoteRoomData {

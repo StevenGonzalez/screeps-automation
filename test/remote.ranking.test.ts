@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_SPAWNS = 108;
@@ -209,6 +209,25 @@ describe("remote source ranking", () => {
     const miner = creep(ROLE_REMOTE_MINER, 9, { targetRoom: "W6N5", remoteSourceId: "W6N5-s0" as Id<Source> });
     const room = home({ remotes, spawns: 3, creeps: [miner], bucket: 1000 });
     expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W6N5-s0"]);
+  });
+
+  it("keeps a source on a low CPU bucket while its slain peddler is replaced", () => {
+    const remotes = [remote("W4N5", [30])];
+    const miner = creep(ROLE_REMOTE_MINER, 9, { targetRoom: "W4N5", remoteSourceId: "W4N5-s0" as Id<Source> });
+    expect(sourceIds(getActiveRemoteRooms(home({ remotes, creeps: [miner] })))).toEqual(["W4N5-s0"]);
+    clock += 1;
+    expect(sourceIds(getActiveRemoteRooms(home({ remotes, bucket: 1000 })))).toEqual(["W4N5-s0"]);
+  });
+
+  it("keeps a source it works through a global reset, though its peddler is gone", async () => {
+    const remotes = [remote("W4N5", [30])];
+    const busy = (n: number) => Array.from({ length: n }, () => creep(ROLE_UPGRADER, 16));
+    expect(sourceIds(getActiveRemoteRooms(home({ remotes, creeps: busy(14) })))).toEqual(["W4N5-s0"]);
+    clock += 1;
+    vi.resetModules();
+    const reset = await import("../src/orchestrators/orchestrator.spawning.remote");
+    // Spare enough for the source, but not with the headroom a new one needs.
+    expect(sourceIds(reset.getActiveRemoteRooms(home({ remotes, creeps: busy(18) })))).toEqual(["W4N5-s0"]);
   });
 });
 
