@@ -792,12 +792,6 @@ export function buildRemoteHaulerBody(
   return body;
 }
 
-function getReserversForRoom(homeRoom: Room): Creep[] {
-  return getCreepsByRole(ROLE_RESERVER).filter(
-    (c) => c.memory.homeRoom === homeRoom.name
-  );
-}
-
 // Top up a reservation before it runs low rather than holding it at the cap:
 // a reservation only builds while a reserver stands on the controller.
 const RESERVATION_TOP_UP_TICKS = 1500;
@@ -813,17 +807,35 @@ function needsReservation(room: Room, roomName: string): boolean {
   return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
 }
 
+// A remote two castles both work, each a source of its own, is reserved by the
+// one that raises the bigger envoy, and the other leaves it be. Each would have
+// sent an envoy as the reservation ran low: Embercrag and Thornbarrow share the
+// Crow Glen once Thornbarrow reaches level 3. Envoys from either castle cover
+// the room, so a change in which castle that is sends no second one.
+function reservedByAnotherCastle(room: Room, roomName: string): boolean {
+  for (const name in Game.rooms) {
+    const other = Game.rooms[name];
+    if (other === room || !other.controller?.my || other.controller.level < 3) continue;
+    const bigger =
+      other.energyCapacityAvailable > room.energyCapacityAvailable ||
+      (other.energyCapacityAvailable === room.energyCapacityAvailable && other.name < room.name);
+    if (bigger && getActiveRemoteRooms(other, "reserve").some((r) => r.roomName === roomName)) return true;
+  }
+  return false;
+}
+
 function findReserverTarget(room: Room): string | null {
   if ((room.controller?.level ?? 0) < 3) return null;
   // A reserver about to die no longer covers its room, so its replacement is
   // ordered while it still works, the same way remote miners are.
   const covered = new Set(
-    getReserversForRoom(room)
-      .filter((c) => !isRemoteCreepRetiring(room, c))
+    getCreepsByRole(ROLE_RESERVER)
+      .filter((c) => !isRemoteCreepRetiring(Game.rooms[c.memory.homeRoom ?? ""] ?? room, c))
       .map((c) => c.memory.targetRoom)
   );
   for (const r of getActiveRemoteRooms(room, "reserve")) {
-    if (!covered.has(r.roomName) && needsReservation(room, r.roomName)) return r.roomName;
+    if (covered.has(r.roomName) || !needsReservation(room, r.roomName)) continue;
+    if (!reservedByAnotherCastle(room, r.roomName)) return r.roomName;
   }
   return null;
 }
