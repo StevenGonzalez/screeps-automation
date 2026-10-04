@@ -42,12 +42,15 @@ import {
 // A remote post is a long walk from the spawn, so its replacement has to be
 // ordered that much earlier. The outgoing creep's own body is a good stand-in
 // for the size of the one that relieves it, and its own walk out, once it has
-// made one, for the time the relief takes on the road: a path counts tiles, not
-// the ticks a heavy body spends on each.
+// made one, for the time the relief takes on the road. The path is only a
+// guess: it counts tiles, not the ticks a heavy body spends on each, and an
+// envoy's is measured to the sources, not the controller. The Misty Thicket's
+// envoy took 82 ticks where the path said 34, and the Bleak Vale's 52 where
+// it said 96.
 function isRemoteCreepRetiring(home: Room, creep: Creep): boolean {
   const target = creep.memory.targetRoom;
   if (!target) return false;
-  const travel = Math.max(remoteTravelTicks(home, target, creep.memory.remoteSourceId), creep.memory.walk ?? 0);
+  const travel = creep.memory.walk || remoteTravelTicks(home, target, creep.memory.remoteSourceId);
   const queue = creep.memory.role === ROLE_RESERVER ? reservationQueueMargin(home, target) : 0;
   return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + queue);
 }

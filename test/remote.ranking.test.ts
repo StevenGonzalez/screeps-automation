@@ -543,7 +543,7 @@ describe("relieving a peddler", () => {
     expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(150, 170)] }))).toBe(true);
   });
 
-  it("never orders it later than the path says", () => {
+  it("orders it by the path when the walk out went unmeasured", () => {
     expect(shouldSpawnRemoteMiner(home({ remotes: [remote("W4N5", [96])], creeps: [peddler(126, 0)] }))).toBe(true);
   });
 });
@@ -569,6 +569,14 @@ describe("relieving an envoy", () => {
   it("orders it by the walk alone while the reservation can outlast the wait", () => {
     const room = home({ remotes: [remote("W4N5", [40])], creeps: [envoy(120)] });
     expect(shouldSpawnReserver(reserved(room, 1000))).toBe(false);
+  });
+
+  it("orders it by the envoy's own walk to the controller, even one shorter than the path", () => {
+    // 6 + 20 + 78 = 104.
+    const walked = envoy(110);
+    walked.memory.walk = 20;
+    const room = home({ remotes: [remote("W4N5", [40])], creeps: [walked] });
+    expect(shouldSpawnReserver(reserved(room, 1))).toBe(false);
   });
 
   it("counts what the reservation has banked against the wait", () => {
