@@ -20,7 +20,7 @@ const { runMiner } = await import("../src/roles/role.miner");
 function coMiner(carried: number) {
   const calls: string[] = [];
   const source = { id: "src", pos: sourcePos };
-  const container = { id: "box", pos: containerPos };
+  const container = { id: "box", pos: { ...containerPos, lookFor: () => [{}] } };
   g.Game = { getObjectById: (id: string) => ({ src: source, box: container })[id] ?? null };
   const creep = {
     room: { name: "W1N1" },
@@ -43,7 +43,8 @@ class Pos {
   isEqualTo(p: { x: number; y: number }) {
     return p.x === this.x && p.y === this.y;
   }
-  isNearTo(p: { x: number; y: number }) {
+  isNearTo(t: { x: number; y: number } | { pos: { x: number; y: number } }) {
+    const p = "pos" in t ? t.pos : t;
     return Math.max(Math.abs(p.x - this.x), Math.abs(p.y - this.y)) <= 1;
   }
   lookFor(type: string) {
@@ -61,7 +62,7 @@ const open = new Set(["21,15", "21,16", "19,17", "20,15"]);
 
 // A miner come to share the post, standing at 22,16: beside the container, out
 // of the source's reach.
-function newcomer() {
+function newcomer(at = new Pos(22, 16)) {
   const moves: Array<{ x: number; y: number }> = [];
   const room = { name: "W1N1", getTerrain: () => ({ get: (x: number, y: number) => (open.has(`${x},${y}`) ? 0 : 1) }) };
   const source = { id: "src", pos: new Pos(sourcePos.x, sourcePos.y), room };
@@ -70,7 +71,7 @@ function newcomer() {
   const creep = {
     room,
     memory: { role: "miner", assignedSourceId: "src", assignedContainerId: "box" },
-    pos: new Pos(22, 16),
+    pos: at,
     store: { energy: 0, getFreeCapacity: () => 50 },
     getActiveBodyparts: () => 3,
     moveTo: (t: { x: number; y: number }) => { moves.push({ x: t.x, y: t.y }); return 0; },
@@ -93,6 +94,13 @@ describe("a miner come to share a post", () => {
     const { creep, moves } = newcomer();
     runMiner(creep);
     expect(moves).toEqual([{ x: 21, y: 15 }]);
+  });
+
+  it("keeps its seat beside the source while the container's tile is held", () => {
+    held = new Set(["21,15", "21,16"]);
+    const { creep, moves } = newcomer(new Pos(21, 16));
+    runMiner(creep);
+    expect(moves).toEqual([]);
   });
 });
 

@@ -39,9 +39,13 @@ export function runMiner(creep: Creep) {
       if (!creep.pos.isEqualTo(container.pos)) {
         // A miner sharing a post digs from another tile beside the source while
         // the container's tile is held. Walking at the container, it stopped
-        // short beside it, out of the source's reach.
-        const held = !creep.pos.isNearTo(source) && container.pos.lookFor(LOOK_CREEPS).length > 0;
-        creep.moveTo((held && freeSeat(source, container)) || container.pos, { reusePath: 50 });
+        // short beside it, out of the source's reach; once seated, it stepped
+        // off its seat again and back each tick, digging only every other one.
+        const held = container.pos.lookFor(LOOK_CREEPS).length > 0;
+        if (!held) creep.moveTo(container.pos, { reusePath: 50 });
+        else if (!creep.pos.isNearTo(source)) {
+          creep.moveTo(freeSeat(source, container) ?? container.pos, { reusePath: 50 });
+        }
         // Moving and harvesting are separate intents, so the walk out costs the
         // room nothing once the creep is already beside the source. This matters
         // while a replacement overlaps the miner it relieves and cannot reach
