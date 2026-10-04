@@ -95,6 +95,19 @@ describe("remote source ranking", () => {
     expect(getActiveRemoteRooms(room).map((r) => r.roomName)).toEqual(["W4N5", "W6N5"]);
   });
 
+  it("costs a three-CLAIM envoy by the reservation it banks", () => {
+    const room = home({ remotes: [] });
+    (room as { energyCapacityAvailable: number }).energyCapacityAvailable = 2300;
+    const r = remote("W4N5", [40]);
+    // 10 gold a tick, less the 800-gold miner and 19.2 CARRY of merchants at
+    // 100 gold each a lifetime, 0.5 a tick of container upkeep, and the
+    // 1,950-gold envoy once every 3 x 560 ticks: three CLAIM bank two ticks of
+    // reservation for each of the 560 it works after its walk out. Bought every
+    // 600 ticks, it cost 3.25 a tick.
+    const upkeep = 800 / 1500 + (19.2 * 100) / 1500 + 0.5 + 1950 / (3 * 560);
+    expect(planRemoteSource(room, r, r.sources[0]).profit).toBeCloseTo(10 - upkeep, 3);
+  });
+
   it("earns more from a near source than a far one", () => {
     const room = home({ remotes: [] });
     const near = planRemoteSource(room, remote("W4N5", [30]), remote("W4N5", [30]).sources[0]);
@@ -137,7 +150,7 @@ describe("remote source ranking", () => {
   });
 
   it("takes on no new remote in a dip of one or two home creeps", () => {
-    // The source fits the budget by 190 ticks, under two creeps of 33 parts.
+    // The source fits the budget by 204 ticks, short of the headroom a new one needs.
     const remotes = [remote("W4N5", [30])];
     const busy = Array.from({ length: 18 }, () => creep(ROLE_UPGRADER, 16));
     expect(getActiveRemoteRooms(home({ remotes, creeps: busy }))).toEqual([]);
@@ -157,7 +170,7 @@ describe("remote source ranking", () => {
     const busy = (n: number) => Array.from({ length: n }, () => creep(ROLE_UPGRADER, 16));
     expect(sourceIds(getActiveRemoteRooms(home({ remotes, creeps: busy(14) })))).toEqual(["W4N5-s0"]);
     clock += 1;
-    expect(getActiveRemoteRooms(home({ remotes, creeps: busy(22) }))).toEqual([]);
+    expect(getActiveRemoteRooms(home({ remotes, creeps: busy(23) }))).toEqual([]);
     // Fifty ticks on there is spare for the source, though not with the
     // headroom a new one needs.
     clock += 50;
@@ -168,7 +181,7 @@ describe("remote source ranking", () => {
     const remotes = [remote("W4N5", [30])];
     const peddler = creep(ROLE_REMOTE_MINER, 9, { targetRoom: "W4N5", remoteSourceId: "W4N5-s0" as Id<Source> });
     const busy = (n: number) => Array.from({ length: n }, () => creep(ROLE_UPGRADER, 16));
-    expect(getActiveRemoteRooms(home({ remotes, creeps: [...busy(22), peddler] }))).toEqual([]);
+    expect(getActiveRemoteRooms(home({ remotes, creeps: [...busy(23), peddler] }))).toEqual([]);
     // Spare enough for the source, but not with the headroom a new one needs.
     clock += 1;
     expect(getActiveRemoteRooms(home({ remotes, creeps: [...busy(18), peddler] }))).toEqual([]);

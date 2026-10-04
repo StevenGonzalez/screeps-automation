@@ -186,11 +186,16 @@ export function planRemoteSource(
   const carry = remoteHaulCarry(output, dist) * REMOTE_HAUL_MARGIN;
   const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
   const haulerPartsPerCarry = hauler.length / haulerCarry;
-  // A reserver lives CREEP_CLAIM_LIFE_TIME, so it is bought that much more
-  // often than the others, and it serves every source in its room.
+  // A reserver serves every source in its room. It lives CREEP_CLAIM_LIFE_TIME,
+  // but each CLAIM past the first banks a tick of reservation for every tick it
+  // works, and the bank lasts as long again once it is gone. Embercrag's
+  // three-CLAIM envoys were costed as bought every 600 ticks, when one is
+  // needed only every 1,600 or so.
   const reserver = buildReserverBody(capacity);
   const reserverShare = 1 / remote.sources.length;
-  const reserverRespawns = CREEP_LIFE_TIME / CREEP_CLAIM_LIFE_TIME;
+  const claims = reserver.filter((p) => p === CLAIM).length;
+  const reserverRespawns =
+    CREEP_LIFE_TIME / (claims * Math.max(1, CREEP_CLAIM_LIFE_TIME - dist));
 
   const roadTiles = src.roadTiles ? src.roadTiles.split(";").length : dist;
   const decay =
@@ -200,7 +205,7 @@ export function planRemoteSource(
   const upkeep =
     calculateBodyPartCost(miner) / CREEP_LIFE_TIME +
     (carry * haulerCostPerCarry) / CREEP_LIFE_TIME +
-    (calculateBodyPartCost(reserver) * reserverShare) / CREEP_CLAIM_LIFE_TIME +
+    (calculateBodyPartCost(reserver) * reserverShare * reserverRespawns) / CREEP_LIFE_TIME +
     decay;
   const parts =
     miner.length + carry * haulerPartsPerCarry + reserver.length * reserverShare * reserverRespawns;
