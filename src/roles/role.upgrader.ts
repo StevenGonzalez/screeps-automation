@@ -7,6 +7,7 @@ import {
 } from "../services/services.creep";
 import { seekBoost } from "../services/services.combat";
 import { nearDowngrade, upgradingFunded } from "../services/services.treasury";
+import { energyClaimedByOthers } from "../services/services.coordination";
 
 export function runUpgrader(creep: Creep) {
   if (creep.memory.working === undefined) creep.memory.working = false;
@@ -39,6 +40,14 @@ export function runUpgrader(creep: Creep) {
     const upgradeCont = Game.getObjectById(upgradeId) as StructureContainer | null;
     if (upgradeCont && upgradeCont.store[RESOURCE_ENERGY] > 0) {
       if (withdrawFromContainer(creep, upgradeCont)) return;
+    }
+    // A keep with no storage feeds its enchanters through this container. One
+    // that walked off to a miner container whenever it ran dry turned back each
+    // time a porter refilled it, and spent its life on the road between them.
+    // While a porter is bringing gold here, wait for it.
+    if (upgradeCont && !creep.room.storage && energyClaimedByOthers(upgradeCont.id, creep) > 0) {
+      if (creep.pos.getRangeTo(upgradeCont) > 1) creep.moveTo(upgradeCont, { range: 1, reusePath: 20 });
+      return;
     }
   }
 

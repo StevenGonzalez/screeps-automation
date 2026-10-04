@@ -173,6 +173,43 @@ describe("upgrader storage floor", () => {
   });
 });
 
+describe("upgrader in a keep with no storage", () => {
+  function youngKeep(porterBringing: boolean): Room {
+    const container = (id: string, energy: number) => ({
+      id,
+      structureType: "container",
+      store: { [g.RESOURCE_ENERGY as string]: energy },
+      pos: { x: 14, y: 5, getRangeTo: () => 5 },
+    });
+    const upgradeCont = container("upgradeCont", 0);
+    const minerCont = container("minerCont", 1400);
+    const porter = { store: { [g.RESOURCE_ENERGY as string]: 300 }, memory: { fillTargetId: "upgradeCont" } };
+    g.Game = {
+      time: clock,
+      creeps: porterBringing ? { "Porter Warin": porter } : {},
+      getObjectById: (id: string) => ({ upgradeCont, minerCont } as Record<string, unknown>)[id] ?? null,
+    };
+    return {
+      name: `W48S7-${clock}`,
+      controller: { ...controller, pos: { x: 12, y: 6, getRangeTo: () => 5, findInRange: () => [] } },
+      memory: { upgradeContainerId: "upgradeCont" } as RoomMemory,
+      find: (type: number) => (type === g.FIND_STRUCTURES ? [upgradeCont, minerCont] : []),
+    } as unknown as Room;
+  }
+
+  it("waits by the upgrade container while a porter brings gold to it", () => {
+    // Walking off to a miner container across the keep, an enchanter turned
+    // back each time a porter refilled the upgrade container behind it.
+    const calls = runEmptyUpgraderIn(youngKeep(true));
+    expect(calls).not.toContain("withdraw:minerCont");
+  });
+
+  it("fetches its own gold when no porter is bringing any", () => {
+    const calls = runEmptyUpgraderIn(youngKeep(false));
+    expect(calls).toContain("withdraw:minerCont");
+  });
+});
+
 describe("runUpgrader", () => {
   it("upgrades the controller even while the room has construction sites", () => {
     const site = {
