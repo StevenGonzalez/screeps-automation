@@ -135,9 +135,14 @@ const EPITHETS = [
   "the Black", "Ironhand", "the Unbowed", "the Fair", "the Cunning", "the Restless", "the Far-Seeing", "the Stern",
 ];
 
-/** Another player as the chronicle knows them, with an epithet drawn from the name: "Jumpp the Bold". */
+/**
+ * Another player as the chronicle knows them, with an epithet drawn from the
+ * name: "Jumpp the Bold". The name is written as a lord's would be, so
+ * "_oleksii" and "screps" read "Oleksii the Grim" and "Screps the Stern".
+ */
 export function lordName(username: string): string {
-  return `${username} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
+  const name = username.replace(/^[^A-Za-z]+|[^A-Za-z0-9]+$/g, "") || username;
+  return `${name[0].toUpperCase()}${name.slice(1)} ${EPITHETS[nameHash(username) % EPITHETS.length]}`;
 }
 
 const WILD_HEADS = [

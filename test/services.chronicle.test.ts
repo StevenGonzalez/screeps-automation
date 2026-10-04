@@ -47,6 +47,13 @@ describe("chronicle", () => {
     expect(lordName("_oleksii")).toBe(lordName("_oleksii"));
   });
 
+  it("writes another player's name as a lord's", () => {
+    expect(lordName("_oleksii")).toMatch(/^Oleksii the /);
+    expect(lordName("screps")).toMatch(/^Screps the /);
+    expect(lordName("xX_Rook_Xx__")).toMatch(/^XX_Rook_Xx /);
+    expect(lordName("__")).toMatch(/^__ /);
+  });
+
   it("names wild country by its room, and the next room over differently", () => {
     expect(wildsName("W2N1")).toBe("Shadow March");
     expect(wildsName("W2N1")).toBe(wildsName("W2N1"));
