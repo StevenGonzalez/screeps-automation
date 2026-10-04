@@ -15131,16 +15131,18 @@ function boostMemory(queue) {
 }
 
 function isRemoteCreepRetiring(home, creep) {
-    var _a;
     const target = creep.memory.targetRoom;
     if (!target)
         return false;
-    const travel = Math.max(remoteTravelTicks(home, target, creep.memory.remoteSourceId), (_a = creep.memory.walk) !== null && _a !== void 0 ? _a : 0);
-    const queue = creep.memory.role === ROLE_RESERVER ? reservationQueueMargin(home, target) : 0;
-    return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + queue);
+    const travel = creep.memory.walk || remoteTravelTicks(home, target, creep.memory.remoteSourceId);
+    return isRetiring(creep, spawnLeadTicks(creep.body.length, travel) + reliefQueueMargin(home, creep, target));
 }
-function reservationQueueMargin(home, roomName) {
+function reliefQueueMargin(home, creep, roomName) {
     var _a, _b, _c, _d;
+    if (creep.memory.role === ROLE_REMOTE_MINER)
+        return longestSpawnTicks(home);
+    if (creep.memory.role !== ROLE_RESERVER)
+        return 0;
     const res = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.reservation;
     const banked = res && res.username === ((_d = (_c = home.controller) === null || _c === void 0 ? void 0 : _c.owner) === null || _d === void 0 ? void 0 : _d.username) ? res.ticksToEnd : 0;
     return Math.max(0, longestSpawnTicks(home) - banked);
