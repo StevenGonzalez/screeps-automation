@@ -53,6 +53,14 @@ describe("chatter", () => {
     expect((g.Memory as Memory).gossip).toBeUndefined();
   });
 
+  it("talks of the night after dark", () => {
+    const day = 23 * TOWN_DAY_LENGTH;
+    const night = ["yawn...", "torches!", "so dark", "owls hoot"];
+    // Ten lines a night, and the first sixteen of a day fall before dusk.
+    expect(linesFrom(day + 700).slice(0, 10).some((l) => night.includes(l))).toBe(true);
+    expect(linesFrom(day + 100).slice(0, 16).some((l) => night.includes(l))).toBe(false);
+  });
+
   it("talks of its end in its last ticks, and no more of its work", () => {
     const start = 23 * TOWN_DAY_LENGTH;
     const elder = linesFrom(start, undefined, 100);

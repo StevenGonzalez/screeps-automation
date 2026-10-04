@@ -280,7 +280,8 @@ News outlives its cry. For 600 ticks after a level, new renown, a keep's
 firstborn, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the
 wolves or the wisps, every creep in the realm now and then repeats it in its idle
 chatter (`Memory.gossip`). Newer news replaces older. In its last 150 ticks a
-creep talks of its end instead of its work ("old bones", "farewell").
+creep talks of its end instead of its work ("old bones", "farewell"), and after
+dark its talk of the weather turns to the night ("torches!", "owls hoot").
 
 Controller signs are dark-fantasy proclamations (`config/signatures.ts`), and
 envoys sign the remote controllers they reserve.
