@@ -63,6 +63,7 @@ export function runRemoteHauler(creep: Creep) {
       (creep.store[RESOURCE_ENERGY] > 0 && (creep.ticksToLive ?? Infinity) < 150))
   ) {
     creep.memory.working = true;
+    delete creep.memory.haulFromId;
   }
 
   if (!creep.memory.working) {
@@ -102,7 +103,7 @@ function collectEnergy(creep: Creep, targetRoom: string) {
     return;
   }
 
-  const container = findBestContainer(creep);
+  const container = pickupContainer(creep);
   // A miner on a full container drops its harvest on the ground, where it
   // decays, while the container's own store keeps. Take the pile by the
   // container first.
@@ -113,6 +114,12 @@ function collectEnergy(creep: Creep, targetRoom: string) {
       (!container || d.pos.inRangeTo(container, 1)),
   }) as Resource | null;
   if (container && !dropped) {
+    // An empty container is waited at: its miner fills it faster than a
+    // merchant can walk to the next one.
+    if (container.store[RESOURCE_ENERGY] === 0) {
+      if (!creep.pos.isNearTo(container)) creep.moveTo(container, { range: 1, reusePath: 30 });
+      return;
+    }
     const res = creep.withdraw(container, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) creep.moveTo(container, { reusePath: 30 });
     return;
@@ -130,37 +137,71 @@ function collectEnergy(creep: Creep, targetRoom: string) {
   }
 }
 
-function findBestContainer(creep: Creep): StructureContainer | null {
+// A merchant keeps to the container it set out for until it is full.
+// Choosing the fullest container afresh every tick sent Grimford's merchants
+// in the Bleak Vale back and forth across the room: its two containers stand
+// on either side of a great rock, and each load one merchant took tipped the
+// rest toward the other. They brought home one load in some 650 ticks.
+function pickupContainer(creep: Creep): StructureContainer | null {
+  const id = creep.memory.haulFromId;
+  const held = id ? Game.getObjectById(id) : null;
+  if (held && held.pos.roomName === creep.room.name) return held;
+  const chosen = chooseContainer(creep);
+  creep.memory.haulFromId = chosen?.id;
+  return chosen;
+}
+
+// The container with the most gold left once the merchants already bound for
+// it have filled up, counting the pile spilt beside it.
+function chooseContainer(creep: Creep): StructureContainer | null {
+  const candidates = remoteContainers(creep);
+  if (candidates.length === 0) return null;
+
+  const claimed = new Map<string, number>();
+  for (const name in Game.creeps) {
+    const other = Game.creeps[name];
+    const id = other.memory.haulFromId;
+    if (!id || other.name === creep.name || other.memory.working) continue;
+    claimed.set(id, (claimed.get(id) ?? 0) + other.store.getFreeCapacity(RESOURCE_ENERGY));
+  }
+  const piles = creep.room.find(FIND_DROPPED_RESOURCES, {
+    filter: (d) => d.resourceType === RESOURCE_ENERGY,
+  });
+
+  let best: StructureContainer | null = null;
+  let bestLeft = -Infinity;
+  for (const c of candidates) {
+    let left = c.store[RESOURCE_ENERGY] - (claimed.get(c.id) ?? 0);
+    for (const d of piles) if (d.pos.inRangeTo(c, 1)) left += d.amount;
+    if (left > bestLeft || (left === bestLeft && best && creep.pos.getRangeTo(c) < creep.pos.getRangeTo(best))) {
+      best = c;
+      bestLeft = left;
+    }
+  }
+  return best;
+}
+
+function remoteContainers(creep: Creep): StructureContainer[] {
   const homeMemory = Memory.rooms[creep.memory.homeRoom!];
   const remoteEntry = homeMemory?.remoteRooms?.find(
     (r) => r.roomName === creep.room.name
   );
 
-  if (remoteEntry) {
-    const candidates: StructureContainer[] = [];
-    for (const sourceData of remoteEntry.sources) {
-      if (!sourceData.containerId) continue;
-      const c = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
-      if (c && c.store[RESOURCE_ENERGY] > 0) candidates.push(c);
-    }
-    if (candidates.length > 0) {
-      return candidates.reduce((a, b) =>
-        a.store[RESOURCE_ENERGY] > b.store[RESOURCE_ENERGY] ? a : b
-      );
-    }
+  const containers: StructureContainer[] = [];
+  for (const sourceData of remoteEntry?.sources ?? []) {
+    if (!sourceData.containerId) continue;
+    const c = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
+    if (c) containers.push(c);
   }
+  if (containers.length > 0) return containers;
 
-  const sources = creep.room.find(FIND_SOURCES);
-  for (const source of sources) {
-    const containers = source.pos.findInRange(FIND_STRUCTURES, 1, {
-      filter: (s): s is StructureContainer =>
-        s.structureType === STRUCTURE_CONTAINER &&
-        (s as StructureContainer).store[RESOURCE_ENERGY] > 0,
+  for (const source of creep.room.find(FIND_SOURCES)) {
+    const found = source.pos.findInRange(FIND_STRUCTURES, 1, {
+      filter: (s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER,
     }) as StructureContainer[];
-    if (containers.length > 0) return containers[0];
+    containers.push(...found);
   }
-
-  return null;
+  return containers;
 }
 
 function depositEnergy(creep: Creep, homeRoom: string) {

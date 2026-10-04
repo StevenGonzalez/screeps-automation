@@ -62,6 +62,8 @@ function hauler(): Creep {
     },
     pos: {
       ...pos(20, 20),
+      getRangeTo: (o: { pos: { x: number; y: number } }) => Math.max(Math.abs(o.pos.x - 20), Math.abs(o.pos.y - 20)),
+      isNearTo: (o: { pos: { x: number; y: number } }) => Math.max(Math.abs(o.pos.x - 20), Math.abs(o.pos.y - 20)) <= 1,
       findClosestByRange: (type: number, opts?: { filter: (o: unknown) => boolean }) => {
         const list = type === g.FIND_DROPPED_RESOURCES ? dropped : [];
         return list.filter((o) => !opts || opts.filter(o))[0] ?? null;
@@ -111,6 +113,53 @@ describe("remote hauler pickup", () => {
 
     expect(creep.withdraw).toHaveBeenCalledWith(container, "energy");
     expect(creep.pickup).not.toHaveBeenCalled();
+  });
+
+  describe("between two containers", () => {
+    let far: typeof container;
+    beforeEach(() => {
+      far = { id: "cont2", pos: pos(5, 45), store: { energy: 2000 } };
+      (g.Game as any).getObjectById = (id: string) => (id === "cont1" ? container : id === "cont2" ? far : null);
+      (g.Memory as any).rooms[HOME].remoteRooms[0].sources.push({ sourceId: "s2", containerId: "cont2" });
+    });
+
+    it("keeps to the container it set out for once the other holds more", () => {
+      const creep = hauler();
+      runRemoteHauler(creep);
+      const first = (creep.withdraw as any).mock.calls[0][0];
+      first.store.energy = 1650;
+
+      runRemoteHauler(creep);
+
+      expect((creep.withdraw as any).mock.calls[1][0]).toBe(first);
+    });
+
+    it("goes to the container no other merchant is bound for", () => {
+      const bound = {
+        name: "Merchant Bruna",
+        memory: { role: ROLE_REMOTE_HAULER, haulFromId: "cont2", working: false },
+        store: { getFreeCapacity: () => 350 },
+      };
+      (g.Game as any).creeps = { [bound.name]: bound };
+      const creep = hauler();
+
+      runRemoteHauler(creep);
+
+      expect(creep.withdraw).toHaveBeenCalledWith(container, "energy");
+    });
+
+    it("chooses afresh once full and bound for home", () => {
+      const creep = hauler();
+      runRemoteHauler(creep);
+      expect(creep.memory.haulFromId).toBe("cont1");
+      (creep.store as any).getFreeCapacity = () => 0;
+      (creep as any).moveTo = vi.fn();
+
+      runRemoteHauler(creep);
+
+      expect(creep.memory.working).toBe(true);
+      expect(creep.memory.haulFromId).toBeUndefined();
+    });
   });
 });
 
