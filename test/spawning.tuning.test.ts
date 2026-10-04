@@ -145,6 +145,19 @@ describe("remote picks look past invaders", () => {
     return room;
   }
 
+  it("keeps working a remote whose miner died while the bucket refills after a pixel", () => {
+    // No miner alive at W6N5: its last one has just died.
+    let room = home([remote("W6N5", false)]);
+    (g.Game as { cpu: { bucket: number } }).cpu.bucket = 1_000;
+    expect(getActiveRemoteRooms(room)).toEqual([]);
+
+    clock += 1;
+    room = home([remote("W6N5", false)]);
+    (g.Game as { cpu: { bucket: number } }).cpu.bucket = 1_000;
+    (g.Memory as Memory).lastPixelTick = clock - 70;
+    expect(getActiveRemoteRooms(room).map((r) => r.roomName)).toEqual(["W6N5"]);
+  });
+
   it("keeps an invaded remote picked while sending no economy creeps there", () => {
     const room = home([remote("W4N5", true), remote("W6N5", false)]);
     expect([...getPickedRemoteRoomNames(room)].sort()).toEqual(["W4N5", "W6N5"]);

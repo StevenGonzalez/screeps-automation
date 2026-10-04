@@ -6,6 +6,7 @@ import {
   ROLE_SCORE_HUNTER,
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
+import { inPixelRefill } from "./orchestrator.pixels";
 import { MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRemoteSourcePathLength, remoteRoadsEnabled } from "../services/services.remote";
 import {
@@ -111,7 +112,10 @@ const REMOTE_SPAWN_SHARE = 0.8;
 // Share of the remote budget a new source must leave spare to be taken on.
 const REMOTE_PICK_HEADROOM = 0.1;
 
-// Below this bucket, keep working the remotes already mined but add none.
+// Below this bucket, keep working the remotes already mined but add none. A
+// bucket refilling after a pixel is not short of CPU: under the floor there, a
+// source whose miner had just died lost its place, and stood idle with its
+// merchants until the bucket climbed back.
 const REMOTE_CPU_BUCKET_FLOOR = 5000;
 
 const REMOTE_ECONOMY_ROLES = new Set<string>([
@@ -216,7 +220,7 @@ function pickRemoteSources(room: Room): Map<string, number> {
     return cached.picked;
   }
 
-  const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR;
+  const lowCpu = Game.cpu.bucket < REMOTE_CPU_BUCKET_FLOOR && !inPixelRefill();
   const mined = new Set(
     getCreepsByRole(ROLE_REMOTE_MINER)
       .filter((c) => c.memory.homeRoom === room.name)
