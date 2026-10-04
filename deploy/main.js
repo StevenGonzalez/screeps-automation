@@ -1112,6 +1112,18 @@ const TOWN_NAMES = [
     "Ironvale", "Wolfsbane", "Hollowmere", "Cinderfell", "Stormwatch", "Gallowgate",
     "Bleakharrow", "Mournspire", "Frosthaven",
 ];
+const LANDMARKS = {
+    spawn: ["barracks", "barracks"],
+    tower: ["watchtower", "watchtowers"],
+    storage: ["treasury", "treasuries"],
+    terminal: ["trading post", "trading posts"],
+    lab: ["alchemy lab", "alchemy labs"],
+    factory: ["workshop", "workshops"],
+    extractor: ["jeweler's mine", "jeweler's mines"],
+    observer: ["seeing-stone", "seeing-stones"],
+    powerSpawn: ["power shrine", "power shrines"],
+    nuker: ["doom engine", "doom engines"],
+};
 const STRUCTURE_PLANNER = {
     roadPadding: 0,
     rampartPadding: 1,
@@ -8340,37 +8352,26 @@ function heraldVisitors(room) {
 }
 const WORKS_CHECK_PERIOD = 100;
 const WORKS_WINDOW = 1500;
-const WORKS = {
-    spawn: ["a barracks", "barracks"],
-    tower: ["a watchtower", "watchtowers"],
-    storage: ["a treasury", "treasuries"],
-    terminal: ["a trading post", "trading posts"],
-    lab: ["an alchemy lab", "alchemy labs"],
-    factory: ["a workshop", "workshops"],
-    extractor: ["a jeweler's mine", "jeweler's mines"],
-    observer: ["a seeing-stone", "seeing-stones"],
-    powerSpawn: ["a power shrine", "power shrines"],
-    nuker: ["a doom engine", "doom engines"],
-};
 function heraldWorks(room) {
     var _a, _b, _c;
     if (Game.time % WORKS_CHECK_PERIOD !== 0)
         return;
     const counts = {};
     for (const s of room.find(FIND_MY_STRUCTURES)) {
-        if (WORKS[s.structureType])
+        if (LANDMARKS[s.structureType])
             counts[s.structureType] = ((_a = counts[s.structureType]) !== null && _a !== void 0 ? _a : 0) + 1;
     }
     const known = room.memory.heraldWorks;
     room.memory.heraldWorks = counts;
     if (!known)
         return;
-    for (const type of Object.keys(WORKS)) {
+    for (const type of Object.keys(LANDMARKS)) {
         const gained = ((_b = counts[type]) !== null && _b !== void 0 ? _b : 0) - ((_c = known[type]) !== null && _c !== void 0 ? _c : 0);
         if (gained <= 0)
             continue;
-        const [one, many] = WORKS[type];
-        tally(`works:${room.name}:${type}`, gained, (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? one : `${n} ${many}`}.`, WORKS_WINDOW);
+        const [one, many] = LANDMARKS[type];
+        const a = /^[aeiou]/.test(one) ? "an" : "a";
+        tally(`works:${room.name}:${type}`, gained, (n) => `The masons of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
     }
 }
 function heraldRise(room) {
@@ -17813,6 +17814,7 @@ function loop$1() {
         drawRoomHUD(room);
         drawChronicle(room);
         drawSeason(room);
+        drawLandmarks(room);
         drawTown(room);
         drawBlueprint(room);
     }
@@ -18037,6 +18039,36 @@ function drawChronicle(room) {
 }
 const PHASE_ICON = { dawn: "🌅", day: "☀", dusk: "🌇", night: "🌙" };
 const NIGHT_SHADE = { dawn: 0.08, day: 0, dusk: 0.12, night: 0.22 };
+const LANDMARK_LABEL = { font: 0.4, color: "#d8c8a0", stroke: "#000000", strokeWidth: 0.05, opacity: 0.75 };
+function titleCase(s) {
+    return s.replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+function drawLandmarks(room) {
+    const v = room.visual;
+    const labs = [];
+    for (const s of room.find(FIND_MY_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_LAB) {
+            labs.push(s.pos);
+            continue;
+        }
+        const names = LANDMARKS[s.structureType];
+        if (!names)
+            continue;
+        let text = titleCase(names[0]);
+        if (s.structureType === STRUCTURE_STORAGE) {
+            text += ` · ${formatK(s.store[RESOURCE_ENERGY])} gold`;
+        }
+        v.text(text, s.pos.x, s.pos.y + 0.95, LANDMARK_LABEL);
+    }
+    if (labs.length > 0) {
+        const [one, many] = LANDMARKS[STRUCTURE_LAB];
+        const x = labs.reduce((sum, p) => sum + p.x, 0) / labs.length;
+        const y = Math.max(...labs.map((p) => p.y));
+        v.text(titleCase(labs.length === 1 ? one : many), x, y + 0.95, LANDMARK_LABEL);
+    }
+    if (room.controller)
+        v.text("Throne", room.controller.pos.x, room.controller.pos.y + 0.95, LANDMARK_LABEL);
+}
 const SEASON_TINT = {
     spring: "#88cc77",
     autumn: "#cc7a33",
