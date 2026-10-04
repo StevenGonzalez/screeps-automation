@@ -4,6 +4,9 @@ const g = globalThis as Record<string, unknown>;
 g.EVENT_ATTACK = 1;
 g.EVENT_OBJECT_DESTROYED = 2;
 g.FIND_HOSTILE_CREEPS = 103;
+g.ATTACK = "attack";
+g.RANGED_ATTACK = "ranged_attack";
+g.WORK = "work";
 class FakeCreep {
   my = true;
   memory: CreepMemory = { role: "x" } as CreepMemory;
@@ -16,12 +19,13 @@ import { cryFor, cryFlight, heraldRooms, settleFlight } from "../src/services/se
 const ROOM = "W1N1";
 let tick = 100;
 
-function roomWith(events: unknown[], controller?: unknown) {
+function roomWith(events: unknown[], controller?: unknown, hostiles: unknown[] = []) {
   return {
     name: ROOM,
     controller,
     memory: {} as RoomMemory,
     getEventLog: () => JSON.stringify(events),
+    find: () => hostiles,
   };
 }
 
@@ -29,6 +33,7 @@ function setup(room: ReturnType<typeof roomWith>, objects: Record<string, unknow
   tick++;
   g.Game = {
     time: tick,
+    gcl: { level: 1 },
     rooms: { [ROOM]: room },
     getObjectById: (id: string) => objects[id] ?? null,
   };
@@ -109,10 +114,10 @@ describe("herald", () => {
     const wilds = { name: "W2N1", find: () => [{ owner: { username: "Invader" } }], getEventLog: () => "[]" };
     const merchant = { pos: { roomName: "W2N1" }, hits: 300, hitsMax: 1000, ticksToLive: 900 };
     tick++;
-    g.Game = { time: tick, rooms: {}, creeps: { "Merchant Leofric": merchant } };
+    g.Game = { time: tick, gcl: { level: 1 }, rooms: {}, creeps: { "Merchant Leofric": merchant } };
     heraldRooms();
     tick++;
-    g.Game = { time: tick, rooms: { W2N1: wilds }, creeps: {} };
+    g.Game = { time: tick, gcl: { level: 1 }, rooms: { W2N1: wilds }, creeps: {} };
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
@@ -124,13 +129,42 @@ describe("herald", () => {
     const old = { pos: { roomName: ROOM }, hits: 300, hitsMax: 1000, ticksToLive: 1 };
     const recycled = { pos: { roomName: ROOM }, hits: 1000, hitsMax: 1000, ticksToLive: 600 };
     tick++;
-    g.Game = { time: tick, rooms: {}, creeps: { "Porter Ada": old, "Reeve Bran": recycled } };
+    g.Game = { time: tick, gcl: { level: 1 }, rooms: {}, creeps: { "Porter Ada": old, "Reeve Bran": recycled } };
     heraldRooms();
     tick++;
-    g.Game = { time: tick, rooms: {}, creeps: {} };
+    g.Game = { time: tick, gcl: { level: 1 }, rooms: {}, creeps: {} };
     heraldRooms();
 
     expect((g.Memory as Memory).chronicle).toBeUndefined();
+  });
+
+  it("proclaims a new GCL once, not on the first look", () => {
+    setup(roomWith([]), {});
+    heraldRooms();
+    (g.Game as { gcl: { level: number } }).gcl.level = 2;
+    heraldRooms();
+    heraldRooms();
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "The Crown's renown grows. The realm may now hold 2 castles.",
+    ]);
+  });
+
+  it("writes one line a visit for a player's spies, and another when they come armed", () => {
+    const castle = { my: true, level: 6 };
+    const spy = { owner: { username: "Rival" }, body: [{ type: "move" }] };
+    const raider = { owner: { username: "Rival" }, body: [{ type: "attack" }, { type: "move" }] };
+    setup(roomWith([], castle, [spy]), {});
+    heraldRooms();
+    setup(roomWith([], castle, [spy]), {});
+    heraldRooms();
+    setup(roomWith([], castle, [spy, raider]), {});
+    heraldRooms();
+
+    const lines = (g.Memory as Memory).chronicle?.map((l) => l.text) ?? [];
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/^Spies of Rival crept about /);
+    expect(lines[1]).toMatch(/^A war party of Rival came in arms to the walls of /);
   });
 
   it("has a fleeing vendor cry out once, and again only after it settles", () => {

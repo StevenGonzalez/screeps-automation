@@ -43,10 +43,39 @@ export function settleFlight(creep: Creep): void {
 export function heraldRooms(): void {
   freshCries();
   heraldFallen();
+  heraldRenown();
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
-    if (room.controller?.my) heraldRise(room);
+    if (room.controller?.my) {
+      heraldRise(room);
+      heraldVisitors(room);
+    }
     heraldKills(room);
+  }
+}
+
+// A new GCL is one more castle the realm may hold.
+function heraldRenown(): void {
+  const level = Game.gcl.level;
+  const known = Memory.heraldGcl;
+  Memory.heraldGcl = level;
+  if (known === undefined || level <= known) return;
+  chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
+}
+
+// A player's creeps in one of our castles make one line a visit, however long
+// they stay: spies when none of them can fight, a war party when one can.
+const VISIT_WINDOW = 1500;
+
+function heraldVisitors(room: Room): void {
+  for (const c of room.find(FIND_HOSTILE_CREEPS)) {
+    if (!isPlayerCreep(c)) continue;
+    const who = c.owner.username;
+    const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
+    const text = armed
+      ? `A war party of ${who} came in arms to the walls of ${castleName(room.name)}.`
+      : `Spies of ${who} crept about ${castleName(room.name)}.`;
+    tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
   }
 }
 
