@@ -15287,29 +15287,35 @@ function getUpgraderPopulationTarget(room) {
     return Math.min(cap, 1 + Math.floor(spare / STORAGE_ENERGY_PER_UPGRADER));
 }
 let constructionSiteCacheTick = -1;
-const constructionSiteCountByRoom = {};
-function getConstructionSiteCount(room) {
+const constructionByRoom = {};
+function getConstruction(room) {
     if (constructionSiteCacheTick !== Game.time) {
         constructionSiteCacheTick = Game.time;
-        for (const k of Object.keys(constructionSiteCountByRoom))
-            delete constructionSiteCountByRoom[k];
+        for (const k of Object.keys(constructionByRoom))
+            delete constructionByRoom[k];
     }
-    if (constructionSiteCountByRoom[room.name] === undefined) {
-        constructionSiteCountByRoom[room.name] = room.find(FIND_CONSTRUCTION_SITES).length;
+    if (constructionByRoom[room.name] === undefined) {
+        const sites = room.find(FIND_CONSTRUCTION_SITES);
+        let left = 0;
+        for (const s of sites)
+            left += s.progressTotal - s.progress;
+        constructionByRoom[room.name] = { sites: sites.length, left };
     }
-    return constructionSiteCountByRoom[room.name];
+    return constructionByRoom[room.name];
 }
+const BUILDER_DUTY = 0.25;
 function getBuilderPopulationTarget(room) {
     var _a, _b;
     if (isEnergyEmergency(room))
         return 0;
-    const siteCount = getConstructionSiteCount(room);
-    if (siteCount === 0)
+    const { sites, left } = getConstruction(room);
+    if (sites === 0)
         return 0;
     const phase = getRoomPhase$1(room);
     if (phase === "bootstrap")
-        return Math.min(3, siteCount);
-    const target = Math.ceil(siteCount / 5);
+        return Math.min(3, sites);
+    const work = buildScaledBody(ROLE_BUILDER, bodyBudget(room, "capacity")).filter((p) => p === WORK).length;
+    const target = Math.ceil(left / (work * BUILD_POWER * CREEP_LIFE_TIME * BUILDER_DUTY));
     const buffer = (_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0;
     const cap = buffer > 30000 ? 5 : 2;
     return Math.min(cap, Math.max(1, target));
