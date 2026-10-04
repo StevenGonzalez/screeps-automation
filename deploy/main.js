@@ -14954,14 +14954,12 @@ function neediestRemote(activeRooms, plans, haulersByRoom) {
     return neediest;
 }
 function reassignStrayHaulers(room) {
-    var _a, _b;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const haulers = getCreepsByRole(ROLE_REMOTE_HAULER).filter((c) => c.memory.homeRoom === room.name);
     if (haulers.length === 0)
         return;
     const worked = getPickedRemoteRoomNames(room);
     const strays = haulers.filter((c) => { var _a; return !worked.has((_a = c.memory.targetRoom) !== null && _a !== void 0 ? _a : ""); });
-    if (strays.length === 0)
-        return;
     const activeRooms = getActiveRemoteRooms(room);
     if (activeRooms.length === 0)
         return;
@@ -14977,6 +14975,18 @@ function reassignStrayHaulers(room) {
         const target = neediestRemote(activeRooms, plans, haulersByRoom);
         c.memory.targetRoom = target;
         haulersByRoom[target] = ((_b = haulersByRoom[target]) !== null && _b !== void 0 ? _b : 0) + 1;
+    }
+    for (const remote of activeRooms) {
+        const posted = haulers.filter((c) => c.memory.targetRoom === remote.roomName);
+        const spare = posted.length - ((_d = (_c = plans[remote.roomName]) === null || _c === void 0 ? void 0 : _c.count) !== null && _d !== void 0 ? _d : 0);
+        for (const c of posted.slice(0, Math.max(0, spare))) {
+            const target = neediestRemote(activeRooms, plans, haulersByRoom);
+            if (((_f = (_e = plans[target]) === null || _e === void 0 ? void 0 : _e.count) !== null && _f !== void 0 ? _f : 0) - ((_g = haulersByRoom[target]) !== null && _g !== void 0 ? _g : 0) <= 0)
+                return;
+            c.memory.targetRoom = target;
+            haulersByRoom[remote.roomName]--;
+            haulersByRoom[target] = ((_h = haulersByRoom[target]) !== null && _h !== void 0 ? _h : 0) + 1;
+        }
     }
 }
 function shouldSpawnRemoteHauler(room) {
