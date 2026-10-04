@@ -67,7 +67,9 @@ export function runRemoteMiner(creep: Creep) {
     creep.memory.remoteSourceId = undefined;
     return;
   }
-  if (creep.memory.walk === undefined && creep.pos.isNearTo(source)) noteWalk(creep, CREEP_LIFE_TIME);
+  // A relief that comes while the peddler it relieves still holds the post
+  // waits a step back from the source, so it has arrived within two tiles.
+  if (creep.memory.walk === undefined && creep.pos.inRangeTo(source, 2)) noteWalk(creep, CREEP_LIFE_TIME);
 
   const container = findOrUpdateContainer(creep, source);
 

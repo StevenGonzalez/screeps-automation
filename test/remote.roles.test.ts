@@ -108,7 +108,7 @@ describe("remote miner", () => {
       hits: 100,
       owner: { username: ME },
       store: { energy: 0 },
-      pos: { isNearTo: () => true, isEqualTo: () => true },
+      pos: { isNearTo: () => true, isEqualTo: () => true, inRangeTo: () => true },
       room: { name: roomName, controller: undefined, find: () => [] },
       memory: { role: "remote_miner", homeRoom: HOME, targetRoom: REMOTE, remoteSourceId: "src", _hp: 200 },
       moveTo: vi.fn(),
@@ -296,13 +296,14 @@ describe("remote miner", () => {
   });
 
   describe("walking out to its source", () => {
+    // Near: two tiles from the source, held back by the peddler it relieves.
     function minerArriving(near: boolean) {
       (g.Game as any).time = 4000;
       const source = { id: "src", pos: { findInRange: () => [] } };
       (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
       const creep = minerIn(REMOTE, { ticksToLive: 1330 });
       creep.memory._hp = 100;
-      creep.pos = { ...creep.pos, isNearTo: () => near };
+      creep.pos = { ...creep.pos, isNearTo: () => false, inRangeTo: (_: unknown, range: number) => range >= (near ? 2 : 3) };
       runRemoteMiner(creep as unknown as Creep);
       return creep.memory as CreepMemory;
     }
