@@ -3008,9 +3008,7 @@ function barrierTargetFn(room) {
         return 0;
     };
 }
-function isDamaged(s) {
-    return s.hits < s.hitsMax;
-}
+const WORN_FRACTION = 0.8;
 function keptUp(room) {
     const roads = keptRoadTiles(room);
     if (!roads)
@@ -3033,7 +3031,7 @@ function findClosestRepairTarget(creep) {
     const kept = keptUp(creep.room);
     const repairTargets = getRoomStructures(creep.room).filter((s) => s.structureType !== STRUCTURE_WALL &&
         s.structureType !== STRUCTURE_RAMPART &&
-        isDamaged(s) &&
+        s.hits < s.hitsMax * WORN_FRACTION &&
         kept(s));
     if (repairTargets.length === 0)
         return null;
@@ -3124,7 +3122,7 @@ function repairCandidates(room) {
         return weakestBand(criticalBarriers);
     const nonDefensive = structures.filter((st) => st.structureType !== STRUCTURE_WALL &&
         st.structureType !== STRUCTURE_RAMPART &&
-        st.hits < st.hitsMax * 0.8);
+        st.hits < st.hitsMax * WORN_FRACTION);
     if (nonDefensive.length > 0) {
         const isRoad = (st) => st.structureType === STRUCTURE_ROAD;
         const nonRoad = nonDefensive.filter((st) => !isRoad(st));
