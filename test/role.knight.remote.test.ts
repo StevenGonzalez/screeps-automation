@@ -5,6 +5,7 @@ g.FIND_HOSTILE_CREEPS = 103;
 g.FIND_MY_CREEPS = 107;
 g.FIND_MY_SPAWNS = 108;
 g.FIND_HOSTILE_STRUCTURES = 109;
+g.ATTACK_POWER = 30;
 g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
@@ -47,7 +48,7 @@ function destination(knight: Creep): string | undefined {
 
 beforeEach(() => {
   remoteEntry = { roomName: REMOTE, sources: [], lastSeen: 0, hostile: false } as RemoteRoomData;
-  g.Game = { time: 1000 };
+  g.Game = { time: 1000, rooms: {}, creeps: {} };
   g.Memory = { rooms: { [HOME]: { remoteRooms: [remoteEntry] } } };
 });
 
@@ -90,6 +91,33 @@ describe("remote knight", () => {
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "The Shadow March is safe again. The vendors take to the road.",
     ]);
+  });
+
+  it("waits at home for the second knight it takes to out-hit the raiders' healers", () => {
+    remoteEntry.invaderUntil = 1500;
+    remoteEntry.invaderStrength = { heal: 120, damage: 80, hits: 2085 };
+    const knight = knightIn(HOME);
+    const second = { spawning: true, memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } };
+    const home = { name: HOME, energyCapacityAvailable: 850, memory: (g.Memory as Memory).rooms[HOME] };
+    g.Game = { time: 1000, rooms: { [HOME]: home }, creeps: { a: knight, b: second } };
+    runKnight(knight);
+    expect(destination(knight)).toBeUndefined();
+
+    second.spawning = false;
+    g.Game = { ...(g.Game as object), time: 1001 };
+    runKnight(knight);
+    expect(destination(knight)).toBe(REMOTE);
+  });
+
+  it("stays home against raiders two knights could not beat", () => {
+    remoteEntry.invaderUntil = 1500;
+    remoteEntry.invaderStrength = { heal: 1000, damage: 80, hits: 2085 };
+    const knight = knightIn(HOME);
+    const second = { memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } };
+    const home = { name: HOME, energyCapacityAvailable: 850, memory: (g.Memory as Memory).rooms[HOME] };
+    g.Game = { time: 1002, rooms: { [HOME]: home }, creeps: { a: knight, b: second } };
+    runKnight(knight);
+    expect(destination(knight)).toBeUndefined();
   });
 
   it("stays home while the remote is only marked hostile by a player", () => {

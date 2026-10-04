@@ -638,6 +638,16 @@ describe("remote knights", () => {
     expect(shouldSpawnRemoteDefender(home({ remotes: [raided()] }))).toBe(true);
   });
 
+  it("raises a second knight when one cannot out-hit the raiders' healers, but none for a host two could not beat", () => {
+    g.ATTACK_POWER = 30;
+    const healed = { ...raided(), invaderStrength: { heal: 180, damage: 80, hits: 2000 } };
+    const first = knight("W4N5", 1000);
+    expect(shouldSpawnRemoteDefender(home({ remotes: [healed], creeps: [first] }))).toBe(true);
+    clock += 1;
+    const host = { ...raided(), invaderStrength: { heal: 1000, damage: 80, hits: 2000 } };
+    expect(shouldSpawnRemoteDefender(home({ remotes: [host] }))).toBe(false);
+  });
+
   it("is not raised by a castle below level 3, which sends no vendors out", () => {
     expect(shouldSpawnRemoteDefender(home({ remotes: [raided()], rcl: 2 }))).toBe(false);
   });

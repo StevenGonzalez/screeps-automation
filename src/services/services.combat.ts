@@ -184,21 +184,25 @@ export function summarizeHostiles(hostiles: Creep[]): HostileStrength {
 // A defender has to finish the job well inside its 1500-tick life, walk included.
 const DEFENDER_KILL_TICKS = 600;
 
-// Fewest melee defenders with this body that out-damage the group's healing,
+// Whether n melee defenders with this body out-damage the group's healing,
 // kill it within DEFENDER_KILL_TICKS, and have the hit points to outlast its
-// damage meanwhile. `cap` when even that many would not.
+// damage meanwhile.
+export function meleeDefendersWin(enemy: HostileStrength, body: BodyPartConstant[], n: number): boolean {
+  const net = n * body.filter((p) => p === ATTACK).length * ATTACK_POWER - enemy.heal;
+  if (net <= 0) return false;
+  const ticks = enemy.hits / net;
+  return ticks <= DEFENDER_KILL_TICKS && n * body.length * 100 > enemy.damage * ticks;
+}
+
+// Fewest melee defenders with this body that win. `cap` when even that many
+// would not.
 export function meleeDefendersToWin(
   enemy: HostileStrength,
   body: BodyPartConstant[],
   cap: number
 ): number {
-  const attack = body.filter((p) => p === ATTACK).length * ATTACK_POWER;
-  const hits = body.length * 100;
   for (let n = 1; n < cap; n++) {
-    const net = n * attack - enemy.heal;
-    if (net <= 0) continue;
-    const ticks = enemy.hits / net;
-    if (ticks <= DEFENDER_KILL_TICKS && n * hits > enemy.damage * ticks) return n;
+    if (meleeDefendersWin(enemy, body, n)) return n;
   }
   return cap;
 }

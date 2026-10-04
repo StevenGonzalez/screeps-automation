@@ -277,7 +277,10 @@ names its tally, whether it fell in a fight or was laid to rest. When an owned r
 new controller level, every creep there shouts "Long live!" and the console logs a
 `[Herald]` proclamation. When a player's war party is first seen in a castle,
 every creep there shouts "To arms!". A knight riding out against raiders in a
-remote shouts "Ride out!" and the chronicle tells of it, once for each raid. Each
+remote shouts "Ride out!" and the chronicle tells of it, once for each raid. When the
+raiders heal more than one knight can hit, the knights raised for that remote wait
+at home and ride out together; no knight is raised against a host two could not beat,
+and the vendors keep off the road until it is gone. Each
 remote's raids come under a named warlord ("Raiders under Grask One-Eye fell upon
 the vendors in the Crow Glen."), who comes back raid after raid ("for a third raid
 on the vendors") until five of its raiders have fallen. On its third raid the

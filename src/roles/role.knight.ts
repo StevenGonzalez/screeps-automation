@@ -5,6 +5,7 @@ import { ROLE_CLERIC } from "../config/config.roles";
 import { parkIdle } from "../services/services.town";
 import { crySortie } from "../services/services.herald";
 import { getDefenseOp, getOffensiveOp, runDefensiveKnight, runOffensiveKnight } from "../orchestrators/orchestrator.military";
+import { awaitingRemoteKnights } from "../orchestrators/orchestrator.spawning.military";
 
 const RETREAT_THRESHOLD = 0.2;
 
@@ -45,7 +46,8 @@ export function runKnight(creep: Creep) {
   const home = creep.memory.homeRoom;
   const invaded = isAssignedRemoteInvaded(creep);
   if (!invaded) delete creep.memory.sortie;
-  if (target && creep.room.name !== target && invaded) {
+  const mustering = invaded && creep.room.name === home && awaitingRemoteKnights(creep);
+  if (target && creep.room.name !== target && invaded && !mustering) {
     crySortie(creep, target);
     creep.moveTo(new RoomPosition(25, 25, target), { reusePath: 20 });
     return;

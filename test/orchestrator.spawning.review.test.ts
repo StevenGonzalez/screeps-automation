@@ -644,10 +644,15 @@ describe("remote invader defense", () => {
 
   it("sends a second knight when one cannot out-damage the invaders' healing", () => {
     // A 1300-capacity knight hits for 180; the invaders heal 300.
-    run({ heal: 300, damage: 100, hits: 3000 });
+    run({ heal: 300, damage: 80, hits: 3000 });
     const knights = spawnCalls.filter((c) => c.memory.role === ROLE_KNIGHT);
     expect(knights).toHaveLength(1);
     expect(knights[0].memory.targetRoom).toBe(REMOTE);
+  });
+
+  it("sends no knight against a host two knights could not beat", () => {
+    run({ heal: 300, damage: 100, hits: 3000 });
+    expect(roles()).not.toContain(ROLE_KNIGHT);
   });
 
   it("keeps to one knight against a lone invader", () => {
