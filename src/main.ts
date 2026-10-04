@@ -29,6 +29,13 @@ import "./services/services.movement";
 const CPU_WARN_THRESHOLD = 0.85;
 
 const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
+// Past the threshold the visuals still draw once this many ticks have gone by
+// since they last did, and the replay shows that drawing on the ticks between.
+// Once the creeps alone used more than the threshold, the guard shed the
+// visuals on every tick and the realm went dark: the replay had nothing kept
+// to show. A drawing costs about a quarter of the limit, so one in ten costs
+// a fortieth of it.
+const VISUALS_MIN_INTERVAL = 10;
 const CPU_SKIP_HEAVY_THRESHOLD = 0.80;
 
 const CPU_BUCKET_CRITICAL = 2000;
@@ -39,6 +46,8 @@ const CPU_BUCKET_FLOOR = 500;
 // CPU the previous tick used, to tell a self-inflicted pixel drain (use under
 // the limit, bucket refilling) from a real overrun.
 let lastTickUsed = 0;
+
+let lastVisualsDrawn = -Infinity;
 
 export function loop() {
   setupConsole();
@@ -84,7 +93,9 @@ export function loop() {
   if (!heavyShed()) runSafe("pixels", () => pixelsSystem.loop());
 
   const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
-  if (!bucketCritical && cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD) {
+  const visualsDue = Game.time - lastVisualsDrawn >= VISUALS_MIN_INTERVAL;
+  if (!bucketCritical && (visualsDue || cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD)) {
+    lastVisualsDrawn = Game.time;
     runSafe("visuals", () => drawAndKeep(() => visualsSystem.loop()));
   } else {
     runSafe("visual replay", () => replayKept());

@@ -43,9 +43,9 @@ import { loop } from "../src/main";
 
 let used: number;
 
-function tick(bucket: number) {
+function tick(bucket: number, time = 1) {
   used = 0;
-  g.Game = { time: 1, cpu: { limit: 20, bucket, getUsed: () => used } };
+  g.Game = { time, cpu: { limit: 20, bucket, getUsed: () => used } };
   g.Memory = {};
   loop();
 }
@@ -61,20 +61,41 @@ describe("CPU guard in main", () => {
   it("runs structures on a busy tick while the bucket is healthy", () => {
     tick(5000);
     expect(loops.structures).toHaveBeenCalled();
-    // Visuals still give way on a busy tick, and the last drawing is shown again.
-    expect(loops.visuals).not.toHaveBeenCalled();
-    expect(replay).toHaveBeenCalled();
   });
 
+  const quiet = () => loops.creep.mockImplementation(() => (used += 2));
+  const busy = () => loops.creep.mockImplementation(() => (used += 16));
+
   it("draws the visuals afresh on a quiet tick", () => {
-    loops.creep.mockImplementation(() => (used += 2));
-    tick(5000);
+    quiet();
+    tick(5000, 100);
     expect(loops.visuals).toHaveBeenCalled();
     expect(replay).not.toHaveBeenCalled();
   });
 
-  it("holds structures back when the bucket is critical", () => {
-    tick(1000);
+  it("shows the last drawing again on a busy tick soon after it", () => {
+    quiet();
+    tick(5000, 200);
+    loops.visuals.mockReset();
+    busy();
+    tick(5000, 205);
+    expect(loops.visuals).not.toHaveBeenCalled();
+    expect(replay).toHaveBeenCalled();
+  });
+
+  it("draws the visuals on a busy tick once the last drawing is ten ticks old", () => {
+    quiet();
+    tick(5000, 300);
+    loops.visuals.mockReset();
+    busy();
+    tick(5000, 310);
+    expect(loops.visuals).toHaveBeenCalled();
+    expect(replay).not.toHaveBeenCalled();
+  });
+
+  it("holds structures and the visuals back when the bucket is critical", () => {
+    tick(1000, 400);
     expect(loops.structures).not.toHaveBeenCalled();
+    expect(loops.visuals).not.toHaveBeenCalled();
   });
 });
