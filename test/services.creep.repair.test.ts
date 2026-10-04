@@ -97,6 +97,24 @@ describe("findMostCriticalRepairTarget ramparts", () => {
     expect(repairFor(room)).toBeNull();
   });
 
+  it("works the nearest of the ramparts about as weak as the weakest", () => {
+    // A ring all within a few thousand hits: one tick of repair lifts a rampart
+    // past the next weakest, which can be on the far side of the base.
+    const far = rampart("far", 40, 30, 15_100);
+    const near = rampart("near", 10, 10, 15_500);
+    const room = makeRoom({ level: 6, structures: [far, near], perimeter: ["40,30", "10,10"] });
+    const smith = { room, pos: { getRangeTo: (t: AnyStructure) => t.pos.getRangeTo({ x: 9, y: 10 } as RoomPosition) } };
+    expect(findMostCriticalRepairTarget(smith as unknown as Creep)?.id).toBe("near");
+  });
+
+  it("still goes to a rampart left far weaker than the rest", () => {
+    const far = rampart("far", 40, 30, 2_500);
+    const near = rampart("near", 10, 10, 40_000);
+    const room = makeRoom({ level: 6, structures: [far, near], perimeter: ["40,30", "10,10"] });
+    const smith = { room, pos: { getRangeTo: (t: AnyStructure) => t.pos.getRangeTo({ x: 9, y: 10 } as RoomPosition) } };
+    expect(findMostCriticalRepairTarget(smith as unknown as Creep)?.id).toBe("far");
+  });
+
   it("holds the perimeter at 1M until storage has energy to spare", () => {
     const wall = rampart("perim", 20, 20, 1_500_000);
     const poor = makeRoom({
