@@ -20723,6 +20723,33 @@ function setupConsole() {
     };
 }
 
+const REPLAY_MAX_AGE = 30;
+let kept;
+function drawAndKeep(draw) {
+    var _a, _b, _c, _d, _e, _f, _g, _h;
+    const before = {};
+    for (const name in Game.rooms)
+        before[name] = (_b = (_a = Game.rooms[name].visual.export()) === null || _a === void 0 ? void 0 : _a.length) !== null && _b !== void 0 ? _b : 0;
+    const mapBefore = (_d = (_c = Game.map.visual.export()) === null || _c === void 0 ? void 0 : _c.length) !== null && _d !== void 0 ? _d : 0;
+    draw();
+    const rooms = {};
+    for (const name in Game.rooms) {
+        const added = (_e = Game.rooms[name].visual.export()) === null || _e === void 0 ? void 0 : _e.slice((_f = before[name]) !== null && _f !== void 0 ? _f : 0);
+        if (added)
+            rooms[name] = added;
+    }
+    kept = { at: Game.time, rooms, map: (_h = (_g = Game.map.visual.export()) === null || _g === void 0 ? void 0 : _g.slice(mapBefore)) !== null && _h !== void 0 ? _h : "" };
+}
+function replayKept() {
+    var _a;
+    if (!kept || Game.time - kept.at > REPLAY_MAX_AGE)
+        return;
+    for (const name in kept.rooms)
+        (_a = Game.rooms[name]) === null || _a === void 0 ? void 0 : _a.visual.import(kept.rooms[name]);
+    if (kept.map)
+        Game.map.visual.import(kept.map);
+}
+
 const CPU_WARN_THRESHOLD = 0.85;
 const CPU_SKIP_VISUALS_THRESHOLD = 0.75;
 const CPU_SKIP_HEAVY_THRESHOLD = 0.80;
@@ -20770,7 +20797,10 @@ function loop() {
         runSafe("pixels", () => loop$b());
     const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
     if (!bucketCritical && cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD) {
-        runSafe("visuals", () => loop$1());
+        runSafe("visuals", () => drawAndKeep(() => loop$1()));
+    }
+    else {
+        runSafe("visual replay", () => replayKept());
     }
     const used = Game.cpu.getUsed() - tickStart;
     lastTickUsed = Game.cpu.getUsed();
