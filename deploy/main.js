@@ -7713,6 +7713,9 @@ const SEASON_TIDINGS = {
     autumn: "Autumn comes to the realm. Leaves blow across the wilds.",
     winter: "Winter comes to the realm. Snow settles on the battlements.",
 };
+function reckoningYear(time) {
+    return Math.floor(time / (TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON * TOWN_SEASONS.length)) + 1;
+}
 function heraldSeason() {
     const season = townSeason(Game.time);
     const known = Memory.heraldSeason;
@@ -7723,8 +7726,9 @@ function heraldSeason() {
     Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
     if (annals)
         chronicle(annalsLine(known, annals));
+    const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
     const feast = townFeast(Game.time);
-    chronicle(feast ? `${SEASON_TIDINGS[season]} The ${feast} begins.` : SEASON_TIDINGS[season]);
+    chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
 }
 function annalsLine(season, a) {
     const whole = a.since <= Game.time - TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON;
@@ -7732,7 +7736,8 @@ function annalsLine(season, a) {
     const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
     const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
     const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
-    return `So ends the ${season}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
+    const ended = season === "winter" ? `, and with it the year ${reckoningYear(Game.time - 1)}` : "";
+    return `So ends the ${season}${ended}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
 }
 const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
