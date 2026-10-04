@@ -12628,6 +12628,7 @@ const WEATHER_EVERY = 4;
 const FIRST_WORDS = ["reporting!", "ready!", "first day!", "hail all!", "I live!"];
 const ELDER_TICKS = 150;
 const ELDER_CHATTER = ["old bones", "last days", "farewell", "rest soon"];
+const WOUNDED_CHATTER = ["my wounds", "ow...", "bleeding!", "a healer?"];
 const SAY_PERIOD = 30;
 let replyTick = -1;
 let repliesDue = {};
@@ -12670,9 +12671,14 @@ function chatterLine(creep) {
     const hail = pick % WEATHER_EVERY === 1 ? greeting(creep, pick) : undefined;
     if (hail)
         return hail;
+    const wounded = creep.hits < creep.hitsMax / 2;
     const elder = ((_b = creep.ticksToLive) !== null && _b !== void 0 ? _b : Infinity) <= ELDER_TICKS;
-    const lines = elder ? ELDER_CHATTER : ((_c = ROLE_CHATTER[creep.memory.role]) !== null && _c !== void 0 ? _c : GENERAL_CHATTER);
-    return lines[pick % lines.length];
+    const lines = wounded
+        ? WOUNDED_CHATTER
+        : elder
+            ? ELDER_CHATTER
+            : ((_c = ROLE_CHATTER[creep.memory.role]) !== null && _c !== void 0 ? _c : GENERAL_CHATTER);
+    return lines[Math.floor(pick / WEATHER_EVERY) % lines.length];
 }
 function greeting(creep, pick) {
     const other = creep.pos.findInRange(FIND_MY_CREEPS, 1).find((c) => c.name !== creep.name);
