@@ -11836,22 +11836,36 @@ const ROLE_CHATTER = {
     [ROLE_SETTLER]: ["new home!", "long road", "finally!"],
     [ROLE_TOWNSFOLK]: ["warm bread", "nice day", "hail Arca!", "tax again?", "gold up"],
 };
+const SEASON_CHATTER = {
+    spring: ["fresh air", "rain again", "blossoms"],
+    summer: ["hot!", "thirsty", "sunburnt"],
+    autumn: ["leaves!", "chilly", "harvest!"],
+    winter: ["brr!", "cold feet", "snow!"],
+};
+const FEAST_CHATTER = ["feast!", "ale!", "fair day!"];
+const WEATHER_EVERY = 4;
 const SAY_PERIOD = 30;
-function maybeChatter(creep) {
+function chatterLine(creep) {
     var _a;
-    const cry = cryFor(creep);
-    if (cry) {
-        creep.say(cry, true);
-        return;
-    }
     let hash = 0;
     for (let i = 0; i < creep.name.length; i++)
         hash = (hash + creep.name.charCodeAt(i)) | 0;
     if ((Game.time + hash) % SAY_PERIOD !== 0)
-        return;
-    const lines = (_a = ROLE_CHATTER[creep.memory.role]) !== null && _a !== void 0 ? _a : GENERAL_CHATTER;
+        return undefined;
     const eventNo = (Game.time + hash) / SAY_PERIOD;
-    creep.say(lines[Math.abs(eventNo + hash) % lines.length], true);
+    const pick = Math.abs(eventNo + hash);
+    if (pick % WEATHER_EVERY === 0) {
+        const weather = townFeast(Game.time) ? FEAST_CHATTER : SEASON_CHATTER[townSeason(Game.time)];
+        return weather[(pick / WEATHER_EVERY) % weather.length];
+    }
+    const lines = (_a = ROLE_CHATTER[creep.memory.role]) !== null && _a !== void 0 ? _a : GENERAL_CHATTER;
+    return lines[pick % lines.length];
+}
+function maybeChatter(creep) {
+    var _a;
+    const line = (_a = cryFor(creep)) !== null && _a !== void 0 ? _a : chatterLine(creep);
+    if (line)
+        creep.say(line, true);
 }
 function loop$e() {
     const profile = Memory.profileRoles === true;
