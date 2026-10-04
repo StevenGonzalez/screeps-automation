@@ -28,7 +28,8 @@ g.FIND_STRUCTURES = 101;
 g.FIND_CONSTRUCTION_SITES = 111;
 g.OK = 0;
 
-import { processRoomSpawning } from "../src/orchestrators/orchestrator.spawning";
+import { loop, processRoomSpawning } from "../src/orchestrators/orchestrator.spawning";
+import { SPAWN_IDLE_RECHECK } from "../src/orchestrators/orchestrator.spawning.shared";
 import { spawnApothecary } from "../src/orchestrators/orchestrator.spawning.economy";
 import {
   ROLE_MINER,
@@ -200,5 +201,59 @@ describe("apothecary sizing", () => {
     const body = spawnCalls[0].body;
     expect(body.filter((p) => p === g.CARRY).length).toBe(10);
     expect(body.filter((p) => p === g.MOVE).length).toBe(5);
+  });
+});
+
+describe("idle spawn", () => {
+  // A filler is alive, so the chain reaches the porter and holds the spawn for
+  // a full-size one: nothing is ordered.
+  const held = () => {
+    clock += 1000;
+    const made = makeRoom(
+      [
+        makeCreep(ROLE_MINER, "W48S8", 5),
+        makeCreep(ROLE_MINER, "W48S8", 5),
+        makeCreep(ROLE_HAULER, "W48S8", 0),
+        makeCreep(ROLE_FILLER, "W48S8", 0),
+      ],
+      300
+    );
+    // The castle's exits, which the blockade watch reads.
+    (g.Game as { map: unknown }).map = { describeExits: () => ({}), getRoomLinearDistance: () => 1 };
+    return made;
+  };
+  const lastLook = (room: Room) => (room.memory as { spawnHold?: { lastTick: number } }).spawnHold?.lastTick;
+  const at = (t: number) => {
+    (g.Game as { time: number }).time = t;
+    loop();
+  };
+
+  it("looks again only every few ticks while it finds nothing to raise", () => {
+    const { room } = held();
+    at(clock);
+    expect(lastLook(room)).toBe(clock);
+    at(clock + 1);
+    expect(lastLook(room)).toBe(clock);
+    at(clock + SPAWN_IDLE_RECHECK);
+    expect(lastLook(room)).toBe(clock + SPAWN_IDLE_RECHECK);
+  });
+
+  it("looks every tick while hostiles are in the room", () => {
+    const { room } = held();
+    const find = room.find.bind(room);
+    const scout = { owner: { username: "Raider" }, body: [{ type: g.MOVE, hits: 100 }], pos: { x: 25, y: 25 } };
+    (room as { find: unknown }).find = (type: number) => (type === g.FIND_HOSTILE_CREEPS ? [scout] : find(type));
+    at(clock);
+    expect(spawnCalls).toEqual([]);
+    at(clock + 1);
+    expect(lastLook(room)).toBe(clock + 1);
+  });
+
+  it("still gives up the porter hold once it has starved the room for 100 ticks", () => {
+    held();
+    let t = clock;
+    while (spawnCalls.length === 0 && t <= clock + 110) at(t++);
+    expect(spawnCalls.map((c) => c.role)).toEqual([ROLE_HAULER]);
+    expect(t - 1 - clock).toBeLessThanOrEqual(100 + SPAWN_IDLE_RECHECK);
   });
 });

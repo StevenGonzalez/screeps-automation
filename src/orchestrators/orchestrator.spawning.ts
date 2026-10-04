@@ -7,7 +7,12 @@ import {
 } from "../services/services.combat";
 import { isEnergyEmergency } from "../services/services.creep";
 import { spawnTownsfolk } from "./orchestrator.spawning.town";
-import { countByRoleInRoom, getRoomPhase } from "./orchestrator.spawning.shared";
+import {
+  countByRoleInRoom,
+  getRoomPhase,
+  SPAWN_IDLE_RECHECK,
+  spawnOrdersThisTick,
+} from "./orchestrator.spawning.shared";
 import {
   hasEnergyGatherers,
   countHomeHaulers,
@@ -95,6 +100,13 @@ export { buildPowerAttackerBody, buildSkGuardianBody } from "./orchestrator.spaw
 // How often each home checks for merchants whose remote is no longer worked.
 const STRAY_HAULER_INTERVAL = 10;
 
+// A spawn that finds nothing to raise looks again only SPAWN_IDLE_RECHECK
+// ticks later. Each look walks the whole spawn order, about half a CPU a
+// castle, and all three castles' spawns stood idle on most ticks. A creep
+// that falls due waits at most two ticks more. A room with hostiles in it
+// looks every tick, so a raid is answered at once.
+const idleUntil: Record<string, number> = {};
+
 export function loop() {
   for (const roomName in Game.rooms) {
     const room = Game.rooms[roomName];
@@ -103,7 +115,11 @@ export function loop() {
     if (Game.time % STRAY_HAULER_INTERVAL === 0) reassignStrayHaulers(room);
     const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
     for (const spawn of spawns) {
-      if (!spawn.spawning) processRoomSpawning(room, spawn);
+      if (spawn.spawning) continue;
+      if ((idleUntil[spawn.id] ?? 0) > Game.time && getThreatInfo(room).hostiles.length === 0) continue;
+      const orders = spawnOrdersThisTick();
+      processRoomSpawning(room, spawn);
+      if (spawnOrdersThisTick() === orders) idleUntil[spawn.id] = Game.time + SPAWN_IDLE_RECHECK;
     }
   }
 }

@@ -69,6 +69,12 @@ function freshIssued(): void {
   for (const k of Object.keys(issuedThisTick)) delete issuedThisTick[k];
 }
 
+// Spawn orders issued so far this tick, in every room.
+export function spawnOrdersThisTick(): number {
+  freshIssued();
+  return issuedNames.size;
+}
+
 function getIssuedCount(room: Room, role: string): number {
   freshIssued();
   return issuedThisTick[room.name]?.[role] ?? 0;
@@ -164,13 +170,18 @@ export function countByRoleInRoom(role: string, room: Room): number {
 // room never reaches costs it every upgrader, builder, repairer and defender.
 const SPAWN_HOLD_LIMIT = 100;
 
+// A spawn that finds nothing to raise looks again only after this many ticks
+// (orchestrator.spawning).
+export const SPAWN_IDLE_RECHECK = 3;
+
 export function holdSpawnFor(room: Room, role: string): boolean {
   const memory = getRoomMemory(room);
   const hold = memory.spawnHold;
-  // A room with two idle spawns asks twice in the same tick, so treat both the
-  // current tick and the previous one as the same unbroken hold.
+  // A room with two idle spawns asks twice in the same tick, and a held spawn
+  // asks only every SPAWN_IDLE_RECHECK ticks, so an ask that soon after the
+  // last continues the same unbroken hold.
   const continuing =
-    hold !== undefined && hold.role === role && Game.time - hold.lastTick <= 1;
+    hold !== undefined && hold.role === role && Game.time - hold.lastTick <= SPAWN_IDLE_RECHECK;
   const since = continuing ? hold!.since : Game.time;
   memory.spawnHold = { role, since, lastTick: Game.time };
   return Game.time - since < SPAWN_HOLD_LIMIT;
