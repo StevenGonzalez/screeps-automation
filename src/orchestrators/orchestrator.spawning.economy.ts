@@ -63,10 +63,6 @@ function minerBudget(room: Room): number {
   return room.energyCapacityAvailable;
 }
 
-function getMinerPopulationTarget(room: Room): number {
-  return (room.memory.minerContainerIds ?? []).length;
-}
-
 function getMinerReplacementLead(room: Room): number {
   const allowed = minerBudget(room);
   return spawnLeadTicks(buildMinerBody(allowed).length, getMinerTravelTicks(room));
@@ -414,19 +410,26 @@ function getMinerWorkTarget(room: Room): number {
 }
 
 export function shouldSpawnMiner(room: Room): boolean {
-  // Count only miners big enough for the room's current capacity. A miner born
-  // during an energy crunch is undersized for its whole life and caps income at
-  // a fraction of the source; it needs replacing once we can afford better.
+  // A post is manned once the miners at it dig as much as the miner the room
+  // would raise for it now. A miner born during an energy crunch is undersized
+  // for its whole life and caps income at a fraction of the source, so its post
+  // needs another once we can afford better. Judging each miner on its own
+  // replaced a young keep's two-WORK pair at a post as well, every time an
+  // extension went up, though together they already outdug the replacement.
   const workTarget = getMinerWorkTarget(room);
   const lead = getMinerReplacementLead(room);
-  const adequate =
-    getCreepsByRoleInRoom(ROLE_MINER, room).filter(
-      (c) =>
-        !c.spawning &&
-        c.body.filter((p) => p.type === WORK).length >= workTarget &&
-        !isRetiring(c, lead)
-    ).length + getRoomSpawningCount(room, ROLE_MINER);
-  return adequate < getMinerPopulationTarget(room);
+  const workAt: Record<string, number> = {};
+  let unposted = 0;
+  for (const c of getCreepsByRoleInRoom(ROLE_MINER, room)) {
+    if (c.spawning || isRetiring(c, lead)) continue;
+    const work = c.body.filter((p) => p.type === WORK).length;
+    const post = c.memory.assignedContainerId;
+    if (post) workAt[post] = (workAt[post] ?? 0) + work;
+    else if (work >= workTarget) unposted++;
+  }
+  const posts = room.memory.minerContainerIds ?? [];
+  const manned = posts.filter((id) => (workAt[id] ?? 0) >= workTarget).length;
+  return manned + unposted + getRoomSpawningCount(room, ROLE_MINER) < posts.length;
 }
 
 // The first harvester goes out on whatever the core holds. The rest wait for a

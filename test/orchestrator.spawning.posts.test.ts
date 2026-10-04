@@ -4,7 +4,7 @@ const g = globalThis as Record<string, unknown>;
 
 g.FIND_MY_SPAWNS = 108;
 
-const { shouldSpawnHauler } = await import("../src/orchestrators/orchestrator.spawning.economy");
+const { shouldSpawnHauler, shouldSpawnMiner } = await import("../src/orchestrators/orchestrator.spawning.economy");
 const { ROLE_MINER, ROLE_HAULER } = await import("../src/config/config.roles");
 
 const ROOM = "W1N1";
@@ -69,5 +69,27 @@ describe("porters for a young keep", () => {
       creep(ROLE_HAULER, 0, 4),
     ]);
     expect(shouldSpawnHauler(room)).toBe(true);
+  });
+});
+
+describe("miners for a young keep", () => {
+  // At 400 capacity a new miner has three WORK.
+  it("mans a post whose miners together dig as much as a new one", () => {
+    const room = keep(400, [
+      creep(ROLE_MINER, 1, 0, "c1"),
+      creep(ROLE_MINER, 2, 1, "c1"),
+      creep(ROLE_MINER, 2, 1, "c2"),
+      creep(ROLE_MINER, 2, 1, "c2"),
+    ]);
+    expect(shouldSpawnMiner(room)).toBe(false);
+  });
+
+  it("sends a bigger miner to a post its runt alone holds", () => {
+    const room = keep(400, [
+      creep(ROLE_MINER, 1, 0, "c1"),
+      creep(ROLE_MINER, 2, 1, "c1"),
+      creep(ROLE_MINER, 2, 1, "c2"),
+    ]);
+    expect(shouldSpawnMiner(room)).toBe(true);
   });
 });
