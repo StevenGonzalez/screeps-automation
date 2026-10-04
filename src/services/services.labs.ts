@@ -175,6 +175,24 @@ export function labInputStock(room: Room, resource: string): number {
   return total;
 }
 
+// Whether the labs have work for an apothecary: boosts to load, minerals to
+// carry to the terminal for a send, a reaction with both its inputs on hand,
+// or, with no reaction set, leftovers in the labs to take back to storage. A
+// reaction waiting on an input no store holds has none: the apothecary raised
+// for one stood beside storage its whole life, 750 gold and 45 ticks of the
+// barracks every 1,500.
+export function labsNeedTending(room: Room): boolean {
+  if (getBoostRequests(room).size > 0) return true;
+  const send = room.memory.pendingSend;
+  if (send && send.resource !== RESOURCE_ENERGY) return true;
+  const ls = room.memory.labSystem;
+  if (!ls) return false;
+  if (ls.inputCompounds) return ls.inputCompounds.every((c) => labInputStock(room, c) >= LAB_REACTION_AMOUNT);
+  return [...(ls.inputLabIds ?? []), ...(ls.outputLabIds ?? [])].some(
+    (id) => !!(Game.getObjectById(id) as StructureLab | null)?.mineralType
+  );
+}
+
 /** Queued terminal sends from our other rooms to `room` of `resource`. */
 export function incomingSends(room: Room, resource: string): number {
   let total = 0;

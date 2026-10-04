@@ -14,6 +14,7 @@ import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { countOpenTilesAround, getSources } from "../services/services.creep";
 import { upgraderStorageFloor } from "../services/services.treasury";
+import { labsNeedTending } from "../services/services.labs";
 import {
   buildScaledBody,
   calculateBodyPartCost,
@@ -754,6 +755,7 @@ function inheritMinerPost(room: Room): Pick<CreepMemory, "assignedSourceId" | "a
 export function shouldSpawnApothecary(room: Room): boolean {
   if ((room.controller?.level ?? 0) < 6) return false;
   if (!room.memory.labSystem?.inputLabIds?.length) return false;
+  if (!labsNeedTending(room)) return false;
   return countByRoleInRoom(ROLE_APOTHECARY, room) < 1;
 }
 

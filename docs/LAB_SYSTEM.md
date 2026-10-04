@@ -38,6 +38,14 @@ Labs are split by proximity to storage:
 
 IDs are cached in `room.memory.labSystem` and only recomputed when invalid.
 
+### The goblin
+
+One goblin serves the labs of an RCL 6+ room, and only while they have work
+(`labsNeedTending`): boosts to load, minerals to carry to the terminal for a
+send, a reaction with both its inputs on hand, or, with no reaction set,
+leftovers in the labs to take back. A reaction waiting on an input no store
+holds raises no goblin; one would only stand beside storage until it died.
+
 ### Reaction-chain resolution
 
 `services/services.labs.ts` (`resolveChain`) expands a requested compound into the

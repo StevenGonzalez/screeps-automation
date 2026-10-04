@@ -59,6 +59,48 @@ describe("resolveChain", () => {
   });
 });
 
+describe("labsNeedTending", () => {
+  const g = globalThis as Record<string, unknown>;
+  g.LAB_REACTION_AMOUNT = 5;
+  g.RESOURCE_ENERGY = "energy";
+  g.FIND_MY_CREEPS = 102;
+
+  function labRoom(labSystem: Partial<RoomMemory["labSystem"]>, stock: Record<string, number>, labs: Record<string, string | null> = {}) {
+    g.Game = { getObjectById: (id: string) => (id in labs ? { mineralType: labs[id], store: { getUsedCapacity: () => 0 } } : null) };
+    const store = { getUsedCapacity: (r: string) => stock[r] ?? 0 };
+    return {
+      find: () => [],
+      storage: { store },
+      memory: { labSystem: { inputLabIds: ["in1", "in2"], outputLabIds: ["out1"], queue: [], ...labSystem } },
+    } as unknown as Room;
+  }
+
+  it("has none while the reaction waits on an input no store holds", async () => {
+    const { labsNeedTending } = await import("../src/services/services.labs");
+    const room = labRoom({ inputCompounds: ["K", "O"] }, { O: 17_560 }, { in1: null, in2: "O", out1: null });
+    expect(labsNeedTending(room)).toBe(false);
+  });
+
+  it("has work once both of the reaction's inputs are on hand", async () => {
+    const { labsNeedTending } = await import("../src/services/services.labs");
+    const room = labRoom({ inputCompounds: ["K", "O"] }, { O: 17_560, K: 3000 });
+    expect(labsNeedTending(room)).toBe(true);
+  });
+
+  it("has work clearing leftovers from the labs with no reaction set", async () => {
+    const { labsNeedTending } = await import("../src/services/services.labs");
+    expect(labsNeedTending(labRoom({}, {}, { in1: null, in2: "O", out1: null }))).toBe(true);
+    expect(labsNeedTending(labRoom({}, {}, { in1: null, in2: null, out1: null }))).toBe(false);
+  });
+
+  it("has work loading minerals for a send", async () => {
+    const { labsNeedTending } = await import("../src/services/services.labs");
+    const room = labRoom({ inputCompounds: ["K", "O"] }, {});
+    room.memory.pendingSend = { resource: "O" } as RoomMemory["pendingSend"];
+    expect(labsNeedTending(room)).toBe(true);
+  });
+});
+
 describe("getBoostRequests", () => {
   const g = globalThis as Record<string, unknown>;
   g.LAB_BOOST_MINERAL = 30;
