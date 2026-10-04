@@ -2849,6 +2849,8 @@ let criticalRepairCacheTick = -1;
 const criticalRepairByRoom = {};
 let towerRepairCacheTick = -1;
 const towerRepairByRoom = {};
+const TOWER_REPAIR_IDLE_TICKS = 10;
+const towerRepairIdleUntil = {};
 let nukeTargetCacheTick = -1;
 const nukeTargetByRoom = {};
 function findClosestConstructionSite(creep) {
@@ -3134,7 +3136,7 @@ function repairCandidates(room) {
     return belowTarget.length > 0 ? weakestBand(belowTarget) : [];
 }
 function findTowerRepairTarget(room) {
-    var _a, _b;
+    var _a, _b, _c;
     const nukeTarget = getNukeRampartTarget(room);
     if (nukeTarget)
         return nukeTarget;
@@ -3145,7 +3147,9 @@ function findTowerRepairTarget(room) {
     }
     if (room.name in towerRepairByRoom)
         return towerRepairByRoom[room.name];
-    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
+    if (((_a = towerRepairIdleUntil[room.name]) !== null && _a !== void 0 ? _a : 0) > Game.time)
+        return null;
+    const rcl = (_c = (_b = room.controller) === null || _b === void 0 ? void 0 : _b.level) !== null && _c !== void 0 ? _c : 0;
     const towerWallThreshold = Math.min(50000, Math.max(5000, getRampartTargetHP(rcl) * 0.05));
     const targetOf = barrierTargetFn(room);
     const kept = keptUp(room);
@@ -3161,6 +3165,8 @@ function findTowerRepairTarget(room) {
         ? null
         : candidates.reduce((a, b) => (a.hits < b.hits ? a : b));
     towerRepairByRoom[room.name] = result;
+    if (!result)
+        towerRepairIdleUntil[room.name] = Game.time + TOWER_REPAIR_IDLE_TICKS;
     return result;
 }
 function findTowerDefenseRepairTarget(room) {
