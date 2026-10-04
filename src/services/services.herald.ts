@@ -228,7 +228,7 @@ function heraldWolves(castles: Room[]): void {
 
 // On a new-moon night the wisps come out over the marshes. Every castle mutters
 // at them as night falls, and the chronicle notes them once.
-const WISP_CRIES = ["Wisps!", "Don't follow!", "Spirits..."];
+const WISP_CRIES = ["Wisps!", "Don't go!", "Spirits..."];
 const WISP_TIDINGS = [
   "Under the dark moon, will-o'-the-wisps drifted over the marshes. None who followed them came back.",
   "Pale lights wandered the bogs all night beneath the new moon.",

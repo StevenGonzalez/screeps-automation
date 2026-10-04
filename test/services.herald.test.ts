@@ -473,6 +473,18 @@ describe("herald", () => {
     expect(lines).toHaveLength(1);
   });
 
+  it("has every castle's wisp cry fit in what creep.say shows", () => {
+    const names = ["W1N1", "W2N1", "W3N1"];
+    const rooms = Object.fromEntries(names.map((name) => [name, { ...roomWith([], { my: true, level: 4 }), name }]));
+    g.Game = { time: 8 * TOWN_DAY_LENGTH + 700, gcl: { level: 1 }, market: NO_TRADE, rooms, creeps: {}, getObjectById: () => null };
+    heraldRooms();
+    for (const name of names) {
+      const cry = cryFor(new FakeCreep("Mason Aldric", { name }) as unknown as Creep);
+      expect(cry).toBeTruthy();
+      expect(cry!.length, cry).toBeLessThanOrEqual(10);
+    }
+  });
+
   it("chronicles the northern lights once, as night falls", () => {
     let day = 0;
     while (!townAurora(day * TOWN_DAY_LENGTH + 800)) day++;

@@ -36,25 +36,26 @@ const LOOKOUT_RETREAT_TICKS = 300;
 // How far inside the neighbouring room a lookout stands.
 const LOOKOUT_DEPTH = 3;
 
-const PHASE_CALLS: Record<string, string[]> = {
-  dawn: ["cock-a-doo!", "morning!", "to the watch"],
+// creep.say shows at most 10 characters, so every line fits in 10.
+export const PHASE_CALLS: Record<string, string[]> = {
+  dawn: ["cock-a-doo", "morning!", "on watch!"],
   day: ["all's well", "quiet day", "eyes open"],
   dusk: ["lamps lit", "home time", "supper!"],
-  night: ["zzz", "g'night", "bar the door"],
+  night: ["zzz", "g'night", "bolt door"],
 };
 
 // At daybreak the talk is of the weather.
-const SEASON_CALLS: Record<TownSeason, string[]> = {
+export const SEASON_CALLS: Record<TownSeason, string[]> = {
   spring: ["blossoms!", "lambs out", "mud again"],
   summer: ["hot one", "hay to cut", "long day"],
-  autumn: ["harvest!", "cider time", "leaves down"],
-  winter: ["brr!", "snow again", "stoke fires"],
+  autumn: ["harvest!", "cider time", "leaf fall"],
+  winter: ["brr!", "snow again", "stoke fire"],
 };
 
 // On a feast day the square cheers every hundred ticks while the sun is up.
-const STORM_CALLS = ["storm!", "bar doors", "rain again"];
+export const STORM_CALLS = ["storm!", "bar doors", "rain again"];
 
-const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
+export const FEAST_CALLS = ["Huzzah!", "ale!", "a toast!", "dance!", "sing!"];
 const FEAST_CHEER_PERIOD = 100;
 
 // Each night one militiaman keeps the watch on a post while the rest sleep, a
