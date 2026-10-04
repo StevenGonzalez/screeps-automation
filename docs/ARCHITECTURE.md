@@ -281,7 +281,9 @@ firstborn, a raider slain, one of ours fallen ("† Wulfric"), the dragon, the
 wolves or the wisps, every creep in the realm now and then repeats it in its idle
 chatter (`Memory.gossip`). Newer news replaces older. In its last 150 ticks a
 creep talks of its end instead of its work ("old bones", "farewell"), and after
-dark its talk of the weather turns to the night ("torches!", "owls hoot").
+dark its talk of the weather turns to the night ("torches!", "owls hoot"). Now
+and then a creep hails another standing beside it by its given name ("hail
+Edith").
 
 Controller signs are dark-fantasy proclamations (`config/signatures.ts`), and
 envoys sign the remote controllers they reserve.

@@ -173,9 +173,21 @@ export function chatterLine(creep: Creep): string | undefined {
   // As often again, the realm's latest news while it is fresh.
   const news = pick % WEATHER_EVERY === WEATHER_EVERY / 2 ? gossip() : undefined;
   if (news) return news;
+  // And as often, a greeting for a creep alongside.
+  const hail = pick % WEATHER_EVERY === 1 ? greeting(creep, pick) : undefined;
+  if (hail) return hail;
   const elder = (creep.ticksToLive ?? Infinity) <= ELDER_TICKS;
   const lines = elder ? ELDER_CHATTER : (ROLE_CHATTER[creep.memory.role] ?? GENERAL_CHATTER);
   return lines[pick % lines.length];
+}
+
+// A creep hails a neighbour by its given name, the last word of its own.
+function greeting(creep: Creep, pick: number): string | undefined {
+  const other = creep.pos.findInRange(FIND_MY_CREEPS, 1).find((c) => c.name !== creep.name);
+  const given = other?.name.split(" ").pop();
+  if (!given) return undefined;
+  const lines = [`hail ${given}`, `ho ${given}!`, `${given}!`].filter((l) => l.length <= 10);
+  return lines.length > 0 ? lines[(pick >> 2) % lines.length] : undefined;
 }
 
 function maybeChatter(creep: Creep): void {

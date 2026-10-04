@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from "vitest";
 const g = vi.hoisted(() => {
   const g = globalThis as Record<string, unknown>;
   for (const name of ["Creep", "PowerCreep", "Room", "RoomPosition", "Structure"]) g[name] = class {};
+  g.FIND_MY_CREEPS = 102;
   return g;
 });
 
@@ -13,8 +14,18 @@ import { ROLE_MINER } from "../src/config/config.roles";
 import { TOWN_DAY_LENGTH } from "../src/config/config.town";
 
 // Every line a creep says over a stretch of ticks in the same season.
-function linesFrom(start: number, gossip?: Memory["gossip"], ticksToLive?: number): string[] {
-  const miner = { name: "Miner Bran", memory: { role: ROLE_MINER }, ticksToLive } as unknown as Creep;
+function linesFrom(
+  start: number,
+  gossip?: Memory["gossip"],
+  ticksToLive?: number,
+  alongside: string[] = []
+): string[] {
+  const miner = {
+    name: "Miner Bran",
+    memory: { role: ROLE_MINER },
+    ticksToLive,
+    pos: { findInRange: () => ["Miner Bran", ...alongside].map((name) => ({ name })) },
+  } as unknown as Creep;
   const lines: string[] = [];
   g.Memory = { gossip };
   for (let t = start; t < start + 3_000; t++) {
@@ -67,6 +78,17 @@ describe("chatter", () => {
     expect(elder).toContain("farewell");
     expect(elder).not.toContain("dig dig");
     expect(linesFrom(start, undefined, 1_000)).not.toContain("farewell");
+  });
+
+  it("hails a creep alongside by its given name, when that fits", () => {
+    const start = 23 * TOWN_DAY_LENGTH;
+    const lines = linesFrom(start, undefined, undefined, ["Pilgrim Edith"]);
+    expect(lines).toContain("hail Edith");
+    expect(lines).toContain("dig dig");
+    expect(linesFrom(start).some((l) => l.includes("Edith"))).toBe(false);
+    const long = linesFrom(start, undefined, undefined, ["Porter Wilhelmina"]);
+    expect(long.some((l) => l.includes("Wilhelmina"))).toBe(false);
+    for (const l of [...lines, ...long]) expect(l.length).toBeLessThanOrEqual(10);
   });
 
   it("talks of the feast on a feast day", () => {
