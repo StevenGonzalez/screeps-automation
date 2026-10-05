@@ -1623,14 +1623,19 @@ function getRemoteSourcePathLength(home, remote, src) {
     }
     return src.pathLength;
 }
+const ROAD_COVERAGE_TTL = 100;
+const roadCoverageCache = new Map();
 function remoteRoadCoverage(remote) {
     const room = Game.rooms[remote.roomName];
     if (!room)
         return 0;
+    const roads = remote.sources.filter((src) => src.containerId && src.roadTiles);
+    const key = `${remote.roomName}:${roads.map((src) => src.roadTiles).join("|")}`;
+    const known = roadCoverageCache.get(key);
+    if (known && Game.time - known.tick < ROAD_COVERAGE_TTL)
+        return known.coverage;
     const tiles = new Set();
-    for (const src of remote.sources) {
-        if (!src.containerId || !src.roadTiles)
-            continue;
+    for (const src of roads) {
         for (const tile of src.roadTiles.split(";")) {
             const [x, y] = tile.split(",").map(Number);
             if (x > 0 && y > 0 && x < 49 && y < 49)
@@ -1644,6 +1649,11 @@ function remoteRoadCoverage(remote) {
         if (s.structureType === STRUCTURE_ROAD && tiles.has(`${s.pos.x},${s.pos.y}`))
             built++;
     }
+    for (const [k, v] of roadCoverageCache) {
+        if (Game.time - v.tick >= ROAD_COVERAGE_TTL)
+            roadCoverageCache.delete(k);
+    }
+    roadCoverageCache.set(key, { tick: Game.time, coverage: built / tiles.size });
     return built / tiles.size;
 }
 const PAVED_ROAD_COVERAGE = 0.9;
@@ -10891,7 +10901,8 @@ function planRemoteSource(room, remote, src) {
     const dist = getRemoteSourceDistance(room, remote, src);
     const roads = remoteRoadsEnabled(room);
     const miner = buildRemoteMinerBody(capacity);
-    const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads);
+    const paved = roads && remotePaved({ ...remote, sources: [src] });
+    const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads, paved);
     const haulerCarry = Math.max(1, hauler.filter((p) => p === CARRY).length);
     const carry = remoteHaulCarry(output, dist) * REMOTE_HAUL_MARGIN;
     const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
