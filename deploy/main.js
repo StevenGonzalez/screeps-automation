@@ -21546,6 +21546,7 @@ function loop() {
                 !(inPixelRefill() && lastTickUsed <= limit)));
     const cpuFraction = (used) => (limit ? used / limit : 0);
     const heavyShed = () => bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
+    runSafe("memory parse", () => Memory);
     runSafe("herald", () => heraldRooms());
     runSafe("memory", () => loop$h());
     runSafe("rebrand", () => migrateRoleNames());
