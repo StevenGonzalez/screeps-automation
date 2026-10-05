@@ -25,6 +25,9 @@ export interface Annals {
   fallen: number;
   // Creeps raised in the barracks. Annals begun before this was counted lack it.
   recruits?: number;
+  // Gold each castle's merchants brought home this season, by road
+  // ("home>remote"). Annals begun before this was counted lack it.
+  roads?: Record<string, number>;
 }
 
 declare global {

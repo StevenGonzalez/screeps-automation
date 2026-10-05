@@ -298,7 +298,9 @@ load ("+800 gold"). Each load is added to the merchant's lifetime haul
 than any before it is named in the chronicle (`Memory.richestHaul`). Each load
 also counts toward what its castle's merchants have brought home from that
 remote (`Memory.roadGold`), and the chronicle marks the count as it passes ten
-thousand, fifty thousand, a hundred thousand and so on up to each million. A new
+thousand, fifty thousand, a hundred thousand and so on up to each million. The
+season's annals keep the same count for the season alone (`annals.roads`), and
+the richest road is named as the season turns. A new
 keep's first born is remembered by name (`memory.firstBorn`) and its bells ring
 again in the chronicle when it dies of age. The chronicle also notes when a
 castle's mineral vein is dug dry, with the days until it returns, and when it

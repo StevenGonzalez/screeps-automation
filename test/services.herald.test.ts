@@ -788,7 +788,49 @@ describe("herald", () => {
       "So ends the spring. This season the realm gathered 152.3K gold, raised 45 recruits, slew 7 foes and buried 1 of its own.",
       "Summer comes to the realm. The days run long on the vendors' roads. The Midsummer Fair begins.",
     ]);
-    expect((g.Memory as Memory).annals).toEqual({ since: 7_000, gold: 0, slain: 0, fallen: 0, recruits: 0 });
+    expect((g.Memory as Memory).annals).toEqual({ since: 7_000, gold: 0, slain: 0, fallen: 0, recruits: 0, roads: {} });
+  });
+
+  it("names the season's richest road as the season turns", () => {
+    const merchant = (home: string, remote: string) => {
+      const m = new FakeCreep("Merchant Leofric", { name: home });
+      m.memory = { role: "merchant", homeRoom: home, targetRoom: remote } as CreepMemory;
+      return m as unknown as Creep;
+    };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    at(6_999);
+    at(7_000);
+    // Gold brought home over earlier seasons does not count towards this one.
+    (g.Memory as Memory).roadGold = { "W1N1>W2N1": 90_000 };
+    cryHaul(merchant("W1N1", "W2N1"), 3_000);
+    cryHaul(merchant("W3N1", "W4N1"), 4_500);
+    cryHaul(merchant("W3N1", "W2N1"), 2_000);
+    at(13_999);
+    at(14_000);
+
+    const texts = (g.Memory as Memory).chronicle?.map((l) => l.text) ?? [];
+    expect(texts.filter((t) => t.includes("richest"))).toEqual([
+      `The road from ${castleName("W3N1")} to the ${wildsName("W4N1")} was the richest of the summer: 4.5K gold came home along it.`,
+    ]);
+    expect((g.Memory as Memory).annals?.roads).toEqual({});
+  });
+
+  it("names no richest road for annals begun before roads were counted", () => {
+    const m = new FakeCreep("Merchant Leofric", { name: "W1N1" });
+    m.memory = { role: "merchant", homeRoom: "W1N1", targetRoom: "W2N1" } as CreepMemory;
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: {}, creeps: {} };
+      heraldRooms();
+    };
+    at(6_999);
+    g.Memory = { ...(g.Memory as Memory), annals: { since: 0, gold: 0, slain: 0, fallen: 0, recruits: 0 } };
+    cryHaul(m as unknown as Creep, 3_000);
+    at(7_000);
+
+    expect((g.Memory as Memory).chronicle?.some((l) => l.text.includes("richest"))).toBe(false);
   });
 
   it("ends the year with the winter, names the new one in spring and counts the realm's souls", () => {

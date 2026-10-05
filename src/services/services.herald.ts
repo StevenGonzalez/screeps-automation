@@ -87,6 +87,8 @@ function heraldRoadGold(creep: Creep, amount: number): void {
   const key = `${homeRoom}>${targetRoom}`;
   const before = roads[key] ?? 0;
   roads[key] = before + amount;
+  const season = Memory.annals?.roads;
+  if (season) season[key] = (season[key] ?? 0) + amount;
   const mark = roadGoldMark(before, before + amount);
   if (!mark) return;
   chronicle(
@@ -215,8 +217,10 @@ function heraldSeason(): void {
   Memory.heraldSeason = season;
   if (known === undefined || known === season) return;
   const annals = Memory.annals;
-  Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
+  Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0, roads: {} };
   if (annals) chronicle(annalsLine(known, annals));
+  const road = annals && richestRoadLine(known, annals);
+  if (road) chronicle(road);
   const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
   const feast = townFeast(Game.time);
   chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
@@ -240,6 +244,18 @@ function annalsLine(season: string, a: Annals): string {
   const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
   const ended = season === "winter" ? `, and with it the year ${reckoningYear(Game.time - 1)}` : "";
   return `So ends the ${season}${ended}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
+}
+
+// The road that brought the most gold home over the season, so a watcher sees
+// which of the realm's roads carried it that season and not only overall.
+function richestRoadLine(season: string, a: Annals): string | undefined {
+  let best: [string, number] | undefined;
+  for (const [key, gold] of Object.entries(a.roads ?? {})) {
+    if (gold > (best?.[1] ?? 0)) best = [key, gold];
+  }
+  if (!best) return undefined;
+  const [home, remote] = best[0].split(">");
+  return `The road from ${castleName(home)} to the ${wildsName(remote)} was the richest of the ${season}: ${formatK(best[1])} gold came home along it.`;
 }
 
 // Trade with other players, read from the market's own records every few
