@@ -78,6 +78,16 @@ function scenario(nearEnergy: number, farEnergy: number, carrying = 0, farRange 
   return creep;
 }
 
+/** Another empty porter already on its way to load at a container. */
+function boundFor(containerId: string, range: number) {
+  (g.Game as { creeps: Record<string, unknown> }).creeps["Porter Hild"] = {
+    name: "Porter Hild",
+    pos: { getRangeTo: () => range },
+    store: { energy: 0, getFreeCapacity: () => 300 },
+    memory: { role: ROLE_HAULER, haulFromId: containerId, working: false },
+  };
+}
+
 beforeEach(() => {
   withdrawn = [];
 });
@@ -97,6 +107,37 @@ describe("hauler pickup", () => {
     runHauler(scenario(60, 2000, 100));
     expect(withdrawn).toEqual([]);
     runHauler(scenario(60, 2000, 100, 8));
+    expect(withdrawn).toEqual(["walk:far"]);
+  });
+
+  it("leaves a load to a porter that will reach it first", () => {
+    const creep = scenario(60, 150);
+    creep.memory.haulFromId = "far" as Id<StructureContainer>;
+    boundFor("far", 10);
+    runHauler(creep);
+    expect(withdrawn).toEqual([]);
+    expect(creep.memory.haulFromId).toBeUndefined();
+  });
+
+  it("still goes for a load when the porter bound there is farther off", () => {
+    const creep = scenario(60, 150);
+    boundFor("far", 50);
+    runHauler(creep);
+    expect(withdrawn).toEqual(["walk:far"]);
+    expect(creep.memory.haulFromId).toBe("far");
+  });
+
+  it("leaves its own container to a nearer porter and goes where there is gold to spare", () => {
+    const creep = scenario(150, 2000);
+    boundFor("near", 2);
+    runHauler(creep);
+    expect(withdrawn).toEqual(["walk:far"]);
+  });
+
+  it("keeps to the container it set out for while there is a load there", () => {
+    const creep = scenario(400, 2000);
+    creep.memory.haulFromId = "far" as Id<StructureContainer>;
+    runHauler(creep);
     expect(withdrawn).toEqual(["walk:far"]);
   });
 });

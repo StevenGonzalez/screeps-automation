@@ -6,7 +6,7 @@ import {
   getSafeSources,
   getMinerContainerIds,
 } from "./services.creep.room";
-import { energyClaimedByOthers } from "./services.coordination";
+import { energyClaimedByOthers, energyLeftFor } from "./services.coordination";
 import { upgradingFunded } from "./services.treasury";
 
 export function findEnergyDepositTarget(
@@ -282,19 +282,24 @@ export function getClosestContainerOrStorage(creep: Creep): Structure | null {
 // energy: the one closest to spilling. Taking the closest with any energy at
 // all sent spare haulers to a near source holding a trickle, too little to
 // fetch, so they stood idle while the far source's container filled and its
-// miner's gold spilled on the ground.
+// miner's gold spilled on the ground. Gold that a nearer porter is already on
+// its way to take is not counted: every empty porter made for the same
+// container, and all but the first turned back when they found it emptied.
 export function findFullestMinerContainer(
   creep: Creep,
   atLeast: number,
   range = Infinity
 ): StructureContainer | null {
   let fullest: StructureContainer | null = null;
+  let fullestLeft = 0;
   for (const id of getMinerContainerIds(creep.room)) {
     const c = Game.getObjectById(id);
     if (!c || c.store[RESOURCE_ENERGY] < atLeast) continue;
-    if (fullest && c.store[RESOURCE_ENERGY] <= fullest.store[RESOURCE_ENERGY]) continue;
     if (range !== Infinity && creep.pos.getRangeTo(c) > range) continue;
+    const left = energyLeftFor(creep, c);
+    if (left < atLeast || (fullest && left <= fullestLeft)) continue;
     fullest = c;
+    fullestLeft = left;
   }
   return fullest;
 }

@@ -248,7 +248,7 @@ declare global {
     // The remote a knight has ridden out to defend; cleared once it is safe.
     sortie?: string;
     fillTargetId?: string;
-    // The remote container a merchant is bound for; cleared once it is full.
+    // The container a merchant or porter is on its way to load at; ignored once it is full.
     haulFromId?: Id<StructureContainer>;
     coreRelief?: boolean;
     constructionSiteId?: Id<ConstructionSite>;

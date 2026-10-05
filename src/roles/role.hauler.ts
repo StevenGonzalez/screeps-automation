@@ -17,7 +17,7 @@ import {
 } from "../services/services.creep";
 import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
-import { findHandoffTarget, setFillTarget } from "../services/services.coordination";
+import { energyLeftFor, findHandoffTarget, setFillTarget, setHaulFrom } from "../services/services.coordination";
 
 // How far a hauler detours to hand energy to a worker before banking it.
 const HANDOFF_RANGE = 10;
@@ -227,26 +227,29 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
   if (dropped.length > 0) {
     const pile = creep.pos.findClosestByRange(dropped) as Resource;
     if (!nearbyOnly || creep.pos.getRangeTo(pile) <= DIVERT_RANGE) {
+      setHaulFrom(creep, undefined);
       pickupDroppedResource(creep, pile);
       return true;
     }
   }
 
-  let container: StructureContainer | null = null;
-  const assignedId = creep.memory.assignedContainerId;
-  if (assignedId) {
-    const assigned = Game.getObjectById(assignedId as Id<StructureContainer>) as StructureContainer | null;
-    if (assigned && assigned.store[RESOURCE_ENERGY] >= 100) container = assigned;
-  }
-  if (!container) container = findFullestMinerContainer(creep, 100, nearbyOnly ? DIVERT_RANGE : Infinity);
-  if (
-    container &&
-    container.store[RESOURCE_ENERGY] >= 100 &&
-    (!nearbyOnly || creep.pos.getRangeTo(container) <= DIVERT_RANGE)
-  ) {
+  // A porter keeps to the container it set out for while there is still a
+  // load there for it. Picking afresh each tick turned it round on the road
+  // whenever another container filled a little faster.
+  const enough = (id: string | undefined) => {
+    const c = id ? (Game.getObjectById(id as Id<StructureContainer>) as StructureContainer | null) : null;
+    return c && energyLeftFor(creep, c) >= 100 ? c : null;
+  };
+  const container =
+    enough(creep.memory.haulFromId) ??
+    enough(creep.memory.assignedContainerId) ??
+    findFullestMinerContainer(creep, 100, nearbyOnly ? DIVERT_RANGE : Infinity);
+  if (container && (!nearbyOnly || creep.pos.getRangeTo(container) <= DIVERT_RANGE)) {
+    setHaulFrom(creep, container.id);
     withdrawFromContainer(creep, container);
     return true;
   }
+  setHaulFrom(creep, undefined);
 
   if (carried === 0) {
     const storage = creep.room.storage;

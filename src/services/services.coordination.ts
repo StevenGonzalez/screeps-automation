@@ -46,6 +46,65 @@ export function energyClaimedByOthers(targetId: string, creep: Creep): number {
   return total;
 }
 
+// Creeps on their way to load at each container, keyed by container id. Built
+// from memory once a tick like the fill claims above; a creep that has filled
+// up and turned to deliver no longer counts.
+let haulTick = -1;
+const haulClaims = new Map<string, Set<string>>();
+
+function haulIndex(): Map<string, Set<string>> {
+  if (haulTick !== Game.time) {
+    haulTick = Game.time;
+    haulClaims.clear();
+    for (const name in Game.creeps) {
+      const c = Game.creeps[name];
+      const id = c.memory.haulFromId;
+      if (id && !c.memory.working) addHaulClaim(id, name);
+    }
+  }
+  return haulClaims;
+}
+
+function addHaulClaim(containerId: string, creepName: string): void {
+  let names = haulClaims.get(containerId);
+  if (!names) {
+    names = new Set();
+    haulClaims.set(containerId, names);
+  }
+  names.add(creepName);
+}
+
+/** Sets the container a creep is on its way to load at. */
+export function setHaulFrom(creep: Creep, id: Id<StructureContainer> | undefined): void {
+  const old = creep.memory.haulFromId;
+  if (old === id) return;
+  const index = haulIndex();
+  if (old) index.get(old)?.delete(creep.name);
+  creep.memory.haulFromId = id;
+  if (id) addHaulClaim(id, creep.name);
+}
+
+/**
+ * Energy in a container once the creeps bound for it that will reach it before
+ * this one have filled up. The nearer creep loads first, so a farther one
+ * leaves it to them instead of walking there for nothing.
+ */
+export function energyLeftFor(creep: Creep, container: StructureContainer): number {
+  let left = container.store[RESOURCE_ENERGY];
+  const names = haulIndex().get(container.id);
+  if (!names) return left;
+  const mine = creep.pos.getRangeTo(container);
+  for (const name of names) {
+    const other = Game.creeps[name];
+    if (!other || name === creep.name) continue;
+    const range = other.pos.getRangeTo(container);
+    if (range < mine || (range === mine && name < creep.name)) {
+      left -= other.store.getFreeCapacity(RESOURCE_ENERGY);
+    }
+  }
+  return left;
+}
+
 // Workers a hauler may hand energy to directly. Upgraders are left out: they
 // draw from their own link and container, and a handoff would slip past the
 // storage floor they keep.
