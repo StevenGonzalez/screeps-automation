@@ -1685,6 +1685,10 @@ function cryFlight(creep) {
     freshCries();
     creepCries[creep.name] = "Bandits!";
 }
+function cryMending(creep) {
+    freshCries();
+    creepCries[creep.name] = "Wounded!";
+}
 const REFUGE_WINDOW = 1500;
 function heraldRefuge(creep, remote, refuge) {
     var _a, _b;
@@ -7267,17 +7271,15 @@ function runTower(tower, attackTarget, hasHostiles) {
         tower.attack(attackTarget);
         return;
     }
-    if (hasHostiles) {
-        const wounded = tower.room.find(FIND_MY_CREEPS, {
-            filter: (c) => c.hits < c.hitsMax &&
-                c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48,
-        });
-        if (wounded.length > 0) {
-            const target = tower.pos.findClosestByRange(wounded);
-            if (target) {
-                tower.heal(target);
-                return;
-            }
+    const wounded = tower.room.find(FIND_MY_CREEPS, {
+        filter: (c) => c.hits < c.hitsMax &&
+            c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48,
+    });
+    if (wounded.length > 0) {
+        const target = tower.pos.findClosestByRange(wounded);
+        if (target) {
+            tower.heal(target);
+            return;
         }
     }
     if (hasHostiles && tower.store[RESOURCE_ENERGY] >= TOWER_DEFENSE_REPAIR_MIN_ENERGY) {
@@ -9910,6 +9912,7 @@ function markRoomUnreachable(homeRoomName, targetRoomName) {
 
 const REMOTE_DAMAGE_BACKOFF$1 = 300;
 const GLUT_PILE = 1000;
+const MEND_WALK_GUESS = 100;
 function runRemoteMiner(creep) {
     var _a, _b;
     var _c, _d;
@@ -9954,6 +9957,8 @@ function runRemoteMiner(creep) {
     delete creep.memory.hid;
     if (inTarget && !core)
         clearRemoteInvader(creep);
+    if (mendAtHome(creep, homeRoom))
+        return;
     if (creep.room.name !== targetRoom) {
         moveToRoom$6(creep, targetRoom);
         return;
@@ -10046,6 +10051,40 @@ function refugeFrom(creep, homeRoom) {
     const refuge = (exit && beyond(exit)) || homeRoom;
     creep.memory.refuge = refuge;
     return refuge;
+}
+function mendAtHome(creep, homeRoom) {
+    var _a, _b;
+    if (creep.hits >= creep.hitsMax) {
+        delete creep.memory.mending;
+        return false;
+    }
+    if (!creep.memory.mending) {
+        if (!((_b = (_a = Memory.rooms[homeRoom]) === null || _a === void 0 ? void 0 : _a.towerIds) === null || _b === void 0 ? void 0 : _b.length) || !worthMending(creep))
+            return false;
+        creep.memory.mending = true;
+        cryMending(creep);
+    }
+    if (creep.room.name !== homeRoom || !creep.pos.inRangeTo(25, 25, 20))
+        moveToRoom$6(creep, homeRoom);
+    return true;
+}
+function worthMending(creep) {
+    var _a;
+    let whole = 0;
+    let working = 0;
+    for (const part of creep.body) {
+        if (part.type !== WORK)
+            continue;
+        whole++;
+        if (part.hits > 0)
+            working++;
+    }
+    if (working === whole)
+        return false;
+    const dig = (work) => Math.min(work * HARVEST_POWER, SOURCE_ENERGY_CAPACITY / ENERGY_REGEN_TIME);
+    const life = (_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : 0;
+    const trip = 2 * (creep.memory.walk || MEND_WALK_GUESS);
+    return (life - trip) * dig(whole) > life * dig(working);
 }
 function moveToRoom$6(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
