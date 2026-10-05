@@ -40,6 +40,12 @@ export function cryFlight(creep: Creep): void {
   creepCries[creep.name] = "Bandits!";
 }
 
+// A peddler setting off home to have the wounds of a raid bound cries out once.
+export function cryMending(creep: Creep): void {
+  freshCries();
+  creepCries[creep.name] = "Wounded!";
+}
+
 // A raid is told as one line however long it lasts, up to this many ticks.
 const REFUGE_WINDOW = 1500;
 

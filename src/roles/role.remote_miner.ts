@@ -10,7 +10,7 @@ import {
   noteWalk,
   standsIn,
 } from "../services/services.creep";
-import { cryFlight, cryGlut, heraldRefuge, heraldWaystation, settleFlight } from "../services/services.herald";
+import { cryFlight, cryGlut, cryMending, heraldRefuge, heraldWaystation, settleFlight } from "../services/services.herald";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -20,6 +20,10 @@ const REMOTE_DAMAGE_BACKOFF = 300;
 // rot. Four peddlers in the Crow Glen and the Bleak Vale dug onto piles of
 // thousands while the realm ran short of CPU.
 const GLUT_PILE = 1000;
+
+// The walk out a peddler is taken to have had when it never finished measuring
+// its own, about what the walks out to the realm's remotes take.
+const MEND_WALK_GUESS = 100;
 
 export function runRemoteMiner(creep: Creep) {
   const { targetRoom, homeRoom, remoteSourceId } = creep.memory;
@@ -63,6 +67,8 @@ export function runRemoteMiner(creep: Creep) {
   delete creep.memory.refuge;
   delete creep.memory.hid;
   if (inTarget && !core) clearRemoteInvader(creep);
+
+  if (mendAtHome(creep, homeRoom)) return;
 
   if (creep.room.name !== targetRoom) {
     moveToRoom(creep, targetRoom);
@@ -171,6 +177,43 @@ function refugeFrom(creep: Creep, homeRoom: string): string {
   const refuge = (exit && beyond(exit)) || homeRoom;
   creep.memory.refuge = refuge;
   return refuge;
+}
+
+// Only towers heal a peddler, and only in their own room, so one that waited
+// out a raid in a room without towers came back to its post short of the WORK
+// parts the raiders broke, and dug short of them until it died. Peddler Rohese
+// came back to the Bleak Vale with two of her six and dug four gold a tick
+// there for about eleven hundred ticks, against the ten the source gives. Such
+// a peddler walks home to be healed when what it would dig whole in the life
+// it has left after the walk there and back beats what it would dig as it is.
+function mendAtHome(creep: Creep, homeRoom: string): boolean {
+  if (creep.hits >= creep.hitsMax) {
+    delete creep.memory.mending;
+    return false;
+  }
+  if (!creep.memory.mending) {
+    if (!Memory.rooms[homeRoom]?.towerIds?.length || !worthMending(creep)) return false;
+    creep.memory.mending = true;
+    cryMending(creep);
+  }
+  // Towers leave alone a creep on the two edge rows, so it walks well in.
+  if (creep.room.name !== homeRoom || !creep.pos.inRangeTo(25, 25, 20)) moveToRoom(creep, homeRoom);
+  return true;
+}
+
+function worthMending(creep: Creep): boolean {
+  let whole = 0;
+  let working = 0;
+  for (const part of creep.body) {
+    if (part.type !== WORK) continue;
+    whole++;
+    if (part.hits > 0) working++;
+  }
+  if (working === whole) return false;
+  const dig = (work: number) => Math.min(work * HARVEST_POWER, SOURCE_ENERGY_CAPACITY / ENERGY_REGEN_TIME);
+  const life = creep.ticksToLive ?? 0;
+  const trip = 2 * (creep.memory.walk || MEND_WALK_GUESS);
+  return (life - trip) * dig(whole) > life * dig(working);
 }
 
 function moveToRoom(creep: Creep, targetRoom: string) {

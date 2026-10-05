@@ -608,6 +608,79 @@ describe("remote miner", () => {
       expect((creep.memory as CreepMemory).walk).toBe(0);
     });
   });
+
+  describe("going home to be healed", () => {
+    // Back from waiting out a raid in a room without towers, short of WORK.
+    function wounded(roomName: string, deadWork: number, ticksToLive = 1100) {
+      (g.Game as any).time = 5000;
+      (g.Memory as any).rooms[HOME].towerIds = ["t1"];
+      const body = [0, 1, 2, 3, 4, 5].map((i) => ({ type: "work", hits: i < deadWork ? 0 : 100 }));
+      const creep = minerIn(roomName, { name: "Peddler Rohese", hitsMax: 1700, body, ticksToLive });
+      creep.memory._hp = 100;
+      (creep.memory as CreepMemory).walk = 114;
+      creep.pos = { ...creep.pos, inRangeTo: () => false } as typeof creep.pos;
+      return creep;
+    }
+    const movedTo = (creep: { moveTo: { mock: { calls: unknown[][] } } }) =>
+      creep.moveTo.mock.calls.map((c) => (c[0] as RoomPosition).roomName);
+
+    it("walks home from its post when a raid broke most of its WORK", () => {
+      const creep = wounded(REMOTE, 4);
+      runRemoteMiner(creep as unknown as Creep);
+      expect(movedTo(creep)).toEqual([HOME]);
+      expect(creep.harvest).not.toHaveBeenCalled();
+      expect(cryFor(creep as unknown as Creep)).toBe("Wounded!");
+    });
+
+    it("keeps digging when too little life is left to pay for the walk", () => {
+      // Two of six WORK dig four a tick, whole they dig ten: home and back takes
+      // 228 ticks, so going pays only with more than 380 left.
+      const source = { id: "src", pos: { findInRange: () => [] } };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
+      const short = wounded(REMOTE, 4, 380);
+      runRemoteMiner(short as unknown as Creep);
+      expect(short.harvest).toHaveBeenCalled();
+      const long = wounded(REMOTE, 4, 381);
+      runRemoteMiner(long as unknown as Creep);
+      expect(movedTo(long)).toEqual([HOME]);
+    });
+
+    it("keeps digging when the WORK it lost did not slow it", () => {
+      // Five WORK dig the ten a tick the source gives.
+      const source = { id: "src", pos: { findInRange: () => [] } };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
+      const creep = wounded(REMOTE, 1, 1500);
+      runRemoteMiner(creep as unknown as Creep);
+      expect(creep.harvest).toHaveBeenCalled();
+    });
+
+    it("keeps digging when its castle has no towers to heal it", () => {
+      const source = { id: "src", pos: { findInRange: () => [] } };
+      (g.Game as any).getObjectById = (id: string) => (id === "src" ? source : null);
+      const creep = wounded(REMOTE, 4);
+      (g.Memory as any).rooms[HOME].towerIds = [];
+      runRemoteMiner(creep as unknown as Creep);
+      expect(creep.harvest).toHaveBeenCalled();
+    });
+
+    it("walks in off the edge, waits to be healed, and goes back once whole", () => {
+      const creep = wounded(HOME, 4);
+      runRemoteMiner(creep as unknown as Creep);
+      expect(movedTo(creep)).toEqual([HOME]);
+
+      // Well inside, it waits for the towers.
+      creep.moveTo.mockClear();
+      creep.pos = { ...creep.pos, inRangeTo: () => true } as typeof creep.pos;
+      runRemoteMiner(creep as unknown as Creep);
+      expect(creep.moveTo).not.toHaveBeenCalled();
+
+      creep.hits = 1700;
+      creep.body.forEach((p: { hits: number }) => (p.hits = 100));
+      runRemoteMiner(creep as unknown as Creep);
+      expect(movedTo(creep)).toEqual([REMOTE]);
+      expect((creep.memory as CreepMemory).mending).toBeUndefined();
+    });
+  });
 });
 
 describe("sk hauler", () => {

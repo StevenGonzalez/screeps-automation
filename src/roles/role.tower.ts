@@ -31,18 +31,20 @@ export function runTower(
     return;
   }
 
-  if (hasHostiles) {
-    const wounded = tower.room.find(FIND_MY_CREEPS, {
-      filter: (c) =>
-        c.hits < c.hitsMax &&
-        c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48,
-    });
-    if (wounded.length > 0) {
-      const target = tower.pos.findClosestByRange(wounded);
-      if (target) {
-        tower.heal(target);
-        return;
-      }
+  // Our wounded are healed in peace as well as war. Healed only while a threat
+  // stood in the room, a knight who came home from a raid short three TOUGH
+  // parts stood watch at Grimford that way for over a thousand ticks, and
+  // merchants came home from the same raid and left again short of CARRY.
+  const wounded = tower.room.find(FIND_MY_CREEPS, {
+    filter: (c) =>
+      c.hits < c.hitsMax &&
+      c.pos.x > 1 && c.pos.x < 48 && c.pos.y > 1 && c.pos.y < 48,
+  });
+  if (wounded.length > 0) {
+    const target = tower.pos.findClosestByRange(wounded);
+    if (target) {
+      tower.heal(target);
+      return;
     }
   }
 

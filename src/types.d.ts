@@ -258,6 +258,9 @@ declare global {
     refuge?: string;
     // Set once a peddler has crossed into its refuge and the chronicle told of it.
     hid?: boolean;
+    // Set while a peddler a raid left short of WORK parts walks home to be
+    // healed by its towers; cleared once it is whole.
+    mending?: boolean;
     // The remote a knight has ridden out to defend; cleared once it is safe.
     sortie?: string;
     fillTargetId?: string;
