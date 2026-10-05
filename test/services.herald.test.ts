@@ -10,6 +10,8 @@ g.FIND_STRUCTURES = 107;
 g.FIND_MINERALS = 116;
 g.STRUCTURE_ROAD = "road";
 g.STRUCTURE_CONTAINER = "container";
+g.STRUCTURE_WALL = "constructedWall";
+g.STRUCTURE_RAMPART = "rampart";
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
 g.WORK = "work";
@@ -807,6 +809,62 @@ describe("herald", () => {
       "The quicksilver vein beneath Ravenhold runs full again. Its jewelers take up their picks.",
       "The quicksilver vein beneath Ravenhold is dug dry. Its jewelers lay down their picks for 50 days.",
     ]);
+  });
+
+  it("tells when the smiths raise a castle's walls past each mark, and a new keep's once its ring closes", () => {
+    g.Memory = { rooms: { [ROOM]: { townName: "Ravenhold" } } };
+    const wall = (x: number, hits: number, structureType = "constructedWall") => ({ structureType, hits, pos: { x, y: 5 } });
+    // A town cottage's wall off the ring is no part of the castle's walls.
+    const cottage = wall(9, 5_000);
+    let barriers = [wall(1, 90_000), wall(2, 95_000, "rampart"), cottage];
+    const room = {
+      name: ROOM,
+      controller: { my: true, level: 6 },
+      memory: { perimeterTiles: ["1,5", "2,5", "3,5"] } as RoomMemory,
+      getEventLog: () => "[]",
+      find: (type: number) => (type === g.FIND_STRUCTURES ? barriers : []),
+    };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {} };
+      heraldRooms();
+    };
+    at(1000);
+    // A gap in the ring: the walls are no stronger than the gap.
+    barriers = [wall(1, 1_200_000), wall(2, 1_300_000, "rampart"), cottage];
+    at(1100);
+    barriers = [wall(1, 1_200_000), wall(2, 1_300_000, "rampart"), wall(3, 110_000), cottage];
+    at(1200);
+    at(1300);
+    // A raid knocks the walls back; climbing past the same mark again is old news.
+    barriers = [wall(1, 80_000), wall(2, 1_300_000, "rampart"), wall(3, 110_000), cottage];
+    at(1400);
+    barriers = [wall(1, 105_000), wall(2, 1_300_000, "rampart"), wall(3, 110_000), cottage];
+    at(1500);
+    barriers = [wall(1, 1_200_000), wall(2, 1_300_000, "rampart"), wall(3, 1_000_000), cottage];
+    at(1600);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "The smiths of Ravenhold have raised its walls a hundred thousand strong.",
+      "The smiths of Ravenhold have raised its walls a million strong.",
+    ]);
+  });
+
+  it("tells nothing of walls already standing at the first look", () => {
+    g.Memory = { rooms: { [ROOM]: { townName: "Ravenhold" } } };
+    const barriers = [{ structureType: "constructedWall", hits: 400_000, pos: { x: 1, y: 5 } }];
+    const room = {
+      name: ROOM,
+      controller: { my: true, level: 6 },
+      memory: { perimeterTiles: ["1,5"] } as RoomMemory,
+      getEventLog: () => "[]",
+      find: (type: number) => (type === g.FIND_STRUCTURES ? barriers : []),
+    };
+    for (const time of [1000, 1100, 1200]) {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {} };
+      heraldRooms();
+    }
+
+    expect((g.Memory as Memory).chronicle ?? []).toEqual([]);
   });
 
   it("tells of each new season once, not on the first look", () => {

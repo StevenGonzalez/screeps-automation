@@ -181,6 +181,7 @@ export function heraldRooms(): void {
       heraldRoads(room);
       heraldVendors(room);
       heraldVein(room);
+      heraldWalls(room);
     }
     heraldKills(room);
   }
@@ -580,6 +581,39 @@ function heraldVein(room: Room): void {
   } else {
     chronicle(`${vein} runs full again. Its jewelers take up their picks.`);
   }
+}
+
+// A castle's walls passing each mark, told once. The smiths pour more gold into
+// the walls than into anything but the throne, and until now a watcher never
+// learned where it went. The walls are only as strong as their weakest stretch,
+// and a ring with a gap in it is no wall at all, so a new keep's walls are told
+// once the ring closes.
+const WALL_MARKS: [number, string][] = [
+  [100_000, "a hundred thousand"],
+  [300_000, "three hundred thousand"],
+  [1_000_000, "a million"],
+  [3_000_000, "three million"],
+  [10_000_000, "ten million"],
+];
+
+function heraldWalls(room: Room): void {
+  const ring = room.memory.perimeterTiles;
+  if (!ring?.length || Game.time % WORKS_CHECK_PERIOD !== 0) return;
+  const tiles = new Set(ring);
+  let standing = 0;
+  let weakest = Infinity;
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART) continue;
+    if (!tiles.has(`${s.pos.x},${s.pos.y}`)) continue;
+    standing++;
+    weakest = Math.min(weakest, s.hits);
+  }
+  const reached = standing < tiles.size ? 0 : WALL_MARKS.filter(([at]) => weakest >= at).length;
+  const known = room.memory.heraldWalls;
+  if (known !== undefined && reached <= known) return;
+  room.memory.heraldWalls = reached;
+  if (known === undefined) return;
+  chronicle(`The smiths of ${castleName(room.name)} have raised its walls ${WALL_MARKS[reached - 1][1]} strong.`);
 }
 
 // While a dragon is overhead every castle cries out every few ticks, and the

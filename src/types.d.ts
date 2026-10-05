@@ -295,6 +295,8 @@ declare global {
     // Whether the castle's mineral vein was dug dry when the herald last looked
     // (services.herald).
     heraldVeinDry?: boolean;
+    // How many of the wall marks the castle's ring has passed (services.herald).
+    heraldWalls?: number;
     // Set once a new keep's first creep of its own was proclaimed (services.herald).
     heraldBorn?: boolean;
     // That first creep's name while it lives, so its death is told (services.herald).
