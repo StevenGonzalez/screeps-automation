@@ -646,6 +646,50 @@ describe("a remote two castles share", () => {
   });
 });
 
+describe("a source two castles contend for", () => {
+  // The castle in W3N5 lists the home's remote too, and its peddler works the
+  // remote's one source. The home last picked the source `pickedAgo` ticks ago.
+  function contested(pickedAgo: number | undefined, otherCapacity: number, theirPeddler = true): Room {
+    const r = remote("W4N5", [30]);
+    if (pickedAgo !== undefined) r.sources[0].pickedAt = clock - pickedAgo;
+    const theirs = creep(ROLE_REMOTE_MINER, 9, {
+      homeRoom: "W3N5",
+      targetRoom: "W4N5",
+      remoteSourceId: "W4N5-s0" as Id<Source>,
+    });
+    const room = home({ remotes: [r], creeps: theirPeddler ? [theirs] : [] });
+    (g.Game as { rooms: Record<string, unknown> }).rooms.W3N5 = {
+      name: "W3N5",
+      controller: { my: true, level: 4, owner: { username: "Me" } },
+      energyAvailable: otherCapacity,
+      energyCapacityAvailable: otherCapacity,
+      memory: { remoteRooms: [remote("W4N5", [30])] },
+      find: (type: number) => (type === g.FIND_MY_SPAWNS ? [{ id: "spawnB" }] : []),
+    };
+    return room;
+  }
+
+  it("takes back a source a smaller castle's peddler took up while its own was gone", () => {
+    expect(sourceIds(getActiveRemoteRooms(contested(300, 800)))).toEqual(["W4N5-s0"]);
+  });
+
+  it("leaves a smaller castle a source it has long worked", () => {
+    expect(sourceIds(getActiveRemoteRooms(contested(2000, 800)))).toEqual([]);
+    clock += 1;
+    expect(sourceIds(getActiveRemoteRooms(contested(undefined, 800)))).toEqual([]);
+  });
+
+  it("does not take a source back from a bigger castle", () => {
+    expect(sourceIds(getActiveRemoteRooms(contested(300, 2300)))).toEqual([]);
+  });
+
+  it("leaves a source a bigger castle works to it before either has a peddler there", () => {
+    expect(sourceIds(getActiveRemoteRooms(contested(undefined, 2300, false)))).toEqual([]);
+    clock += 1;
+    expect(sourceIds(getActiveRemoteRooms(contested(undefined, 800, false)))).toEqual(["W4N5-s0"]);
+  });
+});
+
 describe("remote knights", () => {
   const raided = () => ({ ...remote("W4N5", [30]), invaderUntil: clock + 500 });
 

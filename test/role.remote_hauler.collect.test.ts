@@ -20,6 +20,13 @@ g.RoomPosition = class {
   constructor(public x: number, public y: number, public roomName: string) {}
 };
 
+// The remote sources the merchant's castle works.
+const worked = vi.hoisted(() => new Set<string>());
+vi.mock("../src/orchestrators/orchestrator.spawning.remote", async (original) => ({
+  ...(await original<object>()),
+  worksRemoteSource: (_home: Room, sourceId: string) => worked.has(sourceId),
+}));
+
 import { runRemoteHauler } from "../src/roles/role.remote_hauler";
 import { ROLE_REMOTE_HAULER } from "../src/config/config.roles";
 import { cryFor } from "../src/services/services.herald";
@@ -79,8 +86,10 @@ beforeEach(() => {
   container = { id: "cont1", pos: pos(30, 30), store: { energy: 2000 } };
   dropped = [];
   strangers = [];
+  worked.clear();
   g.Game = {
     time: 1000,
+    rooms: { [HOME]: { name: HOME } },
     getObjectById: (id: string) => (id === "cont1" ? container : null),
   };
   g.Memory = {
@@ -170,6 +179,29 @@ describe("remote hauler pickup", () => {
       runRemoteHauler(creep);
 
       expect(creep.withdraw).toHaveBeenCalledWith(container, "energy");
+    });
+
+    it("loads where a smaller castle's peddler digs once its own castle has taken the source back", () => {
+      container.store.energy = 500;
+      const theirs = { name: "Peddler Oswin", memory: { role: "peddler", homeRoom: "W3N1", assignedContainerId: "cont2" } };
+      (g.Game as any).creeps = { [theirs.name]: theirs };
+      worked.add("s2");
+      const creep = hauler();
+
+      runRemoteHauler(creep);
+
+      expect(creep.withdraw).toHaveBeenCalledWith(far, "energy");
+    });
+
+    it("loads where its own castle's peddler digs on, though the castle has given the source up", () => {
+      container.store.energy = 500;
+      const ours = { name: "Peddler Oswin", memory: { role: "peddler", homeRoom: HOME, assignedContainerId: "cont2" } };
+      (g.Game as any).creeps = { [ours.name]: ours };
+      const creep = hauler();
+
+      runRemoteHauler(creep);
+
+      expect(creep.withdraw).toHaveBeenCalledWith(far, "energy");
     });
 
     it("leaves an emptied container no peddler digs at", () => {

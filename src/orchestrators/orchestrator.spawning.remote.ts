@@ -154,6 +154,10 @@ const REMOTE_PICK_HEADROOM = 0.2;
 // headroom, so a worked source is not lost while its miner is being replaced.
 const REMOTE_PICK_HOLD = 100;
 
+// A source a castle picked within this many ticks is still its own when a
+// smaller castle's peddler has taken it up meanwhile.
+const REMOTE_RECLAIM_HOLD = 1500;
+
 // Below this bucket, keep working the remotes already mined but add none. A
 // bucket refilling after a pixel is not short of CPU: under the floor there, a
 // source whose miner had just died lost its place, and stood idle with its
@@ -363,9 +367,29 @@ function pickRemoteSources(room: Room): Map<string, number> {
   // castle's peddler already works is left to it: only the peddler was kept
   // from being sent twice, so both castles would have raised merchants and an
   // envoy for the one source and split its gold between them.
+  //
+  // A bigger castle's picks come first, and a source it worked of late is still
+  // its own though a smaller castle's peddler works it now. Raiders killed
+  // Embercrag's peddler in the Crow Glen while its barracks raised a knight,
+  // and Thornbarrow's peddler took the source up: Thornbarrow then worked both
+  // the Glen's sources with merchants a third the size, six at most, and about
+  // a third of the gold rotted.
   const minedElsewhere = new Set(
-    peddlers.filter((c) => c.memory.homeRoom !== room.name).map((c) => c.memory.remoteSourceId)
+    peddlers
+      .filter((c) => {
+        if (c.memory.homeRoom === room.name) return false;
+        const other = Game.rooms[c.memory.homeRoom ?? ""];
+        const s = c.memory.remoteSourceId && remoteSourceData(room, c.memory.targetRoom, c.memory.remoteSourceId);
+        const reclaim = Game.time - ((s && s.pickedAt) ?? 0) <= REMOTE_RECLAIM_HOLD;
+        return !(other && outranks(room, other) && reclaim);
+      })
+      .map((c) => c.memory.remoteSourceId)
   );
+  for (const name in Game.rooms) {
+    const other = Game.rooms[name];
+    if (!outranks(other, room)) continue;
+    for (const id of pickRemoteSources(other).keys()) minedElsewhere.add(id as Id<Source>);
+  }
   // The budget counts live creeps, so it breathes as home creeps die and are
   // replaced. A source picked in the last REMOTE_PICK_HOLD ticks stays while it
   // fits; any other has to fit with REMOTE_PICK_HEADROOM to spare, so that
@@ -823,6 +847,26 @@ function needsReservation(room: Room, roomName: string): boolean {
   return res.ticksToEnd < RESERVATION_TOP_UP_TICKS;
 }
 
+function remoteSourceData(room: Room, roomName: string | undefined, sourceId: string): RemoteSourceData | undefined {
+  return room.memory.remoteRooms?.find((r) => r.roomName === roomName)?.sources.find((s) => s.sourceId === sourceId);
+}
+
+// Whether `castle` ranks above `other` among castles sharing a remote: the one
+// that raises the bigger creeps, or on a tie the first by name. Only a castle
+// of level 3 or more works remotes.
+function outranks(castle: Room, other: Room): boolean {
+  if (castle === other || !castle.controller?.my || castle.controller.level < 3) return false;
+  return (
+    castle.energyCapacityAvailable > other.energyCapacityAvailable ||
+    (castle.energyCapacityAvailable === other.energyCapacityAvailable && castle.name < other.name)
+  );
+}
+
+// Whether this home works the remote source.
+export function worksRemoteSource(room: Room, sourceId: string): boolean {
+  return pickRemoteSources(room).has(sourceId);
+}
+
 // A remote two castles both work, each a source of its own, is reserved and
 // defended by the one that raises the bigger creeps, and the other leaves it
 // be. Each would have sent an envoy as the reservation ran low, and a knight
@@ -831,11 +875,7 @@ function needsReservation(room: Room, roomName: string): boolean {
 export function sharedWithBiggerCastle(room: Room, roomName: string): boolean {
   for (const name in Game.rooms) {
     const other = Game.rooms[name];
-    if (other === room || !other.controller?.my || other.controller.level < 3) continue;
-    const bigger =
-      other.energyCapacityAvailable > room.energyCapacityAvailable ||
-      (other.energyCapacityAvailable === room.energyCapacityAvailable && other.name < room.name);
-    if (bigger && getPickedRemoteRoomNames(other).has(roomName)) return true;
+    if (outranks(other, room) && getPickedRemoteRoomNames(other).has(roomName)) return true;
   }
   return false;
 }

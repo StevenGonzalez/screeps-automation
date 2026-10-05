@@ -9,6 +9,7 @@ import {
 import { cryFlight, cryHaul, settleFlight } from "../services/services.herald";
 import { remoteThreats, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 import { ROLE_REMOTE_MINER } from "../config/config.roles";
+import { worksRemoteSource } from "../orchestrators/orchestrator.spawning.remote";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -205,32 +206,41 @@ function chooseContainer(creep: Creep): StructureContainer | null {
   return best;
 }
 
-// A container another castle's peddler digs at is that castle's to haul from.
-// In a remote two castles share, each castle raises merchants for the walk to
-// its own source, and loading at the other's sent them on walks they were not
-// raised for.
+// A container another castle's peddler digs at is that castle's to haul from,
+// unless this castle has taken the source back from it. In a remote two
+// castles share, each castle raises merchants for the walk to its own source,
+// and loading at the other's sent them on walks they were not raised for.
 function remoteContainers(creep: Creep, mined: Map<string, string | undefined>): StructureContainer[] {
-  const ours = (c: StructureContainer) => (mined.get(c.id) ?? creep.memory.homeRoom) === creep.memory.homeRoom;
-  const homeMemory = Memory.rooms[creep.memory.homeRoom!];
+  const homeName = creep.memory.homeRoom!;
+  const ours = (c: StructureContainer, sourceId: string) => {
+    const digger = mined.get(c.id);
+    if (digger === undefined || digger === homeName) return true;
+    const home = Game.rooms[homeName];
+    return !!home && worksRemoteSource(home, sourceId);
+  };
+  const homeMemory = Memory.rooms[homeName];
   const remoteEntry = homeMemory?.remoteRooms?.find(
     (r) => r.roomName === creep.room.name
   );
 
   const containers: StructureContainer[] = [];
+  let recorded = false;
   for (const sourceData of remoteEntry?.sources ?? []) {
     if (!sourceData.containerId) continue;
     const c = Game.getObjectById(sourceData.containerId) as StructureContainer | null;
-    if (c) containers.push(c);
+    if (!c) continue;
+    recorded = true;
+    if (ours(c, sourceData.sourceId)) containers.push(c);
   }
-  if (containers.length > 0) return containers.filter(ours);
+  if (recorded) return containers;
 
   for (const source of creep.room.find(FIND_SOURCES)) {
     const found = source.pos.findInRange(FIND_STRUCTURES, 1, {
       filter: (s): s is StructureContainer => s.structureType === STRUCTURE_CONTAINER,
     }) as StructureContainer[];
-    containers.push(...found);
+    containers.push(...found.filter((c) => ours(c, source.id)));
   }
-  return containers.filter(ours);
+  return containers;
 }
 
 function depositEnergy(creep: Creep, homeRoom: string) {
