@@ -257,6 +257,33 @@ describe("remote hauler among another player's creeps", () => {
 });
 
 describe("remote hauler at home", () => {
+  // Left on the exit tile it came home by, it would be carried back into the
+  // remote it fled.
+  function emptyAtHome(x: number, y: number, extra: Partial<CreepMemory> = {}) {
+    const c = hauler() as unknown as Record<string, unknown>;
+    Object.assign(c, {
+      room: { name: HOME, find: () => [] },
+      pos: { ...(c.pos as object), x, y },
+      memory: { ...(c.memory as CreepMemory), ...extra },
+    });
+    runRemoteHauler(c as unknown as Creep);
+    return c.moveTo as ReturnType<typeof vi.fn>;
+  }
+
+  it("steps off the exit it came home by before it waits out a raid", () => {
+    (g.Memory as any).rooms[HOME].remoteRooms[0].invaderUntil = 1100;
+    expect(emptyAtHome(0, 20)).toHaveBeenCalledWith(expect.objectContaining({ roomName: HOME }), expect.anything());
+    expect(emptyAtHome(1, 20)).not.toHaveBeenCalled();
+  });
+
+  it("steps off the exit it came home by when sent home hurt", () => {
+    expect(emptyAtHome(20, 0, { remoteBackoffUntil: 1100 })).toHaveBeenCalledWith(
+      expect.objectContaining({ roomName: HOME }),
+      expect.anything()
+    );
+    expect(emptyAtHome(20, 1, { remoteBackoffUntil: 1100 })).not.toHaveBeenCalled();
+  });
+
   it("calls out the gold it unloads at the treasury", () => {
     const storage = { store: { getFreeCapacity: () => 50_000 } };
     const c = hauler() as unknown as Record<string, unknown>;

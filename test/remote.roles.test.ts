@@ -121,6 +121,21 @@ describe("reserver", () => {
     expect(c.memory.fled).toBeUndefined();
   });
 
+  it("steps off the exit it came home by before it waits", () => {
+    remote.invaderUntil = 1100;
+    const c = reserverIn(undefined);
+    c.room = { ...c.room, name: HOME };
+    // Left on the exit tile, it would be carried back into the raided remote.
+    c.pos = { x: 49, y: 17 } as typeof c.pos;
+    runReserver(c as unknown as Creep);
+    expect(c.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: HOME }), expect.anything());
+
+    c.moveTo.mockClear();
+    c.pos = { x: 48, y: 17 } as typeof c.pos;
+    runReserver(c as unknown as Creep);
+    expect(c.moveTo).not.toHaveBeenCalled();
+  });
+
   it("stands down once the remote has become one of our own keeps", () => {
     const c = reserverIn({ my: true, owner: { username: ME } });
     runReserver(c as unknown as Creep);
@@ -333,6 +348,24 @@ describe("remote miner", () => {
       expect(remote.hostile).toBe(true);
       expect(creep.harvest).not.toHaveBeenCalled();
     });
+  });
+
+  it("steps off the exit it came home by before it waits out a raid", () => {
+    remote.invaderUntil = 1100;
+    for (const [x, y, walks] of [[0, 17, true], [12, 49, true], [1, 17, false]] as const) {
+      const creep = minerIn(HOME);
+      creep.pos = { ...creep.pos, x, y } as typeof creep.pos;
+      runRemoteMiner(creep as unknown as Creep);
+      if (walks) expect(creep.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: HOME }), expect.anything());
+      else expect(creep.moveTo).not.toHaveBeenCalled();
+    }
+  });
+
+  it("steps off the exit it came home by when sent home hurt", () => {
+    const creep = minerIn(HOME, { memory: { role: "remote_miner", homeRoom: HOME, targetRoom: REMOTE, remoteSourceId: "src", remoteBackoffUntil: 1100 } });
+    creep.pos = { ...creep.pos, x: 49, y: 30 } as typeof creep.pos;
+    runRemoteMiner(creep as unknown as Creep);
+    expect(creep.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: HOME }), expect.anything());
   });
 
   describe("walking out to its source", () => {

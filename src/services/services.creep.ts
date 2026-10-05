@@ -195,6 +195,16 @@ export function noteWalk(creep: Creep, lifeTime: number): void {
   creep.memory.walk = lifeTime - creep.ticksToLive;
 }
 
+// Whether a remote creep sent home to wait out trouble has still to walk. A
+// creep left standing on an exit tile is carried into the next room at the end
+// of the tick, so one that stopped on the tile it reached home by was carried
+// back into the remote it fled, and bounced between the two every tick. In the
+// Crow Glen a raider walked up to the edge and cut down three that way.
+export function outsideHome(creep: Creep, homeRoom: string): boolean {
+  const { x, y } = creep.pos;
+  return creep.room.name !== homeRoom || x === 0 || y === 0 || x === 49 || y === 49;
+}
+
 export function isAssignedRemoteContested(creep: Creep): boolean {
   const entry = assignedRemoteEntry(creep);
   if (!entry) return false;

@@ -6,6 +6,7 @@ import {
   flagRemoteDamage,
   clearRemoteInvader,
   noteWalk,
+  outsideHome,
 } from "../services/services.creep";
 import { cryFlight, cryGlut, heraldWaystation, settleFlight } from "../services/services.herald";
 
@@ -36,7 +37,7 @@ export function runRemoteMiner(creep: Creep) {
   if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
     // A walk out broken off to wait at home is no measure of the road.
     creep.memory.walk ??= 0;
-    if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
+    if (outsideHome(creep, homeRoom)) moveToRoom(creep, homeRoom);
     return;
   }
 
@@ -50,7 +51,7 @@ export function runRemoteMiner(creep: Creep) {
   if (isAssignedRemoteContested(creep) || threats.length > 0) {
     cryFlight(creep);
     creep.memory.walk ??= 0;
-    if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
+    if (outsideHome(creep, homeRoom)) moveToRoom(creep, homeRoom);
     return;
   }
 

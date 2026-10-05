@@ -4,6 +4,7 @@ import {
   flagRemotePlayer,
   isAssignedRemoteContested,
   noteWalk,
+  outsideHome,
   signControllerIfNeeded,
 } from "../services/services.creep";
 import { cryFlight, settleFlight } from "../services/services.herald";
@@ -26,7 +27,7 @@ export function runReserver(creep: Creep) {
     cryFlight(creep);
     // A walk out broken off to wait at home is no measure of the road.
     creep.memory.walk ??= 0;
-    if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
+    if (outsideHome(creep, homeRoom)) moveToRoom(creep, homeRoom);
     return;
   }
   settleFlight(creep);

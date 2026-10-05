@@ -5,6 +5,7 @@ import {
   flagRemotePlayer,
   flagRemoteDamage,
   clearRemoteInvader,
+  outsideHome,
 } from "../services/services.creep";
 import { cryFlight, cryHaul, settleFlight } from "../services/services.herald";
 import { remoteThreats, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
@@ -30,7 +31,7 @@ export function runRemoteHauler(creep: Creep) {
   }
   if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
     if (creep.store[RESOURCE_ENERGY] > 0) depositEnergy(creep, homeRoom);
-    else if (creep.room.name !== homeRoom) moveToRoom(creep, homeRoom);
+    else if (outsideHome(creep, homeRoom)) moveToRoom(creep, homeRoom);
     return;
   }
 
@@ -45,7 +46,7 @@ export function runRemoteHauler(creep: Creep) {
     cryFlight(creep);
     if (creep.store[RESOURCE_ENERGY] > 0) {
       depositEnergy(creep, homeRoom);
-    } else if (creep.room.name !== homeRoom) {
+    } else if (outsideHome(creep, homeRoom)) {
       moveToRoom(creep, homeRoom);
     }
     return;
