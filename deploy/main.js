@@ -9440,7 +9440,7 @@ function processRoomMemory(room) {
         if (room.controller) {
             const controllerContainers = containers.filter((c) => c.pos.getRangeTo(room.controller.pos) <= 2);
             if (controllerContainers.length > 0) {
-                const closest = room.controller.pos.findClosestByPath(controllerContainers);
+                const closest = room.controller.pos.findClosestByPath(controllerContainers, { ignoreCreeps: true });
                 room.memory.upgradeContainerId = closest
                     ? closest.id
                     : undefined;
