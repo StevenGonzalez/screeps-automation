@@ -4467,27 +4467,6 @@ function findFullestMinerContainer(creep, atLeast, range = Infinity) {
     return fullest;
 }
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
-const UPGRADE_CONTAINER_FILLERS = 1;
-let upgradeFillerTick = -1;
-const upgradeFillerIdsByRoom = {};
-function getUpgradeContainerFillerIds(room) {
-    if (upgradeFillerTick !== Game.time) {
-        upgradeFillerTick = Game.time;
-        for (const k in upgradeFillerIdsByRoom)
-            delete upgradeFillerIdsByRoom[k];
-    }
-    if (!upgradeFillerIdsByRoom[room.name]) {
-        const haulerIds = [];
-        for (const name in Game.creeps) {
-            const c = Game.creeps[name];
-            if (c.room.name === room.name && c.memory.role === ROLE_HAULER)
-                haulerIds.push(c.id);
-        }
-        haulerIds.sort();
-        upgradeFillerIdsByRoom[room.name] = new Set(haulerIds.slice(0, UPGRADE_CONTAINER_FILLERS));
-    }
-    return upgradeFillerIdsByRoom[room.name];
-}
 function findDepositTargetExcludingMiner(creep, coreFed = false) {
     var _a;
     const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
@@ -4502,8 +4481,8 @@ function findDepositTargetExcludingMiner(creep, coreFed = false) {
     if (upgradeIsDropTarget &&
         coreFull &&
         upgradingFunded(creep.room) &&
-        ((_a = upgradeCont.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0) < UPGRADE_CONTAINER_REFILL_BELOW &&
-        getUpgradeContainerFillerIds(creep.room).has(creep.id)) {
+        ((_a = upgradeCont.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0) + energyClaimedByOthers(upgradeCont.id, creep) <
+            UPGRADE_CONTAINER_REFILL_BELOW) {
         return upgradeCont;
     }
     const storage = creep.room.storage;
