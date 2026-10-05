@@ -5240,7 +5240,7 @@ function runHauler(creep) {
             return;
         creep.memory.working = true;
     }
-    if (getThreatInfo(creep.room).hostiles.length > 0) {
+    if (getThreatInfo(creep.room).score > 0) {
         const tower = findEmptiestTower(creep.room);
         if (tower) {
             setFillTarget(creep, tower.id);
@@ -6708,7 +6708,7 @@ const TERMINAL_FILL_STORAGE_FLOOR = 20000;
 function runFiller(creep) {
     var _a, _b;
     const storage = creep.room.storage;
-    const underThreat = getThreatInfo(creep.room).hostiles.length > 0;
+    const underThreat = getThreatInfo(creep.room).score > 0;
     const coreTarget = (_a = (underThreat ? findEmptiestTower(creep.room) : null)) !== null && _a !== void 0 ? _a : getCoreFillTarget(creep);
     if (carryingPower(creep)) {
         deliverPower(creep, storage);
@@ -17365,7 +17365,7 @@ function loop$7() {
         for (const spawn of spawns) {
             if (spawn.spawning)
                 continue;
-            if (((_b = idleUntil[spawn.id]) !== null && _b !== void 0 ? _b : 0) > Game.time && getThreatInfo(room).hostiles.length === 0)
+            if (((_b = idleUntil[spawn.id]) !== null && _b !== void 0 ? _b : 0) > Game.time && getThreatInfo(room).score === 0)
                 continue;
             const orders = spawnOrdersThisTick();
             processRoomSpawning(room, spawn);
@@ -18754,7 +18754,7 @@ function loop$5() {
         if (towerIds.length === 0)
             continue;
         const attackTarget = selectRoomAttackTarget(hostiles, room);
-        const hasHostiles = hostiles.length > 0;
+        const hasHostiles = getThreatInfo(room).score > 0;
         for (const id of towerIds) {
             const tower = Game.getObjectById(id);
             if (tower)
