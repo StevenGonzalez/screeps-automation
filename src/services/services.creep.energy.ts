@@ -1,4 +1,4 @@
-import { ENERGY_DEPOSIT_PRIORITY, ROLE_HAULER, ROLE_UPGRADER } from "../config/config.roles";
+import { ENERGY_DEPOSIT_PRIORITY, ROLE_HAULER, ROLE_MINER, ROLE_UPGRADER } from "../config/config.roles";
 import {
   closestByPath,
   getRoomStructures,
@@ -6,7 +6,7 @@ import {
   getSafeSources,
   getMinerContainerIds,
 } from "./services.creep.room";
-import { energyClaimedByOthers, energyLeftFor } from "./services.coordination";
+import { energyClaimedByOthers, energyLeftFor, setHaulFrom } from "./services.coordination";
 import { upgradingFunded } from "./services.treasury";
 
 export function findEnergyDepositTarget(
@@ -56,6 +56,7 @@ export function acquireEnergy(
   const minerIds = bufferOnly
     ? new Set(getMinerContainerIds(creep.room).map((id) => id as string))
     : null;
+  if (creep.memory.role !== ROLE_HAULER) setHaulFrom(creep, undefined);
 
   if (creep.memory.energySourceId) {
     const cached = Game.getObjectById(creep.memory.energySourceId) as AnyStoreStructure | null;
@@ -64,6 +65,7 @@ export function acquireEnergy(
       cached.store[RESOURCE_ENERGY] > 0 &&
       !(minerIds && minerIds.has(cached.id as string))
     ) {
+      if (awaitLoad(creep, cached)) return true;
       const res = creep.withdraw(cached, RESOURCE_ENERGY);
       if (res === ERR_NOT_IN_RANGE) {
         creep.moveTo(cached, { reusePath: 50 });
@@ -117,6 +119,10 @@ export function acquireEnergy(
       : null;
 
   if (storeTarget) {
+    if (awaitLoad(creep, storeTarget)) {
+      creep.memory.energySourceId = storeTarget.id;
+      return true;
+    }
     const res = creep.withdraw(storeTarget, RESOURCE_ENERGY);
     if (res === ERR_NOT_IN_RANGE) {
       creep.memory.energySourceId = storeTarget.id;
@@ -174,6 +180,34 @@ export function acquireEnergy(
   }
 
   return false;
+}
+
+// A worker beside a miner container holding less than it can carry waits there
+// for its load to gather instead of taking the dig as it comes. Grimford's
+// masons and blacksmiths drew ten gold a tick from the miners' containers,
+// thirty withdrawals to a load at a fifth of a CPU each. While it waits it
+// claims the container, so a porter leaves that gold to it. It takes what is
+// there once the container is full or no miner is digging into it. Porters
+// keep their own claims and are left out.
+export function awaitLoad(creep: Creep, store: AnyStoreStructure): boolean {
+  if (creep.memory.role === ROLE_HAULER) return false;
+  const wait =
+    store.structureType === STRUCTURE_CONTAINER &&
+    store.store[RESOURCE_ENERGY] < creep.store.getFreeCapacity(RESOURCE_ENERGY) &&
+    getMinerContainerIds(creep.room).includes(store.id) &&
+    store.store.getFreeCapacity() > 0 &&
+    creep.pos.isNearTo(store) &&
+    minerDiggingInto(creep.room, store.id);
+  setHaulFrom(creep, wait ? store.id : undefined);
+  return wait;
+}
+
+function minerDiggingInto(room: Room, containerId: string): boolean {
+  return room.find(FIND_MY_CREEPS).some((c) => {
+    if (c.memory.role !== ROLE_MINER || c.spawning || c.memory.assignedContainerId !== containerId) return false;
+    const source = c.memory.assignedSourceId ? Game.getObjectById(c.memory.assignedSourceId) : null;
+    return !!source && source.energy > 0;
+  });
 }
 
 export function pickupDroppedResource(

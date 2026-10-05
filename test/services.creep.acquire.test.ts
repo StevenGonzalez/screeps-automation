@@ -63,6 +63,7 @@ describe("acquireEnergy's chosen store", () => {
     const creep = {
       room,
       memory: { role: "builder", energySourceId: cached },
+      store: { getFreeCapacity: () => 50 },
       pos: {
         findInRange: () => [],
         findClosestByPath: (targets: unknown[] | number) => (Array.isArray(targets) ? targets.find((t) => t === near) ?? null : null),

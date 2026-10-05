@@ -23,6 +23,7 @@ export {
 export {
   findEnergyDepositTarget,
   acquireEnergy,
+  awaitLoad,
   pickupDroppedResource,
   withdrawFromContainer,
   findClosestContainerWithFreeCapacity,

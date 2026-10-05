@@ -7,6 +7,7 @@ import {
   findMostCriticalRepairTarget,
   repairStructure,
   acquireEnergy,
+  awaitLoad,
   putSurplusEnergyToWork,
   getRoomBuildTarget,
 } from "../services/services.creep";
@@ -52,6 +53,7 @@ export function runRepairer(creep: Creep) {
     }
     const container = getClosestContainerOrStorage(creep);
     if (container) {
+      if (awaitLoad(creep, container as AnyStoreStructure)) return;
       if (creep.withdraw(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(container, { reusePath: 50 });
       }
