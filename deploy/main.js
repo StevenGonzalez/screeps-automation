@@ -9357,7 +9357,7 @@ function processRemoteRoomDiscovery() {
     }
 }
 function discoverDeepRooms(room) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     if (!room.memory.pendingScoutRooms)
         room.memory.pendingScoutRooms = [];
     const last = (_a = room.memory.lastDeepScout) !== null && _a !== void 0 ? _a : 0;
@@ -9375,7 +9375,12 @@ function discoverDeepRooms(room) {
     if (room.memory.pendingScoutRooms.length >= MAX_PENDING_SCOUT_ROOMS)
         return;
     const ownedNames = new Set(Object.keys(Game.rooms).filter((rn) => { var _a; return (_a = Game.rooms[rn].controller) === null || _a === void 0 ? void 0 : _a.my; }));
-    const intel = (_b = Memory.intel) !== null && _b !== void 0 ? _b : {};
+    const queued = new Set();
+    for (const rn of ownedNames) {
+        for (const r of (_c = (_b = Memory.rooms[rn]) === null || _b === void 0 ? void 0 : _b.pendingScoutRooms) !== null && _c !== void 0 ? _c : [])
+            queued.add(r);
+    }
+    const intel = (_d = Memory.intel) !== null && _d !== void 0 ? _d : {};
     const isFresh = (rn) => {
         var _a;
         const seen = (_a = intel[rn]) === null || _a === void 0 ? void 0 : _a.lastSeen;
@@ -9406,9 +9411,11 @@ function discoverDeepRooms(room) {
                 next.push(neighbor);
                 if (isFresh(neighbor))
                     continue;
-                if (((_d = (_c = room.memory.scoutSkipUntil) === null || _c === void 0 ? void 0 : _c[neighbor]) !== null && _d !== void 0 ? _d : 0) > Game.time)
+                if (((_f = (_e = room.memory.scoutSkipUntil) === null || _e === void 0 ? void 0 : _e[neighbor]) !== null && _f !== void 0 ? _f : 0) > Game.time)
                     continue;
                 if (room.memory.pendingScoutRooms.includes(neighbor))
+                    continue;
+                if (queued.has(neighbor))
                     continue;
                 if (room.memory.pendingScoutRooms.length >= MAX_PENDING_SCOUT_ROOMS)
                     return;
@@ -10917,8 +10924,7 @@ function shouldSpawnScout(room) {
     const pending = (_a = room.memory.pendingScoutRooms) !== null && _a !== void 0 ? _a : [];
     if (pending.length === 0)
         return false;
-    const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
-    return pending.some((r) => !assignedRooms.has(r));
+    return getScoutsForRoom(room).length === 0 && getRoomSpawningCount(room, ROLE_SCOUT) === 0;
 }
 function spawnScout(room, spawn) {
     var _a;
