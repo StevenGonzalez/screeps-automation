@@ -297,7 +297,8 @@ they claim the bounty), the minstrels sing of it at the next feast
 (`Memory.warbands`). A remote peddler, merchant or envoy fleeing
 a contested remote shouts "Bandits!" once. Merchants and envoys wait the raid
 out at home; a peddler, slow off the road, crosses the remote's nearest border
-into a room safe to stand in (raiders keep to the remote they raid), told
+into a room safe to stand in (raiders keep to the remote they raid), nearest
+by a walk that keeps four tiles clear of the raiders where it can, told
 once a raid ("Peddler Nesta slipped over the border into the Barrow Thicket to
 hide from Hask One-Eye's raiders."), and goes home when home's border is the nearest or another player's men are the
 threat. Each steps off the border before it waits. A merchant unloading at the

@@ -40,7 +40,7 @@ export function runRemoteMiner(creep: Creep) {
     // A walk out broken off to wait at home is no measure of the road.
     creep.memory.walk ??= 0;
     const refuge = refugeFrom(creep, homeRoom);
-    if (!standsIn(creep, refuge)) moveToRoom(creep, refuge);
+    if (!standsIn(creep, refuge)) fleeTo(creep, refuge);
     return;
   }
 
@@ -55,7 +55,7 @@ export function runRemoteMiner(creep: Creep) {
     cryFlight(creep);
     creep.memory.walk ??= 0;
     const refuge = refugeFrom(creep, homeRoom);
-    if (!standsIn(creep, refuge)) moveToRoom(creep, refuge);
+    if (!standsIn(creep, refuge)) fleeTo(creep, refuge);
     return;
   }
 
@@ -165,6 +165,7 @@ function refugeFrom(creep: Creep, homeRoom: string): string {
       return room === homeRoom || (!!room && isSafeRefuge(room, me));
     },
     algorithm: "dijkstra",
+    costCallback: shunRaiders(remoteThreats(creep.room)),
   });
   const refuge = (exit && beyond(exit)) || homeRoom;
   creep.memory.refuge = refuge;
@@ -174,6 +175,44 @@ function refugeFrom(creep: Creep, homeRoom: string): string {
 
 function moveToRoom(creep: Creep, targetRoom: string) {
   creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
+}
+
+// A fleeing peddler keeps this far from a raider where it can: a raider's bow
+// reaches three tiles.
+const RAIDER_BERTH = 4;
+// What a tile that close to a raider costs to cross, against 2 for open
+// ground, so a long way round is taken before a short one past the raider.
+const RAIDER_BERTH_COST = 60;
+
+// The nearest border was the nearest by the walk alone, wherever the raiders
+// stood. In the Crow Glen a raider came in over the east border the tick
+// Peddler Godric set off for it, and Godric walked into its arms.
+function fleeTo(creep: Creep, refuge: string): void {
+  const raiders = remoteThreats(creep.room);
+  if (raiders.length === 0) {
+    moveToRoom(creep, refuge);
+    return;
+  }
+  // The raiders move, so the way round them is found again every few steps.
+  creep.moveTo(new RoomPosition(25, 25, refuge), { reusePath: 5, range: 20, costCallback: shunRaiders(raiders) });
+}
+
+function shunRaiders(raiders: Creep[]) {
+  return (roomName: string, matrix: CostMatrix): CostMatrix => {
+    const terrain = Game.map.getRoomTerrain(roomName);
+    for (const raider of raiders) {
+      if (raider.pos.roomName !== roomName) continue;
+      const { x: rx, y: ry } = raider.pos;
+      for (let x = Math.max(0, rx - RAIDER_BERTH); x <= Math.min(49, rx + RAIDER_BERTH); x++) {
+        for (let y = Math.max(0, ry - RAIDER_BERTH); y <= Math.min(49, ry + RAIDER_BERTH); y++) {
+          // A cost set on a wall would let the path through it.
+          if (terrain.get(x, y) & TERRAIN_MASK_WALL) continue;
+          if (matrix.get(x, y) < RAIDER_BERTH_COST) matrix.set(x, y, RAIDER_BERTH_COST);
+        }
+      }
+    }
+    return matrix;
+  };
 }
 
 function pileAt(pos: RoomPosition): number {

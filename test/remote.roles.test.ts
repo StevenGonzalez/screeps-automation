@@ -14,6 +14,7 @@ g.FIND_STRUCTURES = 107;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_HOSTILE_STRUCTURES = 109;
 g.FIND_EXIT = 10;
+g.TERRAIN_MASK_WALL = 1;
 g.LOOK_RESOURCES = "resource";
 g.RESOURCE_ENERGY = "energy";
 g.RoomPosition = class {
@@ -429,6 +430,47 @@ describe("remote miner", () => {
       runRemoteMiner(creep as unknown as Creep);
       expect(creep.memory.remoteBackoffUntil).toBeGreaterThan(2005);
       expect(movedTo(creep)).toEqual([WEST]);
+    });
+
+    // Applies a flight's cost callback to the remote, where a creep stands two
+    // tiles west of the raider and a wall one tile east of it, and reads back
+    // what each tile costs.
+    function shunned(costCallback: (room: string, m: CostMatrix) => CostMatrix, at: { x: number; y: number }) {
+      const cells = new Map<string, number>([[`${at.x - 2},${at.y}`, 255]]);
+      const matrix = {
+        get: (x: number, y: number) => cells.get(`${x},${y}`) ?? 0,
+        set: (x: number, y: number, v: number) => void cells.set(`${x},${y}`, v),
+      };
+      (g.Game as any).map.getRoomTerrain = () => ({ get: (x: number, y: number) => (x === at.x + 1 && y === at.y ? 1 : 0) });
+      costCallback(REMOTE, matrix as unknown as CostMatrix);
+      return matrix.get;
+    }
+    const raiderAt = (x: number, y: number) =>
+      ({ owner: { username: "Invader" }, body: [{ type: "attack", hits: 100 }], pos: { x, y, roomName: REMOTE } });
+
+    it("picks its border by a walk that keeps clear of the raiders, and goes round them on the way", () => {
+      (g.Game as any).time = 2006;
+      (g.Memory as any).intel = { [WEST]: intel() };
+      const creep = fleeing(REMOTE, 3, 12, [raiderAt(30, 12)]);
+      runRemoteMiner(creep as unknown as Creep);
+      const chosen = (creep.pos.findClosestByPath as any).mock.calls[0][1];
+      const [, walk] = creep.moveTo.mock.calls[0] as [unknown, { reusePath: number; costCallback: never }];
+      expect(walk.reusePath).toBe(5);
+      for (const costCallback of [chosen.costCallback, walk.costCallback]) {
+        const cost = shunned(costCallback, { x: 30, y: 12 });
+        expect(cost(30, 12)).toBe(60);
+        expect(cost(34, 16)).toBe(60);
+        expect(cost(26, 8)).toBe(60);
+        expect(cost(35, 12)).toBe(0);
+        expect(cost(30, 7)).toBe(0);
+        // A wall stays a wall, and a tile already blocked stays blocked.
+        expect(cost(31, 12)).toBe(0);
+        expect(cost(28, 12)).toBe(255);
+      }
+      // The raiders are in the remote, so the walk's other rooms are left be.
+      const home = { get: () => 0, set: vi.fn() };
+      (walk.costCallback as (room: string, m: unknown) => unknown)(HOME, home);
+      expect(home.set).not.toHaveBeenCalled();
     });
 
     it("waits at home while a lord holds the remote, though none of the lord's men is in sight", () => {
