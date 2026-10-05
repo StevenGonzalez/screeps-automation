@@ -37,6 +37,16 @@ function hasActiveFiller(room: Room): boolean {
   return roomHasFiller[room.name];
 }
 
+// Whether the gold already on its way to the spawn and extensions covers what
+// they lack: what the barmaids carry, and the porters already on a relief run.
+function coreGapCovered(room: Room): boolean {
+  let carried = 0;
+  for (const c of room.find(FIND_MY_CREEPS)) {
+    if (c.memory.role === ROLE_FILLER || c.memory.coreRelief) carried += c.store[RESOURCE_ENERGY];
+  }
+  return carried >= room.energyCapacityAvailable - room.energyAvailable;
+}
+
 export function runHauler(creep: Creep) {
   if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
 
@@ -265,7 +275,13 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
       // extensions: one filler cannot always keep the core fed, and a starved
       // core is what stops the room spawning. Take the run and mark it, so the
       // delivery leg fills the core instead of putting it back in storage.
-      if (storageModel) creep.memory.coreRelief = true;
+      // Not when the gold on its way already closes the gap: Embercrag's
+      // porters each drew 600 for a core 200 short that the barmaid was
+      // filling, left 10 in an extension, and walked the rest back.
+      if (storageModel) {
+        if (coreGapCovered(creep.room)) return false;
+        creep.memory.coreRelief = true;
+      }
       if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(storage, { reusePath: 20 });
       }

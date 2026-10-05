@@ -22,7 +22,7 @@ let transferred: string[] = [];
  * well short of capacity - the RCL 6 room where the courier sat idle beside
  * empty extensions.
  */
-function scenario(carrying: number, energyAvailable = 300) {
+function scenario(carrying: number, energyAvailable = 300, fillerCarrying = 0, reliefCarrying = 0) {
   clock += 1;
   const roomName = `W48S8-${clock}`;
 
@@ -52,6 +52,15 @@ function scenario(carrying: number, energyAvailable = 300) {
     name: "stuffer1",
     spawning: false,
     memory: { role: ROLE_FILLER },
+    store: { energy: fillerCarrying },
+  };
+
+  // Another porter already on a relief run.
+  const reliever = {
+    name: "courier2",
+    spawning: false,
+    memory: { role: ROLE_HAULER, coreRelief: true },
+    store: { energy: reliefCarrying },
   };
 
   const room = {
@@ -65,7 +74,7 @@ function scenario(carrying: number, energyAvailable = 300) {
       containerIds: ["cont1"],
     } as unknown as RoomMemory,
     find: (type: number) => {
-      if (type === g.FIND_MY_CREEPS) return [filler];
+      if (type === g.FIND_MY_CREEPS) return [filler, reliever];
       if (type === g.FIND_STRUCTURES) return [storage, extension, minerContainer];
       return [];
     },
@@ -124,6 +133,32 @@ beforeEach(() => {
 describe("hauler core relief under the storage model", () => {
   it("pulls from storage instead of idling when there is nothing to haul", () => {
     const { creep } = scenario(0);
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual(["storage1"]);
+    expect(creep.memory.coreRelief).toBe(true);
+  });
+
+  it("leaves the run alone when the barmaid already carries what the core lacks", () => {
+    const { creep } = scenario(0, 2100, 200);
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual([]);
+    expect(creep.memory.coreRelief).toBeUndefined();
+  });
+
+  it("leaves the run alone when another porter on one carries what the core lacks", () => {
+    const { creep } = scenario(0, 2100, 0, 200);
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual([]);
+  });
+
+  it("still takes the run when the gold on its way falls short of what the core lacks", () => {
+    const { creep } = scenario(0, 2100, 100, 50);
 
     runHauler(creep);
 
