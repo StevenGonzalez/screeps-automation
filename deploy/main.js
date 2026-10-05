@@ -1676,9 +1676,8 @@ function cryFlight(creep) {
     creepCries[creep.name] = "Bandits!";
 }
 const REFUGE_WINDOW = 1500;
-function heraldRefuge(creep, refuge) {
+function heraldRefuge(creep, remote, refuge) {
     var _a, _b;
-    const remote = creep.room.name;
     const band = warbandIn(remote);
     const from = band ? `${band}'s raiders` : "the raiders";
     const where = ((_b = (_a = Game.rooms[refuge]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my) ? castleName(refuge) : `the ${wildsName(refuge)}`;
@@ -9770,7 +9769,7 @@ function runRemoteMiner(creep) {
         (_a = (_c = creep.memory).walk) !== null && _a !== void 0 ? _a : (_c.walk = 0);
         const refuge = refugeFrom(creep, homeRoom);
         if (!standsIn(creep, refuge))
-            moveToRoom$6(creep, refuge);
+            fleeTo(creep, refuge);
         return;
     }
     const inTarget = creep.room.name === targetRoom;
@@ -9787,11 +9786,12 @@ function runRemoteMiner(creep) {
         (_b = (_d = creep.memory).walk) !== null && _b !== void 0 ? _b : (_d.walk = 0);
         const refuge = refugeFrom(creep, homeRoom);
         if (!standsIn(creep, refuge))
-            moveToRoom$6(creep, refuge);
+            fleeTo(creep, refuge);
         return;
     }
     settleFlight(creep);
     delete creep.memory.refuge;
+    delete creep.memory.hid;
     if (inTarget && !core)
         clearRemoteInvader(creep);
     if (creep.room.name !== targetRoom) {
@@ -9881,15 +9881,47 @@ function refugeFrom(creep, homeRoom) {
             return room === homeRoom || (!!room && isSafeRefuge(room, me));
         },
         algorithm: "dijkstra",
+        costCallback: shunRaiders(remoteThreats(creep.room)),
     });
     const refuge = (exit && beyond(exit)) || homeRoom;
     creep.memory.refuge = refuge;
-    if (refuge !== homeRoom)
-        heraldRefuge(creep, refuge);
     return refuge;
 }
 function moveToRoom$6(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
+}
+const RAIDER_BERTH = 4;
+const RAIDER_BERTH_COST = 60;
+function fleeTo(creep, refuge) {
+    if (creep.room.name === refuge && refuge !== creep.memory.homeRoom && !creep.memory.hid) {
+        creep.memory.hid = true;
+        heraldRefuge(creep, creep.memory.targetRoom, refuge);
+    }
+    const raiders = remoteThreats(creep.room);
+    if (raiders.length === 0) {
+        moveToRoom$6(creep, refuge);
+        return;
+    }
+    creep.moveTo(new RoomPosition(25, 25, refuge), { reusePath: 5, range: 20, costCallback: shunRaiders(raiders) });
+}
+function shunRaiders(raiders) {
+    return (roomName, matrix) => {
+        const terrain = Game.map.getRoomTerrain(roomName);
+        for (const raider of raiders) {
+            if (raider.pos.roomName !== roomName)
+                continue;
+            const { x: rx, y: ry } = raider.pos;
+            for (let x = Math.max(0, rx - RAIDER_BERTH); x <= Math.min(49, rx + RAIDER_BERTH); x++) {
+                for (let y = Math.max(0, ry - RAIDER_BERTH); y <= Math.min(49, ry + RAIDER_BERTH); y++) {
+                    if (terrain.get(x, y) & TERRAIN_MASK_WALL)
+                        continue;
+                    if (matrix.get(x, y) < RAIDER_BERTH_COST)
+                        matrix.set(x, y, RAIDER_BERTH_COST);
+                }
+            }
+        }
+        return matrix;
+    };
 }
 function pileAt(pos) {
     let gold = 0;
@@ -17650,6 +17682,8 @@ function processRoomSpawning(room, spawn) {
         if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn))
             return;
     }
+    if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn))
+        return;
     if (!blockaded && shouldSpawnRemoteMiner(room) && spawnRemoteMiner(room, spawn))
         return;
     if (!blockaded && shouldSpawnReserver(room) && spawnReserver(room, spawn))
@@ -17678,8 +17712,6 @@ function processRoomSpawning(room, spawn) {
     if (!blockaded && !economyCritical && spawnUnclaimer(room, spawn))
         return;
     if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn))
-        return;
-    if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn))
         return;
     if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn))
         return;
