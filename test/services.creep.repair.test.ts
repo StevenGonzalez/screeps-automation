@@ -8,6 +8,8 @@ g.RESOURCE_ENERGY = "energy";
 g.ATTACK = "attack";
 g.RANGED_ATTACK = "ranged_attack";
 g.STRUCTURE_KEEPER_LAIR = "keeperLair";
+g.FIND_CONSTRUCTION_SITES = 111;
+g.STRUCTURE_STORAGE = "storage";
 
 import {
   findMostCriticalRepairTarget,
@@ -40,6 +42,7 @@ function makeRoom(opts: {
   perimeter?: string[];
   storageEnergy?: number;
   hostiles?: unknown[];
+  sites?: unknown[];
 }): Room {
   return {
     name: "W1N1",
@@ -49,6 +52,7 @@ function makeRoom(opts: {
     find: (type: number) => {
       if (type === g.FIND_STRUCTURES) return opts.structures;
       if (type === g.FIND_HOSTILE_CREEPS) return opts.hostiles ?? [];
+      if (type === g.FIND_CONSTRUCTION_SITES) return opts.sites ?? [];
       return [];
     },
     lookForAt: () => [],
@@ -130,6 +134,24 @@ describe("findMostCriticalRepairTarget ramparts", () => {
     g.Game = { time: tick };
     const saved = makeRoom({ level: 6, structures: [wall], perimeter: ["20,20"], storageEnergy: 50_000 });
     expect(repairFor(saved)?.id).toBe("perim");
+  });
+
+  // Thornbarrow's two blacksmiths raised its ramparts on the gold by the throne
+  // while its masons stood at drained containers with the storage unbuilt.
+  it("leaves raising the walls while the castle builds its storage", () => {
+    const wall = rampart("perim", 20, 20, 15_000);
+    const plain = makeRoom({ level: 4, structures: [wall], perimeter: ["20,20"] });
+    expect(repairFor(plain)?.id).toBe("perim");
+
+    tick++;
+    g.Game = { time: tick };
+    const building = makeRoom({
+      level: 4,
+      structures: [wall],
+      perimeter: ["20,20"],
+      sites: [{ structureType: "extension" }, { structureType: "storage" }],
+    });
+    expect(repairFor(building)).toBeNull();
   });
 
   it("raises the walls under attack whatever the treasury holds", () => {

@@ -5,6 +5,8 @@ g.FIND_STRUCTURES = 107;
 g.FIND_HOSTILE_CREEPS = 103;
 g.STRUCTURE_WALL = "constructedWall";
 g.RESOURCE_ENERGY = "energy";
+g.FIND_CONSTRUCTION_SITES = 111;
+g.STRUCTURE_STORAGE = "storage";
 g.OK = 0;
 
 import { getRepairerPopulationTarget, spawnRepairer } from "../src/orchestrators/orchestrator.spawning.economy";
@@ -67,6 +69,33 @@ describe("repairer population", () => {
     g.Game = { time: tick };
     g.Memory = { expansionSavings: { room: `W1N1-${tick}`, target: "W1N2" } };
     expect(getRepairerPopulationTarget(plannedRoom([rampart], 60_000))).toBe(1);
+  });
+});
+
+describe("repairer population while the storage is built", () => {
+  beforeEach(() => {
+    tick += 100;
+    g.Game = { time: tick };
+    g.Memory = {};
+  });
+
+  // Thornbarrow at RCL 4: no storage yet, so nothing held the walls back.
+  function storagelessRoom(sites: unknown[]): Room {
+    const rampart = { id: "r", structureType: "rampart", pos: { x: 20, y: 20 }, hits: 15_000, hitsMax: 10_000_000 };
+    const room = plannedRoom([rampart]) as unknown as Record<string, unknown>;
+    room.controller = { level: 4 };
+    room.storage = undefined;
+    const find = room.find as (type: number, opts?: unknown) => unknown[];
+    room.find = (type: number, opts?: unknown) => (type === g.FIND_CONSTRUCTION_SITES ? sites : find(type, opts));
+    return room as unknown as Room;
+  }
+
+  it("sends one to raise the walls of a castle with no storage to build", () => {
+    expect(getRepairerPopulationTarget(storagelessRoom([]))).toBe(1);
+  });
+
+  it("sends none to raise them while its storage is a construction site", () => {
+    expect(getRepairerPopulationTarget(storagelessRoom([{ structureType: "storage" }]))).toBe(0);
   });
 });
 

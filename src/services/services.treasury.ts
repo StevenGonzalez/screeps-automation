@@ -32,11 +32,16 @@ export function upgraderStorageFloor(room: Room): number {
  * Whether the castle can spend gold raising its walls. The walls draw on the
  * same treasury as the throne, above the same floor: blacksmiths raising a ring
  * of ramparts otherwise ate the savings for a new keep that the enchanters were
- * holding back.
+ * holding back. A castle building its storage leaves the walls be: Thornbarrow's
+ * two blacksmiths raised its ramparts on the gold by the throne while its masons
+ * stood at drained containers.
  */
 export function wallsFunded(room: Room): boolean {
   const storage = room.storage;
-  return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
+  if (!storage) {
+    return !room.find(FIND_CONSTRUCTION_SITES).some((s) => s.structureType === STRUCTURE_STORAGE);
+  }
+  return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
 }
 
 /**

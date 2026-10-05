@@ -13,7 +13,7 @@ import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { countOpenTilesAround, getSources } from "../services/services.creep";
-import { upgraderStorageFloor } from "../services/services.treasury";
+import { upgraderStorageFloor, wallsFunded } from "../services/services.treasury";
 import { labsNeedTending } from "../services/services.labs";
 import {
   buildScaledBody,
@@ -497,7 +497,8 @@ const WALL_SMITH_SPARE = 10_000;
 
 function wallSmithFunded(room: Room): boolean {
   const storage = room.storage;
-  return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) + WALL_SMITH_SPARE;
+  if (!storage) return wallsFunded(room);
+  return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) + WALL_SMITH_SPARE;
 }
 
 export function getRepairerPopulationTarget(room: Room): number {
