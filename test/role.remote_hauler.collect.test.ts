@@ -288,7 +288,7 @@ describe("remote hauler at home", () => {
     const storage = { store: { getFreeCapacity: () => 50_000 } };
     const c = hauler() as unknown as Record<string, unknown>;
     Object.assign(c, {
-      room: { name: HOME, storage, find: () => [] },
+      room: { name: HOME, storage, memory: {}, find: () => [] },
       memory: { ...(c.memory as CreepMemory), working: true },
       store: { energy: 800, getFreeCapacity: () => 200 },
       transfer: vi.fn(() => 0),

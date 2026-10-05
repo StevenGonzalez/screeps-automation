@@ -10,6 +10,8 @@ import {
 import { cryFlight, cryHaul, settleFlight } from "../services/services.herald";
 import { remoteThreats, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 import { ROLE_REMOTE_MINER } from "../config/config.roles";
+import { energyClaimedByOthers, setFillTarget } from "../services/services.coordination";
+import { upgradingFunded } from "../services/services.treasury";
 import { worksRemoteSource } from "../orchestrators/orchestrator.spawning.remote";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
@@ -60,6 +62,7 @@ export function runRemoteHauler(creep: Creep) {
   // bring home whatever is carried rather than let it die with the load.
   if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
     creep.memory.working = false;
+    setFillTarget(creep, undefined);
   } else if (
     !creep.memory.working &&
     (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 ||
@@ -250,6 +253,13 @@ function depositEnergy(creep: Creep, homeRoom: string) {
     return;
   }
 
+  const throne = throneOnTheWay(creep);
+  if (creep.memory.fillTargetId !== throne?.id) setFillTarget(creep, throne?.id);
+  if (throne) {
+    unload(creep, throne);
+    return;
+  }
+
   const storage = creep.room.storage;
   if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
     unload(creep, storage);
@@ -291,6 +301,28 @@ function depositEnergy(creep: Creep, homeRoom: string) {
   }
 
   putSurplusEnergyToWork(creep);
+}
+
+// Until a link feeds the throne, gold put in storage reached the enchanters only
+// on their own legs: the porters stock the throne's container with what the
+// keep's own sources yield and no more. Grimford's merchants came in from the
+// north and the west past that container, walked twenty-odd tiles on to its
+// storage, and left it empty for the three enchanters beside it. A merchant
+// that comes in nearer the throne than the storage unloads there while the
+// treasury can spare the gold and the whole load fits, and once bound for it
+// keeps to it while there is room.
+function throneOnTheWay(creep: Creep): StructureContainer | null {
+  const room = creep.room;
+  const storage = room.storage;
+  const id = room.memory.upgradeContainerId;
+  if (!storage || !id || room.memory.controllerLinkIds?.length) return null;
+  const throne = Game.getObjectById(id);
+  if (!throne || room.memory.minerContainerIds?.includes(id)) return null;
+  const free = throne.store.getFreeCapacity(RESOURCE_ENERGY);
+  if (creep.memory.fillTargetId === id) return free > 0 ? throne : null;
+  if (!upgradingFunded(room)) return null;
+  if (free - energyClaimedByOthers(id, creep) < creep.store[RESOURCE_ENERGY]) return null;
+  return creep.pos.getRangeTo(throne) < creep.pos.getRangeTo(storage) ? throne : null;
 }
 
 // Hands over the load and calls out the gold brought home once it lands. Only
