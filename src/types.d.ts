@@ -59,6 +59,8 @@ declare global {
     lastCooldown: number;
     requiredMiners: number;
     requiredHaulers: number;
+    // Set once the chronicle told of the op's first nomad setting out.
+    heralded?: boolean;
   }
 
   type SquadFormation = "line" | "box" | "wedge" | "scatter";

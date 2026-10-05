@@ -1,4 +1,5 @@
 import { ROLE_DEPOSIT_MINER } from "../config/config.roles";
+import { heraldCaravan } from "../services/services.herald";
 
 // Ticks per room of travel home, plus slack for the last leg to storage.
 const TICKS_PER_ROOM = 50;
@@ -76,8 +77,12 @@ function deliverHome(creep: Creep) {
   if (!target) return;
   const res = Object.keys(creep.store)[0] as ResourceConstant | undefined;
   if (!res) return;
-  if (creep.transfer(target, res) === ERR_NOT_IN_RANGE) {
+  const amount = creep.store[res];
+  const result = creep.transfer(target, res);
+  if (result === ERR_NOT_IN_RANGE) {
     creep.moveTo(target, { reusePath: 5, visualizePathStyle: {} });
+  } else if (result === OK && home && creep.memory.targetRoom) {
+    heraldCaravan(home, creep.memory.targetRoom, res, amount);
   }
 }
 

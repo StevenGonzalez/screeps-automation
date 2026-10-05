@@ -18,6 +18,7 @@ import {
   boostMemory,
 } from "./orchestrator.spawning.shared";
 import { buildRemoteHaulerBody } from "./orchestrator.spawning.remote";
+import { heraldNomads } from "../services/services.herald";
 
 // Cracking ops are included so a member lost mid-fight gets replaced. A home
 // that cannot build the full healer body cannot field a squad at all.
@@ -157,10 +158,14 @@ export function spawnNextDepositCreep(room: Room, spawn: StructureSpawn): boolea
 
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
   const res = trackedSpawn(room, spawn, body, {
-    memory: { role: roleToSpawn, homeRoom: room.name, depositOpId: op.id },
+    memory: { role: roleToSpawn, homeRoom: room.name, targetRoom: op.roomName, depositOpId: op.id },
   });
   if (res === OK) {
     console.log(`[Deposit] Spawning ${roleToSpawn} for op #${op.id} -> ${op.roomName}`);
+    if (roleToSpawn === ROLE_DEPOSIT_MINER && !op.heralded) {
+      op.heralded = true;
+      heraldNomads(room.name, op.roomName, op.depositType);
+    }
   }
   return res === OK;
 }

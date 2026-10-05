@@ -11,6 +11,7 @@ g.POWER_CREEP_MAX_LEVEL = 25;
 g.POWER_CLASS = { OPERATOR: "operator" };
 
 g.ERR_NOT_ENOUGH_RESOURCES = -6;
+g.ERR_NOT_IN_RANGE = -9;
 [
   "PWR_GENERATE_OPS", "PWR_REGEN_SOURCE", "PWR_OPERATE_SPAWN", "PWR_OPERATE_EXTENSION",
   "PWR_OPERATE_FACTORY", "PWR_OPERATE_LAB", "PWR_OPERATE_STORAGE", "PWR_OPERATE_TOWER",
@@ -25,7 +26,10 @@ const { loop: observerLoop, powerOpTicksNeeded } = await import(
 );
 const { loop: powerCreepLoop } = await import("../src/orchestrators/orchestrator.powercreep");
 const { runDepositMiner } = await import("../src/roles/role.depositminer");
+const { runDepositHauler } = await import("../src/roles/role.deposithauler");
+const { spawnNextDepositCreep } = await import("../src/orchestrators/orchestrator.spawning.ops");
 const { ROLE_DEPOSIT_HAULER } = await import("../src/config/config.roles");
+const { wildsName } = await import("../src/services/services.chronicle");
 
 let clock = 7000;
 beforeEach(() => {
@@ -188,5 +192,60 @@ describe("deposit miner", () => {
 
   it("drops cargo when the next harvest would not fit", () => {
     expect(miner(false, 10)).toEqual(["drop", "harvest"]);
+  });
+});
+
+describe("nomads in the chronicle", () => {
+  const chronicled = () => ((g.Memory as Memory).chronicle ?? []).map((l) => l.text);
+
+  function castle() {
+    const spawned: CreepMemory[] = [];
+    const room = {
+      name: "W1N1",
+      energyAvailable: 2300,
+      energyCapacityAvailable: 2300,
+      memory: {} as RoomMemory,
+      find: () => [],
+    } as unknown as Room;
+    const spawn = {
+      spawnCreep: (_body: unknown, _name: string, opts: { memory: CreepMemory }) => {
+        spawned.push(opts.memory);
+        return g.OK;
+      },
+    } as unknown as StructureSpawn;
+    return { room, spawn, spawned };
+  }
+
+  it("tells of the first nomad setting out for a deposit, and not of the ones sent after it", () => {
+    g.Memory = { rooms: { W1N1: { townName: "Ravenhold" } }, creeps: {} } as unknown as Memory;
+    (g.Memory as Memory).depositOps = [
+      { id: 1, roomName: "W0N1", homeRoom: "W1N1", depositType: "silicon", phase: "mining", requiredMiners: 1, requiredHaulers: 1 } as DepositOp,
+    ];
+    for (const t of [clock, clock + 1500]) {
+      g.Game = { time: t, creeps: {}, rooms: {} };
+      const { room, spawn, spawned } = castle();
+      expect(spawnNextDepositCreep(room, spawn)).toBe(true);
+      expect(spawned[0]).toMatchObject({ targetRoom: "W0N1", depositOpId: 1 });
+    }
+
+    expect(chronicled()).toEqual([`Nomads ride out from Ravenhold to dig the glass sand of the ${wildsName("W0N1")}.`]);
+  });
+
+  it("tells the loads a deposit's caravans bring home as one line", () => {
+    g.Memory = { rooms: { W1N1: { townName: "Ravenhold" } } } as unknown as Memory;
+    const storage = { id: "s1" };
+    const caravan = (time: number, load: number) => {
+      g.Game = { time };
+      runDepositHauler({
+        room: { name: "W1N1", storage },
+        memory: { homeRoom: "W1N1", targetRoom: "W0N1", depositOpId: 1 },
+        store: { silicon: load, getFreeCapacity: () => 0 },
+        transfer: () => g.OK,
+      } as unknown as Creep);
+    };
+    caravan(clock, 550);
+    caravan(clock + 400, 600);
+
+    expect(chronicled()).toEqual([`The caravans of Ravenhold bring 1150 glass sand home from the ${wildsName("W0N1")}.`]);
   });
 });

@@ -307,6 +307,11 @@ const WARES: Record<string, string> = {
   K: "keanium",
   Z: "zynthium",
   X: "philosopher's salt",
+  // Dug by the nomads from the deposits on the highways.
+  silicon: "glass sand",
+  metal: "star iron",
+  biomass: "witchroot",
+  mist: "wraith mist",
 };
 
 function heraldTrade(): void {
@@ -335,6 +340,26 @@ function chronicleTrade(t: Transaction, verb: "sold" | "bought", ours: string, t
     t.amount,
     (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`,
     TRADE_WINDOW
+  );
+}
+
+// A caravan walks to a deposit on the highway and back in a few hundred ticks,
+// so the loads it brings home from one deposit make one line.
+const CARAVAN_WINDOW = 1500;
+
+/** A castle's first nomad sets out to dig a deposit on the highway. */
+export function heraldNomads(home: string, roomName: string, resource: string): void {
+  chronicle(`Nomads ride out from ${castleName(home)} to dig the ${WARES[resource] ?? resource} of the ${wildsName(roomName)}.`);
+}
+
+/** A caravan brings a deposit's goods home. */
+export function heraldCaravan(home: string, roomName: string, resource: string, amount: number): void {
+  const ware = WARES[resource] ?? resource;
+  tally(
+    `caravan:${home}:${roomName}:${resource}`,
+    amount,
+    (n) => `The caravans of ${castleName(home)} bring ${n} ${ware} home from the ${wildsName(roomName)}.`,
+    CARAVAN_WINDOW
   );
 }
 
