@@ -289,7 +289,10 @@ function checkForDeposits(roomName: string) {
   if (deposit.lastCooldown > DEPOSIT_MAX_COOLDOWN) return;
   if (deposit.ticksToDecay < DEPOSIT_MIN_TICKS) return;
 
-  const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my);
+  // Only a castle with a terminal can sell the haul. The nearest castle took
+  // the first silicon the realm dug, and Grimford, without a terminal, kept it
+  // in a storage nothing sells from while Embercrag's terminal stood as near.
+  const ownedRooms = Object.values(Game.rooms).filter((r) => r.controller?.my && r.terminal);
   if (ownedRooms.length === 0) return;
   const homeRoom = ownedRooms.reduce((best, r) => {
     const d = Game.map.getRoomLinearDistance(r.name, roomName);

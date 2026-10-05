@@ -78,6 +78,42 @@ describe("power bank ops", () => {
   });
 });
 
+describe("deposit ops", () => {
+  function world(terminalAt: string[]) {
+    const castle = (name: string) => ({
+      name,
+      controller: { my: true, level: 6 },
+      terminal: terminalAt.includes(name) ? { id: `t-${name}` } : undefined,
+      memory: {},
+    });
+    const deposit = { id: "d1", depositType: "silicon", lastCooldown: 5, ticksToDecay: 40_000 };
+    const highway = {
+      name: "W0N1",
+      memory: {},
+      find: (type: number) => (type === g.FIND_DEPOSITS ? [deposit] : []),
+    };
+    g.Game = {
+      time: clock,
+      rooms: { W1N1: castle("W1N1"), W2N1: castle("W2N1"), W0N1: highway },
+      creeps: {},
+      map: { getRoomLinearDistance: (a: string) => (a === "W1N1" ? 1 : 2) },
+      getObjectById: (id: string) => (id === "d1" ? deposit : null),
+    };
+  }
+
+  it("sends the caravans from the nearest castle with a terminal to sell the haul", () => {
+    world(["W2N1"]);
+    observerLoop();
+    expect((g.Memory as Memory).depositOps?.map((op) => op.homeRoom)).toEqual(["W2N1"]);
+  });
+
+  it("digs nothing while no castle has a terminal", () => {
+    world([]);
+    observerLoop();
+    expect((g.Memory as Memory).depositOps ?? []).toHaveLength(0);
+  });
+});
+
 describe("power creep creation", () => {
   it("spends a free GPL level on upgrading, not on a second operator", () => {
     let created = 0;
