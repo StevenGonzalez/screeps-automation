@@ -211,6 +211,38 @@ describe("upgrader in a keep with no storage", () => {
   });
 });
 
+describe("upgrader in a castle with storage", () => {
+  function castle(porterBringing: boolean): Room {
+    const room = roomWithStorage(50_000);
+    const upgradeCont = {
+      id: "upgradeCont",
+      structureType: "container",
+      store: { [g.RESOURCE_ENERGY as string]: 0 },
+      pos: { x: 14, y: 5, getRangeTo: () => 5 },
+    };
+    const porter = { store: { [g.RESOURCE_ENERGY as string]: 400 }, memory: { fillTargetId: "upgradeCont" } };
+    const game = g.Game as { creeps: Record<string, unknown>; getObjectById: (id: string) => unknown };
+    const byId = game.getObjectById;
+    game.creeps = porterBringing ? { "Porter Osric": porter } : {};
+    game.getObjectById = (id: string) => (id === "upgradeCont" ? upgradeCont : byId(id));
+    room.memory.upgradeContainerId = "upgradeCont" as Id<StructureContainer>;
+    return room;
+  }
+
+  // Grimford's storage stands twenty tiles from the throne. Its enchanters set
+  // off for it whenever the container ran dry, and turned back when a porter
+  // a few tiles off filled it behind them.
+  it("waits by the upgrade container while a porter brings gold to it", () => {
+    const calls = runEmptyUpgraderIn(castle(true));
+    expect(calls).not.toContain("withdraw:storage1");
+  });
+
+  it("goes to storage when no porter is bringing any", () => {
+    const calls = runEmptyUpgraderIn(castle(false));
+    expect(calls).toContain("withdraw:storage1");
+  });
+});
+
 describe("runUpgrader", () => {
   it("upgrades the controller even while the room has construction sites", () => {
     const site = {
