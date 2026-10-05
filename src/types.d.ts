@@ -247,6 +247,8 @@ declare global {
     fled?: boolean;
     // The room a peddler waits out a raid in; cleared when the remote is safe.
     refuge?: string;
+    // Set once a peddler has crossed into its refuge and the chronicle told of it.
+    hid?: boolean;
     // The remote a knight has ridden out to defend; cleared once it is safe.
     sortie?: string;
     fillTargetId?: string;

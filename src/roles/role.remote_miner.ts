@@ -61,6 +61,7 @@ export function runRemoteMiner(creep: Creep) {
 
   settleFlight(creep);
   delete creep.memory.refuge;
+  delete creep.memory.hid;
   if (inTarget && !core) clearRemoteInvader(creep);
 
   if (creep.room.name !== targetRoom) {
@@ -169,7 +170,6 @@ function refugeFrom(creep: Creep, homeRoom: string): string {
   });
   const refuge = (exit && beyond(exit)) || homeRoom;
   creep.memory.refuge = refuge;
-  if (refuge !== homeRoom) heraldRefuge(creep, refuge);
   return refuge;
 }
 
@@ -188,6 +188,12 @@ const RAIDER_BERTH_COST = 60;
 // stood. In the Crow Glen a raider came in over the east border the tick
 // Peddler Godric set off for it, and Godric walked into its arms.
 function fleeTo(creep: Creep, refuge: string): void {
+  // Told as it comes over the border, not as it sets off: Godric was told to
+  // have slipped into the Sorrow Vale, then to have fallen in the Crow Glen.
+  if (creep.room.name === refuge && refuge !== creep.memory.homeRoom && !creep.memory.hid) {
+    creep.memory.hid = true;
+    heraldRefuge(creep, creep.memory.targetRoom!, refuge);
+  }
   const raiders = remoteThreats(creep.room);
   if (raiders.length === 0) {
     moveToRoom(creep, refuge);

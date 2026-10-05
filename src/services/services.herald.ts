@@ -45,8 +45,7 @@ const REFUGE_WINDOW = 1500;
 
 // A peddler gone over a border to wait out a raid, told once a raid for each
 // room the peddlers of a remote hide in.
-export function heraldRefuge(creep: Creep, refuge: string): void {
-  const remote = creep.room.name;
+export function heraldRefuge(creep: Creep, remote: string, refuge: string): void {
   const band = warbandIn(remote);
   const from = band ? `${band}'s raiders` : "the raiders";
   const where = Game.rooms[refuge]?.controller?.my ? castleName(refuge) : `the ${wildsName(refuge)}`;

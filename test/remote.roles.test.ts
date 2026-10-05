@@ -397,6 +397,11 @@ describe("remote miner", () => {
       return creep;
     }
     const movedTo = (creep: ReturnType<typeof fleeing>) => creep.moveTo.mock.calls.map((c) => (c[0] as RoomPosition).roomName);
+    // Carried over the west border, onto the edge of the room beyond.
+    const crossWest = (creep: ReturnType<typeof fleeing>) => {
+      creep.room = { ...creep.room, name: WEST, find: () => [] };
+      creep.pos = { ...creep.pos, x: 49 } as typeof creep.pos;
+    };
 
     it("crosses the nearest border into a room safe to stand in, not the whole remote", () => {
       (g.Game as any).time = 2001;
@@ -413,10 +418,16 @@ describe("remote miner", () => {
       const lines = () => ((g.Memory as any).chronicle ?? []).map((l: { text: string }) => l.text);
       const first = Object.assign(fleeing(REMOTE, 3, 12), { name: "Peddler Nesta" });
       runRemoteMiner(first as unknown as Creep);
+      // Only set off for the border, it may yet fall on the way.
+      expect(lines()).toEqual([]);
+      crossWest(first);
+      runRemoteMiner(first as unknown as Creep);
       expect(lines()).toEqual([expect.stringMatching(/^Peddler Nesta slipped over the border into the .+ to hide from the raiders\.$/)]);
-      // Already over the border, it is not told again.
+      // Still on the border, it is not told again.
       runRemoteMiner(first as unknown as Creep);
       const second = Object.assign(fleeing(REMOTE, 3, 12), { name: "Peddler Gervase" });
+      runRemoteMiner(second as unknown as Creep);
+      crossWest(second);
       runRemoteMiner(second as unknown as Creep);
       expect(lines()).toEqual([expect.stringMatching(/^2 peddlers slipped over the border/)]);
     });
@@ -497,6 +508,8 @@ describe("remote miner", () => {
       (g.Game as any).rooms[WEST] = { controller: { my: true } };
       const creep = Object.assign(fleeing(REMOTE, 3, 12), { name: "Peddler Nesta" });
       runRemoteMiner(creep as unknown as Creep);
+      crossWest(creep);
+      runRemoteMiner(creep as unknown as Creep);
       expect((g.Memory as any).chronicle.map((l: { text: string }) => l.text)).toEqual([
         "Peddler Nesta slipped over the border into Thornbarrow to hide from Hask One-Eye's raiders.",
       ]);
@@ -538,6 +551,12 @@ describe("remote miner", () => {
       const creep = fleeing(REMOTE, 3, 12, [armed]);
       runRemoteMiner(creep as unknown as Creep);
       expect(movedTo(creep)).toEqual([HOME]);
+      // Coming home is no news.
+      creep.room = { ...creep.room, name: HOME, find: () => [] };
+      creep.pos = { ...creep.pos, y: 0 } as typeof creep.pos;
+      runRemoteMiner(creep as unknown as Creep);
+      const told = ((g.Memory as any).chronicle ?? []).map((l: { text: string }) => l.text);
+      expect(told.filter((t: string) => t.includes("slipped"))).toEqual([]);
     });
 
     it("steps off the border into its refuge, waits there, and goes back once the raid is over", () => {
@@ -556,6 +575,8 @@ describe("remote miner", () => {
       runRemoteMiner(creep as unknown as Creep);
       expect(movedTo(creep)).toEqual([REMOTE]);
       expect(creep.memory.refuge).toBeUndefined();
+      // The next raid it hides from is told again.
+      expect(creep.memory.hid).toBeUndefined();
     });
   });
 
