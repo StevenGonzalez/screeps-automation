@@ -134,6 +134,32 @@ describe("hauler pickup", () => {
     expect(withdrawn).toEqual(["walk:far"]);
   });
 
+  it("waits rather than walk to gold another porter is bound for when the spawn is short", () => {
+    const creep = scenario(0, 150);
+    (creep.room as { energyAvailable: number }).energyAvailable = 300;
+    boundFor("far", 10);
+    runHauler(creep);
+    expect(withdrawn).toEqual([]);
+    expect(creep.memory.haulFromId).toBeUndefined();
+  });
+
+  it("takes a part load for a short spawn only where some is left for it, and claims it", () => {
+    const creep = scenario(60, 150);
+    (creep.room as { energyAvailable: number }).energyAvailable = 300;
+    boundFor("far", 10);
+    runHauler(creep);
+    expect(withdrawn).toEqual(["walk:near"]);
+    expect(creep.memory.haulFromId).toBe("near");
+  });
+
+  it("keeps to the part load it set out for", () => {
+    const creep = scenario(60, 80);
+    (creep.room as { energyAvailable: number }).energyAvailable = 300;
+    creep.memory.haulFromId = "near" as Id<StructureContainer>;
+    runHauler(creep);
+    expect(withdrawn).toEqual(["walk:near"]);
+  });
+
   it("lets go of the container once it is full", () => {
     const creep = scenario(400, 2000, 300);
     creep.memory.haulFromId = "far" as Id<StructureContainer>;

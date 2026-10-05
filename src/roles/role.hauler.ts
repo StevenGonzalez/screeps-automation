@@ -237,9 +237,10 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
   // A porter keeps to the container it set out for while there is still a
   // load there for it. Picking afresh each tick turned it round on the road
   // whenever another container filled a little faster.
-  const enough = (id: string | undefined) => {
+  const held = creep.memory.haulFromId;
+  const enough = (id: string | undefined, atLeast = 100) => {
     const c = id ? (Game.getObjectById(id as Id<StructureContainer>) as StructureContainer | null) : null;
-    return c && energyLeftFor(creep, c) >= 100 ? c : null;
+    return c && energyLeftFor(creep, c) >= atLeast ? c : null;
   };
   const container =
     enough(creep.memory.haulFromId) ??
@@ -270,6 +271,21 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
     }
     if (storageModel) return false;
     if (baseNeedsEnergy) {
+      // With nothing worth a trip, a porter takes a part load to the spawn. It
+      // used to take it from whichever store was closest, claimed or not, so it
+      // walked to a container another porter was already bound for, got there
+      // first, and sent that one back. It takes a part load only where some is
+      // left for it, and waits while the gold in the containers is spoken for.
+      const part = enough(held, 1) ?? findFullestMinerContainer(creep, 1);
+      if (part) {
+        setHaulFrom(creep, part.id);
+        withdrawFromContainer(creep, part);
+        return true;
+      }
+      const minerGold = getMinerContainerIds(creep.room).some(
+        (id) => (Game.getObjectById(id)?.store[RESOURCE_ENERGY] ?? 0) > 0
+      );
+      if (minerGold) return false;
       acquireEnergy(creep);
       return true;
     }
