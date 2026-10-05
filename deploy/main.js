@@ -1675,6 +1675,15 @@ function cryFlight(creep) {
     freshCries();
     creepCries[creep.name] = "Bandits!";
 }
+const REFUGE_WINDOW = 1500;
+function heraldRefuge(creep, refuge) {
+    var _a, _b;
+    const remote = creep.room.name;
+    const band = warbandIn(remote);
+    const from = band ? `${band}'s raiders` : "the raiders";
+    const where = ((_b = (_a = Game.rooms[refuge]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my) ? castleName(refuge) : `the ${wildsName(refuge)}`;
+    tally(`refuge:${remote}:${refuge}`, 1, (n) => `${n === 1 ? creep.name : `${n} peddlers`} slipped over the border into ${where} to hide from ${from}.`, REFUGE_WINDOW);
+}
 const GLUT_CRY_PERIOD = 25;
 function cryGlut(creep) {
     if (Game.time % GLUT_CRY_PERIOD !== 0)
@@ -4466,7 +4475,7 @@ function getUpgradeContainerFillerIds(room) {
     }
     return upgradeFillerIdsByRoom[room.name];
 }
-function findDepositTargetExcludingMiner(creep) {
+function findDepositTargetExcludingMiner(creep, coreFed = false) {
     var _a;
     const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
     const upgradeId = creep.room.memory.upgradeContainerId;
@@ -4476,7 +4485,7 @@ function findDepositTargetExcludingMiner(creep) {
     const upgradeIsDropTarget = !!upgradeCont &&
         upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
         minerIds.indexOf(upgradeCont.id) === -1;
-    const coreFull = creep.room.energyAvailable >= creep.room.energyCapacityAvailable;
+    const coreFull = coreFed || creep.room.energyAvailable >= creep.room.energyCapacityAvailable;
     if (upgradeIsDropTarget &&
         coreFull &&
         upgradingFunded(creep.room) &&
@@ -5378,7 +5387,7 @@ function runHauler(creep) {
         transferEnergyTo(creep, handoff);
         return;
     }
-    const depositTarget = findDepositTargetExcludingMiner(creep);
+    const depositTarget = findDepositTargetExcludingMiner(creep, storageModel);
     if (depositTarget) {
         setFillTarget(creep, depositTarget.id);
         if (Memory.debugHaulers === creep.room.name)
@@ -9875,6 +9884,8 @@ function refugeFrom(creep, homeRoom) {
     });
     const refuge = (exit && beyond(exit)) || homeRoom;
     creep.memory.refuge = refuge;
+    if (refuge !== homeRoom)
+        heraldRefuge(creep, refuge);
     return refuge;
 }
 function moveToRoom$6(creep, targetRoom) {
