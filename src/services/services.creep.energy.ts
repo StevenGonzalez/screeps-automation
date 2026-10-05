@@ -338,30 +338,14 @@ export function findFullestMinerContainer(
   return fullest;
 }
 
+// A porter stocks the container by the throne while it and the gold other
+// porters are already bringing to it fall short of this. Once every porter
+// stocked it whenever it stood below the mark, and an enchanter drawing on it
+// kept it there, so the whole fleet queued at the throne. Then only one porter
+// was let stock it: at Grimford that one brought 400 every thirty-odd ticks to
+// two enchanters that could spend 16 a tick. They spent under half that, and
+// walked twenty tiles to storage and back for the rest.
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
-
-const UPGRADE_CONTAINER_FILLERS = 1;
-
-let upgradeFillerTick = -1;
-
-const upgradeFillerIdsByRoom: Record<string, Set<string>> = {};
-
-function getUpgradeContainerFillerIds(room: Room): Set<string> {
-  if (upgradeFillerTick !== Game.time) {
-    upgradeFillerTick = Game.time;
-    for (const k in upgradeFillerIdsByRoom) delete upgradeFillerIdsByRoom[k];
-  }
-  if (!upgradeFillerIdsByRoom[room.name]) {
-    const haulerIds: string[] = [];
-    for (const name in Game.creeps) {
-      const c = Game.creeps[name];
-      if (c.room.name === room.name && c.memory.role === ROLE_HAULER) haulerIds.push(c.id);
-    }
-    haulerIds.sort();
-    upgradeFillerIdsByRoom[room.name] = new Set(haulerIds.slice(0, UPGRADE_CONTAINER_FILLERS));
-  }
-  return upgradeFillerIdsByRoom[room.name];
-}
 
 // coreFed: a barmaid feeds the spawn and extensions from storage, so the
 // porter need not wait for them to be full before it stocks the container by
@@ -385,8 +369,8 @@ export function findDepositTargetExcludingMiner(creep: Creep, coreFed = false): 
     upgradeIsDropTarget &&
     coreFull &&
     upgradingFunded(creep.room) &&
-    (upgradeCont!.store[RESOURCE_ENERGY] ?? 0) < UPGRADE_CONTAINER_REFILL_BELOW &&
-    getUpgradeContainerFillerIds(creep.room).has(creep.id)
+    (upgradeCont!.store[RESOURCE_ENERGY] ?? 0) + energyClaimedByOthers(upgradeCont!.id, creep) <
+      UPGRADE_CONTAINER_REFILL_BELOW
   ) {
     return upgradeCont;
   }

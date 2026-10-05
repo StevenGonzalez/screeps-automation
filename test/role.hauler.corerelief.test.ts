@@ -191,13 +191,13 @@ describe("hauler core relief under the storage model", () => {
 describe("hauler stocking the container by the throne", () => {
   // Grimford: one spawn always at work, so the core was never full, and the
   // container its enchanter draws from stood empty.
-  function withUpgradeContainer(energyAvailable: number) {
+  function withUpgradeContainer(energyAvailable: number, stock = 0) {
     const { creep, room } = scenario(1300, energyAvailable);
     const upgradeContainer = {
       id: "up1",
       structureType: "container",
       pos: { x: 10, y: 6 },
-      store: { energy: 0, getFreeCapacity: () => 2000 },
+      store: { energy: stock, getFreeCapacity: () => 2000 - stock },
     };
     room.memory.upgradeContainerId = "up1" as Id<StructureContainer>;
     const find = room.find.bind(room);
@@ -212,11 +212,43 @@ describe("hauler stocking the container by the throne", () => {
     return creep;
   }
 
+  // Another porter already on its way to the container with a load.
+  function bringing(creep: Creep, amount: number) {
+    const game = g.Game as { creeps: Record<string, Creep> };
+    game.creeps.courier0 = {
+      name: "courier0",
+      id: "courier0",
+      room: creep.room,
+      memory: { role: ROLE_HAULER, working: true, fillTargetId: "up1" },
+      store: { energy: amount },
+    } as unknown as Creep;
+  }
+
   it("stocks it while the barmaid feeds a core that is not full", () => {
     const creep = withUpgradeContainer(300);
 
     runHauler(creep);
 
     expect(transferred).toEqual(["up1"]);
+  });
+
+  // Grimford: one porter was let stock it, and its enchanters walked to
+  // storage for their gold while it stood near empty.
+  it("stocks it beside another porter while their loads leave it short of the mark", () => {
+    const creep = withUpgradeContainer(2300, 14);
+    bringing(creep, 400);
+
+    runHauler(creep);
+
+    expect(transferred).toEqual(["up1"]);
+  });
+
+  it("banks the load when the gold on its way already brings the container to the mark", () => {
+    const creep = withUpgradeContainer(2300, 700);
+    bringing(creep, 400);
+
+    runHauler(creep);
+
+    expect(transferred).toEqual(["storage1"]);
   });
 });
