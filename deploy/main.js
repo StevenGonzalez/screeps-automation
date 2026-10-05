@@ -17001,7 +17001,7 @@ function getContainerDistances(room, from, containers) {
 const HAULER_CARRY_MARGIN = 1.5;
 const MIN_HAULER_CARRY = 4;
 function getHaulerPlan(room) {
-    var _a, _b, _c, _d, _e;
+    var _a, _b, _c, _d, _e, _f;
     const containerIds = (_a = room.memory.containerIds) !== null && _a !== void 0 ? _a : [];
     if (containerIds.length === 0)
         return null;
@@ -17016,15 +17016,15 @@ function getHaulerPlan(room) {
     let requiredCarry = 0;
     if (spawn) {
         const distances = getContainerDistances(room, spawn, minerContainers);
-        const upgradeId = room.storage ? undefined : room.memory.upgradeContainerId;
+        const upgradeId = ((_c = room.memory.controllerLinkIds) === null || _c === void 0 ? void 0 : _c.length) ? undefined : room.memory.upgradeContainerId;
         const upgrade = upgradeId ? Game.getObjectById(upgradeId) : null;
         const onward = upgrade ? getContainerDistances(room, upgrade, minerContainers) : {};
         const dug = minerWorkByContainer(room);
         const workTarget = getMinerWorkTarget(room);
         for (const c of minerContainers) {
-            const dist = Math.max((_c = distances[c.id]) !== null && _c !== void 0 ? _c : 0, (_d = onward[c.id]) !== null && _d !== void 0 ? _d : 0);
+            const dist = Math.max((_d = distances[c.id]) !== null && _d !== void 0 ? _d : 0, (_e = onward[c.id]) !== null && _e !== void 0 ? _e : 0);
             const roundTrip = dist * 2;
-            const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, (_e = dug[c.id]) !== null && _e !== void 0 ? _e : 0));
+            const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, (_f = dug[c.id]) !== null && _f !== void 0 ? _f : 0));
             requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
         }
     }
