@@ -5,6 +5,7 @@ import {
   isCreepFull,
   getClosestContainerOrStorage,
   findMostCriticalRepairTarget,
+  repairGoal,
   repairStructure,
   acquireEnergy,
   awaitLoad,
@@ -26,10 +27,11 @@ function repairTarget(creep: Creep): AnyStructure | null {
   if (mem.repairUntil !== undefined && Game.time < mem.repairUntil) {
     if (!mem.repairId) return null;
     const held = Game.getObjectById(mem.repairId);
-    if (held && held.hits < held.hitsMax) return held;
+    if (held && held.hits < (mem.repairTo ?? held.hitsMax)) return held;
   }
   const target = findMostCriticalRepairTarget(creep);
   mem.repairId = target?.id;
+  mem.repairTo = target ? repairGoal(creep.room, target) : undefined;
   mem.repairUntil = Game.time + REPAIR_HOLD_TICKS;
   return target;
 }

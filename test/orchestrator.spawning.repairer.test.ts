@@ -47,6 +47,43 @@ describe("repairer population", () => {
     expect(getRepairerPopulationTarget(plannedRoom([road(10, 10, 1000)]))).toBe(1);
   });
 
+  it("leaves a keep's worn roads to its towers until they fall below the rescue floor", () => {
+    // Towers mend a road below 40%. A blacksmith sent for roads between that and
+    // 80% crossed the keep to give each a tick of work.
+    const towered = (structures: unknown[]) => {
+      const room = plannedRoom(structures, 30_000);
+      room.memory.towerIds = ["tower" as Id<StructureTower>];
+      return room;
+    };
+    g.Memory = {};
+    expect(getRepairerPopulationTarget(plannedRoom([road(10, 10, 3000)], 30_000))).toBe(1);
+    tick += 100;
+    g.Game = { time: tick };
+    expect(getRepairerPopulationTarget(towered([road(10, 10, 3000)]))).toBe(0);
+    tick += 100;
+    g.Game = { time: tick };
+    expect(getRepairerPopulationTarget(towered([road(10, 10, 1500)]))).toBe(1);
+  });
+
+  it("sends none for ramparts within a band of their goal", () => {
+    // RCL 6 with little stored: the perimeter goal is 300K.
+    const rampart = (hits: number) => ({ id: "r", structureType: "rampart", pos: { x: 20, y: 20 }, hits, hitsMax: 10_000_000 });
+    g.Memory = {};
+    expect(getRepairerPopulationTarget(plannedRoom([rampart(295_000)], 30_000))).toBe(0);
+    tick += 100;
+    g.Game = { time: tick };
+    expect(getRepairerPopulationTarget(plannedRoom([rampart(280_000)], 30_000))).toBe(1);
+  });
+
+  it("keeps half a low goal as the slack", () => {
+    // RCL 2 with no storage: the goal is 10K, less than a band.
+    const room = plannedRoom([{ id: "r", structureType: "rampart", pos: { x: 20, y: 20 }, hits: 4_000, hitsMax: 300_000 }]);
+    (room as { controller: unknown }).controller = { level: 2 };
+    (room as { storage: unknown }).storage = undefined;
+    g.Memory = {};
+    expect(getRepairerPopulationTarget(room)).toBe(1);
+  });
+
   it("sends none to raise the walls while the castle saves for a keep", () => {
     const rampart = { id: "r", structureType: "rampart", pos: { x: 20, y: 20 }, hits: 15_000, hitsMax: 10_000_000 };
     g.Memory = {};

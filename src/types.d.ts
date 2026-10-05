@@ -234,9 +234,11 @@ declare global {
     townSpotTick?: number;
     working?: boolean;
     // The structure a blacksmith is mending, or none when it found nothing to
-    // mend, held until repairUntil (role.repairer).
+    // mend, held until repairUntil or until it reaches repairTo hits
+    // (role.repairer).
     repairId?: Id<AnyStructure>;
     repairUntil?: number;
+    repairTo?: number;
     room?: string;
     sourceId?: string;
     targetId?: string;

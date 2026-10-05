@@ -9,7 +9,13 @@ import {
   ROLE_MINERAL_MINER,
   ROLE_APOTHECARY,
 } from "../config/config.roles";
-import { barrierTargetFn, isEnergyEmergency, keptUp } from "../services/services.creep";
+import {
+  barrierTargetFn,
+  barrierWantsRaising,
+  decayRescueFloor,
+  isEnergyEmergency,
+  keptUp,
+} from "../services/services.creep";
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { countOpenTilesAround, getSources } from "../services/services.creep";
@@ -509,13 +515,19 @@ export function getRepairerPopulationTarget(room: Room): number {
 
   // 0.8 matches where the repair target picker starts caring about a structure.
   // Roads left off the blueprint decay on purpose and nobody repairs them, so
-  // they must not call for repairers either.
+  // they must not call for repairers either. Towers mend a keep's roads below
+  // 40%, so there a road calls for one only below where blacksmiths rescue it:
+  // one sent for the roads between crossed the keep to give each a tick of work.
   const kept = keptUp(room);
+  const towered = (room.memory.towerIds ?? []).length > 0;
   const worn = room.find(FIND_STRUCTURES, {
     filter: (s) => {
       if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) return false;
       const st = s as AnyStructure;
-      return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.8 && kept(st);
+      if (!("hits" in st && "hitsMax" in st) || !kept(st)) return false;
+      const wornBelow =
+        towered && st.structureType === STRUCTURE_ROAD ? decayRescueFloor(st) : st.hitsMax * 0.8;
+      return st.hits < wornBelow;
     },
   }) as AnyStructure[];
   const critical = worn.filter((s) => s.hits < s.hitsMax * 0.5);
@@ -531,7 +543,7 @@ export function getRepairerPopulationTarget(room: Room): number {
       const wallsNeedRepair = wallSmithFunded(room) && room.find(FIND_STRUCTURES, {
         filter: (s): s is AnyStructure =>
           (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
-          (s as AnyStructure).hits < barrierTarget(s as AnyStructure),
+          barrierWantsRaising(s as AnyStructure, barrierTarget(s as AnyStructure)),
       }).length > 0;
       if (wallsNeedRepair) value = Math.min(2, value + 1);
     }

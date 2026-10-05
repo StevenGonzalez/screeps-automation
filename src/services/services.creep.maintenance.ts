@@ -224,7 +224,7 @@ export function keptUp(room: Room): (s: AnyStructure) => boolean {
   return (s) => s.structureType !== STRUCTURE_ROAD || roads.has(`${s.pos.x},${s.pos.y}`);
 }
 
-function decayRescueFloor(s: AnyStructure): number {
+export function decayRescueFloor(s: AnyStructure): number {
   switch (s.structureType) {
     case STRUCTURE_RAMPART:
       return 2000;
@@ -323,6 +323,21 @@ function computeNukeRampartTarget(room: Room): StructureRampart | null {
 // walking, a tick of repair to every ten or twenty of travel.
 const BARRIER_REPAIR_BAND = 10_000;
 
+// A barrier within a band of its goal counts as standing. Decay takes a
+// rampart a band down in some 3,300 ticks, and one visit then raises it whole.
+// Counting every hit short of the goal kept Grimford's two blacksmiths crossing
+// the keep to top up whichever rampart had slipped under it, a tick of work a
+// trip. A low goal keeps half of itself as the slack instead.
+export function barrierWantsRaising(s: AnyStructure, goal: number): boolean {
+  return s.hits < goal - Math.min(BARRIER_REPAIR_BAND, goal / 2);
+}
+
+/** The hits a blacksmith mends a structure to: a barrier's goal, else whole. */
+export function repairGoal(room: Room, s: AnyStructure): number {
+  const barrier = s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART;
+  return barrier ? barrierTargetFn(room)(s) : s.hitsMax;
+}
+
 function weakestBand(barriers: AnyStructure[]): AnyStructure[] {
   const floor = barriers.reduce((min, b) => Math.min(min, b.hits), Infinity);
   return barriers.filter((b) => b.hits < floor + BARRIER_REPAIR_BAND);
@@ -381,20 +396,22 @@ function repairCandidates(room: Room): AnyStructure[] {
       st.structureType !== STRUCTURE_RAMPART &&
       st.hits < st.hitsMax * WORN_FRACTION
   );
-  if (nonDefensive.length > 0) {
-    // Each blacksmith takes the nearest. Chasing the most worn sent both across
-    // the keep whenever a tick of repair made a container at the far end the
-    // more worn one. Anything worn badly enough to matter is rescued above.
-    const isRoad = (st: AnyStructure) => st.structureType === STRUCTURE_ROAD;
-    const nonRoad = nonDefensive.filter((st) => !isRoad(st));
-    return nonRoad.length > 0 ? nonRoad : nonDefensive;
-  }
-  if (!walls) return [];
+  // Each blacksmith takes the nearest. Chasing the most worn sent both across
+  // the keep whenever a tick of repair made a container at the far end the
+  // more worn one. Anything worn badly enough to matter is rescued above.
+  const nonRoad = nonDefensive.filter((st) => st.structureType !== STRUCTURE_ROAD);
+  if (nonRoad.length > 0) return nonRoad;
 
-  const belowTarget = structures.filter(
-    (st): st is AnyStructure => isBarrier(st) && st.hits < targetOf(st)
-  );
-  return belowTarget.length > 0 ? weakestBand(belowTarget) : [];
+  // Worn roads wait on the walls. A road takes a tick of work, and Grimford's
+  // two blacksmiths left their rampart for one 25 tiles off and walked 32 back.
+  // The towers mend a road below 40%, and the blacksmiths rescue it below 35%.
+  if (walls) {
+    const belowTarget = structures.filter(
+      (st): st is AnyStructure => isBarrier(st) && barrierWantsRaising(st, targetOf(st))
+    );
+    if (belowTarget.length > 0) return weakestBand(belowTarget);
+  }
+  return nonDefensive;
 }
 
 export function findTowerRepairTarget(room: Room): AnyStructure | null {

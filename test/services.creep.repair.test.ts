@@ -175,6 +175,21 @@ describe("findMostCriticalRepairTarget ramparts", () => {
     expect(repairFor(room)?.id).toBe("perim");
   });
 
+  it("counts a rampart within a band of its goal as standing", () => {
+    // Grimford's ramparts stood at their 50K goal, each decaying a few hits a
+    // tick, and its two blacksmiths crossed the keep to top up whichever had
+    // slipped under it, a tick of work a trip.
+    const slipped = rampart("slipped", 20, 20, 45_000);
+    const standing = makeRoom({ level: 4, structures: [slipped], perimeter: ["20,20"] });
+    expect(repairFor(standing)).toBeNull();
+
+    tick++;
+    g.Game = { time: tick };
+    const fallen = rampart("fallen", 20, 20, 39_000);
+    const low = makeRoom({ level: 4, structures: [fallen], perimeter: ["20,20"] });
+    expect(repairFor(low)?.id).toBe("fallen");
+  });
+
   it("holds the perimeter at 1M until storage has energy to spare", () => {
     const wall = rampart("perim", 20, 20, 1_500_000);
     const poor = makeRoom({
@@ -217,6 +232,58 @@ describe("findMostCriticalRepairTarget upkeep", () => {
       hitsMax: 250_000,
     } as unknown as AnyStructure;
   }
+
+  function road(id: string, x: number, y: number, hits: number) {
+    return {
+      id,
+      structureType: "road",
+      pos: {
+        x,
+        y,
+        getRangeTo: (p: { x: number; y: number }) => Math.max(Math.abs(p.x - x), Math.abs(p.y - y)),
+      },
+      hits,
+      hitsMax: 5000,
+    } as unknown as AnyStructure;
+  }
+
+  function smithAt(room: Room, x: number, y: number): Creep {
+    return { room, pos: { getRangeTo: (t: AnyStructure) => t.pos.getRangeTo({ x, y } as RoomPosition) } } as unknown as Creep;
+  }
+
+  it("lets a worn road wait while the walls are raised", () => {
+    // Grimford's two blacksmiths left their rampart for a road 25 tiles off,
+    // gave it a tick of work and walked 32 tiles back to the walls.
+    const worn = road("road", 10, 10, 3000);
+    const wall = rampart("wall", 40, 40, 100_000);
+    const room = makeRoom({ level: 6, structures: [worn, wall], perimeter: ["40,40"] });
+    expect(findMostCriticalRepairTarget(smithAt(room, 10, 11))?.id).toBe("wall");
+  });
+
+  it("mends a worn road once the walls stand or wait on the treasury", () => {
+    const worn = road("road", 10, 10, 3000);
+    const whole = rampart("wall", 40, 40, 300_000);
+    const standing = makeRoom({ level: 6, structures: [worn, whole], perimeter: ["40,40"] });
+    expect(findMostCriticalRepairTarget(smithAt(standing, 40, 41))?.id).toBe("road");
+
+    tick++;
+    g.Game = { time: tick };
+    const low = rampart("wall", 40, 40, 100_000);
+    const building = makeRoom({
+      level: 4,
+      structures: [worn, low],
+      perimeter: ["40,40"],
+      sites: [{ structureType: "storage" }],
+    });
+    expect(findMostCriticalRepairTarget(smithAt(building, 40, 41))?.id).toBe("road");
+  });
+
+  it("mends a worn container before raising the walls", () => {
+    const worn = container("box", 10, 10, 150_000);
+    const wall = rampart("wall", 40, 40, 100_000);
+    const room = makeRoom({ level: 6, structures: [worn, wall], perimeter: ["40,40"] });
+    expect(findMostCriticalRepairTarget(smithAt(room, 40, 41))?.id).toBe("box");
+  });
 
   it("mends the nearest worn container rather than the most worn", () => {
     // Two containers across the keep, one a little more worn. A tick of repair
