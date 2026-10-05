@@ -707,6 +707,31 @@ describe("remote knights", () => {
     expect(shouldSpawnRemoteDefender(home({ remotes: [host] }))).toBe(false);
   });
 
+  it("raises a second knight when the first is too small to beat alone raiders a full knight would", () => {
+    g.ATTACK_POWER = 30;
+    const raid = { ...raided(), invaderStrength: { heal: 30, damage: 60, hits: 1000 } };
+    const runt = knight("W4N5", 1000, 2);
+    expect(shouldSpawnRemoteDefender(home({ remotes: [raid], creeps: [runt] }))).toBe(true);
+    clock += 1;
+    const full = knight("W4N5", 1000);
+    expect(shouldSpawnRemoteDefender(home({ remotes: [{ ...raid }], creeps: [full] }))).toBe(false);
+  });
+
+  it("raises no third knight when the two it has could not win side by side", () => {
+    g.ATTACK_POWER = 30;
+    const raid = { ...raided(), invaderStrength: { heal: 30, damage: 60, hits: 1000 } };
+    const runts = [knight("W4N5", 1000, 2), knight("W4N5", 1000, 2)];
+    expect(shouldSpawnRemoteDefender(home({ remotes: [raid], creeps: runts }))).toBe(false);
+  });
+
+  it("raises another knight when the one out there has lost the parts to win", () => {
+    g.ATTACK_POWER = 30;
+    const raid = { ...raided(), invaderStrength: { heal: 30, damage: 60, hits: 1000 } };
+    const wounded = knight("W4N5", 1000);
+    wounded.body = wounded.body.map((p, i) => (i < 3 ? { ...p, hits: 0 } : p));
+    expect(shouldSpawnRemoteDefender(home({ remotes: [raid], creeps: [wounded] }))).toBe(true);
+  });
+
   it("is not raised by a castle below level 3, which sends no vendors out", () => {
     expect(shouldSpawnRemoteDefender(home({ remotes: [raided()], rcl: 2 }))).toBe(false);
   });

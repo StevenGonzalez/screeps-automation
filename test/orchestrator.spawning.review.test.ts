@@ -615,7 +615,9 @@ describe("remote invader defense", () => {
     hostile: false,
   };
   function run(strength: RemoteRoomData["invaderStrength"], worked = remote) {
-    const knight = makeCreep(ROLE_KNIGHT, {}, { memory: { targetRoom: REMOTE } });
+    const knight = Object.assign(makeCreep(ROLE_KNIGHT, {}, { memory: { targetRoom: REMOTE } }), {
+      body: buildKnightBody(1300).map(part),
+    });
     const { room, spawn } = makeRoom(
       [
         makeCreep(ROLE_FILLER, { carry: 10 }),

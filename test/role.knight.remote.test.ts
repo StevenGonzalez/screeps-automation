@@ -28,11 +28,17 @@ const REMOTE = "W2N1";
 
 let remoteEntry: RemoteRoomData;
 
-function knightIn(roomName: string): Creep {
+// Sixteen parts, four of them ATTACK: an 850-gold castle's full knight.
+const KNIGHT_BODY = Array.from({ length: 4 }, () => ["tough", "attack", "move", "move"])
+  .flat()
+  .map((type) => ({ type, hits: 100 }));
+
+function knightIn(roomName: string, body = KNIGHT_BODY): Creep {
   const room = { name: roomName, memory: {}, find: () => [] };
   return {
     name: "Dragon Knight Godric",
     room,
+    body,
     hits: 1000,
     hitsMax: 1000,
     memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } as CreepMemory,
@@ -97,7 +103,7 @@ describe("remote knight", () => {
     remoteEntry.invaderUntil = 1500;
     remoteEntry.invaderStrength = { heal: 120, damage: 80, hits: 2085 };
     const knight = knightIn(HOME);
-    const second = { spawning: true, memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } };
+    const second = { spawning: true, body: KNIGHT_BODY, memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } };
     const home = { name: HOME, energyCapacityAvailable: 850, memory: (g.Memory as Memory).rooms[HOME] };
     g.Game = { time: 1000, rooms: { [HOME]: home }, creeps: { a: knight, b: second } };
     runKnight(knight);
@@ -105,6 +111,22 @@ describe("remote knight", () => {
 
     second.spawning = false;
     g.Game = { ...(g.Game as object), time: 1001 };
+    runKnight(knight);
+    expect(destination(knight)).toBe(REMOTE);
+  });
+
+  it("waits at home for a second when it is too small to beat alone raiders a full knight would", () => {
+    remoteEntry.invaderUntil = 1500;
+    remoteEntry.invaderStrength = { heal: 30, damage: 60, hits: 1000 };
+    const runt = KNIGHT_BODY.slice(0, 8);
+    const knight = knightIn(HOME, runt);
+    const home = { name: HOME, energyCapacityAvailable: 850, memory: (g.Memory as Memory).rooms[HOME] };
+    g.Game = { time: 1010, rooms: { [HOME]: home }, creeps: { a: knight } };
+    runKnight(knight);
+    expect(destination(knight)).toBeUndefined();
+
+    const second = { body: runt, memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } };
+    g.Game = { time: 1011, rooms: { [HOME]: home }, creeps: { a: knight, b: second } };
     runKnight(knight);
     expect(destination(knight)).toBe(REMOTE);
   });
@@ -147,7 +169,7 @@ describe("remote knight", () => {
     remoteEntry.invaderUntil = 1500;
     remoteEntry.invaderStrength = { heal: 1000, damage: 80, hits: 2085 };
     const knight = knightIn(HOME);
-    const second = { memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } };
+    const second = { body: KNIGHT_BODY, memory: { role: ROLE_KNIGHT, homeRoom: HOME, targetRoom: REMOTE } };
     const home = { name: HOME, energyCapacityAvailable: 850, memory: (g.Memory as Memory).rooms[HOME] };
     g.Game = { time: 1002, rooms: { [HOME]: home }, creeps: { a: knight, b: second } };
     runKnight(knight);

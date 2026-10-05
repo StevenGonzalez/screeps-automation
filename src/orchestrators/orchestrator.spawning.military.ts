@@ -620,6 +620,22 @@ function remoteKnightBody(room: Room, roomName: string): BodyPartConstant[] | nu
 
 const attackParts = (body: BodyPartConstant[]) => body.filter((p) => p === ATTACK).length;
 
+function remoteKnights(homeName: string, roomName: string): Creep[] {
+  return getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.homeRoom === homeName && c.memory.targetRoom === roomName);
+}
+
+// Whether a castle's knights for a remote beat its raiders side by side, by
+// the parts they have left. Counting heads took every knight for the biggest
+// the castle can raise, but one raised after the wait for a full purse ran
+// out is smaller: it rode out alone against raiders a full knight would beat
+// and it could not, and no second knight was raised to ride with it.
+function remoteKnightsWin(remote: RemoteRoomData, knights: Creep[]): boolean {
+  if (!remote.invaderStrength) return knights.length > 0;
+  const parts: BodyPartConstant[] = [];
+  for (const c of knights) for (const p of c.body) if (p.hits > 0) parts.push(p.type);
+  return meleeDefendersWin(remote.invaderStrength, parts, 1);
+}
+
 // Knights raised for one remote ride out together. Each used to set out the
 // moment it left the spawn, and alone could not out-hit the healers of the
 // Misty Thicket's raiders: Rohese, then Agnes, fell one after the other where
@@ -628,14 +644,8 @@ export function awaitingRemoteKnights(creep: Creep): boolean {
   const homeName = creep.memory.homeRoom ?? "";
   const remote = Memory.rooms[homeName]?.remoteRooms?.find((r) => r.roomName === creep.memory.targetRoom);
   if (!remote?.invaderStrength) return false;
-  const home = Game.rooms[homeName];
-  if (!home) return false;
-  const needed = remoteKnightsNeeded(home, remote);
-  if (needed <= 1) return false;
-  const ready = getCreepsByRole(ROLE_KNIGHT).filter(
-    (c) => !c.spawning && c.memory.homeRoom === home.name && c.memory.targetRoom === remote.roomName
-  ).length;
-  return ready < needed;
+  const others = remoteKnights(homeName, remote.roomName).filter((c) => c !== creep && !c.spawning);
+  return !remoteKnightsWin(remote, [creep, ...others]);
 }
 
 function findRemoteInvaderTarget(room: Room): string | null {
@@ -650,11 +660,9 @@ function findRemoteInvaderTarget(room: Room): string | null {
   for (const r of remotes) {
     if (r.invaderUntil === undefined || r.invaderUntil <= Game.time) continue;
     if (!worked.has(r.roomName) || sharedWithBiggerCastle(room, r.roomName)) continue;
-    const defending = getCreepsByRole(ROLE_KNIGHT).filter(
-      (c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName
-    ).length;
-    const needed = remoteKnightsNeeded(room, r);
-    if (needed <= REMOTE_KNIGHT_CAP && defending < needed) return r.roomName;
+    if (remoteKnightsNeeded(room, r) > REMOTE_KNIGHT_CAP) continue;
+    const knights = remoteKnights(room.name, r.roomName);
+    if (knights.length < REMOTE_KNIGHT_CAP && !remoteKnightsWin(r, knights)) return r.roomName;
   }
   return null;
 }
