@@ -66,6 +66,11 @@ export function loop() {
   const heavyShed = (): boolean =>
     bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
 
+  // Memory is parsed on its first touch in a tick. Touched here, the parse,
+  // some 0.3 CPU, has its own row in the CPU report: it was counted to the
+  // herald, the first system to read Memory, which looked to cost 0.48 a tick
+  // when its own work came to a fraction of that.
+  runSafe("memory parse", () => Memory);
   // The herald reads last tick's battles before the memory system marks a
   // remote clear of raiders, so the chronicle tells of the killing blow before
   // the raid's end.
