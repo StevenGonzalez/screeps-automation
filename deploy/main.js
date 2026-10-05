@@ -5206,6 +5206,14 @@ function hasActiveFiller(room) {
     }
     return roomHasFiller[room.name];
 }
+function coreGapCovered(room) {
+    let carried = 0;
+    for (const c of room.find(FIND_MY_CREEPS)) {
+        if (c.memory.role === ROLE_FILLER || c.memory.coreRelief)
+            carried += c.store[RESOURCE_ENERGY];
+    }
+    return carried >= room.energyCapacityAvailable - room.energyAvailable;
+}
 function runHauler(creep) {
     var _a, _b;
     if ((creep.memory.boostCompound || ((_a = creep.memory.boostQueue) === null || _a === void 0 ? void 0 : _a.length)) && seekBoost(creep))
@@ -5389,8 +5397,11 @@ function collectEnergy$1(creep, storageModel) {
         const storage = creep.room.storage;
         const baseNeedsEnergy = creep.room.energyAvailable < creep.room.energyCapacityAvailable;
         if (storage && baseNeedsEnergy && storage.store[RESOURCE_ENERGY] > 0) {
-            if (storageModel)
+            if (storageModel) {
+                if (coreGapCovered(creep.room))
+                    return false;
                 creep.memory.coreRelief = true;
+            }
             if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
                 creep.moveTo(storage, { reusePath: 20 });
             }
