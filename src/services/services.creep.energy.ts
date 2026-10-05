@@ -363,7 +363,12 @@ function getUpgradeContainerFillerIds(room: Room): Set<string> {
   return upgradeFillerIdsByRoom[room.name];
 }
 
-export function findDepositTargetExcludingMiner(creep: Creep): Structure | null {
+// coreFed: a barmaid feeds the spawn and extensions from storage, so the
+// porter need not wait for them to be full before it stocks the container by
+// the throne. Grimford's one spawn was never idle long enough for its core to
+// fill, so that container stood empty and its enchanter walked to storage and
+// back for every load.
+export function findDepositTargetExcludingMiner(creep: Creep, coreFed = false): Structure | null {
   const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
 
   const upgradeId = creep.room.memory.upgradeContainerId;
@@ -375,7 +380,7 @@ export function findDepositTargetExcludingMiner(creep: Creep): Structure | null 
     upgradeCont.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
     minerIds.indexOf(upgradeCont.id as string) === -1;
 
-  const coreFull = creep.room.energyAvailable >= creep.room.energyCapacityAvailable;
+  const coreFull = coreFed || creep.room.energyAvailable >= creep.room.energyCapacityAvailable;
   if (
     upgradeIsDropTarget &&
     coreFull &&

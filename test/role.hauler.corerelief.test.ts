@@ -187,3 +187,36 @@ describe("hauler core relief under the storage model", () => {
     expect(creep.memory.coreRelief).toBeUndefined();
   });
 });
+
+describe("hauler stocking the container by the throne", () => {
+  // Grimford: one spawn always at work, so the core was never full, and the
+  // container its enchanter draws from stood empty.
+  function withUpgradeContainer(energyAvailable: number) {
+    const { creep, room } = scenario(1300, energyAvailable);
+    const upgradeContainer = {
+      id: "up1",
+      structureType: "container",
+      pos: { x: 10, y: 6 },
+      store: { energy: 0, getFreeCapacity: () => 2000 },
+    };
+    room.memory.upgradeContainerId = "up1" as Id<StructureContainer>;
+    const find = room.find.bind(room);
+    (room as unknown as { find: unknown }).find = (type: number, opts?: { filter?: (o: unknown) => boolean }) =>
+      (find(type) as unknown[]).filter((o) => !opts?.filter || opts.filter(o));
+    const game = g.Game as { creeps: Record<string, Creep>; getObjectById: (id: string) => unknown };
+    const byId = game.getObjectById;
+    game.getObjectById = (id: string) => (id === "up1" ? upgradeContainer : byId(id));
+    game.creeps[creep.name] = creep;
+    (creep as unknown as { id: string }).id = "courier1";
+    creep.memory.working = true;
+    return creep;
+  }
+
+  it("stocks it while the barmaid feeds a core that is not full", () => {
+    const creep = withUpgradeContainer(300);
+
+    runHauler(creep);
+
+    expect(transferred).toEqual(["up1"]);
+  });
+});

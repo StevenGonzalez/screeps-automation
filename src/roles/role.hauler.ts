@@ -140,7 +140,7 @@ export function runHauler(creep: Creep) {
     return;
   }
 
-  const depositTarget = findDepositTargetExcludingMiner(creep);
+  const depositTarget = findDepositTargetExcludingMiner(creep, storageModel);
   if (depositTarget) {
     setFillTarget(creep, depositTarget.id);
     if (Memory.debugHaulers === creep.room.name) debugDeposit(creep, depositTarget);
