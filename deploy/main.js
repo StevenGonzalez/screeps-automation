@@ -19893,7 +19893,7 @@ function checkForDeposits(roomName) {
         return;
     if (deposit.ticksToDecay < DEPOSIT_MIN_TICKS)
         return;
-    const ownedRooms = Object.values(Game.rooms).filter((r) => { var _a; return (_a = r.controller) === null || _a === void 0 ? void 0 : _a.my; });
+    const ownedRooms = Object.values(Game.rooms).filter((r) => { var _a; return ((_a = r.controller) === null || _a === void 0 ? void 0 : _a.my) && r.terminal; });
     if (ownedRooms.length === 0)
         return;
     const homeRoom = ownedRooms.reduce((best, r) => {
