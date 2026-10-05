@@ -4619,9 +4619,28 @@ function noteWalk(creep, lifeTime) {
         return;
     creep.memory.walk = lifeTime - creep.ticksToLive;
 }
-function outsideHome(creep, homeRoom) {
+function standsIn(creep, roomName) {
     const { x, y } = creep.pos;
-    return creep.room.name !== homeRoom || x === 0 || y === 0 || x === 49 || y === 49;
+    return creep.room.name === roomName && x !== 0 && y !== 0 && x !== 49 && y !== 49;
+}
+function isSafeRefuge(roomName, me) {
+    var _a, _b, _c, _d, _e;
+    if ((_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my)
+        return true;
+    if (isSourceKeeperRoom(roomName))
+        return false;
+    const intel = (_c = Memory.intel) === null || _c === void 0 ? void 0 : _c[roomName];
+    if (!intel || intel.owner || intel.towers > 0)
+        return false;
+    if (intel.reservedBy && intel.reservedBy !== me)
+        return false;
+    for (const home in Memory.rooms) {
+        for (const r of (_d = Memory.rooms[home].remoteRooms) !== null && _d !== void 0 ? _d : []) {
+            if (r.roomName === roomName && (r.hostile || ((_e = r.invaderUntil) !== null && _e !== void 0 ? _e : 0) > Game.time))
+                return false;
+        }
+    }
+    return true;
 }
 function isAssignedRemoteContested(creep) {
     const entry = assignedRemoteEntry(creep);
@@ -9740,8 +9759,9 @@ function runRemoteMiner(creep) {
     }
     if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
         (_a = (_c = creep.memory).walk) !== null && _a !== void 0 ? _a : (_c.walk = 0);
-        if (outsideHome(creep, homeRoom))
-            moveToRoom$6(creep, homeRoom);
+        const refuge = refugeFrom(creep, homeRoom);
+        if (!standsIn(creep, refuge))
+            moveToRoom$6(creep, refuge);
         return;
     }
     const inTarget = creep.room.name === targetRoom;
@@ -9756,11 +9776,13 @@ function runRemoteMiner(creep) {
     if (isAssignedRemoteContested(creep) || threats.length > 0) {
         cryFlight(creep);
         (_b = (_d = creep.memory).walk) !== null && _b !== void 0 ? _b : (_d.walk = 0);
-        if (outsideHome(creep, homeRoom))
-            moveToRoom$6(creep, homeRoom);
+        const refuge = refugeFrom(creep, homeRoom);
+        if (!standsIn(creep, refuge))
+            moveToRoom$6(creep, refuge);
         return;
     }
     settleFlight(creep);
+    delete creep.memory.refuge;
     if (inTarget && !core)
         clearRemoteInvader(creep);
     if (creep.room.name !== targetRoom) {
@@ -9832,6 +9854,28 @@ function harvest$1(creep, source) {
         }
     }
     return res;
+}
+function refugeFrom(creep, homeRoom) {
+    var _a;
+    if (creep.memory.refuge)
+        return creep.memory.refuge;
+    if (creep.room.name !== creep.memory.targetRoom || !isAssignedRemoteInvaded(creep))
+        return homeRoom;
+    if (remoteThreats(creep.room).some(isPlayerCreep))
+        return homeRoom;
+    const exits = (_a = Game.map.describeExits(creep.room.name)) !== null && _a !== void 0 ? _a : {};
+    const beyond = (p) => exits[(p.x === 0 ? "7" : p.x === 49 ? "3" : p.y === 0 ? "1" : "5")];
+    const me = creep.owner.username;
+    const exit = creep.pos.findClosestByPath(FIND_EXIT, {
+        filter: (p) => {
+            const room = beyond(p);
+            return room === homeRoom || (!!room && isSafeRefuge(room, me));
+        },
+        algorithm: "dijkstra",
+    });
+    const refuge = (exit && beyond(exit)) || homeRoom;
+    creep.memory.refuge = refuge;
+    return refuge;
 }
 function moveToRoom$6(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
@@ -11187,7 +11231,7 @@ function runRemoteHauler(creep) {
     if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
         if (creep.store[RESOURCE_ENERGY] > 0)
             depositEnergy(creep, homeRoom);
-        else if (outsideHome(creep, homeRoom))
+        else if (!standsIn(creep, homeRoom))
             moveToRoom$5(creep, homeRoom);
         return;
     }
@@ -11205,7 +11249,7 @@ function runRemoteHauler(creep) {
         if (creep.store[RESOURCE_ENERGY] > 0) {
             depositEnergy(creep, homeRoom);
         }
-        else if (outsideHome(creep, homeRoom)) {
+        else if (!standsIn(creep, homeRoom)) {
             moveToRoom$5(creep, homeRoom);
         }
         return;
@@ -11438,7 +11482,7 @@ function runReserver(creep) {
     if (threats.length > 0 || isAssignedRemoteContested(creep)) {
         cryFlight(creep);
         (_a = (_c = creep.memory).walk) !== null && _a !== void 0 ? _a : (_c.walk = 0);
-        if (outsideHome(creep, homeRoom))
+        if (!standsIn(creep, homeRoom))
             moveToRoom$4(creep, homeRoom);
         return;
     }
