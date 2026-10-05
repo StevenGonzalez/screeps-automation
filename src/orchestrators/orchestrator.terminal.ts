@@ -904,13 +904,28 @@ function manageSellOrders(room: Room, terminal: StructureTerminal): void {
     const rc = c as ResourceConstant;
     if (!NON_SELLABLE.has(rc) && !feedsLocalRecipe(room, rc)) candidates.add(rc);
   }
+  // Raw deposit and power above what the room keeps. attemptRawSale deals only
+  // where the gold a deal burns still leaves a fair price, and silicon's buyers
+  // stood 50 and more rooms off; an order lets them pay for the carrying. It is
+  // offered a deal's worth at a time, as the caravans bring it in by the hundred.
+  const rawKeep = new Map<ResourceConstant, number>();
+  for (const { resource, keep } of saleStock(room)) {
+    if (BASE_MINERALS.includes(resource as MineralConstant)) continue;
+    rawKeep.set(resource, keep);
+    candidates.add(resource);
+  }
 
   for (const resource of candidates) {
+    const keep = rawKeep.get(resource);
     const surplus =
       mineral && resource === mineral.mineralType
         ? sellableMineral(room, terminal, mineral.mineralType)
-        : terminal.store.getUsedCapacity(resource) ?? 0;
-    if (surplus < MARKET_MAKER_CONFIG.MIN_SELL_SURPLUS) continue;
+        : keep !== undefined
+          ? sellableRaw(room, terminal, resource, keep)
+          : terminal.store.getUsedCapacity(resource) ?? 0;
+    const minSurplus =
+      keep !== undefined ? TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD : MARKET_MAKER_CONFIG.MIN_SELL_SURPLUS;
+    if (surplus < minSurplus) continue;
 
     const fair = fairSellPrice(resource);
     if (fair === undefined) continue;

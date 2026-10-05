@@ -190,8 +190,18 @@ describe("terminal transactions", () => {
 describe("raw resource sales", () => {
   g.FIND_MY_STRUCTURES = 104;
 
-  function setup(opts: { terminal: Record<string, number>; storage: Record<string, number>; memory?: object }) {
+  // A buyer far across the world: the price of silicon and of the gold a deal
+  // to it burns, as the market stood when Embercrag could sell to no one. The
+  // realm's credits stand behind it, so any order posted is listed with the deals.
+  type FarBuyer = { price: number; distance: number };
+  function setup(opts: {
+    terminal: Record<string, number>;
+    storage: Record<string, number>;
+    memory?: object;
+    farBuyer?: FarBuyer;
+  }) {
     const deals: string[] = [];
+    const far = opts.farBuyer;
     const terminal = { id: "t1", cooldown: 0, store: store({ energy: 50_000, ...opts.terminal }), send: () => 0 };
     const room = {
       name: "W1N1",
@@ -204,17 +214,23 @@ describe("raw resource sales", () => {
       time: clock + 1,
       rooms: { W1N1: room },
       getObjectById: (id: string) => (id === "t1" ? terminal : null),
-      map: { getRoomLinearDistance: () => 2 },
+      map: { getRoomLinearDistance: () => far?.distance ?? 2 },
       gcl: { level: 1 },
       market: {
-        credits: 0,
+        credits: far ? 1_492_024 : 0,
         orders: {},
+        createOrder: (o: { resourceType: string; totalAmount: number; price: number }) => {
+          deals.push(`offer:${o.resourceType}:${o.totalAmount}@${o.price}`);
+          return 0;
+        },
         getAllOrders: () => [
-          { id: "silicon", type: "buy", resourceType: "silicon", price: 10, amount: 5000, roomName: "W3N1" },
+          { id: "silicon", type: "buy", resourceType: "silicon", price: far?.price ?? 10, amount: 5000, roomName: "W3N1" },
           { id: "power", type: "buy", resourceType: "power", price: 10, amount: 5000, roomName: "W3N1" },
         ],
-        getHistory: () => [{ avgPrice: 10 }],
-        calcTransactionCost: () => 10,
+        getHistory: (resource: string) => [{ avgPrice: !far ? 10 : resource === "energy" ? 85 : 330 }],
+        calcTransactionCost: far
+          ? (amount: number) => Math.ceil(amount * (1 - Math.exp(-far.distance / 30)))
+          : () => 10,
         deal: (id: string, amount: number) => {
           deals.push(`${id}:${amount}`);
           return 0;
@@ -241,6 +257,21 @@ describe("raw resource sales", () => {
     for (const [filter] of getAllOrders.mock.calls) {
       expect(filter).toEqual({ resourceType: expect.any(String) });
     }
+  });
+
+  // Embercrag held 1100 silicon while the only buyers stood 50 and 88 rooms
+  // away, where the gold a deal burns ate a quarter of the price.
+  it("offers raw deposit on the market when its only buyer stands too far for a deal to pay", () => {
+    const deals = setup({ terminal: { silicon: 1_100 }, storage: {}, farBuyer: { price: 330, distance: 88 } });
+    loop();
+    expect(deals).toEqual(["offer:silicon:1100@330"]);
+  });
+
+  it("keeps a factory's raw deposit off the market too", () => {
+    const memory = { factorySystem: { factoryId: "f1" } };
+    const deals = setup({ terminal: { silicon: 4_000 }, storage: {}, memory, farBuyer: { price: 330, distance: 88 } });
+    loop();
+    expect(deals).toEqual([]);
   });
 
   it("keeps a factory's raw deposit and sells only above it", () => {
