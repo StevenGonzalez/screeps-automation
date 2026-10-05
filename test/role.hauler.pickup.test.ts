@@ -134,6 +134,14 @@ describe("hauler pickup", () => {
     expect(withdrawn).toEqual(["walk:far"]);
   });
 
+  it("lets go of the container once it is full", () => {
+    const creep = scenario(400, 2000, 300);
+    creep.memory.haulFromId = "far" as Id<StructureContainer>;
+    runHauler(creep);
+    expect(creep.memory.working).toBe(true);
+    expect(creep.memory.haulFromId).toBeUndefined();
+  });
+
   it("keeps to the container it set out for while there is a load there", () => {
     const creep = scenario(400, 2000);
     creep.memory.haulFromId = "far" as Id<StructureContainer>;
