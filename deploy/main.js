@@ -4098,6 +4098,58 @@ function energyClaimedByOthers(targetId, creep) {
             total += amount;
     return total;
 }
+let haulTick = -1;
+const haulClaims = new Map();
+function haulIndex() {
+    if (haulTick !== Game.time) {
+        haulTick = Game.time;
+        haulClaims.clear();
+        for (const name in Game.creeps) {
+            const c = Game.creeps[name];
+            const id = c.memory.haulFromId;
+            if (id && !c.memory.working)
+                addHaulClaim(id, name);
+        }
+    }
+    return haulClaims;
+}
+function addHaulClaim(containerId, creepName) {
+    let names = haulClaims.get(containerId);
+    if (!names) {
+        names = new Set();
+        haulClaims.set(containerId, names);
+    }
+    names.add(creepName);
+}
+function setHaulFrom(creep, id) {
+    var _a;
+    const old = creep.memory.haulFromId;
+    if (old === id)
+        return;
+    const index = haulIndex();
+    if (old)
+        (_a = index.get(old)) === null || _a === void 0 ? void 0 : _a.delete(creep.name);
+    creep.memory.haulFromId = id;
+    if (id)
+        addHaulClaim(id, creep.name);
+}
+function energyLeftFor(creep, container) {
+    let left = container.store[RESOURCE_ENERGY];
+    const names = haulIndex().get(container.id);
+    if (!names)
+        return left;
+    const mine = creep.pos.getRangeTo(container);
+    for (const name of names) {
+        const other = Game.creeps[name];
+        if (!other || name === creep.name)
+            continue;
+        const range = other.pos.getRangeTo(container);
+        if (range < mine || (range === mine && name < creep.name)) {
+            left -= other.store.getFreeCapacity(RESOURCE_ENERGY);
+        }
+    }
+    return left;
+}
 const HANDOFF_ROLES = new Set([ROLE_BUILDER, ROLE_REPAIRER]);
 function wantsHandoff(c) {
     return (HANDOFF_ROLES.has(c.memory.role) &&
@@ -4315,15 +4367,18 @@ function getClosestContainerOrStorage(creep) {
 }
 function findFullestMinerContainer(creep, atLeast, range = Infinity) {
     let fullest = null;
+    let fullestLeft = 0;
     for (const id of getMinerContainerIds(creep.room)) {
         const c = Game.getObjectById(id);
         if (!c || c.store[RESOURCE_ENERGY] < atLeast)
             continue;
-        if (fullest && c.store[RESOURCE_ENERGY] <= fullest.store[RESOURCE_ENERGY])
-            continue;
         if (range !== Infinity && creep.pos.getRangeTo(c) > range)
             continue;
+        const left = energyLeftFor(creep, c);
+        if (left < atLeast || (fullest && left <= fullestLeft))
+            continue;
         fullest = c;
+        fullestLeft = left;
     }
     return fullest;
 }
@@ -5303,6 +5358,7 @@ function debugDeposit(creep, target) {
 }
 const DIVERT_RANGE = 10;
 function collectEnergy$1(creep, storageModel) {
+    var _a, _b;
     const carried = creep.store[RESOURCE_ENERGY];
     const nearbyOnly = carried > 0;
     const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
@@ -5311,25 +5367,22 @@ function collectEnergy$1(creep, storageModel) {
     if (dropped.length > 0) {
         const pile = creep.pos.findClosestByRange(dropped);
         if (!nearbyOnly || creep.pos.getRangeTo(pile) <= DIVERT_RANGE) {
+            setHaulFrom(creep, undefined);
             pickupDroppedResource(creep, pile);
             return true;
         }
     }
-    let container = null;
-    const assignedId = creep.memory.assignedContainerId;
-    if (assignedId) {
-        const assigned = Game.getObjectById(assignedId);
-        if (assigned && assigned.store[RESOURCE_ENERGY] >= 100)
-            container = assigned;
-    }
-    if (!container)
-        container = findFullestMinerContainer(creep, 100, nearbyOnly ? DIVERT_RANGE : Infinity);
-    if (container &&
-        container.store[RESOURCE_ENERGY] >= 100 &&
-        (!nearbyOnly || creep.pos.getRangeTo(container) <= DIVERT_RANGE)) {
+    const enough = (id) => {
+        const c = id ? Game.getObjectById(id) : null;
+        return c && energyLeftFor(creep, c) >= 100 ? c : null;
+    };
+    const container = (_b = (_a = enough(creep.memory.haulFromId)) !== null && _a !== void 0 ? _a : enough(creep.memory.assignedContainerId)) !== null && _b !== void 0 ? _b : findFullestMinerContainer(creep, 100, nearbyOnly ? DIVERT_RANGE : Infinity);
+    if (container && (!nearbyOnly || creep.pos.getRangeTo(container) <= DIVERT_RANGE)) {
+        setHaulFrom(creep, container.id);
         withdrawFromContainer(creep, container);
         return true;
     }
+    setHaulFrom(creep, undefined);
     if (carried === 0) {
         const storage = creep.room.storage;
         const baseNeedsEnergy = creep.room.energyAvailable < creep.room.energyCapacityAvailable;
