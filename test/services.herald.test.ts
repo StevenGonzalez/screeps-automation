@@ -15,6 +15,24 @@ g.RANGED_ATTACK = "ranged_attack";
 g.WORK = "work";
 g.CARRY = "carry";
 g.CLAIM = "claim";
+const levels = (from: Record<number, number>) => {
+  const t: Record<number, number> = {};
+  let n = 0;
+  for (let l = 0; l <= 8; l++) t[l] = n = from[l] ?? n;
+  return t;
+};
+g.CONTROLLER_STRUCTURES = {
+  spawn: levels({ 0: 0, 1: 1, 7: 2, 8: 3 }),
+  tower: levels({ 0: 0, 3: 1, 5: 2, 7: 3, 8: 6 }),
+  storage: levels({ 0: 0, 4: 1 }),
+  terminal: levels({ 0: 0, 6: 1 }),
+  lab: levels({ 0: 0, 6: 3, 7: 6, 8: 10 }),
+  factory: levels({ 0: 0, 7: 1 }),
+  extractor: levels({ 0: 0, 6: 1 }),
+  observer: levels({ 0: 0, 8: 1 }),
+  powerSpawn: levels({ 0: 0, 8: 1 }),
+  nuker: levels({ 0: 0, 8: 1 }),
+};
 class FakeCreep {
   my = true;
   memory: CreepMemory = { role: "x" } as CreepMemory;
@@ -125,6 +143,23 @@ describe("herald", () => {
     expect(log).toHaveLength(1);
     expect(log[0].text).toContain("rises to level 7");
     expect((g.Memory as Memory).gossip).toEqual({ line: "level 7!", until: tick - 1 + 600 });
+  });
+
+  it("names the works a new level lets the masons raise", () => {
+    const room = roomWith([], { my: true, level: 6 });
+    const rise = (level: number) => {
+      room.controller = { my: true, level };
+      setup(room, {});
+      heraldRooms();
+      return (g.Memory as Memory).chronicle?.at(-1)?.text;
+    };
+    rise(1);
+    expect(rise(2)).toBe(`Hear ye! ${castleName(ROOM)} rises to level 2. Long live the Crown!`);
+    expect(rise(3)).toContain("Long live the Crown! Its masons may now raise a watchtower.");
+    expect(rise(6)).toContain("Its masons may now raise a trading post, 3 alchemy labs and a jeweler's mine.");
+    expect(rise(7)).toContain(
+      "Its masons may now raise a second barracks, a third watchtower, 3 more alchemy labs and a workshop."
+    );
   });
 
   it("tells once per level that the throne nears its next level", () => {

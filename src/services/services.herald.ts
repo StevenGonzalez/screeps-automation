@@ -3,7 +3,7 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { Annals, annal, castleName, chronicle, formatK, lordName, tally, warbandBounty, warbandIn, warbandLoss, wildsName } from "./services.chronicle";
+import { Annals, annal, castleName, chronicle, formatK, lordName, ordinal, tally, warbandBounty, warbandIn, warbandLoss, wildsName } from "./services.chronicle";
 import { isArmedHostile, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, TownSeason } from "../config/config.town";
@@ -177,9 +177,13 @@ export function heraldRooms(): void {
 
 // "Embercrag", "Embercrag and Grimford", "Embercrag, Grimford and Ashford".
 function castleList(castles: Room[]): string {
-  const names = castles.map((r) => castleName(r.name));
-  const last = names.pop()!;
-  return names.length ? `${names.join(", ")} and ${last}` : last;
+  return andList(castles.map((r) => castleName(r.name)));
+}
+
+function andList(items: string[]): string {
+  const rest = items.slice(0, -1);
+  const last = items[items.length - 1];
+  return rest.length ? `${rest.join(", ")} and ${last}` : last;
 }
 
 // A new GCL is one more castle the realm may hold.
@@ -586,7 +590,27 @@ function heraldRise(room: Room): void {
   if (known === undefined || level <= known) return;
   roomCries[room.name] = "Long live!";
   spreadWord(`level ${level}!`);
-  chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+  const works = newWorks(level);
+  chronicle(
+    `Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!` +
+      (works ? ` Its masons may now raise ${works}.` : "")
+  );
+}
+
+// The landmarks a level lets a castle raise that the one below did not:
+// "a second barracks, a third watchtower, 3 more alchemy labs and a workshop".
+function newWorks(level: number): string | undefined {
+  const works: string[] = [];
+  for (const type of Object.keys(LANDMARKS) as BuildableStructureConstant[]) {
+    const was = CONTROLLER_STRUCTURES[type][level - 1] ?? 0;
+    const now = CONTROLLER_STRUCTURES[type][level] ?? 0;
+    if (now <= was) continue;
+    const [one, many] = LANDMARKS[type]!;
+    if (now - was > 1) works.push(`${now - was} ${was ? "more " : ""}${many}`);
+    else if (was) works.push(`a ${ordinal(now)} ${one}`);
+    else works.push(`${/^[aeiou]/.test(one) ? "an" : "a"} ${one}`);
+  }
+  return works.length ? andList(works) : undefined;
 }
 
 // The throne nearing its next level, told once per level. A castle's climb
