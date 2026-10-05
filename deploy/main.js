@@ -10035,55 +10035,64 @@ function recordSpend(roomName, kind, amount) {
         return;
     add(windowFor(room).exact, kind, amount);
 }
-function remoteHomes(homes) {
+function remoteRooms(homes) {
     var _a;
-    const map = {};
+    const names = new Set();
     for (const home of homes) {
         for (const r of (_a = home.memory.remoteRooms) !== null && _a !== void 0 ? _a : [])
-            map[r.roomName] = home.name;
+            names.add(r.roomName);
     }
-    return map;
+    return names;
 }
-function isMine(id) {
+function creepBooks(id) {
+    var _a, _b;
     const obj = Game.getObjectById(id);
-    return !!obj && obj.my;
+    const castle = (obj === null || obj === void 0 ? void 0 : obj.my) ? Game.rooms[(_a = obj.memory.homeRoom) !== null && _a !== void 0 ? _a : ""] : undefined;
+    return ((_b = castle === null || castle === void 0 ? void 0 : castle.controller) === null || _b === void 0 ? void 0 : _b.my) ? windowFor(castle) : undefined;
 }
-function readEvents(room, w, isHome) {
+function readEvents(room, home) {
     var _a, _b, _c, _d;
     const events = room.getEventLog();
     if (events.length === 0)
         return;
     const sources = new Set(room.find(FIND_SOURCES).map((s) => s.id));
-    const towers = isHome
+    const towers = home
         ? new Set(((_a = room.memory.towerIds) !== null && _a !== void 0 ? _a : []).map((id) => id))
         : undefined;
     for (const e of events) {
         switch (e.event) {
-            case EVENT_HARVEST:
+            case EVENT_HARVEST: {
                 if (!sources.has(e.data.targetId))
                     break;
-                if (!isHome && !isMine(e.objectId))
-                    break;
-                add(w.sampled, isHome ? "mines" : "vendors", e.data.amount);
+                const w = home !== null && home !== void 0 ? home : creepBooks(e.objectId);
+                if (w)
+                    add(w.sampled, home ? "mines" : "vendors", e.data.amount);
                 break;
+            }
             case EVENT_UPGRADE_CONTROLLER:
-                if (isHome)
-                    add(w.sampled, "enchant", (_b = e.data.energySpent) !== null && _b !== void 0 ? _b : 0);
+                if (home)
+                    add(home.sampled, "enchant", (_b = e.data.energySpent) !== null && _b !== void 0 ? _b : 0);
                 break;
-            case EVENT_BUILD:
-                if (isHome || isMine(e.objectId))
+            case EVENT_BUILD: {
+                const w = home !== null && home !== void 0 ? home : creepBooks(e.objectId);
+                if (w)
                     add(w.sampled, "masonry", (_c = e.data.energySpent) !== null && _c !== void 0 ? _c : e.data.amount);
                 break;
-            case EVENT_REPAIR:
-                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
-                    add(w.sampled, "smithy", TOWER_ENERGY_COST);
-                else if (isHome || isMine(e.objectId))
+            }
+            case EVENT_REPAIR: {
+                if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId)) {
+                    add(home.sampled, "smithy", TOWER_ENERGY_COST);
+                    break;
+                }
+                const w = home !== null && home !== void 0 ? home : creepBooks(e.objectId);
+                if (w)
                     add(w.sampled, "smithy", (_d = e.data.energySpent) !== null && _d !== void 0 ? _d : 0);
                 break;
+            }
             case EVENT_ATTACK:
             case EVENT_HEAL:
                 if (towers === null || towers === void 0 ? void 0 : towers.has(e.objectId))
-                    add(w.sampled, "towers", TOWER_ENERGY_COST);
+                    add(home.sampled, "towers", TOWER_ENERGY_COST);
                 break;
         }
     }
@@ -10127,18 +10136,16 @@ function loop$g() {
     for (const home of homes)
         windowFor(home);
     if (Game.time % SAMPLE_EVERY === 0) {
-        const remotes = remoteHomes(homes);
         for (const home of homes) {
             const w = windowFor(home);
             w.samples++;
-            readEvents(home, w, true);
+            readEvents(home, w);
         }
-        for (const remoteName in remotes) {
+        for (const remoteName of remoteRooms(homes)) {
             const remote = Game.rooms[remoteName];
-            const home = Game.rooms[remotes[remoteName]];
-            if (!remote || !home || ((_b = remote.controller) === null || _b === void 0 ? void 0 : _b.my))
+            if (!remote || ((_b = remote.controller) === null || _b === void 0 ? void 0 : _b.my))
                 continue;
-            readEvents(remote, windowFor(home), false);
+            readEvents(remote);
         }
     }
     let closed = false;
