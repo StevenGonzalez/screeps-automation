@@ -213,7 +213,7 @@ src/
     +-- services.labs.ts             # Compound stock + reaction-chain helpers
     +-- services.structures.ts       # Structure planning helpers
     +-- services.movement.ts         # Traffic-managed moveTo override (heap path/stuck cache) + civilian shelter
-    +-- services.coordination.ts     # Per-tick fill-target claims + hauler-to-worker energy handoff
+    +-- services.coordination.ts     # Per-tick fill-target and container-load claims + hauler-to-worker energy handoff
     +-- services.town.ts             # Town clock, cottage geometry, parking-spot claims
     +-- services.herald.ts           # Battle cries and level-up proclamations
     +-- services.heraldry.ts         # Each castle's coat of arms and its blazon
