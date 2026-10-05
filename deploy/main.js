@@ -436,6 +436,26 @@ function tally(key, n, describe, window) {
     write({ t: Game.time, text: describe(n), key, n, last: Game.time });
     return true;
 }
+function tallyPlaces(key, room, describe, window) {
+    var _a, _b;
+    const log = entries();
+    for (let i = log.length - 1; i >= 0; i--) {
+        const e = log[i];
+        if (e.key !== key)
+            continue;
+        if (Game.time - ((_a = e.last) !== null && _a !== void 0 ? _a : e.t) > window)
+            break;
+        const places = (_b = e.places) !== null && _b !== void 0 ? _b : [];
+        if (!places.includes(room))
+            places.push(room);
+        e.places = places;
+        e.last = Game.time;
+        e.text = describe(places);
+        return false;
+    }
+    write({ t: Game.time, text: describe([room]), key, places: [room], last: Game.time });
+    return true;
+}
 function chronicleDate(t) {
     var _a;
     const epoch = (_a = Memory.chronicleEpoch) !== null && _a !== void 0 ? _a : t;
@@ -1932,11 +1952,13 @@ function heraldVisitors(room) {
             continue;
         const who = c.owner.username;
         const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
-        const text = armed
-            ? `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`
-            : `Spies of ${lordName(who)} crept about ${castleName(room.name)}.`;
-        const fresh = tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
-        if (fresh && armed) {
+        if (!armed) {
+            const text = (rooms) => `Spies of ${lordName(who)} crept about ${andList(rooms.map(castleName))}.`;
+            tallyPlaces(`visit:${who}:spy`, room.name, text, VISIT_WINDOW);
+            continue;
+        }
+        const text = `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`;
+        if (tally(`visit:${room.name}:${who}:war`, 0, () => text, VISIT_WINDOW)) {
             roomCries[room.name] = "To arms!";
             spreadWord("raiders!");
         }
@@ -1964,8 +1986,8 @@ function heraldWayfarers(room, remote) {
         if (party.some(isArmedHostile) || (remote.hostile && remote.rival === who))
             continue;
         const [, one, many] = WAYFARERS.find(([part]) => !part || party.some((c) => c.body.some((p) => p.type === part)));
-        const text = `${party.length === 1 ? one : many} of ${lordName(who)} passed through the ${wildsName(room.name)}.`;
-        tally(`wayfarers:${room.name}:${who}`, 0, () => text, WAYFARER_WINDOW);
+        const text = (rooms) => `${party.length === 1 ? one : many} of ${lordName(who)} passed through ${andList(rooms.map((r) => `the ${wildsName(r)}`))}.`;
+        tallyPlaces(`wayfarers:${who}:${many}`, room.name, text, WAYFARER_WINDOW);
     }
 }
 const WORKS_CHECK_PERIOD = 100;
@@ -11890,6 +11912,28 @@ function remoteKnightsNeeded(room, remote) {
     const n = meleeDefendersToWin(remote.invaderStrength, body, REMOTE_KNIGHT_CAP);
     return meleeDefendersWin(remote.invaderStrength, body, n) ? n : Infinity;
 }
+const REMOTE_KNIGHT_MARGIN = 2;
+function remoteKnightBody(room, roomName) {
+    var _a;
+    const remote = (_a = room.memory.remoteRooms) === null || _a === void 0 ? void 0 : _a.find((r) => r.roomName === roomName);
+    const s = remote === null || remote === void 0 ? void 0 : remote.invaderStrength;
+    if (!s)
+        return null;
+    const enemy = {
+        heal: s.heal * REMOTE_KNIGHT_MARGIN,
+        damage: s.damage * REMOTE_KNIGHT_MARGIN,
+        hits: s.hits * REMOTE_KNIGHT_MARGIN,
+    };
+    const groupCost = calculateBodyPartCost([TOUGH, ATTACK, MOVE, MOVE]);
+    const full = buildKnightBody(bodyBudget(room, "capacity")).length / 4;
+    for (let groups = 1; groups < full; groups++) {
+        const body = buildKnightBody(groups * groupCost);
+        if (meleeDefendersWin(enemy, body, 1))
+            return body;
+    }
+    return null;
+}
+const attackParts = (body) => body.filter((p) => p === ATTACK).length;
 function awaitingRemoteKnights(creep) {
     var _a, _b, _c;
     const homeName = (_a = creep.memory.homeRoom) !== null && _a !== void 0 ? _a : "";
@@ -11927,7 +11971,7 @@ function findRemoteInvaderTarget(room) {
 }
 const REMOTE_KNIGHT_MIN_TTL = 150;
 function sendIdleRemoteKnights(room) {
-    var _a;
+    var _a, _b;
     const remotes = room.memory.remoteRooms;
     if (!(remotes === null || remotes === void 0 ? void 0 : remotes.some((r) => { var _a; return ((_a = r.invaderUntil) !== null && _a !== void 0 ? _a : 0) > Game.time; })))
         return;
@@ -11941,28 +11985,33 @@ function sendIdleRemoteKnights(room) {
         const target = findRemoteInvaderTarget(room);
         if (!target)
             return;
+        const wanted = (_b = remoteKnightBody(room, target)) !== null && _b !== void 0 ? _b : buildKnightBody(bodyBudget(room, "capacity"));
+        if (attackParts(knight.body.map((b) => b.type)) < attackParts(wanted))
+            continue;
         m.targetRoom = target;
     }
 }
 const REMOTE_DEFENDER_BODY_WAIT = "remoteDefender";
 function shouldSpawnRemoteDefender(room) {
-    const needed = findRemoteInvaderTarget(room) !== null;
-    if (waitForFullBody(room, REMOTE_DEFENDER_BODY_WAIT, needed))
+    const target = findRemoteInvaderTarget(room);
+    const sized = target ? remoteKnightBody(room, target) : null;
+    const ready = !!sized && room.energyAvailable >= calculateBodyPartCost(sized);
+    if (waitForFullBody(room, REMOTE_DEFENDER_BODY_WAIT, target !== null && !ready))
         return false;
-    return needed;
+    return target !== null;
 }
 function spawnRemoteDefender(room, spawn) {
     const target = findRemoteInvaderTarget(room);
     if (!target)
         return false;
-    const allowedEnergy = bodyBudget(room, "available");
+    const sized = remoteKnightBody(room, target);
+    const allowedEnergy = Math.min(bodyBudget(room, "available"), sized ? calculateBodyPartCost(sized) : Infinity);
     const body = buildKnightBody(allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
-    const attackParts = body.filter((p) => p === ATTACK).length;
     const toughParts = body.filter((p) => p === TOUGH).length;
     const moveParts = body.filter((p) => p === MOVE).length;
-    const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
+    const queue = buildBoostQueue(room, "melee", attackParts(body), toughParts, moveParts);
     const res = trackedSpawn(room, spawn, body, {
         memory: {
             role: ROLE_KNIGHT,
