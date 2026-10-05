@@ -1775,9 +1775,12 @@ function heraldRooms() {
     heraldWisps(castles);
 }
 function castleList(castles) {
-    const names = castles.map((r) => castleName(r.name));
-    const last = names.pop();
-    return names.length ? `${names.join(", ")} and ${last}` : last;
+    return andList(castles.map((r) => castleName(r.name)));
+}
+function andList(items) {
+    const rest = items.slice(0, -1);
+    const last = items[items.length - 1];
+    return rest.length ? `${rest.join(", ")} and ${last}` : last;
 }
 function heraldRenown() {
     const level = Game.gcl.level;
@@ -2129,7 +2132,27 @@ function heraldRise(room) {
         return;
     roomCries[room.name] = "Long live!";
     spreadWord(`level ${level}!`);
-    chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!`);
+    const works = newWorks(level);
+    chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!` +
+        (works ? ` Its masons may now raise ${works}.` : ""));
+}
+function newWorks(level) {
+    var _a, _b;
+    const works = [];
+    for (const type of Object.keys(LANDMARKS)) {
+        const was = (_a = CONTROLLER_STRUCTURES[type][level - 1]) !== null && _a !== void 0 ? _a : 0;
+        const now = (_b = CONTROLLER_STRUCTURES[type][level]) !== null && _b !== void 0 ? _b : 0;
+        if (now <= was)
+            continue;
+        const [one, many] = LANDMARKS[type];
+        if (now - was > 1)
+            works.push(`${now - was} ${was ? "more " : ""}${many}`);
+        else if (was)
+            works.push(`a ${ordinal(now)} ${one}`);
+        else
+            works.push(`${/^[aeiou]/.test(one) ? "an" : "a"} ${one}`);
+    }
+    return works.length ? andList(works) : undefined;
 }
 const STIR_SHARE = 0.9;
 function heraldStir(room) {
