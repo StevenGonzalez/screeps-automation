@@ -1897,6 +1897,10 @@ const WARES = {
     K: "keanium",
     Z: "zynthium",
     X: "philosopher's salt",
+    silicon: "glass sand",
+    metal: "star iron",
+    biomass: "witchroot",
+    mist: "wraith mist",
 };
 function heraldTrade() {
     var _a, _b, _c, _d;
@@ -1924,6 +1928,16 @@ function chronicleTrade(t, verb, ours, them, us) {
     const partner = them ? `the merchants of ${lordName(them)}` : "the free markets";
     const dir = verb === "sold" ? "to" : "from";
     tally(`trade:${verb}:${ours}:${them !== null && them !== void 0 ? them : ""}:${t.resourceType}`, t.amount, (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`, TRADE_WINDOW);
+}
+const CARAVAN_WINDOW = 1500;
+function heraldNomads(home, roomName, resource) {
+    var _a;
+    chronicle(`Nomads ride out from ${castleName(home)} to dig the ${(_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource} of the ${wildsName(roomName)}.`);
+}
+function heraldCaravan(home, roomName, resource, amount) {
+    var _a;
+    const ware = (_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource;
+    tally(`caravan:${home}:${roomName}:${resource}`, amount, (n) => `The caravans of ${castleName(home)} bring ${n} ${ware} home from the ${wildsName(roomName)}.`, CARAVAN_WINDOW);
 }
 const BREW_VIRTUES = {
     UH: "strength",
@@ -13231,8 +13245,13 @@ function deliverHome(creep) {
     const res = Object.keys(creep.store)[0];
     if (!res)
         return;
-    if (creep.transfer(target, res) === ERR_NOT_IN_RANGE) {
+    const amount = creep.store[res];
+    const result = creep.transfer(target, res);
+    if (result === ERR_NOT_IN_RANGE) {
         creep.moveTo(target, { reusePath: 5, visualizePathStyle: {} });
+    }
+    else if (result === OK && home && creep.memory.targetRoom) {
+        heraldCaravan(home, creep.memory.targetRoom, res, amount);
     }
 }
 function travelToRoom(creep, roomName) {
@@ -17502,10 +17521,14 @@ function spawnNextDepositCreep(room, spawn) {
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
     const res = trackedSpawn(room, spawn, body, {
-        memory: { role: roleToSpawn, homeRoom: room.name, depositOpId: op.id },
+        memory: { role: roleToSpawn, homeRoom: room.name, targetRoom: op.roomName, depositOpId: op.id },
     });
     if (res === OK) {
         console.log(`[Deposit] Spawning ${roleToSpawn} for op #${op.id} -> ${op.roomName}`);
+        if (roleToSpawn === ROLE_DEPOSIT_MINER && !op.heralded) {
+            op.heralded = true;
+            heraldNomads(room.name, op.roomName, op.depositType);
+        }
     }
     return res === OK;
 }
