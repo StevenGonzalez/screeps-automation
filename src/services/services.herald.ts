@@ -18,15 +18,12 @@ const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 let cryTick = -1;
 let creepCries: Record<string, string> = {};
 let roomCries: Record<string, string> = {};
-// Remote name -> the knights riding out for it this tick.
-let riders: Record<string, string[]> = {};
 
 function freshCries(): void {
   if (cryTick === Game.time) return;
   cryTick = Game.time;
   creepCries = {};
   roomCries = {};
-  riders = {};
 }
 
 export function cryFor(creep: Creep): string | undefined {
@@ -100,23 +97,27 @@ export function settleFlight(creep: Creep): void {
   if (creep.memory.fled) delete creep.memory.fled;
 }
 
+// How long after the last knight rode out against a warband's raid another
+// knight riding out against it joins that line.
+const SORTIE_WINDOW = 1500;
+
 // A knight riding out against raiders in a remote cries out, and the chronicle
-// tells of it, once for each raid rather than on every tick of the ride.
-// Knights who mustered at home ride out on the same tick and share one line.
+// tells of it, once for each raid rather than on every tick of the ride. The
+// knights riding out against one raid share a line, whether they mustered and
+// left together or rode out one after another as they were raised: Hamo,
+// Alaric and Ralph each had a line of their own against Mordrek the Flayer's
+// raid on the Misty Thicket. Raiders under no named warlord are told of only
+// with the knights that leave on the same tick.
 export function crySortie(creep: Creep, roomName: string): void {
   if (creep.memory.sortie === roomName) return;
   creep.memory.sortie = roomName;
   freshCries();
   creepCries[creep.name] = "Ride out!";
-  const names = (riders[roomName] ??= []);
-  if (!names.includes(creep.name)) names.push(creep.name);
-  const band = warbandIn(roomName);
-  const foe = `${band ? `${band}'s` : "the"} raiders in the ${wildsName(roomName)}`;
-  const line = () =>
-    names.length === 1
-      ? `${names[0]} rides out against ${foe}.`
-      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]} ride out together against ${foe}.`;
-  tally(`sortie:${roomName}`, 1, line, 0);
+  const band = Memory.warbands?.[roomName];
+  const foe = `${band ? `${band.name}'s` : "the"} raiders in the ${wildsName(roomName)}`;
+  const line = (names: string[]) =>
+    `${andList(names)} ${names.length === 1 ? "rides" : "ride"} out against ${foe}.`;
+  tallyPlaces(`sortie:${roomName}:${band?.at ?? ""}`, creep.name, line, band ? SORTIE_WINDOW : 0);
 }
 
 // How long the realm talks of a piece of news.

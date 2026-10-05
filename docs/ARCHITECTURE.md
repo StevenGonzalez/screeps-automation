@@ -282,7 +282,8 @@ new controller level, every creep there shouts "Long live!" and the console logs
 every creep there shouts "To arms!". A knight riding out against raiders in a
 remote shouts "Ride out!" and the chronicle tells of it, once for each raid. When the
 raiders heal more than one knight can hit, the knights raised for that remote wait
-at home and ride out together, and the chronicle tells of them in one line; no knight is raised against a host two could not beat,
+at home and ride out together, and the chronicle tells of them in one line, as it does of
+knights riding out one after another against the same warlord's raid; no knight is raised against a host two could not beat,
 and the vendors keep off the road until it is gone. A lone knight is raised only as big as
 twice the raid's last-seen strength calls for, and sets out as soon as the purse covers it;
 an idle knight too small for another remote's raid stays at home. Each

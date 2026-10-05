@@ -115,7 +115,31 @@ describe("remote knight", () => {
     runKnight(knightIn(HOME));
     runKnight(Object.assign(knightIn(HOME), { name: "Dragon Knight Alaric" }));
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
-      "Dragon Knight Godric and Dragon Knight Alaric ride out together against the raiders in the Shadow March.",
+      "Dragon Knight Godric and Dragon Knight Alaric ride out against the raiders in the Shadow March.",
+    ]);
+  });
+
+  it("tells of the knights who ride out one after another against a warlord's raid in one line", () => {
+    const remoteRoom = { name: REMOTE, find: () => [] } as unknown as Room;
+    markRemoteInvader(remoteEntry, remoteRoom);
+    runKnight(knightIn(HOME));
+    g.Game = { time: 1200, rooms: {}, creeps: {} };
+    runKnight(Object.assign(knightIn(HOME), { name: "Dragon Knight Alaric" }));
+    g.Game = { time: 2400, rooms: {}, creeps: {} };
+    runKnight(Object.assign(knightIn(HOME), { name: "Dragon Knight Ralph" }));
+    // The raid ends, and the warlord comes back for another.
+    g.Game = { time: 2450, rooms: {}, creeps: {} };
+    clearRemoteInvaderEntry(remoteEntry);
+    g.Game = { time: 3500, rooms: {}, creeps: {} };
+    markRemoteInvader(remoteEntry, remoteRoom);
+    runKnight(Object.assign(knightIn(HOME), { name: "Dragon Knight Hamo" }));
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
+      "Dragon Knight Godric, Dragon Knight Alaric and Dragon Knight Ralph ride out against Brakka the Gaunt's raiders in the Shadow March.",
+      "The Shadow March is rid of Brakka the Gaunt's raiders. The vendors take to the road.",
+      "Brakka the Gaunt comes back to the Shadow March for a second raid on the vendors.",
+      "Dragon Knight Hamo rides out against Brakka the Gaunt's raiders in the Shadow March.",
     ]);
   });
 
