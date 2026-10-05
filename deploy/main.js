@@ -11966,20 +11966,27 @@ function remoteKnightBody(room, roomName) {
     return null;
 }
 const attackParts = (body) => body.filter((p) => p === ATTACK).length;
+function remoteKnights(homeName, roomName) {
+    return getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.homeRoom === homeName && c.memory.targetRoom === roomName);
+}
+function remoteKnightsWin(remote, knights) {
+    if (!remote.invaderStrength)
+        return knights.length > 0;
+    const parts = [];
+    for (const c of knights)
+        for (const p of c.body)
+            if (p.hits > 0)
+                parts.push(p.type);
+    return meleeDefendersWin(remote.invaderStrength, parts, 1);
+}
 function awaitingRemoteKnights(creep) {
     var _a, _b, _c;
     const homeName = (_a = creep.memory.homeRoom) !== null && _a !== void 0 ? _a : "";
     const remote = (_c = (_b = Memory.rooms[homeName]) === null || _b === void 0 ? void 0 : _b.remoteRooms) === null || _c === void 0 ? void 0 : _c.find((r) => r.roomName === creep.memory.targetRoom);
     if (!(remote === null || remote === void 0 ? void 0 : remote.invaderStrength))
         return false;
-    const home = Game.rooms[homeName];
-    if (!home)
-        return false;
-    const needed = remoteKnightsNeeded(home, remote);
-    if (needed <= 1)
-        return false;
-    const ready = getCreepsByRole(ROLE_KNIGHT).filter((c) => !c.spawning && c.memory.homeRoom === home.name && c.memory.targetRoom === remote.roomName).length;
-    return ready < needed;
+    const others = remoteKnights(homeName, remote.roomName).filter((c) => c !== creep && !c.spawning);
+    return !remoteKnightsWin(remote, [creep, ...others]);
 }
 function findRemoteInvaderTarget(room) {
     var _a, _b;
@@ -11994,9 +12001,10 @@ function findRemoteInvaderTarget(room) {
             continue;
         if (!worked.has(r.roomName) || sharedWithBiggerCastle(room, r.roomName))
             continue;
-        const defending = getCreepsByRole(ROLE_KNIGHT).filter((c) => c.memory.homeRoom === room.name && c.memory.targetRoom === r.roomName).length;
-        const needed = remoteKnightsNeeded(room, r);
-        if (needed <= REMOTE_KNIGHT_CAP && defending < needed)
+        if (remoteKnightsNeeded(room, r) > REMOTE_KNIGHT_CAP)
+            continue;
+        const knights = remoteKnights(room.name, r.roomName);
+        if (knights.length < REMOTE_KNIGHT_CAP && !remoteKnightsWin(r, knights))
             return r.roomName;
     }
     return null;
