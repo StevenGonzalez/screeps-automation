@@ -24,6 +24,7 @@ export function runUpgrader(creep: Creep) {
   if (creep.memory.working) {
     upgradeController(creep);
     topUp(creep);
+    takeSeat(creep);
     return;
   }
 
@@ -48,6 +49,7 @@ export function runUpgrader(creep: Creep) {
     // tiles from the throne. While a porter is bringing gold here, wait for it.
     if (upgradeCont && energyClaimedByOthers(upgradeCont.id, creep) > 0) {
       if (creep.pos.getRangeTo(upgradeCont) > 1) creep.moveTo(upgradeCont, { range: 1, reusePath: 20 });
+      else takeSeat(creep);
       return;
     }
   }
@@ -84,6 +86,58 @@ function topUp(creep: Creep): void {
   const cont = upgradeId ? (Game.getObjectById(upgradeId) as StructureContainer | null) : null;
   const from = [link, cont].find((s) => s && s.store[RESOURCE_ENERGY] > 0 && creep.pos.getRangeTo(s) <= 1);
   if (from) creep.withdraw(from, RESOURCE_ENERGY);
+}
+
+// Tiles beside the throne container an enchanter can upgrade from, nearest the
+// throne first. At Grimford the enchanters stood on the three plain tiles the
+// porters came in by: a porter with a load circled for a way in, or stepped
+// onto the swamp beside the container and stood ten ticks spent.
+type Seat = { x: number; y: number; range: number };
+const SEAT_TTL = 1000;
+const seatsByContainer: Record<string, { tick: number; seats: Seat[] }> = {};
+
+function throneSeats(room: Room, cont: StructureContainer, controller: StructureController): Seat[] {
+  const known = seatsByContainer[cont.id];
+  if (known && Game.time - known.tick < SEAT_TTL) return known.seats;
+  const terrain = room.getTerrain();
+  const seats: Seat[] = [];
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      const x = cont.pos.x + dx;
+      const y = cont.pos.y + dy;
+      if ((dx === 0 && dy === 0) || x < 1 || x > 48 || y < 1 || y > 48) continue;
+      if (terrain.get(x, y) === TERRAIN_MASK_WALL) continue;
+      const range = Math.max(Math.abs(x - controller.pos.x), Math.abs(y - controller.pos.y));
+      if (range > 3) continue;
+      const blocked = room
+        .lookForAt(LOOK_STRUCTURES, x, y)
+        .some((st) => (OBSTACLE_OBJECT_TYPES as string[]).includes(st.structureType));
+      if (!blocked) seats.push({ x, y, range });
+    }
+  }
+  seats.sort((a, b) => a.range - b.range);
+  seatsByContainer[cont.id] = { tick: Game.time, seats };
+  return seats;
+}
+
+// An enchanter beside the throne container moves up to a free seat nearer the
+// throne, leaving the outer ones to the porters. Not where a link feeds the
+// throne: there it keeps to the link.
+function takeSeat(creep: Creep): void {
+  const controller = creep.room.controller;
+  const upgradeId = creep.room.memory.upgradeContainerId;
+  const cont = upgradeId ? (Game.getObjectById(upgradeId) as StructureContainer | null) : null;
+  if (!controller || !cont) return;
+  const { x, y } = creep.pos;
+  if (Math.max(Math.abs(x - cont.pos.x), Math.abs(y - cont.pos.y)) > 1) return;
+  if (findControllerLink(creep)) return;
+  const mine = Math.max(Math.abs(x - controller.pos.x), Math.abs(y - controller.pos.y));
+  for (const seat of throneSeats(creep.room, cont, controller)) {
+    if (seat.range >= mine) return;
+    if (creep.room.lookForAt(LOOK_CREEPS, seat.x, seat.y).length > 0) continue;
+    creep.moveTo(seat.x, seat.y);
+    return;
+  }
 }
 
 const CONTROLLER_LINK_SCAN_TTL = 200;

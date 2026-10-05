@@ -291,6 +291,120 @@ describe("runUpgrader", () => {
   });
 });
 
+describe("enchanter's seat at the throne", () => {
+  // Grimford's throne: the controller at 12,6, its container at 14,5, rock to
+  // the west of the container, swamp at 14,4 and 14,6, and the porters' road
+  // coming in from the east along row 5.
+  const WALLS = new Set(["13,4", "13,5"]);
+
+  function grimford(opts: {
+    at: [number, number];
+    taken?: string[];
+    working?: boolean;
+    link?: boolean;
+    throne?: [number, number];
+    built?: Record<string, string>;
+  }): string[] {
+    const moves: string[] = [];
+    g.LOOK_CREEPS = "creep";
+    g.LOOK_STRUCTURES = "structure";
+    g.TERRAIN_MASK_WALL = 1;
+    g.OBSTACLE_OBJECT_TYPES = ["spawn", "extension", "constructedWall", "link"];
+    g.WORK = "work";
+    // Its own id each case, as the seats are kept by container.
+    const contId = `upgradeCont${clock}`;
+    const upgradeCont = {
+      id: contId,
+      structureType: "container",
+      store: { [g.RESOURCE_ENERGY as string]: 0 },
+      pos: { x: 14, y: 5, getRangeTo: () => 1 },
+    };
+    const link = { id: "link1", structureType: "link", store: { [g.RESOURCE_ENERGY as string]: 0 } };
+    const porter = { store: { [g.RESOURCE_ENERGY as string]: 400 }, memory: { fillTargetId: contId } };
+    g.Game = {
+      time: clock,
+      creeps: { "Porter Ralph": porter },
+      getObjectById: (id: string) => ({ [contId]: upgradeCont, link1: link } as Record<string, unknown>)[id] ?? null,
+    };
+    const taken = new Set(opts.taken ?? []);
+    const room = {
+      name: `W48S7-${clock}`,
+      controller: {
+        ...controller,
+        pos: {
+          x: opts.throne?.[0] ?? 12,
+          y: opts.throne?.[1] ?? 6,
+          getRangeTo: () => 3,
+          findInRange: () => (opts.link ? [link] : []),
+        },
+      },
+      memory: { upgradeContainerId: contId, lastSigned: clock } as RoomMemory,
+      find: () => [],
+      getTerrain: () => ({ get: (x: number, y: number) => (WALLS.has(`${x},${y}`) ? 1 : 0) }),
+      lookForAt: (type: string, x: number, y: number) => {
+        if (type === g.LOOK_CREEPS) return taken.has(`${x},${y}`) ? [{ name: "Enchanter Other" }] : [];
+        const built = opts.built?.[`${x},${y}`];
+        return built ? [{ structureType: built }] : [];
+      },
+    } as unknown as Room;
+    const [x, y] = opts.at;
+    const energy = opts.working ? 30 : 0;
+    const creep = {
+      room,
+      name: "Enchanter Edwin",
+      memory: { working: !!opts.working } as CreepMemory,
+      pos: { x, y, getRangeTo: () => 1 },
+      store: { getFreeCapacity: () => 50 - energy, getUsedCapacity: () => energy, [g.RESOURCE_ENERGY as string]: energy },
+      owner: { username: "Me" },
+      getActiveBodyparts: () => 4,
+      moveTo: (tx: number | { x: number; y: number }, ty?: number) => {
+        moves.push(typeof tx === "number" ? `${tx},${ty}` : `${tx.x},${tx.y}`);
+        return g.OK as number;
+      },
+      upgradeController: () => g.OK as number,
+      withdraw: () => g.OK as number,
+    } as unknown as Creep;
+    runUpgrader(creep);
+    return moves;
+  }
+
+  it("moves up from the porters' tile to a free seat nearer the throne", () => {
+    expect(grimford({ at: [15, 5], working: true })).toEqual(["13,6"]);
+  });
+
+  it("does so too while it waits on a porter for gold", () => {
+    expect(grimford({ at: [15, 5], taken: ["13,6"] })).toEqual(["14,4"]);
+  });
+
+  it("takes the nearest free seat, whichever side of the container the throne lies", () => {
+    expect(grimford({ at: [13, 6], working: true, throne: [16, 6] })).toEqual(["15,5"]);
+  });
+
+  it("passes over a seat built on", () => {
+    expect(grimford({ at: [15, 5], working: true, built: { "13,6": "extension", "14,4": "road" } })).toEqual(["14,4"]);
+  });
+
+  it("does not shuffle to a seat no nearer the throne", () => {
+    expect(grimford({ at: [14, 6], working: true, taken: ["13,6"] })).toEqual([]);
+  });
+
+  it("keeps off seats out of the throne's reach", () => {
+    expect(grimford({ at: [13, 6], working: true, throne: [18, 8], taken: ["15,5", "15,6"] })).toEqual([]);
+  });
+
+  it("leaves an enchanter that is not beside the container where it is", () => {
+    expect(grimford({ at: [16, 5], working: true })).toEqual([]);
+  });
+
+  it("stays put when every seat nearer the throne is taken", () => {
+    expect(grimford({ at: [15, 5], working: true, taken: ["13,6", "14,4", "14,6"] })).toEqual([]);
+  });
+
+  it("stays by the link where a link feeds the throne", () => {
+    expect(grimford({ at: [15, 5], working: true, link: true })).toEqual([]);
+  });
+});
+
 describe("upgrader top-up", () => {
   function upgraderBesideContainer(energy: number, stocked: number): string[] {
     const calls: string[] = [];
@@ -307,6 +421,8 @@ describe("upgrader top-up", () => {
       controller: { ...controller, pos: { x: 35, y: 17, getRangeTo: () => 2, findInRange: () => [] } },
       memory: { upgradeContainerId: "upgradeCont", lastSigned: clock } as RoomMemory,
       find: () => [],
+      getTerrain: () => ({ get: () => 0 }),
+      lookForAt: () => [],
     } as unknown as Room;
     const creep = {
       room,
