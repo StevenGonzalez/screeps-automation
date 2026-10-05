@@ -209,6 +209,12 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
     if (shouldSpawnCleric(room, threatScore) && spawnCleric(room, spawn)) return;
   }
 
+  // Raiders shut a remote's road for the rest of their lives, up to 1500 ticks,
+  // so the knight to clear them comes ahead of everything a castle raises for
+  // itself. Last in the line, behind an enchanter and a yeoman, Embercrag's
+  // knight for the Crow Glen was still not begun two hundred ticks into a raid
+  // that shut both its sources there and Thornbarrow's.
+  if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
   // A remote miner is the cheapest creep there is for what it brings in, and the
   // merchants already walking its road earn nothing while its post stands empty.
   // With one spawn, waiting behind a long repairer or builder body left a source
@@ -244,7 +250,6 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   if (!blockaded && !economyCritical && shouldSpawnDrainLeech(room) && spawnDrainLeech(room, spawn)) return;
   if (!blockaded && !economyCritical && spawnUnclaimer(room, spawn)) return;
   if (!blockaded && shouldSpawnScout(room) && spawnScout(room, spawn)) return;
-  if (!blockaded && shouldSpawnRemoteDefender(room) && spawnRemoteDefender(room, spawn)) return;
   if (!blockaded && shouldSpawnRemoteHauler(room) && spawnRemoteHauler(room, spawn)) return;
 
   if (!blockaded && shouldSpawnPowerCreep(room) && spawnNextPowerCreep(room, spawn)) return;

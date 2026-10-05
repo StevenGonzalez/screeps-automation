@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnReserver, spawnRepairer, need } = vi.hoisted(() => {
+const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnReserver, spawnRepairer, spawnRemoteDefender, need } = vi.hoisted(() => {
   const spawnTownsfolk = vi.fn(() => true);
+  const spawnRemoteDefender = vi.fn(() => true);
   const spawnRemoteMiner = vi.fn(() => true);
   const spawnRemoteHauler = vi.fn(() => true);
   const spawnReserver = vi.fn(() => true);
   const spawnRepairer = vi.fn(() => true);
   // Roles a test says are short; every other role is already satisfied.
-  const need = { remoteMiner: false, remoteHauler: false, reserver: false, repairer: false };
+  const need = { remoteMiner: false, remoteHauler: false, reserver: false, repairer: false, remoteDefender: false };
   // A module whose every export says no, apart from the ones given: every role
   // ahead of the town in the spawn order is already satisfied.
   const stub = (given: Record<string, unknown>) =>
@@ -18,7 +19,7 @@ const { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnReserver
         return k in t ? t[k] : () => false;
       },
     });
-  return { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnReserver, spawnRepairer, need };
+  return { stub, spawnTownsfolk, spawnRemoteMiner, spawnRemoteHauler, spawnReserver, spawnRepairer, spawnRemoteDefender, need };
 });
 
 vi.mock("../src/orchestrators/orchestrator.spawning.economy", () =>
@@ -40,7 +41,9 @@ vi.mock("../src/orchestrators/orchestrator.spawning.remote", () =>
     spawnReserver,
   })
 );
-vi.mock("../src/orchestrators/orchestrator.spawning.military", () => stub({}));
+vi.mock("../src/orchestrators/orchestrator.spawning.military", () =>
+  stub({ shouldSpawnRemoteDefender: () => need.remoteDefender, spawnRemoteDefender })
+);
 vi.mock("../src/orchestrators/orchestrator.spawning.ops", () => stub({}));
 vi.mock("../src/orchestrators/orchestrator.spawning.shared", () =>
   stub({ countByRoleInRoom: () => 1, getRoomPhase: () => "established" })
@@ -69,6 +72,7 @@ beforeEach(() => {
   need.remoteHauler = false;
   need.reserver = false;
   need.repairer = false;
+  need.remoteDefender = false;
   spawnTownsfolk.mockImplementation(() => true);
 });
 
@@ -119,5 +123,17 @@ describe("spawn order", () => {
     expect(spawnReserver).toHaveBeenCalledTimes(1);
     expect(spawnRepairer).not.toHaveBeenCalled();
     expect(spawnRemoteHauler).not.toHaveBeenCalled();
+  });
+
+  it("raises a knight against a remote's raiders ahead of the remote miners, the castle's own workers and the town", () => {
+    // Raiders shut a remote's road for as long as they live.
+    need.remoteDefender = true;
+    need.remoteMiner = true;
+    need.repairer = true;
+    processRoomSpawning(castle(30_000), {} as StructureSpawn);
+    expect(spawnRemoteDefender).toHaveBeenCalledTimes(1);
+    expect(spawnRemoteMiner).not.toHaveBeenCalled();
+    expect(spawnRepairer).not.toHaveBeenCalled();
+    expect(spawnTownsfolk).not.toHaveBeenCalled();
   });
 });
