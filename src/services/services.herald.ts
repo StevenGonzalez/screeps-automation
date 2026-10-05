@@ -3,7 +3,7 @@
 // for the tick they were raised; a cry lost to a global reset is no loss. What
 // is worth remembering also goes into the Royal Chronicle.
 
-import { Annals, annal, castleName, chronicle, formatK, lordName, ordinal, tally, warbandBounty, warbandIn, warbandLoss, wildsName } from "./services.chronicle";
+import { Annals, annal, castleName, chronicle, formatK, lordName, ordinal, tally, tallyPlaces, warbandBounty, warbandIn, warbandLoss, wildsName } from "./services.chronicle";
 import { isArmedHostile, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { NIGHT_START, townAurora, townDragon, townFeast, townHowl, townSeason, townWisps } from "./services.town";
 import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, TownSeason } from "../config/config.town";
@@ -351,7 +351,9 @@ export function heraldBrew(roomName: string, compound: string, amount: number): 
 }
 
 // A player's creeps in one of our castles make one line a visit, however long
-// they stay: spies when none of them can fight, a war party when one can.
+// they stay: spies when none of them can fight, a war party when one can. A
+// lord's spies are told once for every castle they reach; a war party has a
+// line for each castle it comes to, since each one calls its people to arms.
 const VISIT_WINDOW = 1500;
 
 function heraldVisitors(room: Room): void {
@@ -359,20 +361,23 @@ function heraldVisitors(room: Room): void {
     if (!isPlayerCreep(c)) continue;
     const who = c.owner.username;
     const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
-    const text = armed
-      ? `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`
-      : `Spies of ${lordName(who)} crept about ${castleName(room.name)}.`;
-    const fresh = tally(`visit:${room.name}:${who}:${armed ? "war" : "spy"}`, 0, () => text, VISIT_WINDOW);
+    if (!armed) {
+      const text = (rooms: string[]) => `Spies of ${lordName(who)} crept about ${andList(rooms.map(castleName))}.`;
+      tallyPlaces(`visit:${who}:spy`, room.name, text, VISIT_WINDOW);
+      continue;
+    }
+    const text = `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`;
     // The castle calls its people to arms once, as the war party is first seen.
-    if (fresh && armed) {
+    if (tally(`visit:${room.name}:${who}:war`, 0, () => text, VISIT_WINDOW)) {
       roomCries[room.name] = "To arms!";
       spreadWord("raiders!");
     }
   }
 }
 
-// Another player's creeps crossing one of our remotes unarmed make one line a
-// visit, named for what they came as. Armed ones are told as holding it.
+// Another player's creeps crossing our remotes unarmed make one line a visit,
+// named for what they came as and for every remote they cross. Armed ones are
+// told as holding it.
 const WAYFARER_WINDOW = 3000;
 const WAYFARERS: [BodyPartConstant | undefined, string, string][] = [
   [CLAIM, "An envoy", "Envoys"],
@@ -394,8 +399,9 @@ function heraldWayfarers(room: Room, remote: RemoteRoomData): void {
     const [, one, many] = WAYFARERS.find(
       ([part]) => !part || party.some((c) => c.body.some((p) => p.type === part))
     )!;
-    const text = `${party.length === 1 ? one : many} of ${lordName(who)} passed through the ${wildsName(room.name)}.`;
-    tally(`wayfarers:${room.name}:${who}`, 0, () => text, WAYFARER_WINDOW);
+    const text = (rooms: string[]) =>
+      `${party.length === 1 ? one : many} of ${lordName(who)} passed through ${andList(rooms.map((r) => `the ${wildsName(r)}`))}.`;
+    tallyPlaces(`wayfarers:${who}:${many}`, room.name, text, WAYFARER_WINDOW);
   }
 }
 

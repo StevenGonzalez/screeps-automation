@@ -579,6 +579,31 @@ describe("herald", () => {
     expect(lines[1]).toMatch(/^A war party of Rival the Fair came in arms to the walls of /);
   });
 
+  it("names every castle one lord's spies creep about in one line", () => {
+    const spy = { owner: { username: "Rival" }, body: [{ type: "move" }] };
+    const castle = (name: string) => ({ ...roomWith([], { my: true, level: 6 }, [spy]), name });
+    const visit = (time: number, ...names: string[]) => {
+      g.Game = {
+        time,
+        gcl: { level: 1 },
+        market: NO_TRADE,
+        rooms: Object.fromEntries(names.map((n) => [n, castle(n)])),
+        getObjectById: () => null,
+      };
+      heraldRooms();
+    };
+    visit(1000, "W1N1");
+    visit(1100, "W3N1", "W1N1");
+    visit(1200, "W3N1");
+    visit(2600, "W3N1");
+    visit(4200, "W3N1");
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      `Spies of Rival the Fair crept about ${castleName("W1N1")} and ${castleName("W3N1")}.`,
+      `Spies of Rival the Fair crept about ${castleName("W3N1")}.`,
+    ]);
+  });
+
   describe("wayfarers in a remote", () => {
     const REMOTE = "W2N1";
 
@@ -607,6 +632,34 @@ describe("herald", () => {
       const lines = (g.Memory as Memory).chronicle?.map((l) => l.text) ?? [];
       expect(lines[0]).toMatch(/^An envoy of Rival the Fair passed through /);
       expect(lines[1]).toMatch(/^A scout of Other the \w+ passed through /);
+    });
+
+    it("names every remote one lord's wayfarers of a kind pass through in one line", () => {
+      const cross = (time: number, hostiles: Record<string, unknown[]>) => {
+        const home = roomWith([], { my: true, level: 6 });
+        home.memory.remoteRooms = Object.keys(hostiles).map((roomName) => ({
+          roomName,
+          sources: [],
+          lastSeen: 0,
+          hostile: false,
+        })) as unknown as RemoteRoomData[];
+        const rooms: Record<string, unknown> = { [ROOM]: home };
+        for (const [name, found] of Object.entries(hostiles)) {
+          rooms[name] = { name, find: () => found, getEventLog: () => "[]" };
+        }
+        g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms, getObjectById: () => null };
+        heraldRooms();
+      };
+      const scout = creep("Rival", "move");
+      cross(1000, { W2N1: [scout] });
+      cross(1100, { W2N1: [], W3N1: [scout, creep("Rival", "work", "move")] });
+      cross(1200, { W2N1: [], W3N1: [], W4N1: [scout] });
+      cross(1300, { W2N1: [scout] });
+
+      expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+        `A scout of Rival the Fair passed through the ${wildsName("W2N1")} and the ${wildsName("W4N1")}.`,
+        `Labourers of Rival the Fair passed through the ${wildsName("W3N1")}.`,
+      ]);
     });
 
     it("leaves armed men and the rival holding the remote to the line that tells of the hold", () => {

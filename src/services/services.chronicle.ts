@@ -14,6 +14,9 @@ export interface ChronicleEntry {
   n?: number;
   // Tick a tallied entry last grew.
   last?: number;
+  // Rooms a gathered entry was seen in, in the order first seen (see
+  // tallyPlaces).
+  places?: string[];
 }
 
 // What the realm did this season, read out when the season turns.
@@ -91,6 +94,35 @@ export function tally(key: string, n: number, describe: (total: number) => strin
     return false;
   }
   write({ t: Game.time, text: describe(n), key, n, last: Game.time });
+  return true;
+}
+
+/**
+ * Like tally, but gathers the rooms a recurring sight is seen in instead of
+ * counting it, so the entry names each. A scout of Oleksii's wandering the
+ * realm's wilds wrote a line for every one it crossed, and with his spies at
+ * two castles as well, a fifth of the chronicle told of him. Returns whether
+ * it started a new entry.
+ */
+export function tallyPlaces(
+  key: string,
+  room: string,
+  describe: (rooms: string[]) => string,
+  window: number
+): boolean {
+  const log = entries();
+  for (let i = log.length - 1; i >= 0; i--) {
+    const e = log[i];
+    if (e.key !== key) continue;
+    if (Game.time - (e.last ?? e.t) > window) break;
+    const places = e.places ?? [];
+    if (!places.includes(room)) places.push(room);
+    e.places = places;
+    e.last = Game.time;
+    e.text = describe(places);
+    return false;
+  }
+  write({ t: Game.time, text: describe([room]), key, places: [room], last: Game.time });
   return true;
 }
 
