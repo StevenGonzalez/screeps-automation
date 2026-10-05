@@ -276,12 +276,26 @@ export function saleStock(room: Room): { resource: ResourceConstant; keep: numbe
     const rc = mineral.mineralType;
     out.push({ resource: rc, keep: Math.max(MINERAL_LAB_RESERVE, labMineralNeed(room).get(rc) ?? 0) });
   }
-  const depositKeep = room.memory.factorySystem?.factoryId ? DEPOSIT_KEEP : 0;
+  const keep = depositKeep(room);
   for (const rc of [RESOURCE_SILICON, RESOURCE_METAL, RESOURCE_BIOMASS, RESOURCE_MIST]) {
-    out.push({ resource: rc, keep: depositKeep });
+    out.push({ resource: rc, keep });
   }
   out.push({ resource: RESOURCE_POWER, keep: room.memory.powerSpawnId ? POWER_KEEP : 0 });
   return out;
+}
+
+function depositKeep(room: Room): number {
+  return room.memory.factorySystem?.factoryId ? DEPOSIT_KEEP : 0;
+}
+
+/**
+ * Whether a room holds a sale's worth of a raw deposit above its keep. The sale
+ * paths offer it as soon as it does, so stock still held has found no buyer.
+ */
+export function holdsUnsoldDeposit(room: Room, resource: ResourceConstant): boolean {
+  const held =
+    (room.storage?.store.getUsedCapacity(resource) ?? 0) + (room.terminal?.store.getUsedCapacity(resource) ?? 0);
+  return held - depositKeep(room) >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD;
 }
 
 /** Terminal stock of a raw resource that may be sold without eating into its keep. */

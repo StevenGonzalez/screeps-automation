@@ -18,7 +18,8 @@ import {
   boostMemory,
 } from "./orchestrator.spawning.shared";
 import { buildRemoteHaulerBody } from "./orchestrator.spawning.remote";
-import { heraldNomads } from "../services/services.herald";
+import { heraldNomads, heraldNomadsIdle } from "../services/services.herald";
+import { holdsUnsoldDeposit } from "./orchestrator.terminal";
 
 // Cracking ops are included so a member lost mid-fight gets replaced. A home
 // that cannot build the full healer body cannot field a squad at all.
@@ -129,10 +130,23 @@ export function shouldSpawnDepositCreep(room: Room): boolean {
   const op = getDepositOpForRoom(room);
   if (!op) return false;
   const members = getDepositMembersById(op.id);
-  return (
+  const short =
     members.filter((c) => c.memory.role === ROLE_DEPOSIT_MINER).length < op.requiredMiners ||
-    members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length < op.requiredHaulers
-  );
+    members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length < op.requiredHaulers;
+  if (!short) return false;
+  // A haul pays only once it sells. Embercrag's nomads dug silicon from two
+  // deposits at once, some five gold a tick in creeps, while 1100 from their
+  // earlier hauls sat unsold in its terminal: its only buyers stood 88 rooms
+  // off, where the gold a deal burns left less than the floor a sale holds to.
+  // The creeps out there finish their work; none are raised to follow until
+  // the haul sells.
+  if (holdsUnsoldDeposit(room, op.depositType)) {
+    if (!op.unsold) heraldNomadsIdle(room.name, op.depositType);
+    op.unsold = true;
+    return false;
+  }
+  delete op.unsold;
+  return true;
 }
 
 export function spawnNextDepositCreep(room: Room, spawn: StructureSpawn): boolean {

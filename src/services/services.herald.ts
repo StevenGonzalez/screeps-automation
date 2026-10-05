@@ -353,6 +353,17 @@ export function heraldNomads(home: string, roomName: string, resource: string): 
   chronicle(`Nomads ride out from ${castleName(home)} to dig the ${WARES[resource] ?? resource} of the ${wildsName(roomName)}.`);
 }
 
+/** A castle's nomads kept home while their last haul finds no buyer. */
+export function heraldNomadsIdle(home: string, resource: string): void {
+  const ware = WARES[resource] ?? resource;
+  tally(
+    `unsold:${home}:${resource}`,
+    0,
+    () => `The nomads of ${castleName(home)} stay in camp. No merchant will pay a fair price for the ${ware} they dug.`,
+    CARAVAN_WINDOW
+  );
+}
+
 /** A caravan brings a deposit's goods home. */
 export function heraldCaravan(home: string, roomName: string, resource: string, amount: number): void {
   const ware = WARES[resource] ?? resource;

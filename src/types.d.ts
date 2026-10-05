@@ -61,6 +61,8 @@ declare global {
     requiredHaulers: number;
     // Set once the chronicle told of the op's first nomad setting out.
     heralded?: boolean;
+    // Set while no nomad is raised for it because its home's haul is unsold.
+    unsold?: boolean;
   }
 
   type SquadFormation = "line" | "box" | "wedge" | "scatter";

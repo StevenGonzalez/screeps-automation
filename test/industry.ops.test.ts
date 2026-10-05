@@ -27,7 +27,7 @@ const { loop: observerLoop, powerOpTicksNeeded } = await import(
 const { loop: powerCreepLoop } = await import("../src/orchestrators/orchestrator.powercreep");
 const { runDepositMiner } = await import("../src/roles/role.depositminer");
 const { runDepositHauler } = await import("../src/roles/role.deposithauler");
-const { spawnNextDepositCreep } = await import("../src/orchestrators/orchestrator.spawning.ops");
+const { shouldSpawnDepositCreep, spawnNextDepositCreep } = await import("../src/orchestrators/orchestrator.spawning.ops");
 const { ROLE_DEPOSIT_HAULER } = await import("../src/config/config.roles");
 const { wildsName } = await import("../src/services/services.chronicle");
 
@@ -247,5 +247,73 @@ describe("nomads in the chronicle", () => {
     caravan(clock + 400, 600);
 
     expect(chronicled()).toEqual([`The caravans of Ravenhold bring 1150 glass sand home from the ${wildsName("W0N1")}.`]);
+  });
+});
+
+// Embercrag's nomads dug silicon from two deposits at once, some five gold a
+// tick in creeps, while 1100 from their earlier hauls sat unsold in its
+// terminal: its only buyers stood 88 rooms off, where the gold a deal burns
+// left less than the floor a sale holds to, and its sell order stood above
+// cheaper ones.
+describe("nomads held back while their haul goes unsold", () => {
+  const chronicled = () => ((g.Memory as Memory).chronicle ?? []).map((l) => l.text);
+  const op = (depositType = "silicon") =>
+    ({ id: 1, roomName: "W0N1", homeRoom: "W1N1", depositType, phase: "mining", requiredMiners: 1, requiredHaulers: 1 }) as DepositOp;
+  const stock = (held: Record<string, number>) => ({ getUsedCapacity: (r: string) => held[r] ?? 0 });
+
+  function castle(terminal: Record<string, number>, storage: Record<string, number> = {}, memory = {}) {
+    g.Game = { time: clock, creeps: {}, rooms: {} };
+    return {
+      name: "W1N1",
+      memory,
+      terminal: { store: stock(terminal) },
+      storage: { store: stock(storage) },
+    } as unknown as Room;
+  }
+
+  beforeEach(() => {
+    g.Memory = { rooms: { W1N1: { townName: "Ravenhold" } }, creeps: {} } as unknown as Memory;
+  });
+
+  it("raises no nomad while a sale's worth of the last haul sits unsold, and tells why once", () => {
+    (g.Memory as Memory).depositOps = [op()];
+    expect(shouldSpawnDepositCreep(castle({ silicon: 600 }, { silicon: 500 }))).toBe(false);
+    clock += 1;
+    expect(shouldSpawnDepositCreep(castle({ silicon: 1_100 }))).toBe(false);
+
+    expect(chronicled()).toEqual([
+      "The nomads of Ravenhold stay in camp. No merchant will pay a fair price for the glass sand they dug.",
+    ]);
+  });
+
+  it("sends the nomads out again once the haul has sold, and tells of it when a later haul goes unsold", () => {
+    (g.Memory as Memory).depositOps = [op()];
+    expect(shouldSpawnDepositCreep(castle({ silicon: 1_100 }))).toBe(false);
+    clock += 1;
+    expect(shouldSpawnDepositCreep(castle({ silicon: 900 }))).toBe(true);
+    clock += 3_000;
+    expect(shouldSpawnDepositCreep(castle({ silicon: 1_000 }))).toBe(false);
+    expect(chronicled()).toHaveLength(2);
+  });
+
+  it("raises none while the nomads it has are out digging", () => {
+    (g.Memory as Memory).depositOps = [op()];
+    g.Game = { time: clock, rooms: {}, creeps: {
+      n: { memory: { role: "nomad", depositOpId: 1 } },
+      c: { memory: { role: "caravan", depositOpId: 1 } },
+    } };
+    const room = { name: "W1N1", memory: {} } as unknown as Room;
+    expect(shouldSpawnDepositCreep(room)).toBe(false);
+  });
+
+  it("counts only what a castle with a factory holds above its keep", () => {
+    (g.Memory as Memory).depositOps = [op()];
+    const factory = { factorySystem: { factoryId: "f1" } };
+    expect(shouldSpawnDepositCreep(castle({ silicon: 5_500 }, {}, factory))).toBe(true);
+  });
+
+  it("is not held back by another ware gone unsold", () => {
+    (g.Memory as Memory).depositOps = [op()];
+    expect(shouldSpawnDepositCreep(castle({ metal: 3_000 }))).toBe(true);
   });
 });
