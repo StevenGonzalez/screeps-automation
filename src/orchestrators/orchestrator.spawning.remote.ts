@@ -371,9 +371,9 @@ function pickRemoteSources(room: Room): Map<string, number> {
   // A bigger castle's picks come first, and a source it worked of late is still
   // its own though a smaller castle's peddler works it now. Raiders killed
   // Embercrag's peddler in the Crow Glen while its barracks raised a knight,
-  // and Thornbarrow's peddler took the source up: Thornbarrow then worked both
-  // the Glen's sources with merchants a third the size, six at most, and about
-  // a third of the gold rotted.
+  // and Thornbarrow's peddler took the source up for good: Thornbarrow then
+  // worked both the Glen's sources with ten merchants a third the size of
+  // Embercrag's, unpaved, each costing the realm a creep's CPU.
   const minedElsewhere = new Set(
     peddlers
       .filter((c) => {
