@@ -1795,6 +1795,7 @@ function heraldRooms() {
             heraldRoads(room);
             heraldVendors(room);
             heraldVein(room);
+            heraldWalls(room);
         }
         heraldKills(room);
     }
@@ -2129,6 +2130,37 @@ function heraldVein(room) {
     else {
         chronicle(`${vein} runs full again. Its jewelers take up their picks.`);
     }
+}
+const WALL_MARKS = [
+    [100000, "a hundred thousand"],
+    [300000, "three hundred thousand"],
+    [1000000, "a million"],
+    [3000000, "three million"],
+    [10000000, "ten million"],
+];
+function heraldWalls(room) {
+    const ring = room.memory.perimeterTiles;
+    if (!(ring === null || ring === void 0 ? void 0 : ring.length) || Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const tiles = new Set(ring);
+    let standing = 0;
+    let weakest = Infinity;
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART)
+            continue;
+        if (!tiles.has(`${s.pos.x},${s.pos.y}`))
+            continue;
+        standing++;
+        weakest = Math.min(weakest, s.hits);
+    }
+    const reached = standing < tiles.size ? 0 : WALL_MARKS.filter(([at]) => weakest >= at).length;
+    const known = room.memory.heraldWalls;
+    if (known !== undefined && reached <= known)
+        return;
+    room.memory.heraldWalls = reached;
+    if (known === undefined)
+        return;
+    chronicle(`The smiths of ${castleName(room.name)} have raised its walls ${WALL_MARKS[reached - 1][1]} strong.`);
 }
 const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
 const DRAGON_CRY_PERIOD = 8;
@@ -10932,6 +10964,13 @@ const PASSING_ROLES = new Set([
     ROLE_WIZARD,
     ROLE_CLERIC,
 ]);
+const HIGHWAY_ROLES = new Set([
+    ROLE_DEPOSIT_MINER,
+    ROLE_DEPOSIT_HAULER,
+    ROLE_POWER_ATTACKER,
+    ROLE_POWER_HEALER,
+    ROLE_POWER_CARRIER,
+]);
 function remoteSpawnCapacity(room) {
     return room.find(FIND_MY_SPAWNS).length * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE;
 }
@@ -10940,7 +10979,8 @@ function remoteSpawnBudget(room) {
     let used = 0;
     for (const name in Game.creeps) {
         const c = Game.creeps[name];
-        if (REMOTE_ECONOMY_ROLES.has(c.memory.role) || PASSING_ROLES.has(c.memory.role))
+        const role = c.memory.role;
+        if (REMOTE_ECONOMY_ROLES.has(role) || PASSING_ROLES.has(role) || HIGHWAY_ROLES.has(role))
             continue;
         if (((_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : c.room.name) !== room.name)
             continue;
