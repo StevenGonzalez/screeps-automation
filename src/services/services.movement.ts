@@ -90,7 +90,13 @@ function freshCreepAware(): void {
 }
 
 // The structure matrix with our construction sites for walls and ramparts
-// walled off too.
+// walled off too, and our road sites on plain ground priced as the roads they
+// will be. A remote's road site is built only by a merchant passing within
+// reach of it, and priced as plain ground it was passed by: Grimford's
+// merchants cut straight across the plain of the Bleak Vale, up to eight tiles
+// from the planned road, and put work only into the sites nearest where they
+// joined it. A site on a swamp keeps the swamp's price, since the creep
+// walking it would bear the swamp.
 function siteCostMatrix(roomName: string): CostMatrix {
   freshCreepAware();
   const cached = siteAwareCache[roomName];
@@ -101,9 +107,13 @@ function siteCostMatrix(roomName: string): CostMatrix {
   if (!room) return base;
 
   const cm = base.clone();
+  let terrain: RoomTerrain | undefined;
   for (const s of room.find(FIND_MY_CONSTRUCTION_SITES)) {
     if ((OBSTACLE_OBJECT_TYPES as string[]).includes(s.structureType)) {
       cm.set(s.pos.x, s.pos.y, 0xff);
+    } else if (s.structureType === STRUCTURE_ROAD) {
+      terrain ??= room.getTerrain();
+      if (terrain.get(s.pos.x, s.pos.y) === 0) cm.set(s.pos.x, s.pos.y, 1);
     }
   }
   siteAwareCache[roomName] = cm;

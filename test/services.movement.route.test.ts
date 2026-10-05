@@ -214,6 +214,34 @@ describe("cross-room moveTo", () => {
     expect(cm.get(30, 30)).toBe(0);
   });
 
+  it("prices our road sites on plain ground as roads, so passers walk the planned road", () => {
+    g.FIND_CREEPS = 101;
+    g.FIND_STRUCTURES = 107;
+    g.FIND_MY_CONSTRUCTION_SITES = 114;
+    g.FIND_POWER_CREEPS = 119;
+    g.STRUCTURE_ROAD = "road";
+    g.OBSTACLE_OBJECT_TYPES = ["constructedWall"];
+    const site = (structureType: string, x: number, y: number) => ({ structureType, pos: { x, y } });
+    // Plain at 5,5 and 8,8; swamp at 6,6; a wall (a tunnel's site) at 7,7.
+    const terrain = { get: (x: number) => (x === 6 ? 2 : x === 7 ? 1 : 0) };
+    const sites = [site("road", 5, 5), site("road", 6, 6), site("road", 7, 7), site("container", 8, 8), site("constructedWall", 9, 9)];
+    const rooms = (Game as { rooms: Record<string, unknown> }).rooms;
+    rooms.W1N1 = {
+      ...(rooms.W1N1 as object),
+      find: (type: number) => (type === g.FIND_MY_CONSTRUCTION_SITES ? sites : []),
+      getTerrain: () => terrain,
+    };
+
+    creepIn("W1N1").moveTo(new RoomPosition(40, 40, "W1N1"));
+    const opts = originalMoveTo.mock.calls[0][1] as MoveToOpts;
+    const cm = opts.costCallback!("W1N1", new PathFinder.CostMatrix()) as CostMatrix;
+    expect(cm.get(5, 5)).toBe(1);
+    expect(cm.get(6, 6)).toBe(0);
+    expect(cm.get(7, 7)).toBe(0);
+    expect(cm.get(8, 8)).toBe(0);
+    expect(cm.get(9, 9)).toBe(0xff);
+  });
+
   it("does not route same-room moves", () => {
     creepIn("W1N1").moveTo(new RoomPosition(40, 40, "W1N1"));
     expect(findRoute).not.toHaveBeenCalled();
