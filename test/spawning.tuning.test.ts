@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_SPAWNS = 108;
+g.FIND_CONSTRUCTION_SITES = 111;
+g.STRUCTURE_STORAGE = "storage";
 g.OK = 0;
 
 import {
@@ -45,6 +47,37 @@ describe("upgraders with storage", () => {
 
   it("stays at the cap however much is stored", () => {
     expect(getUpgraderPopulationTarget(storageRoom(900_000))).toBe(3);
+  });
+});
+
+describe("upgraders before storage", () => {
+  // Thornbarrow at level 4: two thousand banked in its containers.
+  function keep(storageSite: boolean): Room {
+    const containers: Record<string, unknown> = {
+      c1: { store: { energy: 1500 } },
+      c2: { store: { energy: 500 } },
+    };
+    const sites = [{ structureType: "extension", progress: 900, progressTotal: 3000 }];
+    if (storageSite) sites.push({ structureType: "storage", progress: 0, progressTotal: 30_000 });
+    const room = {
+      name: `W47S7-${clock}`,
+      controller: { my: true, level: 4, ticksToDowngrade: 20_000 },
+      energyAvailable: 950,
+      energyCapacityAvailable: 950,
+      memory: { containerIds: ["c1", "c2"] },
+      find: (type: number) => (type === g.FIND_CONSTRUCTION_SITES ? sites : []),
+    } as unknown as Room;
+    g.Game = { time: clock, rooms: { [room.name]: room }, creeps: {}, getObjectById: (id: string) => containers[id] ?? null };
+    g.Memory = { rooms: { [room.name]: room.memory }, creeps: {} };
+    return room;
+  }
+
+  it("adds an upgrader for each thousand banked in the containers", () => {
+    expect(getUpgraderPopulationTarget(keep(false))).toBe(4);
+  });
+
+  it("keeps one while the storage is being built, and leaves the gold to the masons", () => {
+    expect(getUpgraderPopulationTarget(keep(true))).toBe(1);
   });
 });
 

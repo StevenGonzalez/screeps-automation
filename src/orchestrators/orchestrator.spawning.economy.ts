@@ -163,6 +163,11 @@ export function getUpgraderPopulationTarget(room: Room): number {
 
   const storage = room.storage;
   if (!storage) {
+    // While its storage is being built a castle keeps one enchanter, enough to
+    // hold the throne, and leaves the gold to the masons. Thornbarrow raised a
+    // fourth on the gold its porters banked by the throne, while its two
+    // masons stood at drained miner containers and built eight a tick.
+    if (getConstruction(room).storage) return 1;
     const base = phase === "bootstrap" ? 1 : 2;
     const extra = Math.floor(getContainerEnergy(room) / NO_STORAGE_ENERGY_PER_UPGRADER);
     return Math.min(NO_STORAGE_MAX_UPGRADERS, base + extra);
@@ -180,10 +185,11 @@ export function getUpgraderPopulationTarget(room: Room): number {
 
 let constructionSiteCacheTick = -1;
 
-const constructionByRoom: Record<string, { sites: number; left: number }> = {};
+const constructionByRoom: Record<string, { sites: number; left: number; storage: boolean }> = {};
 
-// The room's construction sites and the build progress they still need.
-function getConstruction(room: Room): { sites: number; left: number } {
+// The room's construction sites, the build progress they still need, and
+// whether one of them is its storage.
+function getConstruction(room: Room): { sites: number; left: number; storage: boolean } {
   if (constructionSiteCacheTick !== Game.time) {
     constructionSiteCacheTick = Game.time;
     for (const k of Object.keys(constructionByRoom)) delete constructionByRoom[k];
@@ -191,8 +197,12 @@ function getConstruction(room: Room): { sites: number; left: number } {
   if (constructionByRoom[room.name] === undefined) {
     const sites = room.find(FIND_CONSTRUCTION_SITES);
     let left = 0;
-    for (const s of sites) left += s.progressTotal - s.progress;
-    constructionByRoom[room.name] = { sites: sites.length, left };
+    let storage = false;
+    for (const s of sites) {
+      left += s.progressTotal - s.progress;
+      if (s.structureType === STRUCTURE_STORAGE) storage = true;
+    }
+    constructionByRoom[room.name] = { sites: sites.length, left, storage };
   }
   return constructionByRoom[room.name];
 }
