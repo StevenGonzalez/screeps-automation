@@ -63,7 +63,11 @@ const DEVELOPING_SCAN_INTERVAL = 10;
 const ESTABLISHED_SCAN_INTERVAL = 100;
 const REMOTE_HOSTILE_EXPIRY = 2000;
 
-const SCOUT_BFS_DEPTH = 2;
+// The expansion planner claims up to four rooms out and keeps clear of strong
+// lords within four (orchestrator.expansion), but it knows only the lords the
+// scouts have seen. Two rooms out saw none: the nearest keep, a level 8 hold,
+// stands three rooms from Embercrag across the highway.
+const SCOUT_BFS_DEPTH = 3;
 // The war council keeps a report for twice this (INTEL_TTL), so the old look
 // is still there to set beside the new one.
 const SCOUT_REFRESH_INTERVAL = 10_000;
@@ -207,7 +211,7 @@ function processRemoteRoomDiscovery() {
   }
 }
 
-function discoverDeepRooms(room: Room): void {
+export function discoverDeepRooms(room: Room): void {
   if (!room.memory.pendingScoutRooms) room.memory.pendingScoutRooms = [];
 
   const last = room.memory.lastDeepScout ?? 0;

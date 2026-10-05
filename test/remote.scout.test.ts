@@ -10,6 +10,7 @@ g.FIND_SOURCES = 105;
 g.EVENT_OBJECT_DESTROYED = 1;
 g.FIND_HOSTILE_STRUCTURES = 109;
 g.STRUCTURE_INVADER_CORE = "invaderCore";
+g.ERR_NO_PATH = -2;
 
 vi.mock("../src/orchestrators/orchestrator.military", () => ({
   recordRoomIntel: vi.fn(),
@@ -22,6 +23,7 @@ import {
   collectRoomMemoryGarbage,
   refreshVisibleRemoteRooms,
   discoverAdjacentRooms,
+  discoverDeepRooms,
 } from "../src/orchestrators/orchestrator.memory";
 import { recordRoomIntel } from "../src/orchestrators/orchestrator.military";
 
@@ -291,6 +293,26 @@ describe("discoverAdjacentRooms", () => {
     const room = { name: home, memory: { remoteRooms: remotes, pendingScoutRooms: [] } } as unknown as Room;
     discoverAdjacentRooms(room);
     expect(room.memory.pendingScoutRooms).toEqual(["W1N2"]);
+  });
+});
+
+describe("discoverDeepRooms", () => {
+  it("sends the scouts three rooms out, where the nearest lords keep their holds", () => {
+    const line = ["W1N1", "W2N1", "W3N1", "W4N1", "W5N1"];
+    Object.assign((g.Game as any).map, {
+      describeExits: (rn: string) => {
+        const i = line.indexOf(rn);
+        const exits: Record<string, string> = {};
+        if (i > 0) exits["3"] = line[i - 1];
+        if (i < line.length - 1) exits["7"] = line[i + 1];
+        return exits;
+      },
+      getRoomStatus: () => ({ status: "normal" }),
+      findRoute: () => [],
+    });
+    const room = { name: HOME, memory: homeMem } as unknown as Room;
+    discoverDeepRooms(room);
+    expect(homeMem.pendingScoutRooms).toEqual(["W2N1", "W3N1", "W4N1"]);
   });
 });
 
