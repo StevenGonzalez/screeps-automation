@@ -299,11 +299,12 @@ interface HaulerPlan {
 // 4 gold a tick of the source's 10, and planning for 10 asked a 350-capacity
 // keep for a fourth porter while its two containers held 100 gold between them.
 //
-// Before storage most of the gold goes on past the spawn to the controller's
-// container, which can be much further from a source. Grimford's far source
-// is 14 steps from its spawn and 32 from its controller; planned for the
-// spawn's walk alone, its porters left that source's container full and
-// spilling. The longer of the two walks is planned for.
+// Until a link feeds the throne most of the gold goes on past the spawn to the
+// controller's container, which can be much further from a source. Grimford's
+// far source is 14 steps from its spawn and 32 from its controller; planned for
+// the spawn's walk alone, its porters left that source's container full and
+// spilling, before its storage and again after it. The longer of the two walks
+// is planned for.
 function getHaulerPlan(room: Room): HaulerPlan | null {
   const containerIds = room.memory.containerIds ?? [];
   if (containerIds.length === 0) return null;
@@ -321,7 +322,7 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
   let requiredCarry = 0;
   if (spawn) {
     const distances = getContainerDistances(room, spawn, minerContainers);
-    const upgradeId = room.storage ? undefined : room.memory.upgradeContainerId;
+    const upgradeId = room.memory.controllerLinkIds?.length ? undefined : room.memory.upgradeContainerId;
     const upgrade = upgradeId ? Game.getObjectById(upgradeId) : null;
     const onward = upgrade ? getContainerDistances(room, upgrade, minerContainers) : {};
     const dug = minerWorkByContainer(room);

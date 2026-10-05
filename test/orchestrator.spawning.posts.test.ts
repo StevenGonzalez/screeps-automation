@@ -105,6 +105,27 @@ describe("porters for a young keep", () => {
     expect(shouldSpawnHauler(keep(550, crew(), undefined, 8))).toBe(false);
     expect(shouldSpawnHauler(keep(550, crew(), undefined, 30))).toBe(true);
   });
+
+  // Grimford at RCL 4: two porters sized for the spawn's walk left both source
+  // containers full and 1,900 gold spilt beside one, while its enchanters stood
+  // empty at the throne.
+  it("plans for that walk after storage while no link feeds the throne", () => {
+    const crew = () => [
+      creep(ROLE_MINER, 5, 0, "c1"),
+      creep(ROLE_MINER, 5, 0, "c2"),
+      creep(ROLE_HAULER, 0, 6),
+      creep(ROLE_HAULER, 0, 6),
+      creep(ROLE_HAULER, 0, 6),
+    ];
+    const castle = (links: string[]) => {
+      const room = keep(550, crew(), undefined, 30) as unknown as { storage: unknown; memory: RoomMemory };
+      room.storage = { store: { energy: 49_600 } };
+      room.memory.controllerLinkIds = links as Id<StructureLink>[];
+      return room as unknown as Room;
+    };
+    expect(shouldSpawnHauler(castle([]))).toBe(true);
+    expect(shouldSpawnHauler(castle(["link1"]))).toBe(false);
+  });
 });
 
 describe("miners for a young keep", () => {
