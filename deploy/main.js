@@ -4619,6 +4619,10 @@ function noteWalk(creep, lifeTime) {
         return;
     creep.memory.walk = lifeTime - creep.ticksToLive;
 }
+function outsideHome(creep, homeRoom) {
+    const { x, y } = creep.pos;
+    return creep.room.name !== homeRoom || x === 0 || y === 0 || x === 49 || y === 49;
+}
 function isAssignedRemoteContested(creep) {
     const entry = assignedRemoteEntry(creep);
     if (!entry)
@@ -9736,7 +9740,7 @@ function runRemoteMiner(creep) {
     }
     if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
         (_a = (_c = creep.memory).walk) !== null && _a !== void 0 ? _a : (_c.walk = 0);
-        if (creep.room.name !== homeRoom)
+        if (outsideHome(creep, homeRoom))
             moveToRoom$6(creep, homeRoom);
         return;
     }
@@ -9752,7 +9756,7 @@ function runRemoteMiner(creep) {
     if (isAssignedRemoteContested(creep) || threats.length > 0) {
         cryFlight(creep);
         (_b = (_d = creep.memory).walk) !== null && _b !== void 0 ? _b : (_d.walk = 0);
-        if (creep.room.name !== homeRoom)
+        if (outsideHome(creep, homeRoom))
             moveToRoom$6(creep, homeRoom);
         return;
     }
@@ -11183,7 +11187,7 @@ function runRemoteHauler(creep) {
     if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
         if (creep.store[RESOURCE_ENERGY] > 0)
             depositEnergy(creep, homeRoom);
-        else if (creep.room.name !== homeRoom)
+        else if (outsideHome(creep, homeRoom))
             moveToRoom$5(creep, homeRoom);
         return;
     }
@@ -11201,7 +11205,7 @@ function runRemoteHauler(creep) {
         if (creep.store[RESOURCE_ENERGY] > 0) {
             depositEnergy(creep, homeRoom);
         }
-        else if (creep.room.name !== homeRoom) {
+        else if (outsideHome(creep, homeRoom)) {
             moveToRoom$5(creep, homeRoom);
         }
         return;
@@ -11434,7 +11438,7 @@ function runReserver(creep) {
     if (threats.length > 0 || isAssignedRemoteContested(creep)) {
         cryFlight(creep);
         (_a = (_c = creep.memory).walk) !== null && _a !== void 0 ? _a : (_c.walk = 0);
-        if (creep.room.name !== homeRoom)
+        if (outsideHome(creep, homeRoom))
             moveToRoom$4(creep, homeRoom);
         return;
     }
