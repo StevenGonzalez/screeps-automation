@@ -4748,18 +4748,21 @@ function isAssignedRemoteInvaded(creep) {
 function clearRemoteInvader(creep) {
     const entry = assignedRemoteEntry(creep);
     if (entry)
-        clearRemoteInvaderEntry(entry);
+        clearRemoteInvaderEntry(entry, creep.room);
 }
-function clearRemoteInvaderEntry(entry) {
+function clearRemoteInvaderEntry(entry, room) {
     if (entry.invaderUntil !== undefined) {
-        if (entry.invaderUntil > Game.time) {
-            const band = warbandIn(entry.roomName);
-            const text = band
-                ? `The ${wildsName(entry.roomName)} is rid of ${band}'s raiders. The vendors take to the road.`
-                : `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
-            tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
-        }
+        if (entry.invaderUntil > Game.time)
+            entry.raidEnding = true;
         entry.invaderUntil = undefined;
+    }
+    if (entry.raidEnding && !room.find(FIND_HOSTILE_CREEPS).some(isInvaderCreep)) {
+        delete entry.raidEnding;
+        const band = warbandIn(entry.roomName);
+        const text = band
+            ? `The ${wildsName(entry.roomName)} is rid of ${band}'s raiders. The vendors take to the road.`
+            : `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
+        tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
     }
     delete entry.invaderStrength;
 }
@@ -9592,7 +9595,7 @@ function refreshVisibleRemoteRooms(room) {
         }
         clearRemotePlayerHostile(remote);
         if (!core)
-            clearRemoteInvaderEntry(remote);
+            clearRemoteInvaderEntry(remote, visible);
         const sources = visible.find(FIND_SOURCES);
         for (const source of sources) {
             let entry = remote.sources.find((s) => s.sourceId === source.id);
