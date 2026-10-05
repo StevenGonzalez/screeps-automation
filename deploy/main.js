@@ -16898,6 +16898,8 @@ function getUpgraderPopulationTarget(room) {
         return 1;
     const storage = room.storage;
     if (!storage) {
+        if (getConstruction(room).storage)
+            return 1;
         const base = phase === "bootstrap" ? 1 : 2;
         const extra = Math.floor(getContainerEnergy(room) / NO_STORAGE_ENERGY_PER_UPGRADER);
         return Math.min(NO_STORAGE_MAX_UPGRADERS, base + extra);
@@ -16919,9 +16921,13 @@ function getConstruction(room) {
     if (constructionByRoom[room.name] === undefined) {
         const sites = room.find(FIND_CONSTRUCTION_SITES);
         let left = 0;
-        for (const s of sites)
+        let storage = false;
+        for (const s of sites) {
             left += s.progressTotal - s.progress;
-        constructionByRoom[room.name] = { sites: sites.length, left };
+            if (s.structureType === STRUCTURE_STORAGE)
+                storage = true;
+        }
+        constructionByRoom[room.name] = { sites: sites.length, left, storage };
     }
     return constructionByRoom[room.name];
 }
