@@ -10,7 +10,7 @@ import {
   noteWalk,
   standsIn,
 } from "../services/services.creep";
-import { cryFlight, cryGlut, heraldWaystation, settleFlight } from "../services/services.herald";
+import { cryFlight, cryGlut, heraldRefuge, heraldWaystation, settleFlight } from "../services/services.herald";
 
 const REMOTE_DAMAGE_BACKOFF = 300;
 
@@ -168,6 +168,7 @@ function refugeFrom(creep: Creep, homeRoom: string): string {
   });
   const refuge = (exit && beyond(exit)) || homeRoom;
   creep.memory.refuge = refuge;
+  if (refuge !== homeRoom) heraldRefuge(creep, refuge);
   return refuge;
 }
 

@@ -40,6 +40,24 @@ export function cryFlight(creep: Creep): void {
   creepCries[creep.name] = "Bandits!";
 }
 
+// A raid is told as one line however long it lasts, up to this many ticks.
+const REFUGE_WINDOW = 1500;
+
+// A peddler gone over a border to wait out a raid, told once a raid for each
+// room the peddlers of a remote hide in.
+export function heraldRefuge(creep: Creep, refuge: string): void {
+  const remote = creep.room.name;
+  const band = warbandIn(remote);
+  const from = band ? `${band}'s raiders` : "the raiders";
+  const where = Game.rooms[refuge]?.controller?.my ? castleName(refuge) : `the ${wildsName(refuge)}`;
+  tally(
+    `refuge:${remote}:${refuge}`,
+    1,
+    (n) => `${n === 1 ? creep.name : `${n} peddlers`} slipped over the border into ${where} to hide from ${from}.`,
+    REFUGE_WINDOW
+  );
+}
+
 // A peddler resting on its full container, its gold piled up beside it, calls
 // for a buyer now and then, so a watcher can see why it is not digging.
 const GLUT_CRY_PERIOD = 25;

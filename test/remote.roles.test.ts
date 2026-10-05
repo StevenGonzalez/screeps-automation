@@ -406,6 +406,20 @@ describe("remote miner", () => {
       expect(movedTo(creep)).toEqual([WEST]);
     });
 
+    it("tells the chronicle once a raid of the peddlers hiding in each room", () => {
+      (g.Game as any).time = 2002;
+      (g.Memory as any).intel = { [WEST]: intel() };
+      const lines = () => ((g.Memory as any).chronicle ?? []).map((l: { text: string }) => l.text);
+      const first = Object.assign(fleeing(REMOTE, 3, 12), { name: "Peddler Nesta" });
+      runRemoteMiner(first as unknown as Creep);
+      expect(lines()).toEqual([expect.stringMatching(/^Peddler Nesta slipped over the border into the .+ to hide from the raiders\.$/)]);
+      // Already over the border, it is not told again.
+      runRemoteMiner(first as unknown as Creep);
+      const second = Object.assign(fleeing(REMOTE, 3, 12), { name: "Peddler Gervase" });
+      runRemoteMiner(second as unknown as Creep);
+      expect(lines()).toEqual([expect.stringMatching(/^2 peddlers slipped over the border/)]);
+    });
+
     it("takes refuge as well when the raiders have wounded it", () => {
       (g.Game as any).time = 2005;
       (g.Memory as any).intel = { [WEST]: intel() };
@@ -433,6 +447,19 @@ describe("remote miner", () => {
       expect(isSafeRefuge(WEST, ME)).toBe(true);
     });
 
+    it("names the warlord it hides from, and a keep of ours it shelters in", () => {
+      (g.Game as any).time = 2003;
+      (g.Memory as any).intel = {};
+      (g.Memory as any).warbands = { [REMOTE]: { name: "Hask One-Eye" } };
+      (g.Memory as any).rooms[WEST] = { townName: "Thornbarrow" };
+      (g.Game as any).rooms[WEST] = { controller: { my: true } };
+      const creep = Object.assign(fleeing(REMOTE, 3, 12), { name: "Peddler Nesta" });
+      runRemoteMiner(creep as unknown as Creep);
+      expect((g.Memory as any).chronicle.map((l: { text: string }) => l.text)).toEqual([
+        "Peddler Nesta slipped over the border into Thornbarrow to hide from Hask One-Eye's raiders.",
+      ]);
+    });
+
     it("keeps out of lair keepers' rooms", () => {
       (g.Memory as any).intel = { W4N4: { ...intel(), roomName: "W4N4" }, W5N5: { ...intel(), roomName: "W5N5" } };
       expect(isSafeRefuge("W4N4", ME)).toBe(false);
@@ -458,6 +485,8 @@ describe("remote miner", () => {
       const creep = fleeing(REMOTE, 3, 12);
       runRemoteMiner(creep as unknown as Creep);
       expect(creep.memory.refuge).toBe(HOME);
+      // Going home is no news.
+      expect((g.Memory as any).chronicle ?? []).toEqual([]);
     });
 
     it("waits out a lord's men at home, since they can follow it over a border", () => {
