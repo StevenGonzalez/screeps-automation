@@ -5359,7 +5359,7 @@ function debugDeposit(creep, target) {
 }
 const DIVERT_RANGE = 10;
 function collectEnergy$1(creep, storageModel) {
-    var _a, _b;
+    var _a, _b, _c;
     const carried = creep.store[RESOURCE_ENERGY];
     const nearbyOnly = carried > 0;
     const dropped = creep.room.find(FIND_DROPPED_RESOURCES, {
@@ -5373,9 +5373,10 @@ function collectEnergy$1(creep, storageModel) {
             return true;
         }
     }
-    const enough = (id) => {
+    const held = creep.memory.haulFromId;
+    const enough = (id, atLeast = 100) => {
         const c = id ? Game.getObjectById(id) : null;
-        return c && energyLeftFor(creep, c) >= 100 ? c : null;
+        return c && energyLeftFor(creep, c) >= atLeast ? c : null;
     };
     const container = (_b = (_a = enough(creep.memory.haulFromId)) !== null && _a !== void 0 ? _a : enough(creep.memory.assignedContainerId)) !== null && _b !== void 0 ? _b : findFullestMinerContainer(creep, 100, nearbyOnly ? DIVERT_RANGE : Infinity);
     if (container && (!nearbyOnly || creep.pos.getRangeTo(container) <= DIVERT_RANGE)) {
@@ -5398,6 +5399,15 @@ function collectEnergy$1(creep, storageModel) {
         if (storageModel)
             return false;
         if (baseNeedsEnergy) {
+            const part = (_c = enough(held, 1)) !== null && _c !== void 0 ? _c : findFullestMinerContainer(creep, 1);
+            if (part) {
+                setHaulFrom(creep, part.id);
+                withdrawFromContainer(creep, part);
+                return true;
+            }
+            const minerGold = getMinerContainerIds(creep.room).some((id) => { var _a, _b; return ((_b = (_a = Game.getObjectById(id)) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) > 0; });
+            if (minerGold)
+                return false;
             acquireEnergy(creep);
             return true;
         }
