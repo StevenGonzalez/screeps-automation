@@ -2150,10 +2150,13 @@ function heraldSky() {
     chronicle(AURORA_TIDINGS[Math.floor(Game.time / TOWN_DAY_LENGTH) % AURORA_TIDINGS.length]);
 }
 function heraldRival(roomName, before, owner, rcl) {
-    if (!before)
-        return;
-    const was = before.owner;
     const wilds = `the ${wildsName(roomName)}`;
+    if (!before) {
+        if (owner)
+            chronicle(`Scouts bring word of ${lordName(owner)}, who holds a keep of level ${rcl} in ${wilds}.`);
+        return;
+    }
+    const was = before.owner;
     if (owner && owner !== was) {
         chronicle(was
             ? `${lordName(owner)} seizes ${wilds} from ${lordName(was)}.`
@@ -8576,7 +8579,7 @@ function isAllyPlayer(username) {
     return Array.isArray(allies) && allies.includes(username);
 }
 
-const INTEL_TTL = 6000;
+const INTEL_TTL = 20000;
 const WARCOUNCIL_SCAN_INTERVAL = 50;
 const AUTO_ATTACK_INTERVAL = 1000;
 const AUTO_ATTACK_MAX_THREAT = 4;
@@ -9238,7 +9241,7 @@ const REMOTE_RESCAN_INTERVAL = 3000;
 const DEVELOPING_SCAN_INTERVAL = 10;
 const ESTABLISHED_SCAN_INTERVAL = 100;
 const REMOTE_HOSTILE_EXPIRY = 2000;
-const SCOUT_BFS_DEPTH = 2;
+const SCOUT_BFS_DEPTH = 3;
 const SCOUT_REFRESH_INTERVAL = 10000;
 const MAX_PENDING_SCOUT_ROOMS = 4;
 const BFS_RUN_INTERVAL = 200;
