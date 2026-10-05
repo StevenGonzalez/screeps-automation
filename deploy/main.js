@@ -1945,6 +1945,11 @@ function heraldNomads(home, roomName, resource) {
     var _a;
     chronicle(`Nomads ride out from ${castleName(home)} to dig the ${(_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource} of the ${wildsName(roomName)}.`);
 }
+function heraldNomadsIdle(home, resource) {
+    var _a;
+    const ware = (_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource;
+    tally(`unsold:${home}:${resource}`, 0, () => `The nomads of ${castleName(home)} stay in camp. No merchant will pay a fair price for the ${ware} they dug.`, CARAVAN_WINDOW);
+}
 function heraldCaravan(home, roomName, resource, amount) {
     var _a;
     const ware = (_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource;
@@ -6306,7 +6311,7 @@ function terminalStockJob(room) {
 const DEPOSIT_KEEP = 5000;
 const POWER_KEEP = 10000;
 function saleStock(room) {
-    var _a, _b;
+    var _a;
     const out = [];
     const mineralId = room.memory.mineralId;
     const mineral = mineralId ? Game.getObjectById(mineralId) : null;
@@ -6314,12 +6319,21 @@ function saleStock(room) {
         const rc = mineral.mineralType;
         out.push({ resource: rc, keep: Math.max(MINERAL_LAB_RESERVE, (_a = labMineralNeed(room).get(rc)) !== null && _a !== void 0 ? _a : 0) });
     }
-    const depositKeep = ((_b = room.memory.factorySystem) === null || _b === void 0 ? void 0 : _b.factoryId) ? DEPOSIT_KEEP : 0;
+    const keep = depositKeep(room);
     for (const rc of [RESOURCE_SILICON, RESOURCE_METAL, RESOURCE_BIOMASS, RESOURCE_MIST]) {
-        out.push({ resource: rc, keep: depositKeep });
+        out.push({ resource: rc, keep });
     }
     out.push({ resource: RESOURCE_POWER, keep: room.memory.powerSpawnId ? POWER_KEEP : 0 });
     return out;
+}
+function depositKeep(room) {
+    var _a;
+    return ((_a = room.memory.factorySystem) === null || _a === void 0 ? void 0 : _a.factoryId) ? DEPOSIT_KEEP : 0;
+}
+function holdsUnsoldDeposit(room, resource) {
+    var _a, _b, _c, _d;
+    const held = ((_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store.getUsedCapacity(resource)) !== null && _b !== void 0 ? _b : 0) + ((_d = (_c = room.terminal) === null || _c === void 0 ? void 0 : _c.store.getUsedCapacity(resource)) !== null && _d !== void 0 ? _d : 0);
+    return held - depositKeep(room) >= TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD;
 }
 function sellableRaw(room, terminal, resource, keep) {
     var _a, _b, _c;
@@ -17624,8 +17638,18 @@ function shouldSpawnDepositCreep(room) {
     if (!op)
         return false;
     const members = getDepositMembersById(op.id);
-    return (members.filter((c) => c.memory.role === ROLE_DEPOSIT_MINER).length < op.requiredMiners ||
-        members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length < op.requiredHaulers);
+    const short = members.filter((c) => c.memory.role === ROLE_DEPOSIT_MINER).length < op.requiredMiners ||
+        members.filter((c) => c.memory.role === ROLE_DEPOSIT_HAULER).length < op.requiredHaulers;
+    if (!short)
+        return false;
+    if (holdsUnsoldDeposit(room, op.depositType)) {
+        if (!op.unsold)
+            heraldNomadsIdle(room.name, op.depositType);
+        op.unsold = true;
+        return false;
+    }
+    delete op.unsold;
+    return true;
 }
 function spawnNextDepositCreep(room, spawn) {
     const op = getDepositOpForRoom(room);
