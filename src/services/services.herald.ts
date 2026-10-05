@@ -245,13 +245,29 @@ function heraldSeason(): void {
   if (season === "spring") heraldCensus();
 }
 
-// The scribes count the realm's souls as each year begins.
+// The scribes count the realm's souls as each year begins, and name the lords
+// the scouts know of beyond its borders.
 function heraldCensus(): void {
   const souls = Object.keys(Game.creeps).length;
   let castles = 0;
   for (const name in Game.rooms) if (Game.rooms[name].controller?.my) castles++;
   const held = castles === 1 ? "its one castle" : `its ${castles} castles`;
-  chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.`);
+  chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.${neighboursLine()}`);
+}
+
+// Strongholds and lairs have owners too, but no lord.
+const NOT_LORDS = new Set(["Invader", "Source Keeper"]);
+const NEIGHBOURS_NAMED = 3;
+
+// The lords holding the most keeps the scouts have seen, from the war
+// council's player model.
+function neighboursLine(): string {
+  const lords = Object.values(Memory.players ?? {})
+    .filter((p) => !NOT_LORDS.has(p.username))
+    .sort((a, b) => b.roomCount - a.roomCount)
+    .slice(0, NEIGHBOURS_NAMED)
+    .map((p) => lordName(p.username));
+  return lords.length ? ` Beyond its borders the scouts know of ${andList(lords)}.` : "";
 }
 
 function annalsLine(season: string, a: Annals): string {

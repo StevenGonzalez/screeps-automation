@@ -904,6 +904,27 @@ describe("herald", () => {
     ]);
   });
 
+  it("names in the census the lords the scouts know of, most keeps first", () => {
+    const castle = roomWith([], { my: true, level: 6 });
+    const lord = (username: string, roomCount: number) => ({ username, roomCount }) as PlayerIntelData;
+    g.Memory = {
+      players: {
+        Tigga: lord("Tigga", 1),
+        Invader: lord("Invader", 4),
+        Jumpp: lord("Jumpp", 2),
+        Ozz: lord("Ozz", 1),
+        Bob: lord("Bob", 3),
+      },
+    };
+    for (const time of [27_000, 28_000]) {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: castle }, creeps: {} };
+      heraldRooms();
+    }
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text).filter((t) => t.startsWith("The scribes"))).toEqual([
+      `The scribes count 0 souls in the realm and its one castle. Beyond its borders the scouts know of ${lordName("Bob")}, ${lordName("Jumpp")} and ${lordName("Tigga")}.`,
+    ]);
+  });
+
   it("leaves recruits out of annals begun before they were counted", () => {
     g.Game = { time: 3_000 };
     g.Memory = { annals: { since: 0, gold: 0, slain: 0, fallen: 0 } };
