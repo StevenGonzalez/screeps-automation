@@ -295,7 +295,12 @@ chronicle tells who broke it (and, for a warlord with a price on its head, that
 they claim the bounty), the minstrels sing of it at the next feast
 (`Memory.lastRout`), and the next raid there comes under a new warlord
 (`Memory.warbands`). A remote peddler, merchant or envoy fleeing
-a contested remote shouts "Bandits!" once, and a merchant unloading at the treasury calls out its
+a contested remote shouts "Bandits!" once. Merchants and envoys wait the raid
+out at home; a peddler, slow off the road, crosses the remote's nearest border
+into a room safe to stand in (raiders keep to the remote they raid), and
+goes home when home's border is the nearest or another player's men are the
+threat. Each steps off the border before it waits. A merchant unloading at the
+treasury calls out its
 load ("+800 gold"). Each load is added to the merchant's lifetime haul
 (`memory.hauled`), and a merchant who dies of age having brought home more gold
 than any before it is named in the chronicle (`Memory.richestHaul`). Each load

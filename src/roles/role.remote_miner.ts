@@ -1,12 +1,14 @@
 import { remoteThreats, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 import {
   isAssignedRemoteContested,
+  isAssignedRemoteInvaded,
+  isSafeRefuge,
   flagRemoteInvader,
   flagRemotePlayer,
   flagRemoteDamage,
   clearRemoteInvader,
   noteWalk,
-  outsideHome,
+  standsIn,
 } from "../services/services.creep";
 import { cryFlight, cryGlut, heraldWaystation, settleFlight } from "../services/services.herald";
 
@@ -37,7 +39,8 @@ export function runRemoteMiner(creep: Creep) {
   if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
     // A walk out broken off to wait at home is no measure of the road.
     creep.memory.walk ??= 0;
-    if (outsideHome(creep, homeRoom)) moveToRoom(creep, homeRoom);
+    const refuge = refugeFrom(creep, homeRoom);
+    if (!standsIn(creep, refuge)) moveToRoom(creep, refuge);
     return;
   }
 
@@ -51,11 +54,13 @@ export function runRemoteMiner(creep: Creep) {
   if (isAssignedRemoteContested(creep) || threats.length > 0) {
     cryFlight(creep);
     creep.memory.walk ??= 0;
-    if (outsideHome(creep, homeRoom)) moveToRoom(creep, homeRoom);
+    const refuge = refugeFrom(creep, homeRoom);
+    if (!standsIn(creep, refuge)) moveToRoom(creep, refuge);
     return;
   }
 
   settleFlight(creep);
+  delete creep.memory.refuge;
   if (inTarget && !core) clearRemoteInvader(creep);
 
   if (creep.room.name !== targetRoom) {
@@ -137,6 +142,33 @@ function harvest(creep: Creep, source: Source): ScreepsReturnCode {
     }
   }
   return res;
+}
+
+// Where a peddler waits out trouble in its remote, chosen once as it flees.
+// Raiders keep to the remote they raid, so a peddler, slow off the road,
+// crosses the remote's nearest border into a room safe to stand in rather
+// than the whole remote to reach home. Peddler Nesta walked twenty-seven tiles
+// of the Bleak Vale toward Grimford with the highway four tiles behind her,
+// and the raider met her on the way. Another player's creeps can follow over
+// a border, so a peddler fleeing them goes home.
+function refugeFrom(creep: Creep, homeRoom: string): string {
+  if (creep.memory.refuge) return creep.memory.refuge;
+  if (creep.room.name !== creep.memory.targetRoom || !isAssignedRemoteInvaded(creep)) return homeRoom;
+  if (remoteThreats(creep.room).some(isPlayerCreep)) return homeRoom;
+  const exits = Game.map.describeExits(creep.room.name) ?? {};
+  const beyond = (p: RoomPosition) =>
+    exits[(p.x === 0 ? "7" : p.x === 49 ? "3" : p.y === 0 ? "1" : "5") as ExitKey];
+  const me = creep.owner.username;
+  const exit = creep.pos.findClosestByPath(FIND_EXIT, {
+    filter: (p: RoomPosition) => {
+      const room = beyond(p);
+      return room === homeRoom || (!!room && isSafeRefuge(room, me));
+    },
+    algorithm: "dijkstra",
+  });
+  const refuge = (exit && beyond(exit)) || homeRoom;
+  creep.memory.refuge = refuge;
+  return refuge;
 }
 
 function moveToRoom(creep: Creep, targetRoom: string) {

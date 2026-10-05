@@ -1,5 +1,5 @@
 import { keepSignature, remoteSignature } from "../config/signatures";
-import { findInvaderCore, invaderStrength, isPlayerCreep } from "./services.combat";
+import { findInvaderCore, invaderStrength, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { WARBAND_BOUNTY_RAIDS, lordName, ordinal, raiseWarband, tally, wildsName, warbandIn } from "./services.chronicle";
 import { spreadWord } from "./services.herald";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
@@ -195,14 +195,32 @@ export function noteWalk(creep: Creep, lifeTime: number): void {
   creep.memory.walk = lifeTime - creep.ticksToLive;
 }
 
-// Whether a remote creep sent home to wait out trouble has still to walk. A
-// creep left standing on an exit tile is carried into the next room at the end
-// of the tick, so one that stopped on the tile it reached home by was carried
-// back into the remote it fled, and bounced between the two every tick. In the
-// Crow Glen a raider walked up to the edge and cut down three that way.
-export function outsideHome(creep: Creep, homeRoom: string): boolean {
+// Whether a remote creep sent off to wait out trouble stands in the room it
+// was sent to. A creep left standing on an exit tile is carried into the next
+// room at the end of the tick, so one that stopped on the tile it reached home
+// by was carried back into the remote it fled, and bounced between the two
+// every tick. In the Crow Glen a raider walked up to the edge and cut down
+// three that way.
+export function standsIn(creep: Creep, roomName: string): boolean {
   const { x, y } = creep.pos;
-  return creep.room.name !== homeRoom || x === 0 || y === 0 || x === 49 || y === 49;
+  return creep.room.name === roomName && x !== 0 && y !== 0 && x !== 49 && y !== 49;
+}
+
+// Whether a remote creep can wait out a raid in a room: one of our own, or one
+// scouted as nobody's, with no towers, no other player's reservation and no
+// raid of ours going on in it. Lair keepers and rooms never scouted are not.
+export function isSafeRefuge(roomName: string, me: string): boolean {
+  if (Game.rooms[roomName]?.controller?.my) return true;
+  if (isSourceKeeperRoom(roomName)) return false;
+  const intel = Memory.intel?.[roomName];
+  if (!intel || intel.owner || intel.towers > 0) return false;
+  if (intel.reservedBy && intel.reservedBy !== me) return false;
+  for (const home in Memory.rooms) {
+    for (const r of Memory.rooms[home].remoteRooms ?? []) {
+      if (r.roomName === roomName && (r.hostile || (r.invaderUntil ?? 0) > Game.time)) return false;
+    }
+  }
+  return true;
 }
 
 export function isAssignedRemoteContested(creep: Creep): boolean {

@@ -245,6 +245,8 @@ declare global {
     walk?: number;
     // Set once a remote creep has cried out and turned for home; cleared when the remote is safe.
     fled?: boolean;
+    // The room a peddler waits out a raid in; cleared when the remote is safe.
+    refuge?: string;
     // The remote a knight has ridden out to defend; cleared once it is safe.
     sortie?: string;
     fillTargetId?: string;

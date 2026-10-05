@@ -13,6 +13,7 @@ g.FIND_SOURCES = 105;
 g.FIND_STRUCTURES = 107;
 g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.FIND_HOSTILE_STRUCTURES = 109;
+g.FIND_EXIT = 10;
 g.LOOK_RESOURCES = "resource";
 g.RESOURCE_ENERGY = "energy";
 g.RoomPosition = class {
@@ -24,6 +25,7 @@ import { runRemoteMiner } from "../src/roles/role.remote_miner";
 import { runSkHauler } from "../src/roles/role.sk_hauler";
 import { loop as skLoop } from "../src/orchestrators/orchestrator.sourcekeeper";
 import { cryFor } from "../src/services/services.herald";
+import { isSafeRefuge } from "../src/services/services.creep";
 
 const HOME = "W1N1";
 const REMOTE = "W1N2";
@@ -33,7 +35,7 @@ let remote: RemoteRoomData;
 
 beforeEach(() => {
   remote = { roomName: REMOTE, sources: [], lastSeen: 0, hostile: false };
-  g.Game = { time: 1000, creeps: {}, rooms: {}, getObjectById: () => null };
+  g.Game = { time: 1000, creeps: {}, rooms: {}, getObjectById: () => null, map: { describeExits: () => null } };
   g.Memory = { rooms: { [HOME]: { remoteRooms: [remote] } }, allies: ["Pal"] };
 });
 
@@ -150,7 +152,7 @@ describe("remote miner", () => {
       hits: 100,
       owner: { username: ME },
       store: { energy: 0 },
-      pos: { isNearTo: () => true, isEqualTo: () => true, inRangeTo: () => true },
+      pos: { isNearTo: () => true, isEqualTo: () => true, inRangeTo: () => true, findClosestByPath: () => null },
       room: { name: roomName, controller: undefined, find: () => [] },
       memory: { role: "remote_miner", homeRoom: HOME, targetRoom: REMOTE, remoteSourceId: "src", _hp: 200 },
       moveTo: vi.fn(),
@@ -366,6 +368,124 @@ describe("remote miner", () => {
     creep.pos = { ...creep.pos, x: 49, y: 30 } as typeof creep.pos;
     runRemoteMiner(creep as unknown as Creep);
     expect(creep.moveTo).toHaveBeenCalledWith(expect.objectContaining({ roomName: HOME }), expect.anything());
+  });
+
+  describe("waiting out a raid", () => {
+    // The remote's borders, nearest first: unscouted to the north, another
+    // room to the west, and home to the south.
+    const NORTH = "W1N3";
+    const WEST = "W2N2";
+    const borders = [
+      { x: 20, y: 0, roomName: REMOTE },
+      { x: 0, y: 12, roomName: REMOTE },
+      { x: 20, y: 49, roomName: REMOTE },
+    ];
+    const intel = (extra: Partial<RoomIntelData> = {}) => ({
+      roomName: WEST, lastSeen: 900, rcl: 0, towers: 0, spawns: 0, hostileCreeps: 0,
+      hostileCombatParts: 0, hostileHealParts: 0, threatLevel: 0, ...extra,
+    });
+
+    function fleeing(roomName: string, x: number, y: number, hostiles: unknown[] = []) {
+      remote.invaderUntil = 2100;
+      (g.Game as any).map = { describeExits: () => ({ 1: NORTH, 7: WEST, 5: HOME }) };
+      const creep = minerIn(roomName);
+      creep.memory._hp = 100;
+      creep.room.find = ((type: number) => (type === g.FIND_HOSTILE_CREEPS ? hostiles : [])) as any;
+      const findClosestByPath = vi.fn((_type: number, opts: { filter: (p: unknown) => boolean }) => borders.find(opts.filter) ?? null);
+      creep.pos = { ...creep.pos, x, y, findClosestByPath } as typeof creep.pos;
+      return creep;
+    }
+    const movedTo = (creep: ReturnType<typeof fleeing>) => creep.moveTo.mock.calls.map((c) => (c[0] as RoomPosition).roomName);
+
+    it("crosses the nearest border into a room safe to stand in, not the whole remote", () => {
+      (g.Game as any).time = 2001;
+      (g.Memory as any).intel = { [WEST]: intel() };
+      const creep = fleeing(REMOTE, 3, 12);
+      runRemoteMiner(creep as unknown as Creep);
+      expect(creep.memory.refuge).toBe(WEST);
+      expect(movedTo(creep)).toEqual([WEST]);
+    });
+
+    it("takes refuge as well when the raiders have wounded it", () => {
+      (g.Game as any).time = 2005;
+      (g.Memory as any).intel = { [WEST]: intel() };
+      const raider = { owner: { username: "Invader" }, body: [{ type: "attack", hits: 100 }] };
+      const creep = fleeing(REMOTE, 3, 12, [raider]);
+      creep.memory._hp = 200;
+      runRemoteMiner(creep as unknown as Creep);
+      expect(creep.memory.remoteBackoffUntil).toBeGreaterThan(2005);
+      expect(movedTo(creep)).toEqual([WEST]);
+    });
+
+    it("waits at home while a lord holds the remote, though none of the lord's men is in sight", () => {
+      (g.Game as any).time = 2035;
+      (g.Memory as any).intel = { [WEST]: intel() };
+      const creep = fleeing(REMOTE, 3, 12);
+      remote.invaderUntil = undefined;
+      remote.hostile = true;
+      runRemoteMiner(creep as unknown as Creep);
+      expect(movedTo(creep)).toEqual([HOME]);
+    });
+
+    it("takes refuge in a keep of ours", () => {
+      (g.Memory as any).intel = {};
+      (g.Game as any).rooms[WEST] = { controller: { my: true } };
+      expect(isSafeRefuge(WEST, ME)).toBe(true);
+    });
+
+    it("keeps out of lair keepers' rooms", () => {
+      (g.Memory as any).intel = { W4N4: { ...intel(), roomName: "W4N4" }, W5N5: { ...intel(), roomName: "W5N5" } };
+      expect(isSafeRefuge("W4N4", ME)).toBe(false);
+      expect(isSafeRefuge("W5N5", ME)).toBe(true);
+    });
+
+    it("keeps out of rooms unscouted, held, towered or raided", () => {
+      for (const [i, west] of [
+        intel({ owner: "Stranger" }),
+        intel({ towers: 1 }),
+        intel({ reservedBy: "Stranger" }),
+        undefined,
+      ].entries()) {
+        (g.Game as any).time = 2010 + i;
+        (g.Memory as any).intel = west ? { [WEST]: west } : {};
+        const creep = fleeing(REMOTE, 3, 12);
+        runRemoteMiner(creep as unknown as Creep);
+        expect(creep.memory.refuge).toBe(HOME);
+      }
+      (g.Game as any).time = 2020;
+      (g.Memory as any).intel = { [WEST]: intel() };
+      (g.Memory as any).rooms.W9N9 = { remoteRooms: [{ roomName: WEST, sources: [], lastSeen: 0, hostile: false, invaderUntil: 2500 }] };
+      const creep = fleeing(REMOTE, 3, 12);
+      runRemoteMiner(creep as unknown as Creep);
+      expect(creep.memory.refuge).toBe(HOME);
+    });
+
+    it("waits out a lord's men at home, since they can follow it over a border", () => {
+      (g.Game as any).time = 2030;
+      (g.Memory as any).intel = { [WEST]: intel() };
+      const armed = { owner: { username: "Stranger" }, body: [{ type: "attack", hits: 100 }] };
+      const creep = fleeing(REMOTE, 3, 12, [armed]);
+      runRemoteMiner(creep as unknown as Creep);
+      expect(movedTo(creep)).toEqual([HOME]);
+    });
+
+    it("steps off the border into its refuge, waits there, and goes back once the raid is over", () => {
+      (g.Game as any).time = 2040;
+      const creep = fleeing(WEST, 49, 12);
+      creep.memory.refuge = WEST;
+      runRemoteMiner(creep as unknown as Creep);
+      expect(movedTo(creep)).toEqual([WEST]);
+
+      creep.moveTo.mockClear();
+      creep.pos = { ...creep.pos, x: 48 } as typeof creep.pos;
+      runRemoteMiner(creep as unknown as Creep);
+      expect(creep.moveTo).not.toHaveBeenCalled();
+
+      (g.Game as any).time = 2100;
+      runRemoteMiner(creep as unknown as Creep);
+      expect(movedTo(creep)).toEqual([REMOTE]);
+      expect(creep.memory.refuge).toBeUndefined();
+    });
   });
 
   describe("walking out to its source", () => {
