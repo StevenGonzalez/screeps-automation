@@ -15001,9 +15001,15 @@ function siteCostMatrix(roomName) {
     if (!room)
         return base;
     const cm = base.clone();
+    let terrain;
     for (const s of room.find(FIND_MY_CONSTRUCTION_SITES)) {
         if (OBSTACLE_OBJECT_TYPES.includes(s.structureType)) {
             cm.set(s.pos.x, s.pos.y, 0xff);
+        }
+        else if (s.structureType === STRUCTURE_ROAD) {
+            terrain !== null && terrain !== void 0 ? terrain : (terrain = room.getTerrain());
+            if (terrain.get(s.pos.x, s.pos.y) === 0)
+                cm.set(s.pos.x, s.pos.y, 1);
         }
     }
     siteAwareCache[roomName] = cm;
