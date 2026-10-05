@@ -100,7 +100,7 @@ function initializeMemory() {
   }
 }
 
-function processRoomMemory(room: Room) {
+export function processRoomMemory(room: Room) {
   if (!room.controller || !room.controller.my) return;
   const scanInterval =
     room.controller.level <= 3 ? DEVELOPING_SCAN_INTERVAL : ESTABLISHED_SCAN_INTERVAL;
@@ -142,7 +142,10 @@ function processRoomMemory(room: Room) {
         (c) => c.pos.getRangeTo(room.controller!.pos) <= 2
       );
       if (controllerContainers.length > 0) {
-        const closest = room.controller!.pos.findClosestByPath(controllerContainers);
+        // Creeps do not block the way. Thornbarrow's throne has one open tile
+        // beside it, and with its enchanter standing there at the scan the keep
+        // lost its throne container: its porters stopped stocking it.
+        const closest = room.controller!.pos.findClosestByPath(controllerContainers, { ignoreCreeps: true });
         room.memory.upgradeContainerId = closest
           ? (closest.id as Id<StructureContainer>)
           : undefined;
