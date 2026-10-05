@@ -5230,6 +5230,7 @@ function runHauler(creep) {
     }
     if (!creep.memory.working && creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0) {
         creep.memory.working = true;
+        setHaulFrom(creep, undefined);
     }
     if (!creep.memory.working) {
         setFillTarget(creep, undefined);
