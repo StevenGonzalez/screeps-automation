@@ -604,11 +604,15 @@ function heraldSky(): void {
 }
 
 // What changed in another lord's hold since the realm last looked at the room:
-// a keep raised, taken, abandoned, or grown a level. The first look is not news.
+// a keep raised, taken, abandoned, or grown a level. The first look at a room
+// is news only when a lord holds it, as word of a neighbour the realm had not met.
 export function heraldRival(roomName: string, before: RoomIntelData | undefined, owner: string | undefined, rcl: number): void {
-  if (!before) return;
-  const was = before.owner;
   const wilds = `the ${wildsName(roomName)}`;
+  if (!before) {
+    if (owner) chronicle(`Scouts bring word of ${lordName(owner)}, who holds a keep of level ${rcl} in ${wilds}.`);
+    return;
+  }
+  const was = before.owner;
   if (owner && owner !== was) {
     chronicle(
       was

@@ -56,6 +56,7 @@ describe("war council intel", () => {
     for (let t = 1_050; t < 11_000; t += 50) council(t, {});
     council(11_000, { [HOLD]: rivalKeep(4) });
     expect(((g.Memory as Memory).chronicle ?? []).map((l) => l.text)).toEqual([
+      `Scouts bring word of ${lordName("Jumpp")}, who holds a keep of level 3 in the ${wildsName(HOLD)}.`,
       `The keep of ${lordName("Jumpp")} in the ${wildsName(HOLD)} rises to level 4.`,
     ]);
   });

@@ -983,10 +983,11 @@ describe("herald", () => {
     ]);
   });
 
-  it("tells of other lords' keeps raised, grown, taken and abandoned, but not of the first look", () => {
+  it("tells of other lords' keeps found, raised, grown, taken and abandoned, but not of a first look at empty wilds", () => {
     g.Game = { time: 500 };
     const seen = (owner: string | undefined, rcl: number) => ({ owner, rcl }) as RoomIntelData;
     const wilds = `the ${wildsName("W5N5")}`;
+    heraldRival("W5N5", undefined, undefined, 0);
     heraldRival("W5N5", undefined, "Jumpp", 3);
     heraldRival("W5N5", seen(undefined, 0), "Jumpp", 1);
     heraldRival("W5N5", seen("Jumpp", 1), "Jumpp", 2);
@@ -994,6 +995,7 @@ describe("herald", () => {
     heraldRival("W5N5", seen("Jumpp", 2), "Tigga", 1);
     heraldRival("W5N5", seen("Tigga", 1), undefined, 0);
     expect(((g.Memory as Memory).chronicle ?? []).map((l) => l.text)).toEqual([
+      `Scouts bring word of ${lordName("Jumpp")}, who holds a keep of level 3 in ${wilds}.`,
       `${lordName("Jumpp")} raises a keep in ${wilds}.`,
       `The keep of ${lordName("Jumpp")} in ${wilds} rises to level 2.`,
       `${lordName("Tigga")} seizes ${wilds} from ${lordName("Jumpp")}.`,
