@@ -370,8 +370,41 @@ describe("merchants on a paved road", () => {
 
   it("needs fewer merchants once the road is all but built", () => {
     expect(shouldSpawnRemoteHauler(remoteWithRoad(8))).toBe(true);
-    clock += 1;
+    clock += 100;
     expect(shouldSpawnRemoteHauler(remoteWithRoad(9))).toBe(false);
+  });
+
+  it("measures the road again only once in a while", () => {
+    expect(shouldSpawnRemoteHauler(remoteWithRoad(8))).toBe(true);
+    clock += 99;
+    expect(shouldSpawnRemoteHauler(remoteWithRoad(9))).toBe(true);
+  });
+
+  it("ranks the remote by the merchants it will raise there", () => {
+    // 24 CARRY of merchants at 20 parts for each 12, as the 1170-gold body
+    // with one MOVE per two CARRY has them, beside the 10-part peddler and the
+    // two-CLAIM envoy, which banks a tick for each of the 550 it works: some 166
+    // ticks of spawn time a lifetime. Costed with a MOVE for every CARRY, the
+    // merchants alone took 38 ticks more, and Embercrag dropped the paved Barrow Thicket for want of
+    // spawn time it had.
+    const room = remoteWithRoad(10);
+    const r = room.memory.remoteRooms![0];
+    const parts = 10 + (24 * 20) / 12 + (4 * 1500) / (2 * 550);
+    expect(planRemoteSource(room, r, r.sources[0]).spawnTime).toBeCloseTo(3 * parts, 3);
+  });
+
+  it("ranks a source by its own road, whatever the road to the remote's other source", () => {
+    const room = remoteWithRoad(10);
+    const r = room.memory.remoteRooms![0];
+    r.sources.push({
+      sourceId: "W4N5-s1",
+      pathLength: 50,
+      containerId: "box2",
+      roadTiles: Array.from({ length: 10 }, (_, i) => `${10 + i},30`).join(";"),
+    } as unknown as RemoteRoomData["sources"][number]);
+    // As above, with the envoy shared between the two sources.
+    const parts = 10 + (24 * 20) / 12 + (4 * 1500) / (2 * 550) / 2;
+    expect(planRemoteSource(room, r, r.sources[0]).spawnTime).toBeCloseTo(3 * parts, 3);
   });
 
   it("raises a merchant with one MOVE per two CARRY there", () => {

@@ -89,6 +89,12 @@ export function getRemoteSourcePathLength(
   return src.pathLength;
 }
 
+// A castle weighs its remotes' roads each time it ranks them, which can be
+// every tick, and a measure costs some 0.035 CPU for a remote with two long
+// roads. Roads go down a few a day, so a measure is kept this long.
+const ROAD_COVERAGE_TTL = 100;
+const roadCoverageCache = new Map<string, { tick: number; coverage: number }>();
+
 // Share of a remote's road built, over the tiles out to each source with a
 // container (the only sources merchants haul from and roads are laid to).
 // Exit tiles take no road, so they are left out. A remote out of sight counts
@@ -96,10 +102,15 @@ export function getRemoteSourcePathLength(
 export function remoteRoadCoverage(remote: RemoteRoomData): number {
   const room = Game.rooms[remote.roomName];
   if (!room) return 0;
+  const roads = remote.sources.filter((src) => src.containerId && src.roadTiles);
+  // Keyed on the roads as well as the room: two castles share a remote, each
+  // with its own road out to it.
+  const key = `${remote.roomName}:${roads.map((src) => src.roadTiles).join("|")}`;
+  const known = roadCoverageCache.get(key);
+  if (known && Game.time - known.tick < ROAD_COVERAGE_TTL) return known.coverage;
   const tiles = new Set<string>();
-  for (const src of remote.sources) {
-    if (!src.containerId || !src.roadTiles) continue;
-    for (const tile of src.roadTiles.split(";")) {
+  for (const src of roads) {
+    for (const tile of src.roadTiles!.split(";")) {
       const [x, y] = tile.split(",").map(Number);
       if (x > 0 && y > 0 && x < 49 && y < 49) tiles.add(tile);
     }
@@ -109,6 +120,10 @@ export function remoteRoadCoverage(remote: RemoteRoomData): number {
   for (const s of room.find(FIND_STRUCTURES)) {
     if (s.structureType === STRUCTURE_ROAD && tiles.has(`${s.pos.x},${s.pos.y}`)) built++;
   }
+  for (const [k, v] of roadCoverageCache) {
+    if (Game.time - v.tick >= ROAD_COVERAGE_TTL) roadCoverageCache.delete(k);
+  }
+  roadCoverageCache.set(key, { tick: Game.time, coverage: built / tiles.size });
   return built / tiles.size;
 }
 

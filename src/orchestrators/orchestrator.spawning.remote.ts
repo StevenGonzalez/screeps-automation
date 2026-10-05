@@ -270,7 +270,14 @@ export function planRemoteSource(
   const roads = remoteRoadsEnabled(room);
 
   const miner = buildRemoteMinerBody(capacity);
-  const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads);
+  // Costed as getRemoteHaulPlans will raise them, by the source's own road: a
+  // remote's other source may be another castle's, its road never laid from
+  // here. Costed with a MOVE for every CARRY on a paved road, Embercrag's
+  // merchants for the Barrow Thicket took a fifth more spawn time than they
+  // would, and it dropped the source for want of time it had, leaving its
+  // peddler to dig with no merchant to come.
+  const paved = roads && remotePaved({ ...remote, sources: [src] });
+  const hauler = buildRemoteHaulerBody(bodyBudget(room, "capacity"), roads, paved);
   const haulerCarry = Math.max(1, hauler.filter((p) => p === CARRY).length);
   const carry = remoteHaulCarry(output, dist) * REMOTE_HAUL_MARGIN;
   const haulerCostPerCarry = calculateBodyPartCost(hauler) / haulerCarry;
