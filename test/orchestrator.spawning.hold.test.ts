@@ -11,6 +11,10 @@ g.RANGED_ATTACK = "ranged_attack";
 g.HEAL = "heal";
 g.TOUGH = "tough";
 g.CLAIM = "claim";
+g.ATTACK_POWER = 30;
+g.RANGED_ATTACK_POWER = 10;
+g.HEAL_POWER = 12;
+g.DISMANTLE_POWER = 50;
 g.BODYPART_COST = {
   work: 100,
   carry: 50,
@@ -238,15 +242,27 @@ describe("idle spawn", () => {
     expect(lastLook(room)).toBe(clock + SPAWN_IDLE_RECHECK);
   });
 
-  it("looks every tick while hostiles are in the room", () => {
-    const { room } = held();
+  const visitedBy = (room: Room, body: string[]) => {
     const find = room.find.bind(room);
-    const scout = { owner: { username: "Raider" }, body: [{ type: g.MOVE, hits: 100 }], pos: { x: 25, y: 25 } };
-    (room as { find: unknown }).find = (type: number) => (type === g.FIND_HOSTILE_CREEPS ? [scout] : find(type));
+    const hostile = { owner: { username: "Raider" }, body: body.map((type) => ({ type, hits: 100 })), pos: { x: 25, y: 25 } };
+    (room as { find: unknown }).find = (type: number) => (type === g.FIND_HOSTILE_CREEPS ? [hostile] : find(type));
+  };
+
+  it("looks every tick while a hostile that can do harm is in the room", () => {
+    const { room } = held();
+    visitedBy(room, [g.HEAL as string, g.MOVE as string]);
     at(clock);
     expect(spawnCalls).toEqual([]);
     at(clock + 1);
     expect(lastLook(room)).toBe(clock + 1);
+  });
+
+  it("keeps its pace while only a scout is in the room", () => {
+    const { room } = held();
+    visitedBy(room, [g.MOVE as string]);
+    at(clock);
+    at(clock + 1);
+    expect(lastLook(room)).toBe(clock);
   });
 
   it("still gives up the porter hold once it has starved the room for 100 ticks", () => {

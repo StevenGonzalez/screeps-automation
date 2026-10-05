@@ -22,7 +22,7 @@ const TERMINAL_FILL_STORAGE_FLOOR = 20_000;
 
 export function runFiller(creep: Creep) {
   const storage = creep.room.storage;
-  const underThreat = getThreatInfo(creep.room).hostiles.length > 0;
+  const underThreat = getThreatInfo(creep.room).score > 0;
 
   const coreTarget =
     (underThreat ? findEmptiestTower(creep.room) : null) ?? getCoreFillTarget(creep);

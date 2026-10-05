@@ -104,8 +104,9 @@ const STRAY_HAULER_INTERVAL = 10;
 // A spawn that finds nothing to raise looks again only SPAWN_IDLE_RECHECK
 // ticks later. Each look walks the whole spawn order, about half a CPU a
 // castle, and all three castles' spawns stood idle on most ticks. A creep
-// that falls due waits at most two ticks more. A room with hostiles in it
-// looks every tick, so a raid is answered at once.
+// that falls due waits at most two ticks more. A room with a hostile in it
+// that can do harm looks every tick, so a raid is answered at once; a scout
+// does not count.
 const idleUntil: Record<string, number> = {};
 
 export function loop() {
@@ -118,7 +119,7 @@ export function loop() {
     const spawns = room.find(FIND_MY_SPAWNS) as StructureSpawn[];
     for (const spawn of spawns) {
       if (spawn.spawning) continue;
-      if ((idleUntil[spawn.id] ?? 0) > Game.time && getThreatInfo(room).hostiles.length === 0) continue;
+      if ((idleUntil[spawn.id] ?? 0) > Game.time && getThreatInfo(room).score === 0) continue;
       const orders = spawnOrdersThisTick();
       processRoomSpawning(room, spawn);
       if (spawnOrdersThisTick() === orders) idleUntil[spawn.id] = Game.time + SPAWN_IDLE_RECHECK;

@@ -75,7 +75,9 @@ export function runHauler(creep: Creep) {
     creep.memory.working = true;
   }
 
-  if (getThreatInfo(creep.room).hostiles.length > 0) {
+  // A scout cannot hurt anything. Treated as a raid, one sent every porter to
+  // top up the same tower at once, ten gold at a time.
+  if (getThreatInfo(creep.room).score > 0) {
     const tower = findEmptiestTower(creep.room);
     if (tower) {
       setFillTarget(creep, tower.id);

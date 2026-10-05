@@ -33,7 +33,10 @@ export function loop() {
 
     const attackTarget = selectRoomAttackTarget(hostiles, room);
 
-    const hasHostiles = hostiles.length > 0;
+    // Only a hostile that can do harm puts the towers on a war footing. A
+    // scout parked on the edge of Grimford had its tower repairing walls at
+    // long range, ten gold a shot, for as long as the scout stayed.
+    const hasHostiles = getThreatInfo(room).score > 0;
     for (const id of towerIds) {
       const tower = Game.getObjectById(id) as StructureTower | null;
       if (tower) runTower(tower, attackTarget, hasHostiles);
