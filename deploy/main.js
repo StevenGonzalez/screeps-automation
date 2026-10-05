@@ -4065,6 +4065,13 @@ function computeNukeRampartTarget(room) {
     return worst;
 }
 const BARRIER_REPAIR_BAND = 10000;
+function barrierWantsRaising(s, goal) {
+    return s.hits < goal - Math.min(BARRIER_REPAIR_BAND, goal / 2);
+}
+function repairGoal(room, s) {
+    const barrier = s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART;
+    return barrier ? barrierTargetFn(room)(s) : s.hitsMax;
+}
 function weakestBand(barriers) {
     const floor = barriers.reduce((min, b) => Math.min(min, b.hits), Infinity);
     return barriers.filter((b) => b.hits < floor + BARRIER_REPAIR_BAND);
@@ -4105,15 +4112,15 @@ function repairCandidates(room) {
     const nonDefensive = structures.filter((st) => st.structureType !== STRUCTURE_WALL &&
         st.structureType !== STRUCTURE_RAMPART &&
         st.hits < st.hitsMax * WORN_FRACTION);
-    if (nonDefensive.length > 0) {
-        const isRoad = (st) => st.structureType === STRUCTURE_ROAD;
-        const nonRoad = nonDefensive.filter((st) => !isRoad(st));
-        return nonRoad.length > 0 ? nonRoad : nonDefensive;
+    const nonRoad = nonDefensive.filter((st) => st.structureType !== STRUCTURE_ROAD);
+    if (nonRoad.length > 0)
+        return nonRoad;
+    if (walls) {
+        const belowTarget = structures.filter((st) => isBarrier(st) && barrierWantsRaising(st, targetOf(st)));
+        if (belowTarget.length > 0)
+            return weakestBand(belowTarget);
     }
-    if (!walls)
-        return [];
-    const belowTarget = structures.filter((st) => isBarrier(st) && st.hits < targetOf(st));
-    return belowTarget.length > 0 ? weakestBand(belowTarget) : [];
+    return nonDefensive;
 }
 function findTowerRepairTarget(room) {
     var _a, _b, _c;
@@ -5072,16 +5079,18 @@ function runBuilder(creep) {
 
 const REPAIR_HOLD_TICKS = 10;
 function repairTarget(creep) {
+    var _a;
     const mem = creep.memory;
     if (mem.repairUntil !== undefined && Game.time < mem.repairUntil) {
         if (!mem.repairId)
             return null;
         const held = Game.getObjectById(mem.repairId);
-        if (held && held.hits < held.hitsMax)
+        if (held && held.hits < ((_a = mem.repairTo) !== null && _a !== void 0 ? _a : held.hitsMax))
             return held;
     }
     const target = findMostCriticalRepairTarget(creep);
     mem.repairId = target === null || target === void 0 ? void 0 : target.id;
+    mem.repairTo = target ? repairGoal(creep.room, target) : undefined;
     mem.repairUntil = Game.time + REPAIR_HOLD_TICKS;
     return target;
 }
@@ -17274,24 +17283,28 @@ function wallSmithFunded(room) {
     return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) + WALL_SMITH_SPARE;
 }
 function getRepairerPopulationTarget(room) {
-    var _a, _b;
+    var _a, _b, _c;
     if (isEnergyEmergency(room))
         return 0;
     const cached = repairerTargetCache[room.name];
     if (cached && Game.time - cached.tick < 50)
         return cached.value;
     const kept = keptUp(room);
+    const towered = ((_a = room.memory.towerIds) !== null && _a !== void 0 ? _a : []).length > 0;
     const worn = room.find(FIND_STRUCTURES, {
         filter: (s) => {
             if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
                 return false;
             const st = s;
-            return "hits" in st && "hitsMax" in st && st.hits < st.hitsMax * 0.8 && kept(st);
+            if (!("hits" in st && "hitsMax" in st) || !kept(st))
+                return false;
+            const wornBelow = towered && st.structureType === STRUCTURE_ROAD ? decayRescueFloor(st) : st.hitsMax * 0.8;
+            return st.hits < wornBelow;
         },
     });
     const critical = worn.filter((s) => s.hits < s.hitsMax * 0.5);
     let value = Math.min(2, Math.ceil(critical.length / 5));
-    const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
+    const rcl = (_c = (_b = room.controller) === null || _b === void 0 ? void 0 : _b.level) !== null && _c !== void 0 ? _c : 0;
     if (rcl >= 2) {
         const hasEnergyBuffer = !room.storage || room.storage.store[RESOURCE_ENERGY] > 20000;
         if (hasEnergyBuffer) {
@@ -17300,7 +17313,7 @@ function getRepairerPopulationTarget(room) {
             const barrierTarget = barrierTargetFn(room);
             const wallsNeedRepair = wallSmithFunded(room) && room.find(FIND_STRUCTURES, {
                 filter: (s) => (s.structureType === STRUCTURE_RAMPART || s.structureType === STRUCTURE_WALL) &&
-                    s.hits < barrierTarget(s),
+                    barrierWantsRaising(s, barrierTarget(s)),
             }).length > 0;
             if (wallsNeedRepair)
                 value = Math.min(2, value + 1);
