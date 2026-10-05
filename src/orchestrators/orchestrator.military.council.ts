@@ -9,7 +9,12 @@ import {
   isAllyPlayer,
 } from "./orchestrator.military.ops";
 
-const INTEL_TTL = 6_000;
+// Twice the scouts' round (SCOUT_REFRESH_INTERVAL in orchestrator.memory). A
+// room beyond the remotes is looked at again only once its report is ten
+// thousand ticks old, and the herald tells what changed in a rival's hold by
+// setting the new look beside the old one. Forgotten at six thousand ticks, the
+// old report was always gone by then, so no rival keep was ever news.
+const INTEL_TTL = 20_000;
 
 const WARCOUNCIL_SCAN_INTERVAL = 50;
 

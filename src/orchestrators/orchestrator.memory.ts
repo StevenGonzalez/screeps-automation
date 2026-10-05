@@ -64,6 +64,8 @@ const ESTABLISHED_SCAN_INTERVAL = 100;
 const REMOTE_HOSTILE_EXPIRY = 2000;
 
 const SCOUT_BFS_DEPTH = 2;
+// The war council keeps a report for twice this (INTEL_TTL), so the old look
+// is still there to set beside the new one.
 const SCOUT_REFRESH_INTERVAL = 10_000;
 const MAX_PENDING_SCOUT_ROOMS = 4;
 const BFS_RUN_INTERVAL = 200;
