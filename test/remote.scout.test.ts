@@ -11,6 +11,10 @@ g.EVENT_OBJECT_DESTROYED = 1;
 g.FIND_HOSTILE_STRUCTURES = 109;
 g.STRUCTURE_INVADER_CORE = "invaderCore";
 g.ERR_NO_PATH = -2;
+g.ERR_INVALID_ARGS = -10;
+g.RoomPosition = class {
+  constructor(public x: number, public y: number, public roomName: string) {}
+};
 
 vi.mock("../src/orchestrators/orchestrator.military", () => ({
   recordRoomIntel: vi.fn(),
@@ -65,7 +69,10 @@ beforeEach(() => {
     time: 5000,
     creeps: {},
     rooms: {},
-    map: { describeExits: (rn: string) => EXITS[rn] ?? {} },
+    map: {
+      describeExits: (rn: string) => EXITS[rn] ?? {},
+      getRoomLinearDistance: (a: string, b: string) => Math.abs(Number(a.slice(1, -2)) - Number(b.slice(1, -2))),
+    },
   };
   g.Memory = { rooms: { [HOME]: homeMem }, allies: ["Pal"] };
   vi.mocked(recordRoomIntel).mockClear();
@@ -124,6 +131,31 @@ describe("scout survey", () => {
     homeMem.remoteRooms = [{ roomName: "W1N2", sources: [], lastSeen: 0, hostile: false }];
     runScout(scoutIn("W1N2", { controller: { my: true, owner: { username: ME } } }));
     expect(homeMem.remoteRooms).toEqual([]);
+  });
+});
+
+describe("raven's walk", () => {
+  function ravenIn(roomName: string, memory: Partial<CreepMemory>) {
+    const creep = scoutIn(roomName);
+    creep.memory = { role: "raven", homeRoom: HOME, ...memory } as CreepMemory;
+    (creep.room as unknown as { findExitTo: () => number }).findExitTo = () => 7;
+    (creep as unknown as { moveTo: () => number }).moveTo = () => 0;
+    return creep;
+  }
+
+  it("takes the nearest room on the list next", () => {
+    homeMem.pendingScoutRooms = ["W9N1", "W4N1", "W3N1"];
+    const creep = ravenIn("W2N1", {});
+    runScout(creep);
+    expect(creep.memory.targetRoom).toBe("W3N1");
+  });
+
+  it("walks on through four borders before giving a room up", () => {
+    homeMem.pendingScoutRooms = ["W5N1"];
+    const creep = ravenIn("W2N1", { targetRoom: "W5N1", scoutTravelTicks: 250 });
+    runScout(creep);
+    expect(creep.memory.targetRoom).toBe("W5N1");
+    expect(homeMem.scoutSkipUntil).toBeUndefined();
   });
 });
 

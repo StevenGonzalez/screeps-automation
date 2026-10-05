@@ -7,7 +7,10 @@ import { applyRemoteControllerStatus } from "../orchestrators/orchestrator.memor
 import { isArmedHostile } from "../services/services.combat";
 
 const SCOUT_HOSTILE_DURATION = 2000;
-const SCOUT_TRAVEL_BUDGET = 150;
+// Ticks a raven walks towards one room before giving it up. Three rooms out, a
+// raven going on from its last room can have four borders to cross: at 150,
+// Embercrag's raven gave up on a highway room three tiles short of it.
+const SCOUT_TRAVEL_BUDGET = 300;
 
 export function runScout(creep: Creep) {
   const homeRoom = creep.memory.homeRoom;
@@ -62,7 +65,18 @@ function assignNextRoom(creep: Creep, homeRoomName: string): boolean {
     }
   }
 
-  const next = pending.find((r) => !claimed.has(r));
+  // The nearest room next, so the raven is not sent back and forth across
+  // the realm in the order the rooms were listed.
+  let next: string | undefined;
+  let nearest = Infinity;
+  for (const r of pending) {
+    if (claimed.has(r)) continue;
+    const d = Game.map.getRoomLinearDistance(creep.room.name, r);
+    if (d < nearest) {
+      nearest = d;
+      next = r;
+    }
+  }
   if (!next) return false;
   creep.memory.targetRoom = next;
   creep.memory.scoutTravelTicks = 0;
