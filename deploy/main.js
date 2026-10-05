@@ -4834,6 +4834,7 @@ function runUpgrader(creep) {
     if (creep.memory.working) {
         upgradeController(creep);
         topUp(creep);
+        takeSeat(creep);
         return;
     }
     const controllerLink = findControllerLink(creep);
@@ -4855,6 +4856,8 @@ function runUpgrader(creep) {
         if (upgradeCont && energyClaimedByOthers(upgradeCont.id, creep) > 0) {
             if (creep.pos.getRangeTo(upgradeCont) > 1)
                 creep.moveTo(upgradeCont, { range: 1, reusePath: 20 });
+            else
+                takeSeat(creep);
             return;
         }
     }
@@ -4878,6 +4881,57 @@ function topUp(creep) {
     const from = [link, cont].find((s) => s && s.store[RESOURCE_ENERGY] > 0 && creep.pos.getRangeTo(s) <= 1);
     if (from)
         creep.withdraw(from, RESOURCE_ENERGY);
+}
+const SEAT_TTL = 1000;
+const seatsByContainer = {};
+function throneSeats(room, cont, controller) {
+    const known = seatsByContainer[cont.id];
+    if (known && Game.time - known.tick < SEAT_TTL)
+        return known.seats;
+    const terrain = room.getTerrain();
+    const seats = [];
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+            const x = cont.pos.x + dx;
+            const y = cont.pos.y + dy;
+            if ((dx === 0 && dy === 0) || x < 1 || x > 48 || y < 1 || y > 48)
+                continue;
+            if (terrain.get(x, y) === TERRAIN_MASK_WALL)
+                continue;
+            const range = Math.max(Math.abs(x - controller.pos.x), Math.abs(y - controller.pos.y));
+            if (range > 3)
+                continue;
+            const blocked = room
+                .lookForAt(LOOK_STRUCTURES, x, y)
+                .some((st) => OBSTACLE_OBJECT_TYPES.includes(st.structureType));
+            if (!blocked)
+                seats.push({ x, y, range });
+        }
+    }
+    seats.sort((a, b) => a.range - b.range);
+    seatsByContainer[cont.id] = { tick: Game.time, seats };
+    return seats;
+}
+function takeSeat(creep) {
+    const controller = creep.room.controller;
+    const upgradeId = creep.room.memory.upgradeContainerId;
+    const cont = upgradeId ? Game.getObjectById(upgradeId) : null;
+    if (!controller || !cont)
+        return;
+    const { x, y } = creep.pos;
+    if (Math.max(Math.abs(x - cont.pos.x), Math.abs(y - cont.pos.y)) > 1)
+        return;
+    if (findControllerLink(creep))
+        return;
+    const mine = Math.max(Math.abs(x - controller.pos.x), Math.abs(y - controller.pos.y));
+    for (const seat of throneSeats(creep.room, cont, controller)) {
+        if (seat.range >= mine)
+            return;
+        if (creep.room.lookForAt(LOOK_CREEPS, seat.x, seat.y).length > 0)
+            continue;
+        creep.moveTo(seat.x, seat.y);
+        return;
+    }
 }
 const CONTROLLER_LINK_SCAN_TTL = 200;
 function findControllerLink(creep) {
