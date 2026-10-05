@@ -11470,6 +11470,7 @@ function runRemoteHauler(creep) {
         clearRemoteInvader(creep);
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
         creep.memory.working = false;
+        setFillTarget(creep, undefined);
     }
     else if (!creep.memory.working &&
         (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 ||
@@ -11633,6 +11634,13 @@ function depositEnergy(creep, homeRoom) {
         moveToRoom$5(creep, homeRoom);
         return;
     }
+    const throne = throneOnTheWay(creep);
+    if (creep.memory.fillTargetId !== (throne === null || throne === void 0 ? void 0 : throne.id))
+        setFillTarget(creep, throne === null || throne === void 0 ? void 0 : throne.id);
+    if (throne) {
+        unload(creep, throne);
+        return;
+    }
     const storage = creep.room.storage;
     if (storage && storage.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         unload(creep, storage);
@@ -11663,6 +11671,25 @@ function depositEnergy(creep, homeRoom) {
         return;
     }
     putSurplusEnergyToWork(creep);
+}
+function throneOnTheWay(creep) {
+    var _a, _b;
+    const room = creep.room;
+    const storage = room.storage;
+    const id = room.memory.upgradeContainerId;
+    if (!storage || !id || ((_a = room.memory.controllerLinkIds) === null || _a === void 0 ? void 0 : _a.length))
+        return null;
+    const throne = Game.getObjectById(id);
+    if (!throne || ((_b = room.memory.minerContainerIds) === null || _b === void 0 ? void 0 : _b.includes(id)))
+        return null;
+    const free = throne.store.getFreeCapacity(RESOURCE_ENERGY);
+    if (creep.memory.fillTargetId === id)
+        return free > 0 ? throne : null;
+    if (!upgradingFunded(room))
+        return null;
+    if (free - energyClaimedByOthers(id, creep) < creep.store[RESOURCE_ENERGY])
+        return null;
+    return creep.pos.getRangeTo(throne) < creep.pos.getRangeTo(storage) ? throne : null;
 }
 function unload(creep, target) {
     var _a;
