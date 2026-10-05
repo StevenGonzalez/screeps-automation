@@ -26,7 +26,10 @@ import {
   spawnRemoteDefender,
 } from "../src/orchestrators/orchestrator.spawning.military";
 import {
+  ROLE_DEPOSIT_HAULER,
+  ROLE_DEPOSIT_MINER,
   ROLE_KNIGHT,
+  ROLE_POWER_HEALER,
   ROLE_REMOTE_HAULER,
   ROLE_REMOTE_MINER,
   ROLE_RESERVER,
@@ -145,6 +148,20 @@ describe("remote source ranking", () => {
     const busy = Array.from({ length: 16 }, () => creep(ROLE_UPGRADER, 16));
     const passing = [33, 30, 33].map((n) => creep(ROLE_SETTLER, n)).concat(creep(ROLE_KNIGHT, 40));
     const room = home({ remotes, creeps: busy.concat(passing) });
+    expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
+  });
+
+  // Embercrag dropped a source of the Witch Weald, and its peddler dug on with
+  // no merchant to come, while nomads and caravans for two silicon deposits
+  // counted against the spawn time its remotes could use. They are raised only
+  // after the merchants, from what spawn time the remotes leave.
+  it("keeps its remotes while nomads dig the highway deposits and a squad forms for a power bank", () => {
+    const remotes = [remote("W4N5", [30])];
+    const busy = Array.from({ length: 16 }, () => creep(ROLE_UPGRADER, 16));
+    const highway = [30, 30].map((n) => creep(ROLE_DEPOSIT_MINER, n))
+      .concat([33, 33].map((n) => creep(ROLE_DEPOSIT_HAULER, n)))
+      .concat(creep(ROLE_POWER_HEALER, 50));
+    const room = home({ remotes, creeps: busy.concat(highway) });
     expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W4N5-s0"]);
   });
 

@@ -9,6 +9,11 @@ import {
   ROLE_KNIGHT,
   ROLE_WIZARD,
   ROLE_CLERIC,
+  ROLE_DEPOSIT_MINER,
+  ROLE_DEPOSIT_HAULER,
+  ROLE_POWER_ATTACKER,
+  ROLE_POWER_HEALER,
+  ROLE_POWER_CARRIER,
 } from "../config/config.roles";
 import { getThreatInfo } from "../services/services.combat";
 import { castleName, chronicle, wildsName } from "../services/services.chronicle";
@@ -328,6 +333,18 @@ const PASSING_ROLES = new Set<string>([
 
 // Spawn time per creep lifetime the home has left for remotes, after what its
 // own creeps (and anything else it keeps up) already take.
+// The highway ops' creeps are raised after the merchants, from whatever spawn
+// time the remotes leave, so they must not count against it. Counted, the
+// nomads and caravans for two silicon deposits cost Embercrag a source of the
+// Witch Weald, and its peddler dug on with no merchant to come.
+const HIGHWAY_ROLES = new Set<string>([
+  ROLE_DEPOSIT_MINER,
+  ROLE_DEPOSIT_HAULER,
+  ROLE_POWER_ATTACKER,
+  ROLE_POWER_HEALER,
+  ROLE_POWER_CARRIER,
+]);
+
 function remoteSpawnCapacity(room: Room): number {
   return room.find(FIND_MY_SPAWNS).length * CREEP_LIFE_TIME * REMOTE_SPAWN_SHARE;
 }
@@ -336,7 +353,8 @@ function remoteSpawnBudget(room: Room): number {
   let used = 0;
   for (const name in Game.creeps) {
     const c = Game.creeps[name];
-    if (REMOTE_ECONOMY_ROLES.has(c.memory.role) || PASSING_ROLES.has(c.memory.role)) continue;
+    const role = c.memory.role;
+    if (REMOTE_ECONOMY_ROLES.has(role) || PASSING_ROLES.has(role) || HIGHWAY_ROLES.has(role)) continue;
     if ((c.memory.homeRoom ?? c.room.name) !== room.name) continue;
     used += c.body.length * CREEP_SPAWN_TIME;
   }
