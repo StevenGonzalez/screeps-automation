@@ -1689,7 +1689,7 @@ function roadGoldMark(before, after) {
     return undefined;
 }
 function heraldRoadGold(creep, amount) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     const { homeRoom, targetRoom } = creep.memory;
     if (!homeRoom || !targetRoom)
         return;
@@ -1697,6 +1697,9 @@ function heraldRoadGold(creep, amount) {
     const key = `${homeRoom}>${targetRoom}`;
     const before = (_b = roads[key]) !== null && _b !== void 0 ? _b : 0;
     roads[key] = before + amount;
+    const season = (_c = Memory.annals) === null || _c === void 0 ? void 0 : _c.roads;
+    if (season)
+        season[key] = ((_d = season[key]) !== null && _d !== void 0 ? _d : 0) + amount;
     const mark = roadGoldMark(before, before + amount);
     if (!mark)
         return;
@@ -1807,9 +1810,12 @@ function heraldSeason() {
     if (known === undefined || known === season)
         return;
     const annals = Memory.annals;
-    Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0 };
+    Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0, roads: {} };
     if (annals)
         chronicle(annalsLine(known, annals));
+    const road = annals && richestRoadLine(known, annals);
+    if (road)
+        chronicle(road);
     const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
     const feast = townFeast(Game.time);
     chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
@@ -1834,6 +1840,18 @@ function annalsLine(season, a) {
     const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
     const ended = season === "winter" ? `, and with it the year ${reckoningYear(Game.time - 1)}` : "";
     return `So ends the ${season}${ended}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
+}
+function richestRoadLine(season, a) {
+    var _a, _b;
+    let best;
+    for (const [key, gold] of Object.entries((_a = a.roads) !== null && _a !== void 0 ? _a : {})) {
+        if (gold > ((_b = best === null || best === void 0 ? void 0 : best[1]) !== null && _b !== void 0 ? _b : 0))
+            best = [key, gold];
+    }
+    if (!best)
+        return undefined;
+    const [home, remote] = best[0].split(">");
+    return `The road from ${castleName(home)} to the ${wildsName(remote)} was the richest of the ${season}: ${formatK(best[1])} gold came home along it.`;
 }
 const TRADE_CHECK_PERIOD = 25;
 const TRADE_WINDOW = 1500;
@@ -4222,11 +4240,15 @@ function acquireEnergy(creep, opts) {
     const minerIds = bufferOnly
         ? new Set(getMinerContainerIds(creep.room).map((id) => id))
         : null;
+    if (creep.memory.role !== ROLE_HAULER)
+        setHaulFrom(creep, undefined);
     if (creep.memory.energySourceId) {
         const cached = Game.getObjectById(creep.memory.energySourceId);
         if (cached &&
             cached.store[RESOURCE_ENERGY] > 0 &&
             !(minerIds && minerIds.has(cached.id))) {
+            if (awaitLoad(creep, cached))
+                return true;
             const res = creep.withdraw(cached, RESOURCE_ENERGY);
             if (res === ERR_NOT_IN_RANGE) {
                 creep.moveTo(cached, { reusePath: 50 });
@@ -4268,6 +4290,10 @@ function acquireEnergy(creep, opts) {
             ? closestByPath(creep.pos, storeTargets)
             : null;
     if (storeTarget) {
+        if (awaitLoad(creep, storeTarget)) {
+            creep.memory.energySourceId = storeTarget.id;
+            return true;
+        }
         const res = creep.withdraw(storeTarget, RESOURCE_ENERGY);
         if (res === ERR_NOT_IN_RANGE) {
             creep.memory.energySourceId = storeTarget.id;
@@ -4315,6 +4341,26 @@ function acquireEnergy(creep, opts) {
         return res === OK;
     }
     return false;
+}
+function awaitLoad(creep, store) {
+    if (creep.memory.role === ROLE_HAULER)
+        return false;
+    const wait = store.structureType === STRUCTURE_CONTAINER &&
+        store.store[RESOURCE_ENERGY] < creep.store.getFreeCapacity(RESOURCE_ENERGY) &&
+        getMinerContainerIds(creep.room).includes(store.id) &&
+        store.store.getFreeCapacity() > 0 &&
+        creep.pos.isNearTo(store) &&
+        minerDiggingInto(creep.room, store.id);
+    setHaulFrom(creep, wait ? store.id : undefined);
+    return wait;
+}
+function minerDiggingInto(room, containerId) {
+    return room.find(FIND_MY_CREEPS).some((c) => {
+        if (c.memory.role !== ROLE_MINER || c.spawning || c.memory.assignedContainerId !== containerId)
+            return false;
+        const source = c.memory.assignedSourceId ? Game.getObjectById(c.memory.assignedSourceId) : null;
+        return !!source && source.energy > 0;
+    });
 }
 function pickupDroppedResource(creep, resource) {
     const res = creep.pickup(resource);
@@ -4896,6 +4942,8 @@ function runRepairer(creep) {
         }
         const container = getClosestContainerOrStorage(creep);
         if (container) {
+            if (awaitLoad(creep, container))
+                return;
             if (creep.withdraw(container, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
                 creep.moveTo(container, { reusePath: 50 });
             }
