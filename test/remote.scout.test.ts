@@ -314,6 +314,26 @@ describe("discoverDeepRooms", () => {
     discoverDeepRooms(room);
     expect(homeMem.pendingScoutRooms).toEqual(["W2N1", "W3N1", "W4N1"]);
   });
+
+  it("leaves a room to the castle whose raven is already bound for it", () => {
+    const line = ["W1N1", "W2N1", "W3N1", "W4N1"];
+    Object.assign((g.Game as any).map, {
+      describeExits: (rn: string) => {
+        const i = line.indexOf(rn);
+        const exits: Record<string, string> = {};
+        if (i > 0) exits["3"] = line[i - 1];
+        if (i < line.length - 1) exits["7"] = line[i + 1];
+        return exits;
+      },
+      getRoomStatus: () => ({ status: "normal" }),
+      findRoute: () => [],
+    });
+    const room = { name: HOME, memory: homeMem, controller: { my: true } } as unknown as Room;
+    (g.Game as any).rooms = { [HOME]: room, W9N9: { name: "W9N9", controller: { my: true } } };
+    (g.Memory as Memory).rooms.W9N9 = { pendingScoutRooms: ["W3N1"] } as RoomMemory;
+    discoverDeepRooms(room);
+    expect(homeMem.pendingScoutRooms).toEqual(["W2N1", "W4N1"]);
+  });
 });
 
 describe("pruneRemoteRooms", () => {

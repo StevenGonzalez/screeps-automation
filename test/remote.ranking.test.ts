@@ -17,6 +17,7 @@ import {
   shouldSpawnRemoteHauler,
   shouldSpawnRemoteMiner,
   shouldSpawnReserver,
+  shouldSpawnScout,
   spawnRemoteHauler,
 } from "../src/orchestrators/orchestrator.spawning.remote";
 import {
@@ -29,6 +30,7 @@ import {
   ROLE_REMOTE_HAULER,
   ROLE_REMOTE_MINER,
   ROLE_RESERVER,
+  ROLE_SCOUT,
   ROLE_SETTLER,
   ROLE_UPGRADER,
 } from "../src/config/config.roles";
@@ -687,6 +689,19 @@ describe("a source two castles contend for", () => {
     expect(sourceIds(getActiveRemoteRooms(contested(undefined, 2300, false)))).toEqual([]);
     clock += 1;
     expect(sourceIds(getActiveRemoteRooms(contested(undefined, 800, false)))).toEqual(["W4N5-s0"]);
+  });
+});
+
+describe("ravens", () => {
+  it("sends one raven at a time to take the castle's rooms in turn", () => {
+    const room = home({ remotes: [] });
+    room.memory.pendingScoutRooms = ["W1N9", "W2N9", "W3N9"];
+    expect(shouldSpawnScout(room)).toBe(true);
+    // The creeps by role are read once a tick.
+    clock++;
+    const out = home({ remotes: [], creeps: [creep(ROLE_SCOUT, 1, { targetRoom: "W1N9" })] });
+    out.memory.pendingScoutRooms = ["W1N9", "W2N9", "W3N9"];
+    expect(shouldSpawnScout(out)).toBe(false);
   });
 });
 

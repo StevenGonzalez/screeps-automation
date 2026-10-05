@@ -229,6 +229,13 @@ export function discoverDeepRooms(room: Room): void {
   const ownedNames = new Set(
     Object.keys(Game.rooms).filter((rn) => Game.rooms[rn].controller?.my)
   );
+  // Rooms a castle's raven is already bound for. Embercrag and Thornbarrow
+  // both listed the same four rooms out west, and a raven from each walked to
+  // every one of them.
+  const queued = new Set<string>();
+  for (const rn of ownedNames) {
+    for (const r of Memory.rooms[rn]?.pendingScoutRooms ?? []) queued.add(r);
+  }
 
   const intel = Memory.intel ?? {};
   const isFresh = (rn: string): boolean => {
@@ -264,6 +271,7 @@ export function discoverDeepRooms(room: Room): void {
         if (isFresh(neighbor)) continue;
         if ((room.memory.scoutSkipUntil?.[neighbor] ?? 0) > Game.time) continue;
         if (room.memory.pendingScoutRooms.includes(neighbor)) continue;
+        if (queued.has(neighbor)) continue;
         if (room.memory.pendingScoutRooms.length >= MAX_PENDING_SCOUT_ROOMS) return;
 
         const route = Game.map.findRoute(room.name, neighbor);

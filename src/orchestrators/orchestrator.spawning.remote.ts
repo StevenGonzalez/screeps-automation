@@ -437,11 +437,14 @@ function getScoutsForRoom(room: Room): Creep[] {
   return getCreepsByRole(ROLE_SCOUT).filter((c) => c.memory.homeRoom === room.name);
 }
 
+// One raven at a time, taking the castle's rooms in turn (assignNextRoom in
+// role.scout). A raven for every room on the list sent twelve out at once when
+// the scouts first went three rooms deep, each spending 0.4 CPU a tick on its
+// long walk, and the realm stood at its CPU limit.
 export function shouldSpawnScout(room: Room): boolean {
   const pending = room.memory.pendingScoutRooms ?? [];
   if (pending.length === 0) return false;
-  const assignedRooms = new Set(getScoutsForRoom(room).map((c) => c.memory.targetRoom));
-  return pending.some((r) => !assignedRooms.has(r));
+  return getScoutsForRoom(room).length === 0 && getRoomSpawningCount(room, ROLE_SCOUT) === 0;
 }
 
 export function spawnScout(room: Room, spawn: StructureSpawn): boolean {
