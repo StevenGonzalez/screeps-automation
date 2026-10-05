@@ -1852,7 +1852,18 @@ function heraldCensus() {
         if ((_a = Game.rooms[name].controller) === null || _a === void 0 ? void 0 : _a.my)
             castles++;
     const held = castles === 1 ? "its one castle" : `its ${castles} castles`;
-    chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.`);
+    chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.${neighboursLine()}`);
+}
+const NOT_LORDS = new Set(["Invader", "Source Keeper"]);
+const NEIGHBOURS_NAMED = 3;
+function neighboursLine() {
+    var _a;
+    const lords = Object.values((_a = Memory.players) !== null && _a !== void 0 ? _a : {})
+        .filter((p) => !NOT_LORDS.has(p.username))
+        .sort((a, b) => b.roomCount - a.roomCount)
+        .slice(0, NEIGHBOURS_NAMED)
+        .map((p) => lordName(p.username));
+    return lords.length ? ` Beyond its borders the scouts know of ${andList(lords)}.` : "";
 }
 function annalsLine(season, a) {
     const whole = a.since <= Game.time - TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON;
@@ -9602,7 +9613,7 @@ function isHighwayRoom$2(roomName) {
 }
 
 const SCOUT_HOSTILE_DURATION = 2000;
-const SCOUT_TRAVEL_BUDGET = 150;
+const SCOUT_TRAVEL_BUDGET = 300;
 function runScout(creep) {
     var _a;
     const homeRoom = creep.memory.homeRoom;
@@ -9652,7 +9663,17 @@ function assignNextRoom(creep, homeRoomName) {
             claimed.add(c.memory.targetRoom);
         }
     }
-    const next = pending.find((r) => !claimed.has(r));
+    let next;
+    let nearest = Infinity;
+    for (const r of pending) {
+        if (claimed.has(r))
+            continue;
+        const d = Game.map.getRoomLinearDistance(creep.room.name, r);
+        if (d < nearest) {
+            nearest = d;
+            next = r;
+        }
+    }
     if (!next)
         return false;
     creep.memory.targetRoom = next;
