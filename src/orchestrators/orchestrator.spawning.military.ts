@@ -592,6 +592,34 @@ function remoteKnightsNeeded(room: Room, remote: RemoteRoomData): number {
   return meleeDefendersWin(remote.invaderStrength, body, n) ? n : Infinity;
 }
 
+// A lone knight is raised only as big as the raid it rides against, taken at
+// REMOTE_KNIGHT_MARGIN times its last-seen strength. Every remote knight was a
+// full body: Dragon Knight Sybil, 48 parts, took 144 ticks to raise after a
+// wait for a full purse, while a single ten-part raider of Zagra One-Eye's cut
+// down four vendors in the Crow Glen. Sixteen parts would have beaten it.
+// Null when the raid wants the biggest knight the castle can raise.
+const REMOTE_KNIGHT_MARGIN = 2;
+
+function remoteKnightBody(room: Room, roomName: string): BodyPartConstant[] | null {
+  const remote = room.memory.remoteRooms?.find((r) => r.roomName === roomName);
+  const s = remote?.invaderStrength;
+  if (!s) return null;
+  const enemy = {
+    heal: s.heal * REMOTE_KNIGHT_MARGIN,
+    damage: s.damage * REMOTE_KNIGHT_MARGIN,
+    hits: s.hits * REMOTE_KNIGHT_MARGIN,
+  };
+  const groupCost = calculateBodyPartCost([TOUGH, ATTACK, MOVE, MOVE]);
+  const full = buildKnightBody(bodyBudget(room, "capacity")).length / 4;
+  for (let groups = 1; groups < full; groups++) {
+    const body = buildKnightBody(groups * groupCost);
+    if (meleeDefendersWin(enemy, body, 1)) return body;
+  }
+  return null;
+}
+
+const attackParts = (body: BodyPartConstant[]) => body.filter((p) => p === ATTACK).length;
+
 // Knights raised for one remote ride out together. Each used to set out the
 // moment it left the spawn, and alone could not out-hit the healers of the
 // Misty Thicket's raiders: Rohese, then Agnes, fell one after the other where
@@ -650,29 +678,36 @@ export function sendIdleRemoteKnights(room: Room): void {
     if (raided(m.targetRoom) || (knight.ticksToLive ?? 0) < REMOTE_KNIGHT_MIN_TTL) continue;
     const target = findRemoteInvaderTarget(room);
     if (!target) return;
+    // A knight raised for a lesser raid is left at home, so as not to stand
+    // in the way of the knight this raid calls for.
+    const wanted = remoteKnightBody(room, target) ?? buildKnightBody(bodyBudget(room, "capacity"));
+    if (attackParts(knight.body.map((b) => b.type)) < attackParts(wanted)) continue;
     m.targetRoom = target;
   }
 }
 
 const REMOTE_DEFENDER_BODY_WAIT = "remoteDefender";
 
-// Nothing at home is at stake, so the defender always waits for a full body.
+// Nothing at home is at stake, so the defender waits for a full body, unless
+// the raid wants a smaller knight than that and the purse already covers it.
 export function shouldSpawnRemoteDefender(room: Room): boolean {
-  const needed = findRemoteInvaderTarget(room) !== null;
-  if (waitForFullBody(room, REMOTE_DEFENDER_BODY_WAIT, needed)) return false;
-  return needed;
+  const target = findRemoteInvaderTarget(room);
+  const sized = target ? remoteKnightBody(room, target) : null;
+  const ready = !!sized && room.energyAvailable >= calculateBodyPartCost(sized);
+  if (waitForFullBody(room, REMOTE_DEFENDER_BODY_WAIT, target !== null && !ready)) return false;
+  return target !== null;
 }
 
 export function spawnRemoteDefender(room: Room, spawn: StructureSpawn): boolean {
   const target = findRemoteInvaderTarget(room);
   if (!target) return false;
-  const allowedEnergy = bodyBudget(room, "available");
+  const sized = remoteKnightBody(room, target);
+  const allowedEnergy = Math.min(bodyBudget(room, "available"), sized ? calculateBodyPartCost(sized) : Infinity);
   const body = buildKnightBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
-  const attackParts = body.filter((p) => p === ATTACK).length;
   const toughParts = body.filter((p) => p === TOUGH).length;
   const moveParts = body.filter((p) => p === MOVE).length;
-  const queue = buildBoostQueue(room, "melee", attackParts, toughParts, moveParts);
+  const queue = buildBoostQueue(room, "melee", attackParts(body), toughParts, moveParts);
   const res = trackedSpawn(room, spawn, body, {
     memory: {
       role: ROLE_KNIGHT,

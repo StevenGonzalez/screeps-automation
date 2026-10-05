@@ -22,6 +22,7 @@ import {
 import {
   sendIdleRemoteKnights,
   shouldSpawnRemoteDefender,
+  spawnRemoteDefender,
 } from "../src/orchestrators/orchestrator.spawning.military";
 import {
   ROLE_KNIGHT,
@@ -666,8 +667,76 @@ describe("remote knights", () => {
     expect(shouldSpawnRemoteDefender(home({ remotes: [raided()], rcl: 2 }))).toBe(false);
   });
 
-  const knight = (targetRoom: string, ticksToLive: number) =>
-    Object.assign(creep(ROLE_KNIGHT, 10, { targetRoom }), { ticksToLive });
+  // A 1300-gold castle's full knight has six ATTACK.
+  const knight = (targetRoom: string, ticksToLive: number, attack = 6) =>
+    Object.assign(creep(ROLE_KNIGHT, 0, { targetRoom }), {
+      ticksToLive,
+      body: Array(attack).fill({ type: "attack", hits: 100 }),
+    });
+
+  // One Invader of ten parts: 1,000 hits, a melee and a ranged strike.
+  const loneRaider = { heal: 0, damage: 40, hits: 1000 };
+
+  function purse(room: Room, energy: number): Room {
+    (room as { energyAvailable: number }).energyAvailable = energy;
+    return room;
+  }
+
+  function raise(room: Room): string[][] {
+    const bodies: string[][] = [];
+    const spawn = {
+      name: "Spawn1",
+      spawning: null,
+      spawnCreep(body: string[]) {
+        bodies.push(body);
+        return g.OK;
+      },
+    } as unknown as StructureSpawn;
+    spawnRemoteDefender(room, spawn);
+    return bodies;
+  }
+
+  it("raises a knight only as big as a lone raider calls for, without waiting on a full purse", () => {
+    g.ATTACK_POWER = 30;
+    // At twice the raider's strength, four groups are the fewest that outlast
+    // its blows while they cut down its hits.
+    const room = purse(home({ remotes: [{ ...raided(), invaderStrength: loneRaider }] }), 700);
+    expect(shouldSpawnRemoteDefender(room)).toBe(false);
+    expect(shouldSpawnRemoteDefender(purse(room, 800))).toBe(true);
+    const bodies = raise(purse(room, 1300));
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toHaveLength(16);
+    expect(bodies[0].filter((p) => p === "attack")).toHaveLength(4);
+  });
+
+  it("waits for a full purse when the raid calls for the biggest knight", () => {
+    g.ATTACK_POWER = 30;
+    const strong = { ...raided(), invaderStrength: { heal: 0, damage: 100, hits: 3000 } };
+    expect(shouldSpawnRemoteDefender(purse(home({ remotes: [strong] }), 800))).toBe(false);
+    clock += 1;
+    const room = purse(home({ remotes: [{ ...strong }] }), 1300);
+    expect(shouldSpawnRemoteDefender(room)).toBe(true);
+    expect(raise(room)[0].filter((p) => p === "attack")).toHaveLength(6);
+  });
+
+  it("leaves a knight raised for a lesser raid at home, and raises one fit for this", () => {
+    const small = knight("W6N5", 1000, 4);
+    const room = home({ remotes: [remote("W6N5", [60]), raided()], creeps: [small] });
+    sendIdleRemoteKnights(room);
+    expect(small.memory.targetRoom).toBe("W6N5");
+    expect(shouldSpawnRemoteDefender(room)).toBe(true);
+  });
+
+  it("sends a small knight to a raid no bigger than it was raised for", () => {
+    g.ATTACK_POWER = 30;
+    const small = knight("W6N5", 1000, 4);
+    const room = home({
+      remotes: [remote("W6N5", [60]), { ...raided(), invaderStrength: loneRaider }],
+      creeps: [small],
+    });
+    sendIdleRemoteKnights(room);
+    expect(small.memory.targetRoom).toBe("W4N5");
+  });
 
   it("sends a knight standing watch for a clear remote to one raiders hold, rather than raise another", () => {
     const watch = knight("W6N5", 1000);
