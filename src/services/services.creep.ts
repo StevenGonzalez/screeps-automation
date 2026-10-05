@@ -1,5 +1,5 @@
 import { keepSignature, remoteSignature } from "../config/signatures";
-import { findInvaderCore, invaderStrength, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
+import { findInvaderCore, invaderStrength, isInvaderCreep, isPlayerCreep, isSourceKeeperRoom } from "./services.combat";
 import { WARBAND_BOUNTY_RAIDS, lordName, ordinal, raiseWarband, tally, wildsName, warbandIn } from "./services.chronicle";
 import { spreadWord } from "./services.herald";
 import { getRoomBuildTarget, findClosestRepairTarget } from "./services.creep.maintenance";
@@ -322,20 +322,25 @@ export function isAssignedRemoteInvaded(creep: Creep): boolean {
 
 export function clearRemoteInvader(creep: Creep): void {
   const entry = assignedRemoteEntry(creep);
-  if (entry) clearRemoteInvaderEntry(entry);
+  if (entry) clearRemoteInvaderEntry(entry, creep.room);
 }
 
-// `entry` is a remote seen clear of invaders this tick.
-export function clearRemoteInvaderEntry(entry: RemoteRoomData): void {
+// `entry` is a remote seen clear of invaders this tick, as `room`. A raider
+// stripped of its weapons is no threat, so the vendors take to the road, but the
+// raid is told as over only once it falls: the Misty Thicket was told rid of
+// Mordrek the Flayer's raiders a tick before Dragon Knight Morwen slew the last.
+export function clearRemoteInvaderEntry(entry: RemoteRoomData, room: Room): void {
   if (entry.invaderUntil !== undefined) {
-    if (entry.invaderUntil > Game.time) {
-      const band = warbandIn(entry.roomName);
-      const text = band
-        ? `The ${wildsName(entry.roomName)} is rid of ${band}'s raiders. The vendors take to the road.`
-        : `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
-      tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
-    }
+    if (entry.invaderUntil > Game.time) entry.raidEnding = true;
     entry.invaderUntil = undefined;
+  }
+  if (entry.raidEnding && !room.find(FIND_HOSTILE_CREEPS).some(isInvaderCreep)) {
+    delete entry.raidEnding;
+    const band = warbandIn(entry.roomName);
+    const text = band
+      ? `The ${wildsName(entry.roomName)} is rid of ${band}'s raiders. The vendors take to the road.`
+      : `The ${wildsName(entry.roomName)} is safe again. The vendors take to the road.`;
+    tally(`safe:${entry.roomName}`, 0, () => text, RAID_CHRONICLE_WINDOW);
   }
   delete entry.invaderStrength;
 }

@@ -397,7 +397,7 @@ export function refreshVisibleRemoteRooms(room: Room) {
     // castle whose own creeps walked in used to clear its mark: the other's
     // stood for the whole window, and Thornbarrow sent a knight to the Crow
     // Glen after Embercrag's had already cleared it.
-    if (!core) clearRemoteInvaderEntry(remote);
+    if (!core) clearRemoteInvaderEntry(remote, visible);
 
     const sources = visible.find(FIND_SOURCES);
     for (const source of sources) {

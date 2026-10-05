@@ -151,7 +151,7 @@ describe("remote knight", () => {
     runKnight(Object.assign(knightIn(HOME), { name: "Dragon Knight Ralph" }));
     // The raid ends, and the warlord comes back for another.
     g.Game = { time: 2450, rooms: {}, creeps: {} };
-    clearRemoteInvaderEntry(remoteEntry);
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
     g.Game = { time: 3500, rooms: {}, creeps: {} };
     markRemoteInvader(remoteEntry, remoteRoom);
     runKnight(Object.assign(knightIn(HOME), { name: "Dragon Knight Hamo" }));
@@ -202,7 +202,7 @@ describe("raids in the chronicle", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
     runKnight(knightIn(HOME));
     g.Game = { time: 1400 };
-    clearRemoteInvaderEntry(remoteEntry);
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
@@ -211,12 +211,44 @@ describe("raids in the chronicle", () => {
     ]);
   });
 
+  it("tells the raid over only once its last raider has fallen, though the vendors go back while it stands unarmed", () => {
+    markRemoteInvader(remoteEntry, remoteRoom);
+    const unarmed = { owner: { username: "Invader" }, body: [{ type: "move", hits: 50 }] };
+    const stillHeld = { name: REMOTE, find: (type: number) => (type === g.FIND_HOSTILE_CREEPS ? [unarmed] : []) } as unknown as Room;
+    g.Game = { time: 1400 };
+    clearRemoteInvaderEntry(remoteEntry, stillHeld);
+    expect(remoteEntry.invaderUntil).toBeUndefined();
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
+    ]);
+
+    g.Game = { time: 1401 };
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
+    g.Game = { time: 1402 };
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
+    g.Game = { time: 9000 };
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
+      "The Shadow March is rid of Brakka the Gaunt's raiders. The vendors take to the road.",
+    ]);
+  });
+
+  it("tells nothing of a raid whose mark ran out before the remote was seen again", () => {
+    markRemoteInvader(remoteEntry, remoteRoom);
+    g.Game = { time: 2600 };
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
+    ]);
+  });
+
   it("names one warlord when a second castle sees the raid a few ticks later", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
     g.Game = { time: 1004 };
     markRemoteInvader({ ...remoteEntry, invaderUntil: undefined }, remoteRoom);
     g.Game = { time: 1400 };
-    clearRemoteInvaderEntry(remoteEntry);
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
 
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "Raiders under Brakka the Gaunt fell upon the vendors in the Shadow March.",
@@ -226,10 +258,10 @@ describe("raids in the chronicle", () => {
 
   it("brings the same warlord back raid after raid", () => {
     markRemoteInvader(remoteEntry, remoteRoom);
-    clearRemoteInvaderEntry(remoteEntry);
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
     g.Game = { time: 6000 };
     markRemoteInvader(remoteEntry, remoteRoom);
-    clearRemoteInvaderEntry(remoteEntry);
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
     g.Game = { time: 9000 };
     markRemoteInvader(remoteEntry, remoteRoom);
 
@@ -254,7 +286,7 @@ describe("raids in the chronicle", () => {
     const first = (g.Memory as Memory).warbands![REMOTE];
     for (let i = 0; i < 5; i++) warbandLoss(REMOTE);
     expect(first.broken).toBe(true);
-    clearRemoteInvaderEntry(remoteEntry);
+    clearRemoteInvaderEntry(remoteEntry, remoteRoom);
     g.Game = { time: 6000 };
     markRemoteInvader(remoteEntry, remoteRoom);
 

@@ -188,6 +188,9 @@ declare global {
     // The player whose creeps or reservation made the remote hostile, if known.
     rival?: string;
     invaderUntil?: number;
+    // The raid is over but a raider, stripped of its weapons, may still stand
+    // there; the chronicle tells it over once none does.
+    raidEnding?: boolean;
     // Last Invader force seen there (creeps plus any core), to size the defenders.
     invaderStrength?: { heal: number; damage: number; hits: number };
   }
