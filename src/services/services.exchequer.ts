@@ -73,54 +73,65 @@ export function recordSpend(roomName: string, kind: LedgerSpend, amount: number)
   add(windowFor(room).exact, kind, amount);
 }
 
-// Remote room name -> the castle that works it.
-function remoteHomes(homes: Room[]): Record<string, string> {
-  const map: Record<string, string> = {};
+// The rooms the castles work as remotes.
+function remoteRooms(homes: Room[]): Set<string> {
+  const names = new Set<string>();
   for (const home of homes) {
-    for (const r of home.memory.remoteRooms ?? []) map[r.roomName] = home.name;
+    for (const r of home.memory.remoteRooms ?? []) names.add(r.roomName);
   }
-  return map;
+  return names;
 }
 
-function isMine(id: string): boolean {
+// The books of the castle a creep of ours works for. Two castles can share a
+// remote, and its vendors' gold went whole to whichever was listed last.
+function creepBooks(id: string): LedgerWindow | undefined {
   const obj = Game.getObjectById(id as Id<Creep>);
-  return !!obj && obj.my;
+  const castle = obj?.my ? Game.rooms[obj.memory.homeRoom ?? ""] : undefined;
+  return castle?.controller?.my ? windowFor(castle) : undefined;
 }
 
-// Adds one tick of a room's events to the books of the castle `home`. In a
-// remote room other players' creeps can act too, so there each event's actor
-// is checked.
-function readEvents(room: Room, w: LedgerWindow, isHome: boolean): void {
+// Adds one tick of a room's events to the books: a castle's own to its books
+// `home`, a remote's to the books of each acting creep's castle. In a remote
+// other players' creeps can act too, and theirs are counted nowhere.
+function readEvents(room: Room, home?: LedgerWindow): void {
   const events = room.getEventLog();
   if (events.length === 0) return;
   const sources = new Set(room.find(FIND_SOURCES).map((s) => s.id as string));
-  const towers = isHome
+  const towers = home
     ? new Set((room.memory.towerIds ?? []).map((id) => id as string))
     : undefined;
   for (const e of events) {
     switch (e.event) {
-      case EVENT_HARVEST:
+      case EVENT_HARVEST: {
         if (!sources.has(e.data.targetId)) break;
-        if (!isHome && !isMine(e.objectId)) break;
-        add(w.sampled, isHome ? "mines" : "vendors", e.data.amount);
+        const w = home ?? creepBooks(e.objectId);
+        if (w) add(w.sampled, home ? "mines" : "vendors", e.data.amount);
         break;
+      }
       case EVENT_UPGRADE_CONTROLLER:
-        if (isHome) add(w.sampled, "enchant", e.data.energySpent ?? 0);
+        if (home) add(home.sampled, "enchant", e.data.energySpent ?? 0);
         break;
-      case EVENT_BUILD:
+      case EVENT_BUILD: {
         // The server's build event carries no energySpent, whatever the typings
         // say, so masonry always read nothing. Unboosted, a point of progress
         // costs a point of gold.
-        if (isHome || isMine(e.objectId)) add(w.sampled, "masonry", e.data.energySpent ?? e.data.amount);
+        const w = home ?? creepBooks(e.objectId);
+        if (w) add(w.sampled, "masonry", e.data.energySpent ?? e.data.amount);
         break;
-      case EVENT_REPAIR:
+      }
+      case EVENT_REPAIR: {
         // A tower pays a flat TOWER_ENERGY_COST a repair, whatever it mends.
-        if (towers?.has(e.objectId)) add(w.sampled, "smithy", TOWER_ENERGY_COST);
-        else if (isHome || isMine(e.objectId)) add(w.sampled, "smithy", e.data.energySpent ?? 0);
+        if (towers?.has(e.objectId)) {
+          add(home!.sampled, "smithy", TOWER_ENERGY_COST);
+          break;
+        }
+        const w = home ?? creepBooks(e.objectId);
+        if (w) add(w.sampled, "smithy", e.data.energySpent ?? 0);
         break;
+      }
       case EVENT_ATTACK:
       case EVENT_HEAL:
-        if (towers?.has(e.objectId)) add(w.sampled, "towers", TOWER_ENERGY_COST);
+        if (towers?.has(e.objectId)) add(home!.sampled, "towers", TOWER_ENERGY_COST);
         break;
     }
   }
@@ -167,17 +178,15 @@ export function loop(): void {
   for (const home of homes) windowFor(home);
 
   if (Game.time % SAMPLE_EVERY === 0) {
-    const remotes = remoteHomes(homes);
     for (const home of homes) {
       const w = windowFor(home);
       w.samples++;
-      readEvents(home, w, true);
+      readEvents(home, w);
     }
-    for (const remoteName in remotes) {
+    for (const remoteName of remoteRooms(homes)) {
       const remote = Game.rooms[remoteName];
-      const home = Game.rooms[remotes[remoteName]];
-      if (!remote || !home || remote.controller?.my) continue;
-      readEvents(remote, windowFor(home), false);
+      if (!remote || remote.controller?.my) continue;
+      readEvents(remote);
     }
   }
 

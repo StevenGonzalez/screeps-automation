@@ -46,7 +46,7 @@ describe("exchequer", () => {
     vi.resetModules();
     ex = await import("../src/services/services.exchequer");
     events = {};
-    objects = { peddler: { my: true }, stranger: { my: false } };
+    objects = { peddler: { my: true, memory: { homeRoom: HOME } }, stranger: { my: false } };
     storageEnergy = 10_000;
     g.Memory = {};
     g.Game = {
@@ -106,6 +106,26 @@ describe("exchequer", () => {
     for (let t = 1186; t <= 1285; t++) runTo(t);
     // 70% of the old rate, 30% of the new one.
     expect((g.Memory as Memory).exchequer![HOME].in.mines).toBe(13);
+  });
+
+  it("books a shared remote's gold to the castle of each vendor that dug it", () => {
+    // Both castles list the remote. Its gold all went to whichever was listed
+    // last, and the other's books showed no vendors at all.
+    const OTHER = "W2N2";
+    (g.Game as { rooms: Record<string, unknown> }).rooms[OTHER] = room(OTHER, true);
+    objects.theirs = { my: true, memory: { homeRoom: OTHER } };
+    events[REMOTE] = [
+      { event: 5, objectId: "peddler", data: { targetId: "src2", amount: 10 } },
+      { event: 5, objectId: "theirs", data: { targetId: "src2", amount: 6 } },
+      { event: 4, objectId: "theirs", data: { targetId: "container", amount: 5 } },
+    ];
+    for (let t = 1000; t <= 1100; t++) runTo(t);
+
+    const books = (g.Memory as Memory).exchequer!;
+    expect(books[HOME].in.vendors).toBe(10);
+    expect(books[OTHER].in.vendors).toBe(6);
+    expect(books[HOME].out.masonry).toBe(0);
+    expect(books[OTHER].out.masonry).toBe(5);
   });
 
   it("describes the books in short lines", () => {
