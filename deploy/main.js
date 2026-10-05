@@ -2432,7 +2432,10 @@ function upgraderStorageFloor(room) {
 }
 function wallsFunded(room) {
     const storage = room.storage;
-    return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
+    if (!storage) {
+        return !room.find(FIND_CONSTRUCTION_SITES).some((s) => s.structureType === STRUCTURE_STORAGE);
+    }
+    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
 }
 function upgradingFunded(room) {
     const storage = room.storage;
@@ -6739,11 +6742,22 @@ function manageSellOrders(room, terminal) {
         if (!NON_SELLABLE.has(rc) && !feedsLocalRecipe(room, rc))
             candidates.add(rc);
     }
+    const rawKeep = new Map();
+    for (const { resource, keep } of saleStock(room)) {
+        if (BASE_MINERALS.includes(resource))
+            continue;
+        rawKeep.set(resource, keep);
+        candidates.add(resource);
+    }
     for (const resource of candidates) {
+        const keep = rawKeep.get(resource);
         const surplus = mineral && resource === mineral.mineralType
             ? sellableMineral(room, terminal, mineral.mineralType)
-            : (_a = terminal.store.getUsedCapacity(resource)) !== null && _a !== void 0 ? _a : 0;
-        if (surplus < MARKET_MAKER_CONFIG.MIN_SELL_SURPLUS)
+            : keep !== undefined
+                ? sellableRaw(room, terminal, resource, keep)
+                : (_a = terminal.store.getUsedCapacity(resource)) !== null && _a !== void 0 ? _a : 0;
+        const minSurplus = keep !== undefined ? TERMINAL_CONFIG.MINERAL_SELL_THRESHOLD : MARKET_MAKER_CONFIG.MIN_SELL_SURPLUS;
+        if (surplus < minSurplus)
             continue;
         const fair = fairSellPrice(resource);
         if (fair === undefined)
@@ -17127,7 +17141,9 @@ const repairerTargetCache = {};
 const WALL_SMITH_SPARE = 10000;
 function wallSmithFunded(room) {
     const storage = room.storage;
-    return !storage || storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) + WALL_SMITH_SPARE;
+    if (!storage)
+        return wallsFunded(room);
+    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) + WALL_SMITH_SPARE;
 }
 function getRepairerPopulationTarget(room) {
     var _a, _b;
