@@ -11068,6 +11068,8 @@ function pickRemoteSources(room) {
         if (c.memory.homeRoom === room.name)
             return false;
         const other = Game.rooms[(_a = c.memory.homeRoom) !== null && _a !== void 0 ? _a : ""];
+        if (other && outranks(other, room))
+            return false;
         const s = c.memory.remoteSourceId && remoteSourceData(room, c.memory.targetRoom, c.memory.remoteSourceId);
         const reclaim = Game.time - ((_b = (s && s.pickedAt)) !== null && _b !== void 0 ? _b : 0) <= REMOTE_RECLAIM_HOLD;
         return !(other && outranks(room, other) && reclaim);
@@ -11085,6 +11087,7 @@ function pickRemoteSources(room) {
     for (const r of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
         if (!isRemoteEligible(room, r, "reserve", true))
             continue;
+        const shared = smallerCastleCouldWork(room, r.roomName);
         for (const s of r.sources) {
             if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId))
                 continue;
@@ -11092,15 +11095,15 @@ function pickRemoteSources(room) {
                 continue;
             const plan = planRemoteSource(room, r, s);
             if (plan.profit > 0)
-                plans.push({ source: s, ...plan });
+                plans.push({ source: s, shared, ...plan });
         }
     }
-    plans.sort((a, b) => b.profit - a.profit);
+    plans.sort((a, b) => Number(a.shared) - Number(b.shared) || b.profit - a.profit);
     const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
     let budget = remoteSpawnBudget(room);
-    const picked = new Map();
+    const taken = [];
     for (const p of plans) {
-        if (picked.size >= MAX_REMOTE_SOURCES)
+        if (taken.length >= MAX_REMOTE_SOURCES)
             break;
         const reserve = held(p.source) ? 0 : headroom;
         if (p.spawnTime > budget - reserve) {
@@ -11108,9 +11111,11 @@ function pickRemoteSources(room) {
             continue;
         }
         budget -= p.spawnTime;
-        picked.set(p.source.sourceId, picked.size);
+        taken.push(p);
         p.source.pickedAt = Game.time;
     }
+    taken.sort((a, b) => b.profit - a.profit);
+    const picked = new Map(taken.map((p, i) => [p.source.sourceId, i]));
     remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
     return picked;
 }
@@ -11411,6 +11416,17 @@ function outranks(castle, other) {
         return false;
     return (castle.energyCapacityAvailable > other.energyCapacityAvailable ||
         (castle.energyCapacityAvailable === other.energyCapacityAvailable && castle.name < other.name));
+}
+function smallerCastleCouldWork(room, roomName) {
+    var _a, _b;
+    for (const name in Game.rooms) {
+        const other = Game.rooms[name];
+        if (!((_a = other.controller) === null || _a === void 0 ? void 0 : _a.my) || other.controller.level < 3 || !outranks(room, other))
+            continue;
+        if ((_b = other.memory.remoteRooms) === null || _b === void 0 ? void 0 : _b.some((r) => r.roomName === roomName))
+            return true;
+    }
+    return false;
 }
 function worksRemoteSource(room, sourceId) {
     return pickRemoteSources(room).has(sourceId);
