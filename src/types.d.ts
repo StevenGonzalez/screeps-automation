@@ -315,6 +315,9 @@ declare global {
     // Set once the herald has seen the castle's vendors on the road, whether or
     // not it told of their setting out (services.herald).
     heraldVendors?: boolean;
+    // The blueprint the herald last looked at (its tick), and whether buildings
+    // still stood out of its place then (services.herald).
+    heraldKeep?: { at: number; moving: boolean };
     sourceIds?: Id<Source>[];
     mineralId?: Id<Mineral>;
     containerIds?: Id<StructureContainer>[];

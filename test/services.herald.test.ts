@@ -8,6 +8,7 @@ g.FIND_MY_STRUCTURES = 108;
 g.FIND_MY_SPAWNS = 112;
 g.FIND_STRUCTURES = 107;
 g.FIND_MINERALS = 116;
+g.FIND_MY_CONSTRUCTION_SITES = 114;
 g.STRUCTURE_ROAD = "road";
 g.STRUCTURE_CONTAINER = "container";
 g.STRUCTURE_WALL = "constructedWall";
@@ -846,6 +847,46 @@ describe("herald", () => {
     expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
       "The smiths of Ravenhold have raised its walls a hundred thousand strong.",
       "The smiths of Ravenhold have raised its walls a million strong.",
+    ]);
+  });
+
+  it("tells when a castle is laid out anew around its keep, and when the last work out of place is raised again", () => {
+    g.Memory = { rooms: { [ROOM]: { townName: "Ravenhold" } } };
+    const work = (x: number, structureType = "extension") => ({ structureType, pos: { x, y: 5 } });
+    const plan = (at: number, s: string) => ({ v: 3, at, anchor: { x: 5, y: 9 }, hub: { x: 5, y: 11 }, s, exits: {} });
+    let built = [work(1), work(2), work(7, "lab"), work(8)];
+    let sites: unknown[] = [];
+    const room = {
+      name: ROOM,
+      controller: { my: true, level: 6 },
+      memory: { blueprint: plan(10, "E1,5,2;E2,5,2;L7,5,6;E8,5,2") } as unknown as RoomMemory,
+      getEventLog: () => "[]",
+      find: (type: number) =>
+        type === g.FIND_MY_STRUCTURES ? built : type === g.FIND_MY_CONSTRUCTION_SITES ? sites : [],
+    };
+    const at = (time: number) => {
+      g.Game = { time, gcl: { level: 1 }, market: NO_TRADE, rooms: { [ROOM]: room }, creeps: {} };
+      heraldRooms();
+    };
+    at(1000);
+    // The new plan leaves two coffers and a lab where it wants none.
+    room.memory.blueprint = plan(1050, "E1,5,2;E3,5,2;E4,5,2;L6,5,6") as RoomMemory["blueprint"];
+    at(1100);
+    built = [work(1), work(2), work(7, "lab")];
+    sites = [{ structureType: "extension" }];
+    at(1200);
+    // The last one pulled down is not back up until its site is built.
+    built = [work(1), work(3), work(6, "lab")];
+    at(1300);
+    built = [work(1), work(3), work(4), work(6, "lab")];
+    sites = [];
+    at(1400);
+    at(1500);
+
+    expect((g.Memory as Memory).chronicle?.map((l) => l.text)).toEqual([
+      "The master mason of Ravenhold draws the castle anew around its keep. " +
+        "Its masons must pull down 2 coffers and an alchemy lab and raise them again where the plan wants.",
+      "The last of Ravenhold's works is raised in its new place. The keep stands as its master mason drew it.",
     ]);
   });
 

@@ -10,6 +10,7 @@ import { TOWN_DAY_LENGTH, TOWN_DAYS_PER_SEASON, TOWN_MOON_DAYS, TOWN_SEASONS, To
 import { LANDMARKS } from "../config/config.structures";
 import { remotePaved } from "./services.remote";
 import { ROLE_REMOTE_MINER } from "../config/config.roles";
+import { readBlueprint } from "../planning/planner.blueprint";
 
 const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
 
@@ -194,6 +195,7 @@ export function heraldRooms(): void {
       heraldVendors(room);
       heraldVein(room);
       heraldWalls(room);
+      heraldKeep(room);
     }
     heraldKills(room);
   }
@@ -637,6 +639,52 @@ function heraldWalls(room: Room): void {
   room.memory.heraldWalls = reached;
   if (known === undefined) return;
   chronicle(`The smiths of ${castleName(room.name)} have raised its walls ${WALL_MARKS[reached - 1][1]} strong.`);
+}
+
+// A castle laid out anew around its keep, told when the plan leaves buildings
+// standing out of place and again once the last of them is raised where the
+// plan wants it. A plan drawn before the herald first looked is told only
+// when it is done.
+const OUT_OF_PLACE: Record<string, [one: string, many: string]> = {
+  extension: ["coffer", "coffers"],
+  lab: LANDMARKS.lab!,
+  link: ["link", "links"],
+};
+
+function heraldKeep(room: Room): void {
+  const plan = room.memory.blueprint;
+  if (!plan || Game.time % WORKS_CHECK_PERIOD !== 0) return;
+  const bp = readBlueprint(room);
+  if (!bp) return;
+  const planned = new Set(bp.entries.map((e) => `${e.x},${e.y}:${e.type}`));
+  const strays: Record<string, number> = {};
+  let stray = 0;
+  for (const s of room.find(FIND_MY_STRUCTURES)) {
+    if (!OUT_OF_PLACE[s.structureType] || planned.has(`${s.pos.x},${s.pos.y}:${s.structureType}`)) continue;
+    strays[s.structureType] = (strays[s.structureType] ?? 0) + 1;
+    stray++;
+  }
+  // The last one pulled down is not back up until its site is built.
+  const known = room.memory.heraldKeep;
+  const rising = room.find(FIND_MY_CONSTRUCTION_SITES).some((c) => OUT_OF_PLACE[c.structureType]);
+  const moving = stray > 0 || (known?.at === plan.at && known.moving && rising);
+  room.memory.heraldKeep = { at: plan.at, moving };
+  if (!known) return;
+  const castle = castleName(room.name);
+  if (known.at !== plan.at) {
+    if (!moving) return;
+    const works = Object.entries(strays).map(([type, n]) => {
+      const [one, many] = OUT_OF_PLACE[type];
+      return n === 1 ? `${/^[aeiou]/.test(one) ? "an" : "a"} ${one}` : `${n} ${many}`;
+    });
+    chronicle(
+      `The master mason of ${castle} draws the castle anew around its keep. ` +
+        `Its masons must pull down ${andList(works)} and raise ${stray === 1 ? "it" : "them"} again where the plan wants.`
+    );
+  } else if (known.moving && !moving) {
+    spreadWord("new keep!");
+    chronicle(`The last of ${castle}'s works is raised in its new place. The keep stands as its master mason drew it.`);
+  }
 }
 
 // While a dragon is overhead every castle cries out every few ticks, and the
