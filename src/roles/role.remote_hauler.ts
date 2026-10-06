@@ -69,7 +69,7 @@ export function runRemoteHauler(creep: Creep) {
   if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
     creep.memory.working = false;
     setFillTarget(creep, undefined);
-    if (timeTrip(creep)) {
+    if (creep.room.name === homeRoom && timeTrip(creep)) {
       retire(creep, homeRoom);
       return;
     }
@@ -95,7 +95,9 @@ export function runRemoteHauler(creep: Creep) {
 // days all the same: Wystan died on the road home from the Crow Glen with a
 // full load, and a thousand gold rotted in his grave, while Amice died
 // empty-handed by the container she had walked out to.
-// One too old for the road goes home to the spawn and is recycled.
+// One too old for the road goes home to the spawn and is recycled. A trip
+// ends only at home: a small load spent on road repairs empties a merchant out
+// in the wilds, and Matilda timed a thirty-tick trip that way.
 function timeTrip(creep: Creep): boolean {
   if (creep.memory.tripFrom !== undefined) creep.memory.trip = Game.time - creep.memory.tripFrom;
   creep.memory.tripFrom = Game.time;

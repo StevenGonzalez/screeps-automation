@@ -4,6 +4,9 @@ const g = globalThis as Record<string, unknown>;
 g.FIND_HOSTILE_CREEPS = 103;
 g.FIND_STRUCTURES = 107;
 g.FIND_MY_SPAWNS = 112;
+g.FIND_HOSTILE_STRUCTURES = 109;
+g.FIND_SOURCES = 105;
+g.FIND_DROPPED_RESOURCES = 106;
 g.RESOURCE_ENERGY = "energy";
 g.ERR_NOT_IN_RANGE = -9;
 g.OK = 0;
@@ -200,6 +203,22 @@ describe("a merchant near the end of its days", () => {
     spawn.recycleCreep.mockClear().mockReturnValue(g.OK);
     runRemoteHauler(creep);
     expect(spawn.recycleCreep).toHaveBeenCalledWith(creep);
+  });
+
+  it("times a trip only once it unloads at home", () => {
+    const { creep } = merchantAt(15, 1, 0);
+    unloaded(creep, 1000);
+    wait(200);
+    unloaded(creep, 800);
+    // Road repairs spend the last of a small load out in the wilds.
+    wait(150);
+    (creep.room as { name: string }).name = "W1N2";
+    unloaded(creep, 650);
+    (creep.room as { name: string }).name = HOME;
+    wait(30);
+    unloaded(creep, 220);
+    expect(creep.memory.trip).toBe(180);
+    expect(setsOut(creep)).toBe(true);
   });
 
   it.each([
