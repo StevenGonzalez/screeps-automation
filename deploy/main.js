@@ -2499,138 +2499,48 @@ function upgradingFunded(room) {
     return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) || nearDowngrade(room);
 }
 
-const CASTLE_STAMP = [
-    { dx: 0, dy: 0, type: "spawn", minRcl: 1, critical: true },
-    { dx: -2, dy: 0, type: "spawn", minRcl: 7, critical: true },
-    { dx: 2, dy: 0, type: "spawn", minRcl: 8, critical: true },
-    { dx: 0, dy: 2, type: "storage", minRcl: 4, critical: true },
-    { dx: 0, dy: -2, type: "terminal", minRcl: 6, critical: true },
-    { dx: 0, dy: -4, type: "factory", minRcl: 7, critical: true },
-    { dx: 0, dy: -6, type: "observer", minRcl: 8 },
-    { dx: 2, dy: -4, type: "power_spawn", minRcl: 8, critical: true },
-    { dx: -2, dy: -4, type: "nuker", minRcl: 8 },
-    { dx: 1, dy: 3, type: "link", minRcl: 5 },
-    { dx: -4, dy: -4, type: "tower", minRcl: 3 },
-    { dx: 4, dy: -4, type: "tower", minRcl: 5 },
-    { dx: -4, dy: 4, type: "tower", minRcl: 5 },
-    { dx: 4, dy: 4, type: "tower", minRcl: 6 },
-    { dx: -4, dy: 0, type: "tower", minRcl: 7 },
-    { dx: 4, dy: 0, type: "tower", minRcl: 8 },
-    { dx: 3, dy: 2, type: "lab", minRcl: 6 },
-    { dx: 4, dy: 2, type: "lab", minRcl: 6 },
-    { dx: 3, dy: 3, type: "lab", minRcl: 6 },
-    { dx: 4, dy: 3, type: "lab", minRcl: 7 },
-    { dx: 5, dy: 2, type: "lab", minRcl: 7 },
-    { dx: 5, dy: 3, type: "lab", minRcl: 7 },
-    { dx: 3, dy: 4, type: "lab", minRcl: 7 },
-    { dx: 5, dy: 4, type: "lab", minRcl: 8 },
-    { dx: 3, dy: 1, type: "lab", minRcl: 8 },
-    { dx: 4, dy: 1, type: "lab", minRcl: 8 },
-    { dx: -1, dy: 0, type: "road", minRcl: 1 },
-    { dx: 1, dy: 0, type: "road", minRcl: 1 },
-    { dx: -3, dy: 0, type: "road", minRcl: 1 },
-    { dx: 3, dy: 0, type: "road", minRcl: 1 },
-    { dx: -5, dy: 0, type: "road", minRcl: 1 },
-    { dx: 5, dy: 0, type: "road", minRcl: 1 },
-    { dx: 0, dy: -1, type: "road", minRcl: 1 },
-    { dx: 0, dy: 1, type: "road", minRcl: 1 },
-    { dx: 0, dy: -3, type: "road", minRcl: 1 },
-    { dx: 0, dy: 3, type: "road", minRcl: 1 },
-    { dx: 0, dy: -5, type: "road", minRcl: 1 },
-    { dx: 0, dy: 5, type: "road", minRcl: 1 },
-    { dx: -1, dy: -1, type: "road", minRcl: 1 },
-    { dx: -2, dy: -2, type: "road", minRcl: 1 },
-    { dx: -3, dy: -3, type: "road", minRcl: 1 },
-    { dx: 1, dy: -1, type: "road", minRcl: 1 },
-    { dx: 2, dy: -2, type: "road", minRcl: 1 },
-    { dx: 3, dy: -3, type: "road", minRcl: 1 },
-    { dx: -1, dy: 1, type: "road", minRcl: 1 },
-    { dx: -2, dy: 2, type: "road", minRcl: 1 },
-    { dx: -3, dy: 3, type: "road", minRcl: 1 },
-    { dx: 1, dy: 1, type: "road", minRcl: 1 },
-    { dx: 2, dy: 2, type: "road", minRcl: 1 },
-    { dx: 1, dy: 2, type: "road", minRcl: 1 },
-    { dx: -1, dy: 2, type: "road", minRcl: 1 },
-    { dx: 1, dy: -2, type: "road", minRcl: 1 },
-    { dx: -1, dy: -2, type: "road", minRcl: 1 },
-    { dx: 1, dy: -4, type: "road", minRcl: 1 },
-    { dx: -1, dy: -4, type: "road", minRcl: 1 },
+const KEEP = [
+    "+eeeeeBeeeee+",
+    "e+++++++++++e",
+    "e+Teee+eeeT+e",
+    "e+e+++++++e+e",
+    "e+e++FMP++e+e",
+    "e+e+e+++e+e+e",
+    "T+++S+S+S+++T",
+    "e+e+e+++e+e+e",
+    "e+e++KON++e+e",
+    "e+e+++++++e+e",
+    "e+TeLLLLLeT+e",
+    "e+++++++++++e",
+    "+eeeLLLLLeee+",
 ];
-const MERCHANT_RING_ROAD_RADII = new Set([3, 5]);
-const MERCHANT_RING_MAX_RADIUS = STAMP_PLANNER.halfSize;
-const MERCHANT_RING_TARGET = 60;
-function chebyshev(dx, dy) {
-    return Math.max(Math.abs(dx), Math.abs(dy));
-}
-function isReservedLane(dx, dy) {
-    if (dx === 0 && dy === 0)
-        return false;
-    const onSpoke = dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy);
-    return onSpoke || MERCHANT_RING_ROAD_RADII.has(chebyshev(dx, dy));
-}
-const STAMP_OCCUPIED_OFFSETS = new Set(CASTLE_STAMP.map((c) => `${c.dx},${c.dy}`));
-const CORE_STRUCTURE_OFFSETS = new Set(CASTLE_STAMP.filter((c) => c.type !== "road").map((c) => `${c.dx},${c.dy}`));
-function computeMerchantRingExtensionOffsets() {
-    const offsets = [];
-    const selected = new Set();
-    const walkableNeighbors = (dx, dy) => {
-        let n = 0;
-        for (let ax = -1; ax <= 1; ax++) {
-            for (let ay = -1; ay <= 1; ay++) {
-                if (ax === 0 && ay === 0)
-                    continue;
-                const k = `${dx + ax},${dy + ay}`;
-                if (CORE_STRUCTURE_OFFSETS.has(k) || selected.has(k))
-                    continue;
-                n++;
-            }
+const KEEP_TYPES = {
+    S: "spawn", O: "storage", M: "terminal", F: "factory", P: "power_spawn", N: "nuker",
+    B: "observer", K: "link", T: "tower", L: "lab", e: "extension", "+": "road",
+};
+const KEEP_ORDER = {
+    spawn: [[0, 0], [-2, 0], [2, 0]],
+    tower: [[-4, -4], [4, -4], [-4, 4], [4, 4], [-6, 0], [6, 0]],
+    lab: [[0, 4], [-1, 4], [1, 4], [0, 6], [-1, 6], [1, 6], [-2, 4], [2, 4], [-2, 6], [2, 6]],
+};
+function keepCells() {
+    const half = STAMP_PLANNER.halfSize;
+    const cells = [];
+    KEEP.forEach((row, y) => {
+        for (let x = 0; x < row.length; x++) {
+            cells.push({ dx: x - half, dy: y - half, type: KEEP_TYPES[row[x]] });
         }
-        return n;
+    });
+    const rank = (c) => {
+        const order = KEEP_ORDER[c.type];
+        return order ? order.findIndex(([dx, dy]) => dx === c.dx && dy === c.dy) : 0;
     };
-    for (let r = 1; r <= MERCHANT_RING_MAX_RADIUS && offsets.length < MERCHANT_RING_TARGET; r++) {
-        const ring = [];
-        for (let dx = -r; dx <= r; dx++) {
-            for (let dy = -r; dy <= r; dy++) {
-                if (chebyshev(dx, dy) !== r)
-                    continue;
-                if (Math.abs(dx) === r && Math.abs(dy) === r)
-                    continue;
-                if (isReservedLane(dx, dy))
-                    continue;
-                if (STAMP_OCCUPIED_OFFSETS.has(`${dx},${dy}`))
-                    continue;
-                ring.push({ dx, dy });
-            }
-        }
-        ring.sort((a, b) => Math.atan2(a.dy, a.dx) - Math.atan2(b.dy, b.dx));
-        for (const { dx, dy } of ring) {
-            if (offsets.length >= MERCHANT_RING_TARGET)
-                break;
-            if (walkableNeighbors(dx, dy) < 1)
-                continue;
-            let strands = false;
-            for (let ax = -1; ax <= 1 && !strands; ax++) {
-                for (let ay = -1; ay <= 1; ay++) {
-                    if (ax === 0 && ay === 0)
-                        continue;
-                    const nk = `${dx + ax},${dy + ay}`;
-                    if (selected.has(nk) && walkableNeighbors(dx + ax, dy + ay) <= 1) {
-                        strands = true;
-                        break;
-                    }
-                }
-            }
-            if (strands)
-                continue;
-            offsets.push({ dx, dy });
-            selected.add(`${dx},${dy}`);
-        }
-    }
-    return offsets;
+    return cells.sort((a, b) => rank(a) - rank(b));
 }
-const MERCHANT_RING_EXTENSION_OFFSETS = computeMerchantRingExtensionOffsets();
+const CASTLE_STAMP = keepCells();
+const MERCHANT_RING_EXTENSION_OFFSETS = CASTLE_STAMP.filter((c) => c.type === "extension").map(({ dx, dy }) => ({ dx, dy }));
 
-const BLUEPRINT_VERSION = 2;
+const BLUEPRINT_VERSION = 3;
 const SIZE$1 = 50;
 const idx$1 = (x, y) => y * SIZE$1 + x;
 const tx = (i) => i % SIZE$1;
@@ -2668,6 +2578,10 @@ const LAB_FLOWERS = [
 ];
 const TRUNK_RCL = 2;
 const MINERAL_RCL = 6;
+const RING_ROAD_RCL = 3;
+const RING_MAX = 10;
+const RING_DETOUR = 5;
+const RESERVED_COST = 40;
 const LINK_ORDER = (tag, farSource) => {
     if (tag === "storage")
         return 0;
@@ -2691,6 +2605,8 @@ class Planner {
         this.oldContainers = [];
         this.oldExtensionAt = new Uint8Array(SIZE$1 * SIZE$1);
         this.trunkRcl = new Map();
+        this.reserved = new Uint8Array(SIZE$1 * SIZE$1);
+        this.ringRoad = new Uint8Array(SIZE$1 * SIZE$1);
         this.exits = {};
         this.order = 0;
         this.anchor = -1;
@@ -2769,6 +2685,8 @@ class Planner {
             return 50;
         if (this.occ[i] === ROAD)
             return 1;
+        if (this.reserved[i] && this.occ[i] === FREE)
+            return RESERVED_COST;
         if (this.oldExtensionAt[i] && this.occ[i] === FREE)
             return 30;
         if (this.oldRoad[i])
@@ -2841,6 +2759,22 @@ class Planner {
             }
         }
         return { dist };
+    }
+    steps() {
+        const steps = new Int32Array(SIZE$1 * SIZE$1).fill(UNREACHED);
+        const queue = this.hubStarts();
+        for (const s of queue)
+            steps[s] = 0;
+        for (let k = 0; k < queue.length; k++) {
+            const i = queue[k];
+            for (const n of this.neighbours(i)) {
+                if (!this.passable(n) || steps[n] !== UNREACHED)
+                    continue;
+                steps[n] = steps[i] + 1;
+                queue.push(n);
+            }
+        }
+        return steps;
     }
     roadDijkstra() {
         const states = SIZE$1 * SIZE$1 * 8;
@@ -2944,7 +2878,7 @@ class Planner {
         if (spawn)
             return spawn.i;
         const core = CASTLE_STAMP.filter((c) => c.type !== "road" && c.type !== "lab");
-        const must = CASTLE_STAMP.filter((c) => c.type === "spawn" && c.minRcl === 1 || c.type === "storage");
+        const must = CASTLE_STAMP.filter((c) => c.type === "spawn" && c.dx === 0 && c.dy === 0 || c.type === "storage");
         const pois = [...this.input.sources, this.input.controller];
         let best = -1;
         let bestScore = -Infinity;
@@ -2962,7 +2896,7 @@ class Planner {
                 }
                 for (const p of pois) {
                     const r = Math.max(Math.abs(p.x - x), Math.abs(p.y - y));
-                    score -= r * 0.3;
+                    score -= r;
                     if (r < 8)
                         score -= (8 - r) * 2;
                 }
@@ -3004,12 +2938,16 @@ class Planner {
     }
     placeLabs() {
         const oldLabs = this.drafts.filter((d) => d.type === STRUCTURE_LAB);
+        if (oldLabs.length === 0 && this.placeKeepLabs())
+            return;
         const oldLabTiles = new Set(oldLabs.map((d) => d.i));
         const ax = tx(this.anchor);
         const ay = ty(this.anchor);
         const kept = new Set();
         for (const c of CASTLE_STAMP) {
             if (c.type === "lab" || c.type === "tower")
+                continue;
+            if (oldLabs.length > 0 && (c.type === "extension" || c.type === "road"))
                 continue;
             const i = this.at(ax + c.dx, ay + c.dy);
             if (i >= 0)
@@ -3054,6 +2992,26 @@ class Planner {
             if (this.occ[i] === FREE)
                 this.occ[i] = OPEN;
     }
+    placeKeepLabs() {
+        const ax = tx(this.anchor);
+        const ay = ty(this.anchor);
+        const roads = new Set();
+        for (const c of CASTLE_STAMP) {
+            const i = this.at(ax + c.dx, ay + c.dy);
+            if (c.type === "road" && i >= 0 && this.passable(i))
+                roads.add(i);
+        }
+        const labs = CASTLE_STAMP.filter((c) => c.type === "lab").map((c) => this.at(ax + c.dx, ay + c.dy));
+        for (const i of labs) {
+            if (i < 0 || !this.buildable(i))
+                return false;
+            if (!this.neighbours(i).some((n) => roads.has(n)))
+                return false;
+        }
+        for (const i of labs)
+            this.add(STRUCTURE_LAB, i);
+        return true;
+    }
     placeStamp() {
         var _a;
         const ax = tx(this.anchor);
@@ -3065,9 +3023,16 @@ class Planner {
             if (c.type === "road") {
                 if (this.occ[i] === FREE)
                     this.occ[i] = OPEN;
+                if (this.passable(i))
+                    this.ringRoad[i] = 1;
                 continue;
             }
-            if (c.type === "lab" || c.type === "storage")
+            if (c.type === "extension" || c.type === "lab") {
+                if (this.buildable(i))
+                    this.reserved[i] = 1;
+                continue;
+            }
+            if (c.type === "storage")
                 continue;
             if (c.type === "link") {
                 if (this.storageLink() || !this.buildable(i) || cheb$1(i, this.hub) > 2)
@@ -3177,8 +3142,22 @@ class Planner {
                 best = n;
             }
         }
-        if (best >= 0)
+        if (best >= 0) {
             this.add(STRUCTURE_LINK, best, { tag });
+            return;
+        }
+        for (const n of this.neighbours(container)) {
+            if (this.occ[n] !== OPEN || this.byTile.has(n) || this.ringRoad[n] || this.avoid[n])
+                continue;
+            if (tx(n) < 2 || tx(n) > 47 || ty(n) < 2 || ty(n) > 47)
+                continue;
+            if (tag === "controller" && cheb$1(n, target) > 3)
+                continue;
+            if (this.placeChecked(STRUCTURE_LINK, n, tag))
+                break;
+            this.occ[n] = OPEN;
+        }
+        this.reach = null;
     }
     trunkToExit(side) {
         const edge = [];
@@ -3216,6 +3195,7 @@ class Planner {
         this.trunkRcl.set(i, Math.min((_a = this.trunkRcl.get(i)) !== null && _a !== void 0 ? _a : 8, rcl));
     }
     fillRemaining() {
+        const rings = this.layRings();
         const { dist } = this.dijkstra();
         const access = (i) => {
             let best = UNREACHED;
@@ -3224,6 +3204,15 @@ class Planner {
                     best = dist[n];
             return best;
         };
+        const steps = this.steps();
+        const walk = (i) => {
+            let best = UNREACHED;
+            for (const n of this.neighbours(i))
+                if (this.passable(n) && steps[n] < best)
+                    best = steps[n];
+            return best;
+        };
+        const slots = rings.filter((i) => walk(i) <= cheb$1(i, this.hub) + RING_DETOUR);
         const ax = tx(this.anchor);
         const ay = ty(this.anchor);
         const onLattice = (i) => (((tx(i) + ty(i) - ax - ay) % 4) + 4) % 4 === 0 || (((tx(i) - ty(i) - ax + ay) % 4) + 4) % 4 === 0;
@@ -3254,18 +3243,91 @@ class Planner {
                     this.placeChecked(type, c.i);
             }
         };
-        const old = this.oldExtensions
-            .map((i) => ({ i, d: access(i) }))
-            .filter((c) => c.d < UNREACHED)
-            .sort((a, b) => a.d - b.d);
-        fill(STRUCTURE_EXTENSION, old);
+        const slotSet = new Set(slots);
+        const asSlots = (list) => list.map((i) => ({ i, d: 0 }));
+        const lone = slots.filter((i) => {
+            const twin = this.twin(i);
+            return twin === i || !slotSet.has(twin);
+        });
         for (const type of [
             STRUCTURE_SPAWN, STRUCTURE_TOWER, STRUCTURE_TERMINAL, STRUCTURE_POWER_SPAWN,
             STRUCTURE_FACTORY, STRUCTURE_NUKER, STRUCTURE_OBSERVER,
         ]) {
+            fill(type, asSlots(lone));
+            fill(type, asSlots(slots));
             fill(type, lattice);
         }
+        for (let r = 2; r <= RING_MAX; r += 2) {
+            const ring = slots
+                .filter((i) => cheb$1(i, this.anchor) === r)
+                .sort((a, b) => this.oldExtensionAt[b] - this.oldExtensionAt[a]);
+            this.fillPairs(STRUCTURE_EXTENSION, ring, slotSet);
+            fill(STRUCTURE_EXTENSION, asSlots(ring));
+        }
         fill(STRUCTURE_EXTENSION, lattice);
+    }
+    layRings() {
+        const ax = tx(this.anchor);
+        const ay = ty(this.anchor);
+        const hx = tx(this.hub);
+        const hy = ty(this.hub);
+        const slots = [];
+        for (let dy = -RING_MAX; dy <= RING_MAX; dy++) {
+            for (let dx = -RING_MAX; dx <= RING_MAX; dx++) {
+                const i = this.at(ax + dx, ay + dy);
+                if (i < 0)
+                    continue;
+                const r = Math.max(Math.abs(dx), Math.abs(dy));
+                if (r <= STAMP_PLANNER.halfSize) {
+                    if (!this.reserved[i])
+                        continue;
+                }
+                else if (r % 2 === 1 || dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy)) {
+                    if (this.occ[i] === FREE)
+                        this.occ[i] = OPEN;
+                    if (this.passable(i))
+                        this.ringRoad[i] = 1;
+                    continue;
+                }
+                if (!this.buildable(i))
+                    continue;
+                const h = (tx(i) - hx) ** 2 + (ty(i) - hy) ** 2;
+                slots.push({ i, key: (r * 10000 + h) * 2 + (dx <= 0 ? 0 : 1) });
+            }
+        }
+        return slots.sort((a, b) => a.key - b.key || a.i - b.i).map((s) => s.i);
+    }
+    twin(i) {
+        return this.at(2 * tx(this.anchor) - tx(i), ty(i));
+    }
+    fillPairs(type, slots, slotSet) {
+        for (const i of slots) {
+            const left = this.want(type) - this.count(type);
+            if (left <= 0)
+                return;
+            if (!this.buildable(i))
+                continue;
+            const twin = this.twin(i);
+            if (twin >= 0 && this.byTile.has(twin)) {
+                this.placeChecked(type, i);
+                continue;
+            }
+            if (!slotSet.has(twin) || tx(twin) < tx(i))
+                continue;
+            if (twin === i) {
+                this.placeChecked(type, i);
+                continue;
+            }
+            if (left < 2 || !this.buildable(twin))
+                continue;
+            const before = this.reach;
+            if (!this.placeChecked(type, i))
+                continue;
+            if (this.placeChecked(type, twin))
+                continue;
+            this.remove(this.byTile.get(i));
+            this.reach = before;
+        }
     }
     openNear(center, range, access) {
         const out = [];
@@ -3279,7 +3341,7 @@ class Planner {
         return out;
     }
     finish() {
-        var _a;
+        var _a, _b;
         const entries = [];
         const byType = new Map();
         for (const d of this.drafts) {
@@ -3322,6 +3384,19 @@ class Planner {
                 continue;
             for (const i of road(door)) {
                 roadRcl.set(i, Math.min((_a = roadRcl.get(i)) !== null && _a !== void 0 ? _a : 8, rcl));
+            }
+        }
+        const keepHalf = STAMP_PLANNER.halfSize;
+        for (const [d, rcl] of rclOf) {
+            if (d.type === STRUCTURE_CONTAINER || d.type === STRUCTURE_EXTRACTOR)
+                continue;
+            const inKeep = cheb$1(d.i, this.anchor) <= keepHalf;
+            for (const n of this.neighbours(d.i)) {
+                if (!this.ringRoad[n] || !this.passable(n))
+                    continue;
+                if (inKeep && cheb$1(n, this.anchor) > keepHalf)
+                    continue;
+                roadRcl.set(n, Math.min((_b = roadRcl.get(n)) !== null && _b !== void 0 ? _b : 8, Math.max(rcl, RING_ROAD_RCL)));
             }
         }
         for (const [i, rcl] of roadRcl) {
