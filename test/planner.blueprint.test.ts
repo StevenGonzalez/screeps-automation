@@ -250,20 +250,60 @@ describe("blueprint for the live castle", () => {
     expect(bp.hub).toEqual({ x: 25, y: 27 });
   });
 
-  it("keeps the labs and most extensions already built", () => {
+  it("keeps the labs and the extensions already built", () => {
     const bp = planFor(room);
     const at = new Map(bp.entries.map((e) => [`${e.x},${e.y}`, e.type]));
     for (const s of room.structures.filter((s) => s.type === "lab")) {
       expect(at.get(`${s.x},${s.y}`)).toBe("lab");
     }
-    const ext = room.structures.filter((s) => s.type === "extension");
-    const kept = ext.filter((s) => at.get(`${s.x},${s.y}`) === "extension").length;
-    expect(kept).toBeGreaterThanOrEqual(35);
+    for (const s of room.structures.filter((s) => s.type === "extension")) {
+      expect(at.get(`${s.x},${s.y}`), `extension at ${s.x},${s.y}`).toBe("extension");
+    }
   });
 
   it("stays off the town's tiles", () => {
     const bp = planFor(room);
     const avoid = new Set(room.avoid);
     for (const e of bp.entries) expect(avoid.has(`${e.x},${e.y}`), `${e.type} at ${e.x},${e.y}`).toBe(false);
+  });
+});
+
+describe("blueprint for open ground", () => {
+  const bp = planBlueprint({
+    terrain: () => 0,
+    controller: { x: 10, y: 10 },
+    sources: [{ id: "a", x: 40, y: 8 }, { id: "b", x: 8, y: 42 }],
+    mineral: { id: "m", x: 42, y: 42 },
+    structures: [],
+  })!;
+  const { x: ax, y: ay } = bp.anchor;
+  const inKeep = (e: { x: number; y: number }) => Math.max(Math.abs(e.x - ax), Math.abs(e.y - ay)) <= 6;
+  const at = new Map(bp.entries.map((e) => [`${e.x},${e.y}`, e.type]));
+
+  it("lays the keep out the same on both sides", () => {
+    for (const e of bp.entries) {
+      if (e.type === "road" || !inKeep(e)) continue;
+      const twin = at.get(`${2 * ax - e.x},${e.y}`);
+      expect(twin !== undefined && twin !== "road", `${e.type} at ${e.x},${e.y}`).toBe(true);
+      if (["spawn", "extension", "tower", "lab"].includes(e.type)) {
+        expect(twin, `${e.type} at ${e.x},${e.y}`).toBe(e.type);
+      }
+    }
+  });
+
+  it("fits every building in the keep", () => {
+    for (const e of bp.entries) {
+      if (e.type === "road" || e.type === "container" || e.tag) continue;
+      expect(inKeep(e), `${e.type} at ${e.x},${e.y}`).toBe(true);
+    }
+  });
+
+  it("stands the labs in the keep's two rows below storage", () => {
+    const labs = bp.entries.filter((e) => e.type === "lab");
+    expect(labs).toHaveLength(10);
+    for (const l of labs) {
+      expect([ay + 4, ay + 6], `lab at ${l.x},${l.y}`).toContain(l.y);
+      expect(Math.abs(l.x - ax), `lab at ${l.x},${l.y}`).toBeLessThanOrEqual(2);
+    }
   });
 });

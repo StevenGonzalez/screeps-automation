@@ -1,5 +1,6 @@
 import { CASTLE_STAMP } from "./planner.stamp";
 import { townFootprint } from "../services/services.town";
+import { STAMP_PLANNER } from "../config/config.structures";
 
 // The kingdom's blueprint: every structure and road the room will ever have
 // at RCL 8, planned once against the real terrain and kept in memory. Each
@@ -12,21 +13,32 @@ import { townFootprint } from "../services/services.town";
 //
 //   1. What already stands and matters: spawns, storage, terminal, towers,
 //      labs, links and the other core buildings stay where they are.
-//   2. The lab cluster, where it keeps the most labs already built.
-//   3. The rest of the castle stamp around the first spawn. A stamp cell that
-//      lands on a wall is not squeezed in nearby; it goes to the fill below.
+//   2. The labs: in the keep's two lab rows when the room has none yet and
+//      they fit, else on a 4x4 cluster where it keeps the most labs already
+//      built.
+//   3. The keep around the first spawn (see planner.stamp). Its extension
+//      cells are saved for step 5, and roads keep off them where they can.
+//      A keep cell that lands on a wall is not squeezed in nearby; it goes
+//      to the fill below.
 //   4. Trunk roads from storage to each source, the controller, the mineral
 //      and each exit, with the containers and links at their ends. Later
 //      trunks reuse earlier ones.
-//   5. Everything still unplaced - extensions last - on the nearest free
-//      tiles of a diagonal lattice, so every building touches a walkway. A
-//      building is only placed if every walkway, trunk and building placed
-//      before it can still be reached from storage.
-//   6. Roads: only the tiles on the cheapest walk from storage to each
-//      building. Other walkway tiles stay bare ground. Roads here and in
+//   5. Everything still unplaced, extensions last: first the keep's cells,
+//      then the rings beyond it, which carry on its pattern of a ring of
+//      buildings, a ring of road, and roads out along the eight spokes from
+//      the first spawn. A ring slot that is a long walk round a wall is
+//      left out. In each ring, extensions already standing keep their slots
+//      first, then extensions go in pairs mirrored across the keep, so the
+//      castle is the same on both sides at every age. Only when the pairs
+//      run out does one go in alone, and only when the rings are full do the
+//      last go on a diagonal lattice further out. A building is only placed
+//      if every walkway, trunk and building placed before it can still be
+//      reached from storage.
+//   6. Roads: the keep's and the rings' walkways beside each building, and
+//      the cheapest walk from storage to each building. Roads here and in
 //      step 4 pay for every bend, so they run straight and turn gently.
 
-export const BLUEPRINT_VERSION = 2;
+export const BLUEPRINT_VERSION = 3;
 
 const SIZE = 50;
 const idx = (x: number, y: number): number => y * SIZE + x;
@@ -132,6 +144,19 @@ const LAB_FLOWERS: ReadonlyArray<{ labs: Array<[number, number]>; roads: Array<[
 // waits for the extractor.
 const TRUNK_RCL = 2;
 const MINERAL_RCL = 6;
+// The keep's walkways are paved from the third age, so a young castle spends
+// its gold on extensions first. The walk to each building is paved with it.
+const RING_ROAD_RCL = 3;
+
+// The rings beyond the keep reach this far from the first spawn.
+const RING_MAX = 10;
+// How much further than the crow flies a ring slot may be to walk to from
+// storage. A slot behind a wall that is near on the map but a long way round
+// is left to the lattice, which goes by the walk.
+const RING_DETOUR = 5;
+// What a road pays to cross a tile saved for a keep building, against 2 for
+// plain ground: enough to send it round by the keep's own walkways.
+const RESERVED_COST = 40;
 
 // The order unbuilt links are unlocked in: storage and the farthest source
 // first, so energy flows as soon as links exist.
@@ -154,6 +179,10 @@ class Planner {
   private readonly oldContainers: number[] = [];
   private readonly oldExtensionAt = new Uint8Array(SIZE * SIZE);
   private readonly trunkRcl = new Map<number, number>();
+  // Keep and ring tiles saved for a building placed later.
+  private readonly reserved = new Uint8Array(SIZE * SIZE);
+  // Walkways of the keep and its rings, paved beside each building.
+  private readonly ringRoad = new Uint8Array(SIZE * SIZE);
   private readonly exits: Blueprint["exits"] = {};
   private order = 0;
   private anchor = -1;
@@ -233,6 +262,7 @@ class Planner {
   private moveCost(i: number): number {
     if (this.avoid[i]) return 50;
     if (this.occ[i] === ROAD) return 1;
+    if (this.reserved[i] && this.occ[i] === FREE) return RESERVED_COST;
     // Roads go round a standing extension rather than through it.
     if (this.oldExtensionAt[i] && this.occ[i] === FREE) return 30;
     if (this.oldRoad[i]) return 1;
@@ -311,6 +341,22 @@ class Planner {
       }
     }
     return { dist };
+  }
+
+  /** Tiles walked from storage to each tile, whatever the ground. */
+  private steps(): Int32Array {
+    const steps = new Int32Array(SIZE * SIZE).fill(UNREACHED);
+    const queue = this.hubStarts();
+    for (const s of queue) steps[s] = 0;
+    for (let k = 0; k < queue.length; k++) {
+      const i = queue[k];
+      for (const n of this.neighbours(i)) {
+        if (!this.passable(n) || steps[n] !== UNREACHED) continue;
+        steps[n] = steps[i] + 1;
+        queue.push(n);
+      }
+    }
+    return steps;
   }
 
   /**
@@ -424,7 +470,7 @@ class Planner {
     // A fresh room: the spot where most of the stamp lands on open ground,
     // not crowding the sources, and close to what it serves.
     const core = CASTLE_STAMP.filter((c) => c.type !== "road" && c.type !== "lab");
-    const must = CASTLE_STAMP.filter((c) => c.type === "spawn" && c.minRcl === 1 || c.type === "storage");
+    const must = CASTLE_STAMP.filter((c) => c.type === "spawn" && c.dx === 0 && c.dy === 0 || c.type === "storage");
     const pois = [...this.input.sources, this.input.controller];
     let best = -1;
     let bestScore = -Infinity;
@@ -436,9 +482,12 @@ class Planner {
         for (const c of CASTLE_STAMP) {
           if (c.type === "road" && this.occ[idx(x + c.dx, y + c.dy)] !== SOLID) score += 1;
         }
+        // Every tile to a source or the controller is walked on every haul
+        // for as long as the room stands, while a keep cell lost to a wall
+        // only moves a building into the rings.
         for (const p of pois) {
           const r = Math.max(Math.abs(p.x - x), Math.abs(p.y - y));
-          score -= r * 0.3;
+          score -= r;
           if (r < 8) score -= (8 - r) * 2;
         }
         if (score > bestScore) {
@@ -479,14 +528,17 @@ class Planner {
 
   private placeLabs(): void {
     const oldLabs = this.drafts.filter((d) => d.type === STRUCTURE_LAB);
+    if (oldLabs.length === 0 && this.placeKeepLabs()) return;
     const oldLabTiles = new Set(oldLabs.map((d) => d.i));
-    // Stamp cells kept for buildings that have nowhere else as good; towers
-    // and labs can go elsewhere.
+    // Keep cells kept for buildings that have nowhere else as good; towers
+    // and labs can go elsewhere. A new cluster stays out of the keep, but
+    // one that keeps labs already built may take some of its cells.
     const ax = tx(this.anchor);
     const ay = ty(this.anchor);
     const kept = new Set<number>();
     for (const c of CASTLE_STAMP) {
       if (c.type === "lab" || c.type === "tower") continue;
+      if (oldLabs.length > 0 && (c.type === "extension" || c.type === "road")) continue;
       const i = this.at(ax + c.dx, ay + c.dy);
       if (i >= 0) kept.add(i);
     }
@@ -520,6 +572,24 @@ class Planner {
     for (const i of best.roads) if (this.occ[i] === FREE) this.occ[i] = OPEN;
   }
 
+  // The keep's two lab rows, when every lab fits and has a keep road beside it.
+  private placeKeepLabs(): boolean {
+    const ax = tx(this.anchor);
+    const ay = ty(this.anchor);
+    const roads = new Set<number>();
+    for (const c of CASTLE_STAMP) {
+      const i = this.at(ax + c.dx, ay + c.dy);
+      if (c.type === "road" && i >= 0 && this.passable(i)) roads.add(i);
+    }
+    const labs = CASTLE_STAMP.filter((c) => c.type === "lab").map((c) => this.at(ax + c.dx, ay + c.dy));
+    for (const i of labs) {
+      if (i < 0 || !this.buildable(i)) return false;
+      if (!this.neighbours(i).some((n) => roads.has(n))) return false;
+    }
+    for (const i of labs) this.add(STRUCTURE_LAB, i);
+    return true;
+  }
+
   // ---- 3. castle stamp -----------------------------------------------------
 
   private placeStamp(): void {
@@ -530,9 +600,15 @@ class Planner {
       if (i < 0) continue;
       if (c.type === "road") {
         if (this.occ[i] === FREE) this.occ[i] = OPEN;
+        if (this.passable(i)) this.ringRoad[i] = 1;
         continue;
       }
-      if (c.type === "lab" || c.type === "storage") continue;
+      // Lab cells the labs did not take go to extensions like the rest.
+      if (c.type === "extension" || c.type === "lab") {
+        if (this.buildable(i)) this.reserved[i] = 1;
+        continue;
+      }
+      if (c.type === "storage") continue;
       if (c.type === "link") {
         if (this.storageLink() || !this.buildable(i) || cheb(i, this.hub) > 2) continue;
         this.add(STRUCTURE_LINK, i, { tag: "storage" });
@@ -648,7 +724,21 @@ class Planner {
         best = n;
       }
     }
-    if (best >= 0) this.add(STRUCTURE_LINK, best, { tag });
+    if (best >= 0) {
+      this.add(STRUCTURE_LINK, best, { tag });
+      return;
+    }
+    // Hemmed in, as a source can be by another beside it: the link takes a
+    // tile of the ground kept clear for working, if that cuts nothing off.
+    for (const n of this.neighbours(container)) {
+      if (this.occ[n] !== OPEN || this.byTile.has(n) || this.ringRoad[n] || this.avoid[n]) continue;
+      if (tx(n) < 2 || tx(n) > 47 || ty(n) < 2 || ty(n) > 47) continue;
+      if (tag === "controller" && cheb(n, target) > 3) continue;
+      if (this.placeChecked(STRUCTURE_LINK, n, tag)) break;
+      this.occ[n] = OPEN;
+    }
+    // Trunks and links still to come change who can walk where.
+    this.reach = null;
   }
 
   private trunkToExit(side: ExitSide): void {
@@ -687,12 +777,20 @@ class Planner {
   // ---- 5. fill -------------------------------------------------------------
 
   private fillRemaining(): void {
+    const rings = this.layRings();
     const { dist } = this.dijkstra();
     const access = (i: number): number => {
       let best = UNREACHED;
       for (const n of this.neighbours(i)) if (this.passable(n) && dist[n] < best) best = dist[n];
       return best;
     };
+    const steps = this.steps();
+    const walk = (i: number): number => {
+      let best = UNREACHED;
+      for (const n of this.neighbours(i)) if (this.passable(n) && steps[n] < best) best = steps[n];
+      return best;
+    };
+    const slots = rings.filter((i) => walk(i) <= cheb(i, this.hub) + RING_DETOUR);
     const ax = tx(this.anchor);
     const ay = ty(this.anchor);
     // Walkway lines run on both diagonals through the first spawn, four tiles
@@ -725,20 +823,100 @@ class Planner {
         if (this.buildable(c.i)) this.placeChecked(type, c.i);
       }
     };
-    // Extensions already standing keep their place where they still fit, before
-    // anything else takes their tiles.
-    const old = this.oldExtensions
-      .map((i) => ({ i, d: access(i) }))
-      .filter((c) => c.d < UNREACHED)
-      .sort((a, b) => a.d - b.d);
-    fill(STRUCTURE_EXTENSION, old);
+    const slotSet = new Set(slots);
+    const asSlots = (list: number[]) => list.map((i) => ({ i, d: 0 }));
+    // A keep building that lost its cell to a wall takes a slot that has no
+    // twin, where it spoils no pair, if one is near enough.
+    const lone = slots.filter((i) => {
+      const twin = this.twin(i);
+      return twin === i || !slotSet.has(twin);
+    });
     for (const type of [
       STRUCTURE_SPAWN, STRUCTURE_TOWER, STRUCTURE_TERMINAL, STRUCTURE_POWER_SPAWN,
       STRUCTURE_FACTORY, STRUCTURE_NUKER, STRUCTURE_OBSERVER,
     ] as BuildableStructureConstant[]) {
+      fill(type, asSlots(lone));
+      fill(type, asSlots(slots));
       fill(type, lattice);
     }
+    // Ring by ring, so the castle stays compact where a wall spoils a pair.
+    // In each ring the slots that already hold an extension go first, so a
+    // ring with more slots than extensions leaves none of them to tear down.
+    for (let r = 2; r <= RING_MAX; r += 2) {
+      const ring = slots
+        .filter((i) => cheb(i, this.anchor) === r)
+        .sort((a, b) => this.oldExtensionAt[b] - this.oldExtensionAt[a]);
+      this.fillPairs(STRUCTURE_EXTENSION, ring, slotSet);
+      fill(STRUCTURE_EXTENSION, asSlots(ring));
+    }
     fill(STRUCTURE_EXTENSION, lattice);
+  }
+
+  /**
+   * Building slots for whatever the keep has not placed, nearest the keep
+   * first: the keep's saved cells, then the rings beyond it. Out there, as in
+   * the keep, every odd ring from the first spawn is road, and so are the
+   * eight spokes; those tiles are kept as walkways.
+   */
+  private layRings(): number[] {
+    const ax = tx(this.anchor);
+    const ay = ty(this.anchor);
+    const hx = tx(this.hub);
+    const hy = ty(this.hub);
+    const slots: Array<{ i: number; key: number }> = [];
+    for (let dy = -RING_MAX; dy <= RING_MAX; dy++) {
+      for (let dx = -RING_MAX; dx <= RING_MAX; dx++) {
+        const i = this.at(ax + dx, ay + dy);
+        if (i < 0) continue;
+        const r = Math.max(Math.abs(dx), Math.abs(dy));
+        if (r <= STAMP_PLANNER.halfSize) {
+          if (!this.reserved[i]) continue;
+        } else if (r % 2 === 1 || dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy)) {
+          if (this.occ[i] === FREE) this.occ[i] = OPEN;
+          if (this.passable(i)) this.ringRoad[i] = 1;
+          continue;
+        }
+        if (!this.buildable(i)) continue;
+        // The nearest ring first, then the slots nearest storage, the left
+        // one of a pair before the right.
+        const h = (tx(i) - hx) ** 2 + (ty(i) - hy) ** 2;
+        slots.push({ i, key: (r * 10000 + h) * 2 + (dx <= 0 ? 0 : 1) });
+      }
+    }
+    return slots.sort((a, b) => a.key - b.key || a.i - b.i).map((s) => s.i);
+  }
+
+  /** The tile mirrored across the keep's middle, or -1 off the room. */
+  private twin(i: number): number {
+    return this.at(2 * tx(this.anchor) - tx(i), ty(i));
+  }
+
+  // Extensions go in pairs mirrored across the keep's middle, so the castle
+  // grows the same on both sides. A slot whose twin already holds a building
+  // is mirrored as it is and goes in alone. One whose twin is lost to a wall
+  // or a road waits until the ring's pairs are placed, then goes in alone.
+  private fillPairs(type: BuildableStructureConstant, slots: number[], slotSet: Set<number>): void {
+    for (const i of slots) {
+      const left = this.want(type) - this.count(type);
+      if (left <= 0) return;
+      if (!this.buildable(i)) continue;
+      const twin = this.twin(i);
+      if (twin >= 0 && this.byTile.has(twin)) {
+        this.placeChecked(type, i);
+        continue;
+      }
+      if (!slotSet.has(twin) || tx(twin) < tx(i)) continue;
+      if (twin === i) {
+        this.placeChecked(type, i);
+        continue;
+      }
+      if (left < 2 || !this.buildable(twin)) continue;
+      const before = this.reach;
+      if (!this.placeChecked(type, i)) continue;
+      if (this.placeChecked(type, twin)) continue;
+      this.remove(this.byTile.get(i)!);
+      this.reach = before;
+    }
   }
 
   private openNear(
@@ -797,6 +975,20 @@ class Planner {
       if (door < 0 || dist[door] >= UNREACHED) continue;
       for (const i of road(door)) {
         roadRcl.set(i, Math.min(roadRcl.get(i) ?? 8, rcl));
+      }
+    }
+    // The keep's and the rings' walkways beside each building. The keep's
+    // outer row is served from inside, so the road ringing it is laid only
+    // beside buildings out in the rings, and the keep's outer row stands
+    // as its wall.
+    const keepHalf = STAMP_PLANNER.halfSize;
+    for (const [d, rcl] of rclOf) {
+      if (d.type === STRUCTURE_CONTAINER || d.type === STRUCTURE_EXTRACTOR) continue;
+      const inKeep = cheb(d.i, this.anchor) <= keepHalf;
+      for (const n of this.neighbours(d.i)) {
+        if (!this.ringRoad[n] || !this.passable(n)) continue;
+        if (inKeep && cheb(n, this.anchor) > keepHalf) continue;
+        roadRcl.set(n, Math.min(roadRcl.get(n) ?? 8, Math.max(rcl, RING_ROAD_RCL)));
       }
     }
     for (const [i, rcl] of roadRcl) {

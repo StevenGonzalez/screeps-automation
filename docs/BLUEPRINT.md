@@ -29,32 +29,83 @@ per RCL (`CONTROLLER_STRUCTURES`), so no age ever plans more of a type than the
 engine allows. In a room that already has buildings, the ones standing take
 the first slots, so a link or tower that exists is counted in the earliest age.
 
+## The keep
+
+Every castle is built around the **keep**, a square of 13 by 13 tiles
+centred on the first spawn (`src/planning/planner.stamp.ts`). It is the same
+on its left and right. Rings of buildings alternate with rings of road, so
+every building has a road beside it:
+
+```
++eeeeeBeeeee+      S spawn       O storage    M terminal
+e+++++++++++e      F factory     P power spawn
+e+Teee+eeeT+e      N nuker       B observer   K storage link
+e+e+++++++e+e      T tower       L lab        e extension
+e+e++FMP++e+e      + road
+e+e+e+++e+e+e
+T+++S+S+S+++T      The three spawns stand in a row across the middle,
+e+e+e+++e+e+e      with storage below and the terminal above. Walkers
+e+e++KON++e+e      cross between the rings at the middle of the top and
+e+e+++++++e+e      of each side, and leave the keep at its four corners.
+e+TeLLLLLeT+e      The ten labs stand in two rows of five with a road
+e+++++++++++e      between them; the two in the middle reach all the
++eeeLLLLLeee+      others.
+```
+
+The keep holds all 60 extensions, so on open ground the whole castle fits
+inside it. Its outer row of buildings stands as the castle's wall. Each age
+keeps the keep balanced where the count allows: the second and third spawns
+flank the first, the first two towers guard the top corners, the first three
+labs stand in the middle of the upper row, and extensions come in mirrored
+pairs.
+
 ## How the plan is laid out
 
 Each step works around everything placed before it.
 
 1. **What already stands.** Spawns, storage, terminal, towers, labs, links,
    factory, power spawn, nuker and observer stay where they are. Walls,
-   sources, the mineral and the controller are solid.
+   sources, the mineral and the controller are solid. In a new room the
+   first spawn goes where most of the keep lands on open ground, close to
+   the sources and the controller. Every tile to them counts against a
+   spot, since haulers walk it for as long as the room stands.
 2. **Storage.** Storage is the hub every road starts from.
-3. **Labs.** Ten labs go on a 4x4 "flower" with a road on one diagonal. Two
-   labs reach all the others. The flower goes where it keeps the most labs
-   already built.
-4. **The castle stamp** around the first spawn. A stamp cell that lands on a
-   wall is not squeezed in nearby. It goes to step 6 instead.
+3. **Labs.** In a room with no labs, the labs take the keep's two lab rows
+   if they fit. Otherwise ten labs go on a 4x4 "flower" with a road on one
+   diagonal, where it keeps the most labs already built. Two labs reach all
+   the others.
+4. **The keep** around the first spawn. Its extension and lab cells are saved
+   for step 6, and roads pay to cross them, so they go round by the keep's
+   own walkways. A keep cell that lands on a wall is not squeezed in nearby.
+   It goes to step 6 instead.
 5. **Trunk roads** run from storage to each source, the controller, the mineral
    and each side of the room that has exits. Each trunk ends in a container,
-   plus a link except at the mineral. Later trunks reuse earlier ones, and
-   trunks route around standing extensions. Every road pays a little for
-   each bend, more the sharper it is, so roads run in long straight lines
-   and turn gently, like a cart road, instead of zigzagging. A road takes a
-   short detour to stay straight, never a long one. Where a trunk passes
-   right beside the mineral, its container sits on the road.
-6. **Everything else**, extensions last, goes on the nearest free tiles of a
-   diagonal lattice, so every building touches a walkway. Extensions that
-   already stand are placed first.
-7. **Roads.** A road is built only on the cheapest walk from storage to a
-   building, bends counted as in step 5. Other walkway tiles stay bare ground.
+   plus a link except at the mineral. Where the ground around a container is
+   all taken, as when two sources stand side by side, its link may take a
+   tile of the ground kept clear for working, if that cuts nothing off.
+   Later trunks reuse earlier ones, and trunks route around standing
+   extensions. Every road pays a little for each bend, more the sharper it
+   is, so roads run in long straight lines and turn gently, like a cart
+   road, instead of zigzagging. A road takes a short detour to stay
+   straight, never a long one. Where a trunk passes right beside the
+   mineral, its container sits on the road.
+6. **Everything else**, extensions last. First the keep's saved cells, then
+   rings beyond the keep that carry on its pattern out to 10 tiles from the
+   first spawn: every odd ring is road, and so are the eight spokes out from
+   the first spawn. A ring tile that is near on the map but a long walk
+   round a wall is skipped. The rings fill nearest first. In each ring,
+   extensions already standing keep their tiles first, then extensions go
+   in pairs mirrored across the keep's middle. A tile whose mirror already
+   holds a building goes in alone, as does one whose mirror is lost to a
+   wall, once the ring's pairs are placed. Only when the rings are full do
+   the last go on a diagonal lattice further out, so every building
+   touches a walkway.
+7. **Roads.** The keep's walkways are paved beside each of its buildings
+   from RCL 3, and the rings' walkways beside each building in the rings.
+   The road around the keep is laid only beside buildings out in the rings.
+   Beyond that, a road is built only on the cheapest walk from storage to a
+   building, bends counted as in step 5. Other walkway tiles stay bare
+   ground.
 
 **No build is cut off by a wall.** Each placement is checked before it is
 accepted. The planner rejects a building if it would leave any of these
