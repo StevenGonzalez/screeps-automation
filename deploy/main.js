@@ -11536,7 +11536,7 @@ function runRemoteHauler(creep) {
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
         creep.memory.working = false;
         setFillTarget(creep, undefined);
-        if (timeTrip(creep)) {
+        if (creep.room.name === homeRoom && timeTrip(creep)) {
             retire(creep, homeRoom);
             return;
         }
