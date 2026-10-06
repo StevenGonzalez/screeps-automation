@@ -46,6 +46,12 @@ export function cryMending(creep: Creep): void {
   creepCries[creep.name] = "Wounded!";
 }
 
+// A merchant with too few days left for another trip bids the road farewell.
+export function cryFarewell(creep: Creep): void {
+  freshCries();
+  creepCries[creep.name] = "Farewell!";
+}
+
 // A raid is told as one line however long it lasts, up to this many ticks.
 const REFUGE_WINDOW = 1500;
 

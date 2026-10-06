@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const g = globalThis as Record<string, unknown>;
 g.FIND_HOSTILE_CREEPS = 103;
 g.FIND_STRUCTURES = 107;
+g.FIND_MY_SPAWNS = 112;
 g.RESOURCE_ENERGY = "energy";
 g.ERR_NOT_IN_RANGE = -9;
 g.OK = 0;
@@ -12,6 +13,7 @@ g.RoomPosition = class {
 
 import { runRemoteHauler } from "../src/roles/role.remote_hauler";
 import { ROLE_HAULER, ROLE_REMOTE_HAULER } from "../src/config/config.roles";
+import { cryFor } from "../src/services/services.herald";
 
 const HOME = "W1N1";
 let tick = 1000;
@@ -28,6 +30,7 @@ let storage: { id: string; pos: { x: number; y: number }; store: Store };
 let throne: { id: string; pos: { x: number; y: number }; store: Store };
 let roomMemory: Partial<RoomMemory>;
 let creeps: Record<string, unknown>;
+let spawn: { id: string; recycleCreep: ReturnType<typeof vi.fn> };
 
 function merchantAt(x: number, y: number, load = 500) {
   const room = { name: HOME, storage, memory: roomMemory, find: () => [] };
@@ -43,6 +46,7 @@ function merchantAt(x: number, y: number, load = 500) {
       y,
       roomName: HOME,
       getRangeTo: (o: { pos: { x: number; y: number } }) => Math.max(Math.abs(o.pos.x - x), Math.abs(o.pos.y - y)),
+      findClosestByRange: (type: number) => (type === g.FIND_MY_SPAWNS ? spawn : null),
     },
     transfer: vi.fn((target: { id: string }) => (unloaded.push(target.id), g.ERR_NOT_IN_RANGE)),
     moveTo: vi.fn(() => 0),
@@ -62,6 +66,7 @@ beforeEach(() => {
   throne = { id: "throne", pos: { x: 14, y: 5 }, store: store(0, 2000) };
   roomMemory = { upgradeContainerId: "throne" as Id<StructureContainer>, minerContainerIds: [] };
   creeps = {};
+  spawn = { id: "spawn", recycleCreep: vi.fn(() => g.OK) };
   g.Game = {
     time: tick,
     creeps,
@@ -143,5 +148,76 @@ describe("merchant unloading at home", () => {
     nextTick();
     runRemoteHauler(creep);
     expect(creep.memory.fillTargetId).toBeUndefined();
+  });
+});
+
+describe("a merchant near the end of its days", () => {
+  // The merchant has just unloaded at home with `ticksToLive` left.
+  function unloaded(creep: Creep, ticksToLive: number) {
+    (creep.moveTo as ReturnType<typeof vi.fn>).mockClear();
+    creep.memory.working = true;
+    (creep.store as unknown as Store).energy = 0;
+    (creep as { ticksToLive?: number }).ticksToLive = ticksToLive;
+    runRemoteHauler(creep);
+  }
+
+  function wait(ticks: number) {
+    tick += ticks;
+    (g.Game as { time: number }).time = tick;
+  }
+
+  function setsOut(creep: Creep): boolean {
+    return (creep.moveTo as ReturnType<typeof vi.fn>).mock.calls.some(
+      ([to]) => (to as { roomName?: string }).roomName === "W1N2"
+    );
+  }
+
+  it("sets out again while it has the days for a trip as long as its last", () => {
+    const { creep } = merchantAt(15, 1, 0);
+    unloaded(creep, 1000);
+    wait(200);
+    unloaded(creep, 200);
+    expect(setsOut(creep)).toBe(true);
+    // Once on its way it keeps on, though fewer days are left than the trip.
+    nextTick();
+    (creep as { ticksToLive?: number }).ticksToLive = 199;
+    runRemoteHauler(creep);
+    expect(spawn.recycleCreep).not.toHaveBeenCalled();
+  });
+
+  it("bids the road farewell and is recycled once its days fall short of another trip", () => {
+    const { creep } = merchantAt(15, 1, 0);
+    unloaded(creep, 1000);
+    wait(200);
+    spawn.recycleCreep.mockReturnValue(g.ERR_NOT_IN_RANGE);
+    unloaded(creep, 199);
+    expect(setsOut(creep)).toBe(false);
+    expect(creep.moveTo).toHaveBeenCalledWith(spawn, expect.anything());
+    expect(cryFor(creep)).toBe("Farewell!");
+    // It keeps on to the spawn on the ticks after.
+    nextTick();
+    (creep as { ticksToLive?: number }).ticksToLive = 198;
+    spawn.recycleCreep.mockClear().mockReturnValue(g.OK);
+    runRemoteHauler(creep);
+    expect(spawn.recycleCreep).toHaveBeenCalledWith(creep);
+  });
+
+  it.each([
+    ["is struck on the road", (c: Creep) => (c.memory.remoteBackoffUntil = tick + 300)],
+    ["flees raiders", () => (g.Memory as { rooms: Record<string, RoomMemory> }).rooms[HOME].remoteRooms!.push(
+      { roomName: "W1N2", hostile: true, sources: [], lastSeen: 0 } as RemoteRoomData)],
+  ])("does not time a trip it cut short when it %s", (_, flee) => {
+    const { creep } = merchantAt(15, 1, 0);
+    unloaded(creep, 1000);
+    wait(200);
+    unloaded(creep, 1000);
+    wait(100);
+    flee(creep);
+    runRemoteHauler(creep);
+    wait(500);
+    delete creep.memory.remoteBackoffUntil;
+    (g.Memory as { rooms: Record<string, RoomMemory> }).rooms[HOME].remoteRooms = [];
+    unloaded(creep, 250);
+    expect(setsOut(creep)).toBe(true);
   });
 });

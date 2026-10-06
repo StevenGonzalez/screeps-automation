@@ -7,7 +7,7 @@ import {
   clearRemoteInvader,
   standsIn,
 } from "../services/services.creep";
-import { cryFlight, cryHaul, settleFlight } from "../services/services.herald";
+import { cryFarewell, cryFlight, cryHaul, settleFlight } from "../services/services.herald";
 import { remoteThreats, isInvaderCreep, isPlayerCreep, findInvaderCore } from "../services/services.combat";
 import { ROLE_REMOTE_MINER } from "../config/config.roles";
 import { energyClaimedByOthers, setFillTarget } from "../services/services.coordination";
@@ -23,6 +23,10 @@ export function runRemoteHauler(creep: Creep) {
     creep.suicide();
     return;
   }
+  if (tooOldForTheRoad(creep)) {
+    retire(creep, homeRoom);
+    return;
+  }
 
   const tookDamage = creep.memory._hp !== undefined && creep.hits < creep.memory._hp;
   creep.memory._hp = creep.hits;
@@ -32,6 +36,7 @@ export function runRemoteHauler(creep: Creep) {
     if (creep.room.name === targetRoom) flagRemoteDamage(creep);
   }
   if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
+    delete creep.memory.tripFrom;
     if (creep.store[RESOURCE_ENERGY] > 0) depositEnergy(creep, homeRoom);
     else if (!standsIn(creep, homeRoom)) moveToRoom(creep, homeRoom);
     return;
@@ -46,6 +51,7 @@ export function runRemoteHauler(creep: Creep) {
 
   if (isAssignedRemoteContested(creep) || threats.length > 0) {
     cryFlight(creep);
+    delete creep.memory.tripFrom;
     if (creep.store[RESOURCE_ENERGY] > 0) {
       depositEnergy(creep, homeRoom);
     } else if (!standsIn(creep, homeRoom)) {
@@ -63,6 +69,10 @@ export function runRemoteHauler(creep: Creep) {
   if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
     creep.memory.working = false;
     setFillTarget(creep, undefined);
+    if (timeTrip(creep)) {
+      retire(creep, homeRoom);
+      return;
+    }
   } else if (
     !creep.memory.working &&
     (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 ||
@@ -78,6 +88,35 @@ export function runRemoteHauler(creep: Creep) {
     if (creep.room.name !== homeRoom) tendRemoteRoad(creep);
     depositEnergy(creep, homeRoom);
   }
+}
+
+// A merchant sets out again only with the days left for a round trip as long
+// as its last. With no thought for the road back it walked out on its last
+// days all the same: Wystan died on the road home from the Crow Glen with a
+// full load, and a thousand gold rotted in his grave, while Amice died
+// empty-handed by the container she had walked out to.
+// One too old for the road goes home to the spawn and is recycled.
+function timeTrip(creep: Creep): boolean {
+  if (creep.memory.tripFrom !== undefined) creep.memory.trip = Game.time - creep.memory.tripFrom;
+  creep.memory.tripFrom = Game.time;
+  if (!tooOldForTheRoad(creep)) return false;
+  cryFarewell(creep);
+  return true;
+}
+
+function tooOldForTheRoad(creep: Creep): boolean {
+  const { trip, tripFrom } = creep.memory;
+  if (trip === undefined || tripFrom === undefined || creep.ticksToLive === undefined) return false;
+  return creep.ticksToLive + Game.time - tripFrom < trip;
+}
+
+function retire(creep: Creep, homeRoom: string): void {
+  if (creep.room.name !== homeRoom) {
+    moveToRoom(creep, homeRoom);
+    return;
+  }
+  const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS);
+  if (spawn && spawn.recycleCreep(creep) === ERR_NOT_IN_RANGE) creep.moveTo(spawn, { range: 1, reusePath: 20 });
 }
 
 // Remote roads have no builder or repairer of their own: a hauler with a WORK

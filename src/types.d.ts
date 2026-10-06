@@ -261,6 +261,10 @@ declare global {
     // Set while a peddler a raid left short of WORK parts walks home to be
     // healed by its towers; cleared once it is whole.
     mending?: boolean;
+    // The tick a merchant last set out from home empty, and the ticks its last
+    // whole round trip took; one cut short by flight is not timed.
+    tripFrom?: number;
+    trip?: number;
     // The remote a knight has ridden out to defend; cleared once it is safe.
     sortie?: string;
     fillTargetId?: string;
