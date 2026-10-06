@@ -1661,844 +1661,6 @@ function remotePaved(remote) {
     return remoteRoadCoverage(remote) >= PAVED_ROAD_COVERAGE;
 }
 
-const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
-let cryTick = -1;
-let creepCries = {};
-let roomCries = {};
-function freshCries() {
-    if (cryTick === Game.time)
-        return;
-    cryTick = Game.time;
-    creepCries = {};
-    roomCries = {};
-}
-function cryFor(creep) {
-    var _a;
-    if (cryTick !== Game.time)
-        return undefined;
-    return (_a = creepCries[creep.name]) !== null && _a !== void 0 ? _a : roomCries[creep.room.name];
-}
-function cryFlight(creep) {
-    if (creep.memory.fled)
-        return;
-    creep.memory.fled = true;
-    freshCries();
-    creepCries[creep.name] = "Bandits!";
-}
-function cryMending(creep) {
-    freshCries();
-    creepCries[creep.name] = "Wounded!";
-}
-function cryFarewell(creep) {
-    freshCries();
-    creepCries[creep.name] = "Farewell!";
-}
-const REFUGE_WINDOW = 1500;
-function heraldRefuge(creep, remote, refuge) {
-    var _a, _b;
-    const band = warbandIn(remote);
-    const from = band ? `${band}'s raiders` : "the raiders";
-    const where = ((_b = (_a = Game.rooms[refuge]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my) ? castleName(refuge) : `the ${wildsName(refuge)}`;
-    tally(`refuge:${remote}:${refuge}`, 1, (n) => `${n === 1 ? creep.name : `${n} peddlers`} slipped over the border into ${where} to hide from ${from}.`, REFUGE_WINDOW);
-}
-const GLUT_CRY_PERIOD = 25;
-function cryGlut(creep) {
-    if (Game.time % GLUT_CRY_PERIOD !== 0)
-        return;
-    freshCries();
-    creepCries[creep.name] = "no buyers";
-}
-function cryHaul(creep, amount) {
-    var _a;
-    creep.memory.hauled = ((_a = creep.memory.hauled) !== null && _a !== void 0 ? _a : 0) + amount;
-    freshCries();
-    creepCries[creep.name] = `+${amount} gold`;
-    heraldRoadGold(creep, amount);
-}
-const ROAD_GOLD_MARKS = [
-    [10000, "ten thousand"],
-    [50000, "fifty thousand"],
-    [100000, "a hundred thousand"],
-    [250000, "a quarter of a million"],
-    [500000, "half a million"],
-    [1000000, "a million"],
-];
-function roadGoldMark(before, after) {
-    for (const [at, words] of ROAD_GOLD_MARKS)
-        if (before < at && after >= at)
-            return words;
-    const millions = Math.floor(after / 1000000);
-    if (millions >= 2 && Math.floor(before / 1000000) < millions)
-        return `${millions} million`;
-    return undefined;
-}
-function heraldRoadGold(creep, amount) {
-    var _a, _b, _c, _d;
-    const { homeRoom, targetRoom } = creep.memory;
-    if (!homeRoom || !targetRoom)
-        return;
-    const roads = ((_a = Memory.roadGold) !== null && _a !== void 0 ? _a : (Memory.roadGold = {}));
-    const key = `${homeRoom}>${targetRoom}`;
-    const before = (_b = roads[key]) !== null && _b !== void 0 ? _b : 0;
-    roads[key] = before + amount;
-    const season = (_c = Memory.annals) === null || _c === void 0 ? void 0 : _c.roads;
-    if (season)
-        season[key] = ((_d = season[key]) !== null && _d !== void 0 ? _d : 0) + amount;
-    const mark = roadGoldMark(before, before + amount);
-    if (!mark)
-        return;
-    chronicle(`With ${creep.name}'s load, the merchants of ${castleName(homeRoom)} have brought ${mark} gold home from the ${wildsName(targetRoom)}.`);
-}
-function settleFlight(creep) {
-    if (creep.memory.fled)
-        delete creep.memory.fled;
-}
-const SORTIE_WINDOW = 1500;
-function crySortie(creep, roomName) {
-    var _a, _b;
-    if (creep.memory.sortie === roomName)
-        return;
-    creep.memory.sortie = roomName;
-    freshCries();
-    creepCries[creep.name] = "Ride out!";
-    const band = (_a = Memory.warbands) === null || _a === void 0 ? void 0 : _a[roomName];
-    const foe = `${band ? `${band.name}'s` : "the"} raiders in the ${wildsName(roomName)}`;
-    const line = (names) => `${andList(names)} ${names.length === 1 ? "rides" : "ride"} out against ${foe}.`;
-    tallyPlaces(`sortie:${roomName}:${(_b = band === null || band === void 0 ? void 0 : band.at) !== null && _b !== void 0 ? _b : ""}`, creep.name, line, band ? SORTIE_WINDOW : 0);
-}
-const GOSSIP_TICKS = 600;
-function spreadWord(line) {
-    Memory.gossip = { line: line.slice(0, 10), until: Game.time + GOSSIP_TICKS };
-}
-function gossip() {
-    const word = Memory.gossip;
-    if (!word)
-        return undefined;
-    if (word.until > Game.time)
-        return word.line;
-    delete Memory.gossip;
-    return undefined;
-}
-function mourn(name) {
-    return `† ${name.slice(name.lastIndexOf(" ") + 1)}`;
-}
-function heraldRooms() {
-    var _a, _b, _c;
-    freshCries();
-    heraldFallen();
-    heraldRenown();
-    heraldTrade();
-    heraldSeason();
-    heraldSky();
-    const castles = [];
-    for (const roomName in Game.rooms) {
-        const room = Game.rooms[roomName];
-        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
-            castles.push(room);
-            heraldRise(room);
-            heraldStir(room);
-            heraldFirstBorn(room);
-            heraldVisitors(room);
-            heraldWorks(room);
-            heraldRoads(room);
-            heraldVendors(room);
-            heraldVein(room);
-            heraldWalls(room);
-        }
-        heraldKills(room);
-    }
-    for (const castle of castles) {
-        for (const remote of (_b = castle.memory.remoteRooms) !== null && _b !== void 0 ? _b : []) {
-            const wilds = Game.rooms[remote.roomName];
-            if (wilds && !((_c = wilds.controller) === null || _c === void 0 ? void 0 : _c.my))
-                heraldWayfarers(wilds, remote);
-        }
-    }
-    heraldDragon(castles);
-    heraldWolves(castles);
-    heraldWisps(castles);
-}
-function castleList(castles) {
-    return andList(castles.map((r) => castleName(r.name)));
-}
-function andList(items) {
-    const rest = items.slice(0, -1);
-    const last = items[items.length - 1];
-    return rest.length ? `${rest.join(", ")} and ${last}` : last;
-}
-function heraldRenown() {
-    const level = Game.gcl.level;
-    const known = Memory.heraldGcl;
-    Memory.heraldGcl = level;
-    if (known === undefined || level <= known)
-        return;
-    spreadWord("renown!");
-    chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
-}
-const SEASON_TIDINGS = {
-    spring: "Spring comes to the realm. The snow melts from the castle walls.",
-    summer: "Summer comes to the realm. The days run long on the vendors' roads.",
-    autumn: "Autumn comes to the realm. Leaves blow across the wilds.",
-    winter: "Winter comes to the realm. Snow settles on the battlements.",
-};
-function reckoningYear(time) {
-    return Math.floor(time / (TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON * TOWN_SEASONS.length)) + 1;
-}
-function heraldSeason() {
-    const season = townSeason(Game.time);
-    const known = Memory.heraldSeason;
-    Memory.heraldSeason = season;
-    if (known === undefined || known === season)
-        return;
-    const annals = Memory.annals;
-    Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0, roads: {} };
-    if (annals)
-        chronicle(annalsLine(known, annals));
-    const road = annals && richestRoadLine(known, annals);
-    if (road)
-        chronicle(road);
-    const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
-    const feast = townFeast(Game.time);
-    chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
-    if (season === "spring")
-        heraldCensus();
-}
-function heraldCensus() {
-    var _a;
-    const souls = Object.keys(Game.creeps).length;
-    let castles = 0;
-    for (const name in Game.rooms)
-        if ((_a = Game.rooms[name].controller) === null || _a === void 0 ? void 0 : _a.my)
-            castles++;
-    const held = castles === 1 ? "its one castle" : `its ${castles} castles`;
-    chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.${neighboursLine()}`);
-}
-const NOT_LORDS = new Set(["Invader", "Source Keeper"]);
-const NEIGHBOURS_NAMED = 3;
-function neighboursLine() {
-    var _a;
-    const lords = Object.values((_a = Memory.players) !== null && _a !== void 0 ? _a : {})
-        .filter((p) => !NOT_LORDS.has(p.username))
-        .sort((a, b) => b.roomCount - a.roomCount)
-        .slice(0, NEIGHBOURS_NAMED)
-        .map((p) => lordName(p.username));
-    return lords.length ? ` Beyond its borders the scouts know of ${andList(lords)}.` : "";
-}
-function annalsLine(season, a) {
-    const whole = a.since <= Game.time - TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON;
-    const when = whole ? "This season" : "Since the scribes took up their pens";
-    const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
-    const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
-    const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
-    const ended = season === "winter" ? `, and with it the year ${reckoningYear(Game.time - 1)}` : "";
-    return `So ends the ${season}${ended}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
-}
-function richestRoadLine(season, a) {
-    var _a, _b;
-    let best;
-    for (const [key, gold] of Object.entries((_a = a.roads) !== null && _a !== void 0 ? _a : {})) {
-        if (gold > ((_b = best === null || best === void 0 ? void 0 : best[1]) !== null && _b !== void 0 ? _b : 0))
-            best = [key, gold];
-    }
-    if (!best)
-        return undefined;
-    const [home, remote] = best[0].split(">");
-    return `The road from ${castleName(home)} to the ${wildsName(remote)} was the richest of the ${season}: ${formatK(best[1])} gold came home along it.`;
-}
-const TRADE_CHECK_PERIOD = 25;
-const TRADE_WINDOW = 1500;
-const WARES = {
-    energy: "gold",
-    H: "brimstone",
-    O: "quicksilver",
-    U: "utrium",
-    L: "lemergium",
-    K: "keanium",
-    Z: "zynthium",
-    X: "philosopher's salt",
-    silicon: "glass sand",
-    metal: "star iron",
-    biomass: "witchroot",
-    mist: "wraith mist",
-};
-function heraldTrade() {
-    var _a, _b, _c, _d;
-    if (Game.time % TRADE_CHECK_PERIOD !== 0)
-        return;
-    const seen = Memory.heraldTradeAt;
-    Memory.heraldTradeAt = Game.time - 1;
-    if (seen === undefined)
-        return;
-    const fresh = (t) => t.time > seen && t.time < Game.time;
-    for (const t of Game.market.outgoingTransactions) {
-        if (fresh(t))
-            chronicleTrade(t, "sold", t.from, (_a = t.recipient) === null || _a === void 0 ? void 0 : _a.username, (_b = t.sender) === null || _b === void 0 ? void 0 : _b.username);
-    }
-    for (const t of Game.market.incomingTransactions) {
-        if (fresh(t))
-            chronicleTrade(t, "bought", t.to, (_c = t.sender) === null || _c === void 0 ? void 0 : _c.username, (_d = t.recipient) === null || _d === void 0 ? void 0 : _d.username);
-    }
-}
-function chronicleTrade(t, verb, ours, them, us) {
-    var _a;
-    if (them !== undefined && them === us)
-        return;
-    const ware = (_a = WARES[t.resourceType]) !== null && _a !== void 0 ? _a : t.resourceType;
-    const partner = them ? `the merchants of ${lordName(them)}` : "the free markets";
-    const dir = verb === "sold" ? "to" : "from";
-    tally(`trade:${verb}:${ours}:${them !== null && them !== void 0 ? them : ""}:${t.resourceType}`, t.amount, (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`, TRADE_WINDOW);
-}
-const CARAVAN_WINDOW = 1500;
-function heraldNomads(home, roomName, resource) {
-    var _a;
-    chronicle(`Nomads ride out from ${castleName(home)} to dig the ${(_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource} of the ${wildsName(roomName)}.`);
-}
-function heraldNomadsIdle(home, resource) {
-    var _a;
-    const ware = (_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource;
-    tally(`unsold:${home}:${resource}`, 0, () => `The nomads of ${castleName(home)} stay in camp. No merchant will pay a fair price for the ${ware} they dug.`, CARAVAN_WINDOW);
-}
-function heraldCaravan(home, roomName, resource, amount) {
-    var _a;
-    const ware = (_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource;
-    tally(`caravan:${home}:${roomName}:${resource}`, amount, (n) => `The caravans of ${castleName(home)} bring ${n} ${ware} home from the ${wildsName(roomName)}.`, CARAVAN_WINDOW);
-}
-const BREW_VIRTUES = {
-    UH: "strength",
-    UO: "delving",
-    KH: "the packhorse",
-    KO: "the far shot",
-    LH: "masonry",
-    LO: "mending",
-    ZH: "sundering",
-    ZO: "swiftness",
-    GH: "the crown",
-    GO: "iron skin",
-};
-const REAGENTS = {
-    OH: "cinnabar",
-    ZK: "zynthium keanite",
-    UL: "utrium lemergite",
-    G: "ghodium",
-};
-function brewName(compound) {
-    const reagent = REAGENTS[compound];
-    if (reagent)
-        return reagent;
-    const m = /^(X?)([UKLZG])(H2O|HO2|H|O)$/.exec(compound);
-    if (!m)
-        return compound;
-    const [, catalyzed, element, rest] = m;
-    const kind = catalyzed ? "philters" : rest.length > 1 ? "elixirs" : "draughts";
-    return `${kind} of ${BREW_VIRTUES[element + (rest === "HO2" ? "O" : rest[0])]}`;
-}
-const BREW_WINDOW = 1500;
-function heraldBrew(roomName, compound, amount) {
-    tally(`brew:${roomName}:${compound}`, amount, (n) => `The goblin of ${castleName(roomName)}'s labs brewed ${formatK(n)} ${brewName(compound)}.`, BREW_WINDOW);
-}
-const VISIT_WINDOW = 1500;
-function heraldVisitors(room) {
-    for (const c of room.find(FIND_HOSTILE_CREEPS)) {
-        if (!isPlayerCreep(c))
-            continue;
-        const who = c.owner.username;
-        const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
-        if (!armed) {
-            const text = (rooms) => `Spies of ${lordName(who)} crept about ${andList(rooms.map(castleName))}.`;
-            tallyPlaces(`visit:${who}:spy`, room.name, text, VISIT_WINDOW);
-            continue;
-        }
-        const text = `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`;
-        if (tally(`visit:${room.name}:${who}:war`, 0, () => text, VISIT_WINDOW)) {
-            roomCries[room.name] = "To arms!";
-            spreadWord("raiders!");
-        }
-    }
-}
-const WAYFARER_WINDOW = 3000;
-const WAYFARERS = [
-    [CLAIM, "An envoy", "Envoys"],
-    [WORK, "A labourer", "Labourers"],
-    [CARRY, "A carter", "Carters"],
-    [undefined, "A scout", "Scouts"],
-];
-function heraldWayfarers(room, remote) {
-    const parties = new Map();
-    for (const c of room.find(FIND_HOSTILE_CREEPS)) {
-        if (!isPlayerCreep(c))
-            continue;
-        const party = parties.get(c.owner.username);
-        if (party)
-            party.push(c);
-        else
-            parties.set(c.owner.username, [c]);
-    }
-    for (const [who, party] of parties) {
-        if (party.some(isArmedHostile) || (remote.hostile && remote.rival === who))
-            continue;
-        const [, one, many] = WAYFARERS.find(([part]) => !part || party.some((c) => c.body.some((p) => p.type === part)));
-        const text = (rooms) => `${party.length === 1 ? one : many} of ${lordName(who)} passed through ${andList(rooms.map((r) => `the ${wildsName(r)}`))}.`;
-        tallyPlaces(`wayfarers:${who}:${many}`, room.name, text, WAYFARER_WINDOW);
-    }
-}
-const WORKS_CHECK_PERIOD = 100;
-const WORKS_WINDOW = 1500;
-function heraldWorks(room) {
-    var _a, _b, _c;
-    if (Game.time % WORKS_CHECK_PERIOD !== 0)
-        return;
-    const counts = {};
-    for (const s of room.find(FIND_MY_STRUCTURES)) {
-        if (LANDMARKS[s.structureType])
-            counts[s.structureType] = ((_a = counts[s.structureType]) !== null && _a !== void 0 ? _a : 0) + 1;
-    }
-    const known = room.memory.heraldWorks;
-    room.memory.heraldWorks = counts;
-    if (!known)
-        return;
-    const exp = Memory.expansion;
-    const builders = (exp === null || exp === void 0 ? void 0 : exp.roomName) === room.name && exp.phase === "bootstrapping" ? "pilgrims" : "masons";
-    for (const type of Object.keys(LANDMARKS)) {
-        const gained = ((_b = counts[type]) !== null && _b !== void 0 ? _b : 0) - ((_c = known[type]) !== null && _c !== void 0 ? _c : 0);
-        if (gained <= 0)
-            continue;
-        const [one, many] = LANDMARKS[type];
-        const a = /^[aeiou]/.test(one) ? "an" : "a";
-        tally(`works:${room.name}:${type}`, gained, (n) => `The ${builders} of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
-    }
-}
-function heraldWaystation(creep, site) {
-    const home = creep.memory.homeRoom;
-    if (!home)
-        return;
-    const wilds = wildsName(site.pos.roomName);
-    const theirs = new Set();
-    for (const name in Game.creeps) {
-        const mem = Game.creeps[name].memory;
-        if (mem.homeRoom !== home && mem.assignedContainerId)
-            theirs.add(mem.assignedContainerId);
-    }
-    const second = creep.room
-        .find(FIND_STRUCTURES)
-        .some((s) => s.structureType === STRUCTURE_CONTAINER && !theirs.has(s.id));
-    const fresh = tally(`waystation:${site.id}`, 0, () => second
-        ? `${creep.name} raised a second waystation in the ${wilds}, so the merchants of ${castleName(home)} load at both its diggings.`
-        : `${creep.name} raised a waystation in the ${wilds}. No more of ${castleName(home)}'s gold rots in the mud.`, CREEP_LIFE_TIME);
-    if (fresh)
-        spreadWord("waystation");
-}
-function heraldRoads(room) {
-    var _a, _b;
-    if (Game.time % WORKS_CHECK_PERIOD !== 0)
-        return;
-    for (const remote of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
-        const told = (_b = room.memory.heraldRoads) !== null && _b !== void 0 ? _b : [];
-        if (told.includes(remote.roomName) || !remotePaved(remote))
-            continue;
-        room.memory.heraldRoads = [...told, remote.roomName];
-        spreadWord("new road!");
-        chronicle(`The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`);
-    }
-}
-const VENDOR_NEWS_AGE = 2 * WORKS_CHECK_PERIOD;
-function heraldVendors(room) {
-    if (room.memory.heraldVendors || Game.time % WORKS_CHECK_PERIOD !== 0)
-        return;
-    const peddlers = [];
-    for (const name in Game.creeps) {
-        const c = Game.creeps[name];
-        if (c.memory.role === ROLE_REMOTE_MINER && c.memory.targetRoom)
-            peddlers.push(c);
-    }
-    const ours = peddlers.filter((c) => c.memory.homeRoom === room.name);
-    if (ours.length === 0)
-        return;
-    room.memory.heraldVendors = true;
-    if (ours.some((c) => { var _a; return ((_a = c.ticksToLive) !== null && _a !== void 0 ? _a : CREEP_LIFE_TIME) < CREEP_LIFE_TIME - VENDOR_NEWS_AGE; }))
-        return;
-    const target = ours[0].memory.targetRoom;
-    const neighbour = peddlers.find((c) => c.memory.homeRoom !== room.name && c.memory.targetRoom === target);
-    const shared = (neighbour === null || neighbour === void 0 ? void 0 : neighbour.memory.homeRoom) ? ` ${castleName(neighbour.memory.homeRoom)}'s vendors already dig there.` : "";
-    roomCries[room.name] = "Godspeed!";
-    spreadWord("vendors!");
-    chronicle(`${castleName(room.name)} sends its first vendors out into the ${wildsName(target)}.${shared}`);
-}
-function heraldVein(room) {
-    var _a, _b;
-    if (Game.time % WORKS_CHECK_PERIOD !== 0)
-        return;
-    const mineral = room.find(FIND_MINERALS)[0];
-    if (!mineral)
-        return;
-    const dry = mineral.mineralAmount === 0;
-    const known = room.memory.heraldVeinDry;
-    room.memory.heraldVeinDry = dry;
-    if (known === undefined || known === dry)
-        return;
-    const vein = `The ${(_a = WARES[mineral.mineralType]) !== null && _a !== void 0 ? _a : mineral.mineralType} vein beneath ${castleName(room.name)}`;
-    if (dry) {
-        const days = Math.max(1, Math.round(((_b = mineral.ticksToRegeneration) !== null && _b !== void 0 ? _b : 0) / TOWN_DAY_LENGTH));
-        chronicle(`${vein} is dug dry. Its jewelers lay down their picks for ${days} days.`);
-    }
-    else {
-        chronicle(`${vein} runs full again. Its jewelers take up their picks.`);
-    }
-}
-const WALL_MARKS = [
-    [100000, "a hundred thousand"],
-    [300000, "three hundred thousand"],
-    [1000000, "a million"],
-    [3000000, "three million"],
-    [10000000, "ten million"],
-];
-function heraldWalls(room) {
-    const ring = room.memory.perimeterTiles;
-    if (!(ring === null || ring === void 0 ? void 0 : ring.length) || Game.time % WORKS_CHECK_PERIOD !== 0)
-        return;
-    const tiles = new Set(ring);
-    let standing = 0;
-    let weakest = Infinity;
-    for (const s of room.find(FIND_STRUCTURES)) {
-        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART)
-            continue;
-        if (!tiles.has(`${s.pos.x},${s.pos.y}`))
-            continue;
-        standing++;
-        weakest = Math.min(weakest, s.hits);
-    }
-    const reached = standing < tiles.size ? 0 : WALL_MARKS.filter(([at]) => weakest >= at).length;
-    const known = room.memory.heraldWalls;
-    if (known !== undefined && reached <= known)
-        return;
-    room.memory.heraldWalls = reached;
-    if (known === undefined)
-        return;
-    chronicle(`The smiths of ${castleName(room.name)} have raised its walls ${WALL_MARKS[reached - 1][1]} strong.`);
-}
-const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
-const DRAGON_CRY_PERIOD = 8;
-const DRAGON_TIDINGS = [
-    (c) => `A dragon passed over ${c}, black against the sky.`,
-    (c) => `A dragon crossed the skies of ${c} and was gone.`,
-    (c) => `The shadow of a dragon fell across ${c}.`,
-];
-function heraldDragon(castles) {
-    const dragon = townDragon(Game.time);
-    if (castles.length === 0 || !dragon || dragon.t % DRAGON_CRY_PERIOD !== 0)
-        return;
-    for (const room of castles)
-        roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
-    if (dragon.t !== 0)
-        return;
-    spreadWord("a dragon!");
-    chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleList(castles)));
-}
-const HOWL_CRIES = ["Wolves!", "Hark!", "Hear that?", "Awoo?!"];
-function heraldWolves(castles) {
-    const howl = townHowl(Game.time);
-    if (castles.length === 0 || !howl || howl.t !== 0)
-        return;
-    for (const room of castles)
-        roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
-    if (howl.n !== 0)
-        return;
-    spreadWord("wolves...");
-    chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
-}
-const WISP_CRIES = ["Wisps!", "Don't go!", "Spirits..."];
-const WISP_TIDINGS = [
-    "Under the dark moon, will-o'-the-wisps drifted over the marshes. None who followed them came back.",
-    "Pale lights wandered the bogs all night beneath the new moon.",
-    "The marsh-lights were out under the dark moon. The old folk barred their doors.",
-];
-function heraldWisps(castles) {
-    if (castles.length === 0 || Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townWisps(Game.time))
-        return;
-    castles.forEach((room, i) => (roomCries[room.name] = WISP_CRIES[i % WISP_CRIES.length]));
-    const moon = Math.floor(Game.time / (TOWN_DAY_LENGTH * TOWN_MOON_DAYS));
-    spreadWord("the wisps");
-    chronicle(WISP_TIDINGS[moon % WISP_TIDINGS.length]);
-}
-const AURORA_TIDINGS = [
-    "The northern lights burned green over the realm.",
-    "Green fire danced in the winter sky. The old folk say the dead were dancing.",
-    "Ribbons of light rippled over the battlements all night long.",
-];
-function heraldSky() {
-    if (Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townAurora(Game.time))
-        return;
-    chronicle(AURORA_TIDINGS[Math.floor(Game.time / TOWN_DAY_LENGTH) % AURORA_TIDINGS.length]);
-}
-function heraldRival(roomName, before, owner, rcl) {
-    const wilds = `the ${wildsName(roomName)}`;
-    if (!before) {
-        if (owner)
-            chronicle(`Scouts bring word of ${lordName(owner)}, who holds a keep of level ${rcl} in ${wilds}.`);
-        return;
-    }
-    const was = before.owner;
-    if (owner && owner !== was) {
-        chronicle(was
-            ? `${lordName(owner)} seizes ${wilds} from ${lordName(was)}.`
-            : `${lordName(owner)} raises a keep in ${wilds}.`);
-    }
-    else if (!owner && was) {
-        chronicle(`The keep of ${lordName(was)} in ${wilds} lies abandoned.`);
-    }
-    else if (owner && before.rcl > 0 && rcl > before.rcl) {
-        chronicle(`The keep of ${lordName(owner)} in ${wilds} rises to level ${rcl}.`);
-    }
-}
-function heraldRise(room) {
-    const level = room.controller.level;
-    const known = room.memory.heraldLevel;
-    room.memory.heraldLevel = level;
-    if (known === undefined || level <= known)
-        return;
-    roomCries[room.name] = "Long live!";
-    spreadWord(`level ${level}!`);
-    const works = newWorks(level);
-    chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!` +
-        (works ? ` Its masons may now raise ${works}.` : ""));
-}
-function newWorks(level) {
-    var _a, _b;
-    const works = [];
-    for (const type of Object.keys(LANDMARKS)) {
-        const was = (_a = CONTROLLER_STRUCTURES[type][level - 1]) !== null && _a !== void 0 ? _a : 0;
-        const now = (_b = CONTROLLER_STRUCTURES[type][level]) !== null && _b !== void 0 ? _b : 0;
-        if (now <= was)
-            continue;
-        const [one, many] = LANDMARKS[type];
-        if (now - was > 1)
-            works.push(`${now - was} ${was ? "more " : ""}${many}`);
-        else if (was)
-            works.push(`a ${ordinal(now)} ${one}`);
-        else
-            works.push(`${/^[aeiou]/.test(one) ? "an" : "a"} ${one}`);
-    }
-    return works.length ? andList(works) : undefined;
-}
-const STIR_SHARE = 0.9;
-function heraldStir(room) {
-    if (Game.time % WORKS_CHECK_PERIOD !== 0)
-        return;
-    const { level, progress, progressTotal } = room.controller;
-    if (level < 2 || !progressTotal || progress < progressTotal * STIR_SHARE)
-        return;
-    const next = level + 1;
-    if (room.memory.heraldStirred === next)
-        return;
-    room.memory.heraldStirred = next;
-    chronicle(`The enchanters of ${castleName(room.name)} feel the throne stir. Level ${next} is near.`);
-}
-function heraldFirstBorn(room) {
-    var _a, _b;
-    if (((_a = Memory.expansion) === null || _a === void 0 ? void 0 : _a.roomName) !== room.name || room.memory.heraldBorn)
-        return;
-    const birth = (_b = room.find(FIND_MY_SPAWNS).find((s) => s.spawning)) === null || _b === void 0 ? void 0 : _b.spawning;
-    if (!birth)
-        return;
-    room.memory.heraldBorn = true;
-    for (const name in Game.creeps) {
-        if (name !== birth.name && Game.creeps[name].memory.homeRoom === room.name)
-            return;
-    }
-    room.memory.firstBorn = birth.name;
-    roomCries[room.name] = "Huzzah!";
-    spreadWord("firstborn!");
-    chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
-}
-function heraldFirstBornRest(name) {
-    for (const roomName in Memory.rooms) {
-        const mem = Memory.rooms[roomName];
-        if (mem.firstBorn !== name)
-            continue;
-        delete mem.firstBorn;
-        spreadWord(mourn(name));
-        chronicle(`${name}, the first born in the barracks of ${castleName(roomName)}, has died of old age. The keep's bells ring once more.`);
-    }
-}
-const BATTLE_WINDOW = 300;
-function whereIn(roomName) {
-    var _a, _b;
-    return ((_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my)
-        ? `before the walls of ${castleName(roomName)}`
-        : `in the ${wildsName(roomName)}`;
-}
-function chronicleKill(room, slayer, dead) {
-    const lord = dead && isPlayerCreep(dead) ? dead.owner.username : undefined;
-    const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
-    annal("slain", 1);
-    if (lord || foe === "raider")
-        spreadWord("victory!");
-    const band = foe === "raider" && !lord ? warbandIn(room.name) : undefined;
-    let one = band ? `A raider of ${band}'s band` : `A ${foe}`;
-    let many = (n) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
-    let key = `slain:${room.name}`;
-    if (lord) {
-        const armed = "body" in dead && dead.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
-        const [kind, kinds] = armed ? ["man-at-arms", "men-at-arms"] : ["spy", "spies"];
-        one = `A ${kind} of ${lordName(lord)}`;
-        many = (n) => `${n} of ${lordName(lord)}'s ${kinds}`;
-        key += `:${lord}:${kind}`;
-    }
-    tally(key, 1, (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
-    if (band && warbandLoss(room.name)) {
-        spreadWord("routed!");
-        Memory.lastRout = { band, room: room.name, slayer };
-        const bounty = slayer && warbandBounty(room.name) ? " and claims the Crown's bounty" : "";
-        chronicle(`${slayer ? `${slayer} broke ${band}'s band` : `${band}'s band is broken`} ${whereIn(room.name)}${bounty}. The warlord is heard of no more.`);
-    }
-}
-let muster = new Map();
-function foeIn(roomName) {
-    var _a, _b;
-    const hostiles = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.find(FIND_HOSTILE_CREEPS)) !== null && _b !== void 0 ? _b : [];
-    const player = hostiles.find(isPlayerCreep);
-    if (player)
-        return `the men of ${lordName(player.owner.username)}`;
-    if (hostiles.length === 0)
-        return undefined;
-    if (isSourceKeeperRoom(roomName))
-        return "a lair keeper";
-    const band = warbandIn(roomName);
-    return band ? `${band}'s raiders` : "raiders";
-}
-function heraldFallen() {
-    var _a, _b, _c, _d;
-    const next = new Map();
-    for (const name in Game.creeps) {
-        const c = Game.creeps[name];
-        if (c.spawning)
-            continue;
-        next.set(name, {
-            room: c.pos.roomName,
-            hurt: c.hits < c.hitsMax,
-            ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0,
-        });
-    }
-    for (const [name, last] of muster) {
-        if (next.has(name))
-            continue;
-        const mem = (_b = Memory.creeps) === null || _b === void 0 ? void 0 : _b[name];
-        const kills = (_c = mem === null || mem === void 0 ? void 0 : mem.kills) !== null && _c !== void 0 ? _c : 0;
-        const slew = kills > 0 ? `, who slew ${kills === 1 ? "a foe" : `${kills} foes`},` : "";
-        if (!last.hurt || last.ttl <= 1) {
-            if (slew) {
-                spreadWord(mourn(name));
-                chronicle(`${name}${slew} was laid to rest with honours.`);
-                heraldSlayer(name, kills);
-            }
-            heraldRetired(name, (_d = mem === null || mem === void 0 ? void 0 : mem.hauled) !== null && _d !== void 0 ? _d : 0);
-            if (last.ttl <= 1)
-                heraldFirstBornRest(name);
-            continue;
-        }
-        const foe = foeIn(last.room);
-        const by = foe ? ` to ${foe}` : "";
-        annal("fallen", 1);
-        spreadWord(mourn(name));
-        tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
-        heraldSlayer(name, kills);
-    }
-    muster = next;
-}
-function heraldSlayer(name, kills) {
-    var _a, _b;
-    if (kills <= ((_b = (_a = Memory.greatestSlayer) === null || _a === void 0 ? void 0 : _a.kills) !== null && _b !== void 0 ? _b : 0))
-        return;
-    Memory.greatestSlayer = { name, kills };
-    chronicle(`The minstrels make a song of ${name}, who slew more foes than any before.`);
-}
-function heraldRetired(name, hauled) {
-    var _a;
-    if (hauled <= ((_a = Memory.richestHaul) !== null && _a !== void 0 ? _a : 0))
-        return;
-    Memory.richestHaul = hauled;
-    Memory.richestHauler = name;
-    chronicle(`${name} retired from the road with ${formatK(hauled)} gold brought home, the most of any merchant yet.`);
-}
-function heraldRazed(room, events, id) {
-    var _a, _b, _c;
-    if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
-        return;
-    const struck = events.some((a) => { var _a; return a.event === EVENT_ATTACK && a.data.targetId === id && !((_a = Game.getObjectById(a.objectId)) === null || _a === void 0 ? void 0 : _a.my); });
-    if (!struck)
-        return;
-    for (const name in Game.rooms) {
-        const castle = Game.rooms[name];
-        if (!((_b = castle.controller) === null || _b === void 0 ? void 0 : _b.my) || !((_c = castle.memory.remoteRooms) === null || _c === void 0 ? void 0 : _c.some((r) => r.roomName === room.name)))
-            continue;
-        chronicle(`Raiders razed a waystation in the ${wildsName(room.name)}. ${castleName(name)}'s gold spills into the mud.`);
-        return;
-    }
-}
-function heraldKills(room) {
-    var _a, _b;
-    const raw = room.getEventLog(true);
-    if (!raw.includes(`"event":${EVENT_OBJECT_DESTROYED},`))
-        return;
-    const events = JSON.parse(raw);
-    for (const e of events) {
-        if (e.event !== EVENT_OBJECT_DESTROYED)
-            continue;
-        if (e.data.type === STRUCTURE_CONTAINER)
-            heraldRazed(room, events, e.objectId);
-        if (e.data.type !== "creep")
-            continue;
-        const ours = events
-            .filter((a) => a.event === EVENT_ATTACK && a.data.targetId === e.objectId)
-            .map((a) => Game.getObjectById(a.objectId))
-            .filter((o) => !!o && o.my);
-        if (ours.length === 0)
-            continue;
-        const creeps = [...new Set(ours.filter((o) => o instanceof Creep))];
-        const alone = creeps.length === 1 && creeps.length === new Set(ours).size;
-        const dead = (_a = room.find(FIND_TOMBSTONES).find((t) => t.creep.id === e.objectId)) === null || _a === void 0 ? void 0 : _a.creep;
-        chronicleKill(room, alone ? creeps[0].name : undefined, dead);
-        if (creeps.length === 0) {
-            roomCries[room.name] = "Huzzah!";
-            continue;
-        }
-        for (const c of creeps) {
-            creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
-            c.memory.kills = ((_b = c.memory.kills) !== null && _b !== void 0 ? _b : 0) + 1;
-        }
-    }
-}
-
-const UPGRADER_STORAGE_FLOOR = 10000;
-const KEEP_FUND_FLOOR = 45000;
-const UPGRADER_DOWNGRADE_GUARD = 5000;
-function nearDowngrade(room) {
-    const ctrl = room.controller;
-    return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
-}
-function savingForKeep(room) {
-    var _a;
-    const exp = Memory.expansion;
-    if (exp && exp.homeRoom === room.name && exp.phase !== "established")
-        return true;
-    return ((_a = Memory.expansionSavings) === null || _a === void 0 ? void 0 : _a.room) === room.name;
-}
-function upgraderStorageFloor(room) {
-    return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
-}
-function wallsFunded(room) {
-    const storage = room.storage;
-    if (!storage) {
-        return !room.find(FIND_CONSTRUCTION_SITES).some((s) => s.structureType === STRUCTURE_STORAGE);
-    }
-    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
-}
-function upgradingFunded(room) {
-    const storage = room.storage;
-    if (!storage)
-        return true;
-    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) || nearDowngrade(room);
-}
-
 const KEEP = [
     "+eeeeeBeeeee+",
     "e+++++++++++e",
@@ -3654,6 +2816,889 @@ function describeBlueprint(room) {
     return lines;
 }
 
+const KILL_CRIES = ["Slain!", "Begone!", "For Crown!", "Next!", "Fell one!"];
+let cryTick = -1;
+let creepCries = {};
+let roomCries = {};
+function freshCries() {
+    if (cryTick === Game.time)
+        return;
+    cryTick = Game.time;
+    creepCries = {};
+    roomCries = {};
+}
+function cryFor(creep) {
+    var _a;
+    if (cryTick !== Game.time)
+        return undefined;
+    return (_a = creepCries[creep.name]) !== null && _a !== void 0 ? _a : roomCries[creep.room.name];
+}
+function cryFlight(creep) {
+    if (creep.memory.fled)
+        return;
+    creep.memory.fled = true;
+    freshCries();
+    creepCries[creep.name] = "Bandits!";
+}
+function cryMending(creep) {
+    freshCries();
+    creepCries[creep.name] = "Wounded!";
+}
+function cryFarewell(creep) {
+    freshCries();
+    creepCries[creep.name] = "Farewell!";
+}
+const REFUGE_WINDOW = 1500;
+function heraldRefuge(creep, remote, refuge) {
+    var _a, _b;
+    const band = warbandIn(remote);
+    const from = band ? `${band}'s raiders` : "the raiders";
+    const where = ((_b = (_a = Game.rooms[refuge]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my) ? castleName(refuge) : `the ${wildsName(refuge)}`;
+    tally(`refuge:${remote}:${refuge}`, 1, (n) => `${n === 1 ? creep.name : `${n} peddlers`} slipped over the border into ${where} to hide from ${from}.`, REFUGE_WINDOW);
+}
+const GLUT_CRY_PERIOD = 25;
+function cryGlut(creep) {
+    if (Game.time % GLUT_CRY_PERIOD !== 0)
+        return;
+    freshCries();
+    creepCries[creep.name] = "no buyers";
+}
+function cryHaul(creep, amount) {
+    var _a;
+    creep.memory.hauled = ((_a = creep.memory.hauled) !== null && _a !== void 0 ? _a : 0) + amount;
+    freshCries();
+    creepCries[creep.name] = `+${amount} gold`;
+    heraldRoadGold(creep, amount);
+}
+const ROAD_GOLD_MARKS = [
+    [10000, "ten thousand"],
+    [50000, "fifty thousand"],
+    [100000, "a hundred thousand"],
+    [250000, "a quarter of a million"],
+    [500000, "half a million"],
+    [1000000, "a million"],
+];
+function roadGoldMark(before, after) {
+    for (const [at, words] of ROAD_GOLD_MARKS)
+        if (before < at && after >= at)
+            return words;
+    const millions = Math.floor(after / 1000000);
+    if (millions >= 2 && Math.floor(before / 1000000) < millions)
+        return `${millions} million`;
+    return undefined;
+}
+function heraldRoadGold(creep, amount) {
+    var _a, _b, _c, _d;
+    const { homeRoom, targetRoom } = creep.memory;
+    if (!homeRoom || !targetRoom)
+        return;
+    const roads = ((_a = Memory.roadGold) !== null && _a !== void 0 ? _a : (Memory.roadGold = {}));
+    const key = `${homeRoom}>${targetRoom}`;
+    const before = (_b = roads[key]) !== null && _b !== void 0 ? _b : 0;
+    roads[key] = before + amount;
+    const season = (_c = Memory.annals) === null || _c === void 0 ? void 0 : _c.roads;
+    if (season)
+        season[key] = ((_d = season[key]) !== null && _d !== void 0 ? _d : 0) + amount;
+    const mark = roadGoldMark(before, before + amount);
+    if (!mark)
+        return;
+    chronicle(`With ${creep.name}'s load, the merchants of ${castleName(homeRoom)} have brought ${mark} gold home from the ${wildsName(targetRoom)}.`);
+}
+function settleFlight(creep) {
+    if (creep.memory.fled)
+        delete creep.memory.fled;
+}
+const SORTIE_WINDOW = 1500;
+function crySortie(creep, roomName) {
+    var _a, _b;
+    if (creep.memory.sortie === roomName)
+        return;
+    creep.memory.sortie = roomName;
+    freshCries();
+    creepCries[creep.name] = "Ride out!";
+    const band = (_a = Memory.warbands) === null || _a === void 0 ? void 0 : _a[roomName];
+    const foe = `${band ? `${band.name}'s` : "the"} raiders in the ${wildsName(roomName)}`;
+    const line = (names) => `${andList(names)} ${names.length === 1 ? "rides" : "ride"} out against ${foe}.`;
+    tallyPlaces(`sortie:${roomName}:${(_b = band === null || band === void 0 ? void 0 : band.at) !== null && _b !== void 0 ? _b : ""}`, creep.name, line, band ? SORTIE_WINDOW : 0);
+}
+const GOSSIP_TICKS = 600;
+function spreadWord(line) {
+    Memory.gossip = { line: line.slice(0, 10), until: Game.time + GOSSIP_TICKS };
+}
+function gossip() {
+    const word = Memory.gossip;
+    if (!word)
+        return undefined;
+    if (word.until > Game.time)
+        return word.line;
+    delete Memory.gossip;
+    return undefined;
+}
+function mourn(name) {
+    return `† ${name.slice(name.lastIndexOf(" ") + 1)}`;
+}
+function heraldRooms() {
+    var _a, _b, _c;
+    freshCries();
+    heraldFallen();
+    heraldRenown();
+    heraldTrade();
+    heraldSeason();
+    heraldSky();
+    const castles = [];
+    for (const roomName in Game.rooms) {
+        const room = Game.rooms[roomName];
+        if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) {
+            castles.push(room);
+            heraldRise(room);
+            heraldStir(room);
+            heraldFirstBorn(room);
+            heraldVisitors(room);
+            heraldWorks(room);
+            heraldRoads(room);
+            heraldVendors(room);
+            heraldVein(room);
+            heraldWalls(room);
+            heraldKeep(room);
+        }
+        heraldKills(room);
+    }
+    for (const castle of castles) {
+        for (const remote of (_b = castle.memory.remoteRooms) !== null && _b !== void 0 ? _b : []) {
+            const wilds = Game.rooms[remote.roomName];
+            if (wilds && !((_c = wilds.controller) === null || _c === void 0 ? void 0 : _c.my))
+                heraldWayfarers(wilds, remote);
+        }
+    }
+    heraldDragon(castles);
+    heraldWolves(castles);
+    heraldWisps(castles);
+}
+function castleList(castles) {
+    return andList(castles.map((r) => castleName(r.name)));
+}
+function andList(items) {
+    const rest = items.slice(0, -1);
+    const last = items[items.length - 1];
+    return rest.length ? `${rest.join(", ")} and ${last}` : last;
+}
+function heraldRenown() {
+    const level = Game.gcl.level;
+    const known = Memory.heraldGcl;
+    Memory.heraldGcl = level;
+    if (known === undefined || level <= known)
+        return;
+    spreadWord("renown!");
+    chronicle(`The Crown's renown grows. The realm may now hold ${level} castles.`);
+}
+const SEASON_TIDINGS = {
+    spring: "Spring comes to the realm. The snow melts from the castle walls.",
+    summer: "Summer comes to the realm. The days run long on the vendors' roads.",
+    autumn: "Autumn comes to the realm. Leaves blow across the wilds.",
+    winter: "Winter comes to the realm. Snow settles on the battlements.",
+};
+function reckoningYear(time) {
+    return Math.floor(time / (TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON * TOWN_SEASONS.length)) + 1;
+}
+function heraldSeason() {
+    const season = townSeason(Game.time);
+    const known = Memory.heraldSeason;
+    Memory.heraldSeason = season;
+    if (known === undefined || known === season)
+        return;
+    const annals = Memory.annals;
+    Memory.annals = { since: Game.time, gold: 0, slain: 0, fallen: 0, recruits: 0, roads: {} };
+    if (annals)
+        chronicle(annalsLine(known, annals));
+    const road = annals && richestRoadLine(known, annals);
+    if (road)
+        chronicle(road);
+    const year = season === "spring" ? ` It is the year ${reckoningYear(Game.time)} of the Old Reckoning.` : "";
+    const feast = townFeast(Game.time);
+    chronicle(`${SEASON_TIDINGS[season]}${year}${feast ? ` The ${feast} begins.` : ""}`);
+    if (season === "spring")
+        heraldCensus();
+}
+function heraldCensus() {
+    var _a;
+    const souls = Object.keys(Game.creeps).length;
+    let castles = 0;
+    for (const name in Game.rooms)
+        if ((_a = Game.rooms[name].controller) === null || _a === void 0 ? void 0 : _a.my)
+            castles++;
+    const held = castles === 1 ? "its one castle" : `its ${castles} castles`;
+    chronicle(`The scribes count ${souls} ${souls === 1 ? "soul" : "souls"} in the realm and ${held}.${neighboursLine()}`);
+}
+const NOT_LORDS = new Set(["Invader", "Source Keeper"]);
+const NEIGHBOURS_NAMED = 3;
+function neighboursLine() {
+    var _a;
+    const lords = Object.values((_a = Memory.players) !== null && _a !== void 0 ? _a : {})
+        .filter((p) => !NOT_LORDS.has(p.username))
+        .sort((a, b) => b.roomCount - a.roomCount)
+        .slice(0, NEIGHBOURS_NAMED)
+        .map((p) => lordName(p.username));
+    return lords.length ? ` Beyond its borders the scouts know of ${andList(lords)}.` : "";
+}
+function annalsLine(season, a) {
+    const whole = a.since <= Game.time - TOWN_DAY_LENGTH * TOWN_DAYS_PER_SEASON;
+    const when = whole ? "This season" : "Since the scribes took up their pens";
+    const slain = a.slain === 0 ? "slew no foe" : `slew ${a.slain} ${a.slain === 1 ? "foe" : "foes"}`;
+    const fallen = a.fallen === 0 ? "lost none of its own" : `buried ${a.fallen} of its own`;
+    const raised = a.recruits ? ` raised ${a.recruits} ${a.recruits === 1 ? "recruit" : "recruits"},` : "";
+    const ended = season === "winter" ? `, and with it the year ${reckoningYear(Game.time - 1)}` : "";
+    return `So ends the ${season}${ended}. ${when} the realm gathered ${formatK(a.gold)} gold,${raised} ${slain} and ${fallen}.`;
+}
+function richestRoadLine(season, a) {
+    var _a, _b;
+    let best;
+    for (const [key, gold] of Object.entries((_a = a.roads) !== null && _a !== void 0 ? _a : {})) {
+        if (gold > ((_b = best === null || best === void 0 ? void 0 : best[1]) !== null && _b !== void 0 ? _b : 0))
+            best = [key, gold];
+    }
+    if (!best)
+        return undefined;
+    const [home, remote] = best[0].split(">");
+    return `The road from ${castleName(home)} to the ${wildsName(remote)} was the richest of the ${season}: ${formatK(best[1])} gold came home along it.`;
+}
+const TRADE_CHECK_PERIOD = 25;
+const TRADE_WINDOW = 1500;
+const WARES = {
+    energy: "gold",
+    H: "brimstone",
+    O: "quicksilver",
+    U: "utrium",
+    L: "lemergium",
+    K: "keanium",
+    Z: "zynthium",
+    X: "philosopher's salt",
+    silicon: "glass sand",
+    metal: "star iron",
+    biomass: "witchroot",
+    mist: "wraith mist",
+};
+function heraldTrade() {
+    var _a, _b, _c, _d;
+    if (Game.time % TRADE_CHECK_PERIOD !== 0)
+        return;
+    const seen = Memory.heraldTradeAt;
+    Memory.heraldTradeAt = Game.time - 1;
+    if (seen === undefined)
+        return;
+    const fresh = (t) => t.time > seen && t.time < Game.time;
+    for (const t of Game.market.outgoingTransactions) {
+        if (fresh(t))
+            chronicleTrade(t, "sold", t.from, (_a = t.recipient) === null || _a === void 0 ? void 0 : _a.username, (_b = t.sender) === null || _b === void 0 ? void 0 : _b.username);
+    }
+    for (const t of Game.market.incomingTransactions) {
+        if (fresh(t))
+            chronicleTrade(t, "bought", t.to, (_c = t.sender) === null || _c === void 0 ? void 0 : _c.username, (_d = t.recipient) === null || _d === void 0 ? void 0 : _d.username);
+    }
+}
+function chronicleTrade(t, verb, ours, them, us) {
+    var _a;
+    if (them !== undefined && them === us)
+        return;
+    const ware = (_a = WARES[t.resourceType]) !== null && _a !== void 0 ? _a : t.resourceType;
+    const partner = them ? `the merchants of ${lordName(them)}` : "the free markets";
+    const dir = verb === "sold" ? "to" : "from";
+    tally(`trade:${verb}:${ours}:${them !== null && them !== void 0 ? them : ""}:${t.resourceType}`, t.amount, (n) => `${castleName(ours)} ${verb} ${n} ${ware} ${dir} ${partner}.`, TRADE_WINDOW);
+}
+const CARAVAN_WINDOW = 1500;
+function heraldNomads(home, roomName, resource) {
+    var _a;
+    chronicle(`Nomads ride out from ${castleName(home)} to dig the ${(_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource} of the ${wildsName(roomName)}.`);
+}
+function heraldNomadsIdle(home, resource) {
+    var _a;
+    const ware = (_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource;
+    tally(`unsold:${home}:${resource}`, 0, () => `The nomads of ${castleName(home)} stay in camp. No merchant will pay a fair price for the ${ware} they dug.`, CARAVAN_WINDOW);
+}
+function heraldCaravan(home, roomName, resource, amount) {
+    var _a;
+    const ware = (_a = WARES[resource]) !== null && _a !== void 0 ? _a : resource;
+    tally(`caravan:${home}:${roomName}:${resource}`, amount, (n) => `The caravans of ${castleName(home)} bring ${n} ${ware} home from the ${wildsName(roomName)}.`, CARAVAN_WINDOW);
+}
+const BREW_VIRTUES = {
+    UH: "strength",
+    UO: "delving",
+    KH: "the packhorse",
+    KO: "the far shot",
+    LH: "masonry",
+    LO: "mending",
+    ZH: "sundering",
+    ZO: "swiftness",
+    GH: "the crown",
+    GO: "iron skin",
+};
+const REAGENTS = {
+    OH: "cinnabar",
+    ZK: "zynthium keanite",
+    UL: "utrium lemergite",
+    G: "ghodium",
+};
+function brewName(compound) {
+    const reagent = REAGENTS[compound];
+    if (reagent)
+        return reagent;
+    const m = /^(X?)([UKLZG])(H2O|HO2|H|O)$/.exec(compound);
+    if (!m)
+        return compound;
+    const [, catalyzed, element, rest] = m;
+    const kind = catalyzed ? "philters" : rest.length > 1 ? "elixirs" : "draughts";
+    return `${kind} of ${BREW_VIRTUES[element + (rest === "HO2" ? "O" : rest[0])]}`;
+}
+const BREW_WINDOW = 1500;
+function heraldBrew(roomName, compound, amount) {
+    tally(`brew:${roomName}:${compound}`, amount, (n) => `The goblin of ${castleName(roomName)}'s labs brewed ${formatK(n)} ${brewName(compound)}.`, BREW_WINDOW);
+}
+const VISIT_WINDOW = 1500;
+function heraldVisitors(room) {
+    for (const c of room.find(FIND_HOSTILE_CREEPS)) {
+        if (!isPlayerCreep(c))
+            continue;
+        const who = c.owner.username;
+        const armed = c.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
+        if (!armed) {
+            const text = (rooms) => `Spies of ${lordName(who)} crept about ${andList(rooms.map(castleName))}.`;
+            tallyPlaces(`visit:${who}:spy`, room.name, text, VISIT_WINDOW);
+            continue;
+        }
+        const text = `A war party of ${lordName(who)} came in arms to the walls of ${castleName(room.name)}.`;
+        if (tally(`visit:${room.name}:${who}:war`, 0, () => text, VISIT_WINDOW)) {
+            roomCries[room.name] = "To arms!";
+            spreadWord("raiders!");
+        }
+    }
+}
+const WAYFARER_WINDOW = 3000;
+const WAYFARERS = [
+    [CLAIM, "An envoy", "Envoys"],
+    [WORK, "A labourer", "Labourers"],
+    [CARRY, "A carter", "Carters"],
+    [undefined, "A scout", "Scouts"],
+];
+function heraldWayfarers(room, remote) {
+    const parties = new Map();
+    for (const c of room.find(FIND_HOSTILE_CREEPS)) {
+        if (!isPlayerCreep(c))
+            continue;
+        const party = parties.get(c.owner.username);
+        if (party)
+            party.push(c);
+        else
+            parties.set(c.owner.username, [c]);
+    }
+    for (const [who, party] of parties) {
+        if (party.some(isArmedHostile) || (remote.hostile && remote.rival === who))
+            continue;
+        const [, one, many] = WAYFARERS.find(([part]) => !part || party.some((c) => c.body.some((p) => p.type === part)));
+        const text = (rooms) => `${party.length === 1 ? one : many} of ${lordName(who)} passed through ${andList(rooms.map((r) => `the ${wildsName(r)}`))}.`;
+        tallyPlaces(`wayfarers:${who}:${many}`, room.name, text, WAYFARER_WINDOW);
+    }
+}
+const WORKS_CHECK_PERIOD = 100;
+const WORKS_WINDOW = 1500;
+function heraldWorks(room) {
+    var _a, _b, _c;
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const counts = {};
+    for (const s of room.find(FIND_MY_STRUCTURES)) {
+        if (LANDMARKS[s.structureType])
+            counts[s.structureType] = ((_a = counts[s.structureType]) !== null && _a !== void 0 ? _a : 0) + 1;
+    }
+    const known = room.memory.heraldWorks;
+    room.memory.heraldWorks = counts;
+    if (!known)
+        return;
+    const exp = Memory.expansion;
+    const builders = (exp === null || exp === void 0 ? void 0 : exp.roomName) === room.name && exp.phase === "bootstrapping" ? "pilgrims" : "masons";
+    for (const type of Object.keys(LANDMARKS)) {
+        const gained = ((_b = counts[type]) !== null && _b !== void 0 ? _b : 0) - ((_c = known[type]) !== null && _c !== void 0 ? _c : 0);
+        if (gained <= 0)
+            continue;
+        const [one, many] = LANDMARKS[type];
+        const a = /^[aeiou]/.test(one) ? "an" : "a";
+        tally(`works:${room.name}:${type}`, gained, (n) => `The ${builders} of ${castleName(room.name)} raise ${n === 1 ? `${a} ${one}` : `${n} ${many}`}.`, WORKS_WINDOW);
+    }
+}
+function heraldWaystation(creep, site) {
+    const home = creep.memory.homeRoom;
+    if (!home)
+        return;
+    const wilds = wildsName(site.pos.roomName);
+    const theirs = new Set();
+    for (const name in Game.creeps) {
+        const mem = Game.creeps[name].memory;
+        if (mem.homeRoom !== home && mem.assignedContainerId)
+            theirs.add(mem.assignedContainerId);
+    }
+    const second = creep.room
+        .find(FIND_STRUCTURES)
+        .some((s) => s.structureType === STRUCTURE_CONTAINER && !theirs.has(s.id));
+    const fresh = tally(`waystation:${site.id}`, 0, () => second
+        ? `${creep.name} raised a second waystation in the ${wilds}, so the merchants of ${castleName(home)} load at both its diggings.`
+        : `${creep.name} raised a waystation in the ${wilds}. No more of ${castleName(home)}'s gold rots in the mud.`, CREEP_LIFE_TIME);
+    if (fresh)
+        spreadWord("waystation");
+}
+function heraldRoads(room) {
+    var _a, _b;
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    for (const remote of (_a = room.memory.remoteRooms) !== null && _a !== void 0 ? _a : []) {
+        const told = (_b = room.memory.heraldRoads) !== null && _b !== void 0 ? _b : [];
+        if (told.includes(remote.roomName) || !remotePaved(remote))
+            continue;
+        room.memory.heraldRoads = [...told, remote.roomName];
+        spreadWord("new road!");
+        chronicle(`The road from ${castleName(room.name)} to the ${wildsName(remote.roomName)} is paved. Its merchants travel light.`);
+    }
+}
+const VENDOR_NEWS_AGE = 2 * WORKS_CHECK_PERIOD;
+function heraldVendors(room) {
+    if (room.memory.heraldVendors || Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const peddlers = [];
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (c.memory.role === ROLE_REMOTE_MINER && c.memory.targetRoom)
+            peddlers.push(c);
+    }
+    const ours = peddlers.filter((c) => c.memory.homeRoom === room.name);
+    if (ours.length === 0)
+        return;
+    room.memory.heraldVendors = true;
+    if (ours.some((c) => { var _a; return ((_a = c.ticksToLive) !== null && _a !== void 0 ? _a : CREEP_LIFE_TIME) < CREEP_LIFE_TIME - VENDOR_NEWS_AGE; }))
+        return;
+    const target = ours[0].memory.targetRoom;
+    const neighbour = peddlers.find((c) => c.memory.homeRoom !== room.name && c.memory.targetRoom === target);
+    const shared = (neighbour === null || neighbour === void 0 ? void 0 : neighbour.memory.homeRoom) ? ` ${castleName(neighbour.memory.homeRoom)}'s vendors already dig there.` : "";
+    roomCries[room.name] = "Godspeed!";
+    spreadWord("vendors!");
+    chronicle(`${castleName(room.name)} sends its first vendors out into the ${wildsName(target)}.${shared}`);
+}
+function heraldVein(room) {
+    var _a, _b;
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const mineral = room.find(FIND_MINERALS)[0];
+    if (!mineral)
+        return;
+    const dry = mineral.mineralAmount === 0;
+    const known = room.memory.heraldVeinDry;
+    room.memory.heraldVeinDry = dry;
+    if (known === undefined || known === dry)
+        return;
+    const vein = `The ${(_a = WARES[mineral.mineralType]) !== null && _a !== void 0 ? _a : mineral.mineralType} vein beneath ${castleName(room.name)}`;
+    if (dry) {
+        const days = Math.max(1, Math.round(((_b = mineral.ticksToRegeneration) !== null && _b !== void 0 ? _b : 0) / TOWN_DAY_LENGTH));
+        chronicle(`${vein} is dug dry. Its jewelers lay down their picks for ${days} days.`);
+    }
+    else {
+        chronicle(`${vein} runs full again. Its jewelers take up their picks.`);
+    }
+}
+const WALL_MARKS = [
+    [100000, "a hundred thousand"],
+    [300000, "three hundred thousand"],
+    [1000000, "a million"],
+    [3000000, "three million"],
+    [10000000, "ten million"],
+];
+function heraldWalls(room) {
+    const ring = room.memory.perimeterTiles;
+    if (!(ring === null || ring === void 0 ? void 0 : ring.length) || Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const tiles = new Set(ring);
+    let standing = 0;
+    let weakest = Infinity;
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART)
+            continue;
+        if (!tiles.has(`${s.pos.x},${s.pos.y}`))
+            continue;
+        standing++;
+        weakest = Math.min(weakest, s.hits);
+    }
+    const reached = standing < tiles.size ? 0 : WALL_MARKS.filter(([at]) => weakest >= at).length;
+    const known = room.memory.heraldWalls;
+    if (known !== undefined && reached <= known)
+        return;
+    room.memory.heraldWalls = reached;
+    if (known === undefined)
+        return;
+    chronicle(`The smiths of ${castleName(room.name)} have raised its walls ${WALL_MARKS[reached - 1][1]} strong.`);
+}
+const OUT_OF_PLACE = {
+    extension: ["coffer", "coffers"],
+    lab: LANDMARKS.lab,
+    link: ["link", "links"],
+};
+function heraldKeep(room) {
+    var _a;
+    const plan = room.memory.blueprint;
+    if (!plan || Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const bp = readBlueprint(room);
+    if (!bp)
+        return;
+    const planned = new Set(bp.entries.map((e) => `${e.x},${e.y}:${e.type}`));
+    const strays = {};
+    let stray = 0;
+    for (const s of room.find(FIND_MY_STRUCTURES)) {
+        if (!OUT_OF_PLACE[s.structureType] || planned.has(`${s.pos.x},${s.pos.y}:${s.structureType}`))
+            continue;
+        strays[s.structureType] = ((_a = strays[s.structureType]) !== null && _a !== void 0 ? _a : 0) + 1;
+        stray++;
+    }
+    const known = room.memory.heraldKeep;
+    const rising = room.find(FIND_MY_CONSTRUCTION_SITES).some((c) => OUT_OF_PLACE[c.structureType]);
+    const moving = stray > 0 || ((known === null || known === void 0 ? void 0 : known.at) === plan.at && known.moving && rising);
+    room.memory.heraldKeep = { at: plan.at, moving };
+    if (!known)
+        return;
+    const castle = castleName(room.name);
+    if (known.at !== plan.at) {
+        if (!moving)
+            return;
+        const works = Object.entries(strays).map(([type, n]) => {
+            const [one, many] = OUT_OF_PLACE[type];
+            return n === 1 ? `${/^[aeiou]/.test(one) ? "an" : "a"} ${one}` : `${n} ${many}`;
+        });
+        chronicle(`The master mason of ${castle} draws the castle anew around its keep. ` +
+            `Its masons must pull down ${andList(works)} and raise ${stray === 1 ? "it" : "them"} again where the plan wants.`);
+    }
+    else if (known.moving && !moving) {
+        spreadWord("new keep!");
+        chronicle(`The last of ${castle}'s works is raised in its new place. The keep stands as its master mason drew it.`);
+    }
+}
+const DRAGON_CRIES = ["Dragon!", "Look up!", "Hide!", "Run!", "Dragon!!"];
+const DRAGON_CRY_PERIOD = 8;
+const DRAGON_TIDINGS = [
+    (c) => `A dragon passed over ${c}, black against the sky.`,
+    (c) => `A dragon crossed the skies of ${c} and was gone.`,
+    (c) => `The shadow of a dragon fell across ${c}.`,
+];
+function heraldDragon(castles) {
+    const dragon = townDragon(Game.time);
+    if (castles.length === 0 || !dragon || dragon.t % DRAGON_CRY_PERIOD !== 0)
+        return;
+    for (const room of castles)
+        roomCries[room.name] = DRAGON_CRIES[(dragon.t / DRAGON_CRY_PERIOD) % DRAGON_CRIES.length];
+    if (dragon.t !== 0)
+        return;
+    spreadWord("a dragon!");
+    chronicle(DRAGON_TIDINGS[dragon.day % DRAGON_TIDINGS.length](castleList(castles)));
+}
+const HOWL_CRIES = ["Wolves!", "Hark!", "Hear that?", "Awoo?!"];
+function heraldWolves(castles) {
+    const howl = townHowl(Game.time);
+    if (castles.length === 0 || !howl || howl.t !== 0)
+        return;
+    for (const room of castles)
+        roomCries[room.name] = HOWL_CRIES[howl.n % HOWL_CRIES.length];
+    if (howl.n !== 0)
+        return;
+    spreadWord("wolves...");
+    chronicle(`Wolves howled beneath the full moon outside the walls of ${castleList(castles)}.`);
+}
+const WISP_CRIES = ["Wisps!", "Don't go!", "Spirits..."];
+const WISP_TIDINGS = [
+    "Under the dark moon, will-o'-the-wisps drifted over the marshes. None who followed them came back.",
+    "Pale lights wandered the bogs all night beneath the new moon.",
+    "The marsh-lights were out under the dark moon. The old folk barred their doors.",
+];
+function heraldWisps(castles) {
+    if (castles.length === 0 || Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townWisps(Game.time))
+        return;
+    castles.forEach((room, i) => (roomCries[room.name] = WISP_CRIES[i % WISP_CRIES.length]));
+    const moon = Math.floor(Game.time / (TOWN_DAY_LENGTH * TOWN_MOON_DAYS));
+    spreadWord("the wisps");
+    chronicle(WISP_TIDINGS[moon % WISP_TIDINGS.length]);
+}
+const AURORA_TIDINGS = [
+    "The northern lights burned green over the realm.",
+    "Green fire danced in the winter sky. The old folk say the dead were dancing.",
+    "Ribbons of light rippled over the battlements all night long.",
+];
+function heraldSky() {
+    if (Game.time % TOWN_DAY_LENGTH !== NIGHT_START || !townAurora(Game.time))
+        return;
+    chronicle(AURORA_TIDINGS[Math.floor(Game.time / TOWN_DAY_LENGTH) % AURORA_TIDINGS.length]);
+}
+function heraldRival(roomName, before, owner, rcl) {
+    const wilds = `the ${wildsName(roomName)}`;
+    if (!before) {
+        if (owner)
+            chronicle(`Scouts bring word of ${lordName(owner)}, who holds a keep of level ${rcl} in ${wilds}.`);
+        return;
+    }
+    const was = before.owner;
+    if (owner && owner !== was) {
+        chronicle(was
+            ? `${lordName(owner)} seizes ${wilds} from ${lordName(was)}.`
+            : `${lordName(owner)} raises a keep in ${wilds}.`);
+    }
+    else if (!owner && was) {
+        chronicle(`The keep of ${lordName(was)} in ${wilds} lies abandoned.`);
+    }
+    else if (owner && before.rcl > 0 && rcl > before.rcl) {
+        chronicle(`The keep of ${lordName(owner)} in ${wilds} rises to level ${rcl}.`);
+    }
+}
+function heraldRise(room) {
+    const level = room.controller.level;
+    const known = room.memory.heraldLevel;
+    room.memory.heraldLevel = level;
+    if (known === undefined || level <= known)
+        return;
+    roomCries[room.name] = "Long live!";
+    spreadWord(`level ${level}!`);
+    const works = newWorks(level);
+    chronicle(`Hear ye! ${castleName(room.name)} rises to level ${level}. Long live the Crown!` +
+        (works ? ` Its masons may now raise ${works}.` : ""));
+}
+function newWorks(level) {
+    var _a, _b;
+    const works = [];
+    for (const type of Object.keys(LANDMARKS)) {
+        const was = (_a = CONTROLLER_STRUCTURES[type][level - 1]) !== null && _a !== void 0 ? _a : 0;
+        const now = (_b = CONTROLLER_STRUCTURES[type][level]) !== null && _b !== void 0 ? _b : 0;
+        if (now <= was)
+            continue;
+        const [one, many] = LANDMARKS[type];
+        if (now - was > 1)
+            works.push(`${now - was} ${was ? "more " : ""}${many}`);
+        else if (was)
+            works.push(`a ${ordinal(now)} ${one}`);
+        else
+            works.push(`${/^[aeiou]/.test(one) ? "an" : "a"} ${one}`);
+    }
+    return works.length ? andList(works) : undefined;
+}
+const STIR_SHARE = 0.9;
+function heraldStir(room) {
+    if (Game.time % WORKS_CHECK_PERIOD !== 0)
+        return;
+    const { level, progress, progressTotal } = room.controller;
+    if (level < 2 || !progressTotal || progress < progressTotal * STIR_SHARE)
+        return;
+    const next = level + 1;
+    if (room.memory.heraldStirred === next)
+        return;
+    room.memory.heraldStirred = next;
+    chronicle(`The enchanters of ${castleName(room.name)} feel the throne stir. Level ${next} is near.`);
+}
+function heraldFirstBorn(room) {
+    var _a, _b;
+    if (((_a = Memory.expansion) === null || _a === void 0 ? void 0 : _a.roomName) !== room.name || room.memory.heraldBorn)
+        return;
+    const birth = (_b = room.find(FIND_MY_SPAWNS).find((s) => s.spawning)) === null || _b === void 0 ? void 0 : _b.spawning;
+    if (!birth)
+        return;
+    room.memory.heraldBorn = true;
+    for (const name in Game.creeps) {
+        if (name !== birth.name && Game.creeps[name].memory.homeRoom === room.name)
+            return;
+    }
+    room.memory.firstBorn = birth.name;
+    roomCries[room.name] = "Huzzah!";
+    spreadWord("firstborn!");
+    chronicle(`The bells of ${castleName(room.name)} ring for the first born in its own barracks: ${birth.name}.`);
+}
+function heraldFirstBornRest(name) {
+    for (const roomName in Memory.rooms) {
+        const mem = Memory.rooms[roomName];
+        if (mem.firstBorn !== name)
+            continue;
+        delete mem.firstBorn;
+        spreadWord(mourn(name));
+        chronicle(`${name}, the first born in the barracks of ${castleName(roomName)}, has died of old age. The keep's bells ring once more.`);
+    }
+}
+const BATTLE_WINDOW = 300;
+function whereIn(roomName) {
+    var _a, _b;
+    return ((_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my)
+        ? `before the walls of ${castleName(roomName)}`
+        : `in the ${wildsName(roomName)}`;
+}
+function chronicleKill(room, slayer, dead) {
+    const lord = dead && isPlayerCreep(dead) ? dead.owner.username : undefined;
+    const foe = isSourceKeeperRoom(room.name) ? "lair keeper" : "raider";
+    annal("slain", 1);
+    if (lord || foe === "raider")
+        spreadWord("victory!");
+    const band = foe === "raider" && !lord ? warbandIn(room.name) : undefined;
+    let one = band ? `A raider of ${band}'s band` : `A ${foe}`;
+    let many = (n) => (band ? `${n} of ${band}'s raiders` : `${n} ${foe}s`);
+    let key = `slain:${room.name}`;
+    if (lord) {
+        const armed = "body" in dead && dead.body.some((p) => p.type === ATTACK || p.type === RANGED_ATTACK || p.type === WORK);
+        const [kind, kinds] = armed ? ["man-at-arms", "men-at-arms"] : ["spy", "spies"];
+        one = `A ${kind} of ${lordName(lord)}`;
+        many = (n) => `${n} of ${lordName(lord)}'s ${kinds}`;
+        key += `:${lord}:${kind}`;
+    }
+    tally(key, 1, (n) => (n === 1 ? `${one} fell${slayer ? ` to ${slayer}` : ""}` : `${many(n)} fell`) + ` ${whereIn(room.name)}.`, BATTLE_WINDOW);
+    if (band && warbandLoss(room.name)) {
+        spreadWord("routed!");
+        Memory.lastRout = { band, room: room.name, slayer };
+        const bounty = slayer && warbandBounty(room.name) ? " and claims the Crown's bounty" : "";
+        chronicle(`${slayer ? `${slayer} broke ${band}'s band` : `${band}'s band is broken`} ${whereIn(room.name)}${bounty}. The warlord is heard of no more.`);
+    }
+}
+let muster = new Map();
+function foeIn(roomName) {
+    var _a, _b;
+    const hostiles = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.find(FIND_HOSTILE_CREEPS)) !== null && _b !== void 0 ? _b : [];
+    const player = hostiles.find(isPlayerCreep);
+    if (player)
+        return `the men of ${lordName(player.owner.username)}`;
+    if (hostiles.length === 0)
+        return undefined;
+    if (isSourceKeeperRoom(roomName))
+        return "a lair keeper";
+    const band = warbandIn(roomName);
+    return band ? `${band}'s raiders` : "raiders";
+}
+function heraldFallen() {
+    var _a, _b, _c, _d;
+    const next = new Map();
+    for (const name in Game.creeps) {
+        const c = Game.creeps[name];
+        if (c.spawning)
+            continue;
+        next.set(name, {
+            room: c.pos.roomName,
+            hurt: c.hits < c.hitsMax,
+            ttl: (_a = c.ticksToLive) !== null && _a !== void 0 ? _a : 0,
+        });
+    }
+    for (const [name, last] of muster) {
+        if (next.has(name))
+            continue;
+        const mem = (_b = Memory.creeps) === null || _b === void 0 ? void 0 : _b[name];
+        const kills = (_c = mem === null || mem === void 0 ? void 0 : mem.kills) !== null && _c !== void 0 ? _c : 0;
+        const slew = kills > 0 ? `, who slew ${kills === 1 ? "a foe" : `${kills} foes`},` : "";
+        if (!last.hurt || last.ttl <= 1) {
+            if (slew) {
+                spreadWord(mourn(name));
+                chronicle(`${name}${slew} was laid to rest with honours.`);
+                heraldSlayer(name, kills);
+            }
+            heraldRetired(name, (_d = mem === null || mem === void 0 ? void 0 : mem.hauled) !== null && _d !== void 0 ? _d : 0);
+            if (last.ttl <= 1)
+                heraldFirstBornRest(name);
+            continue;
+        }
+        const foe = foeIn(last.room);
+        const by = foe ? ` to ${foe}` : "";
+        annal("fallen", 1);
+        spreadWord(mourn(name));
+        tally(`fallen:${last.room}`, 1, (n) => `${n === 1 ? name + slew : `${n} of the realm's own`} fell${by} ${whereIn(last.room)}.`, BATTLE_WINDOW);
+        heraldSlayer(name, kills);
+    }
+    muster = next;
+}
+function heraldSlayer(name, kills) {
+    var _a, _b;
+    if (kills <= ((_b = (_a = Memory.greatestSlayer) === null || _a === void 0 ? void 0 : _a.kills) !== null && _b !== void 0 ? _b : 0))
+        return;
+    Memory.greatestSlayer = { name, kills };
+    chronicle(`The minstrels make a song of ${name}, who slew more foes than any before.`);
+}
+function heraldRetired(name, hauled) {
+    var _a;
+    if (hauled <= ((_a = Memory.richestHaul) !== null && _a !== void 0 ? _a : 0))
+        return;
+    Memory.richestHaul = hauled;
+    Memory.richestHauler = name;
+    chronicle(`${name} retired from the road with ${formatK(hauled)} gold brought home, the most of any merchant yet.`);
+}
+function heraldRazed(room, events, id) {
+    var _a, _b, _c;
+    if ((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my)
+        return;
+    const struck = events.some((a) => { var _a; return a.event === EVENT_ATTACK && a.data.targetId === id && !((_a = Game.getObjectById(a.objectId)) === null || _a === void 0 ? void 0 : _a.my); });
+    if (!struck)
+        return;
+    for (const name in Game.rooms) {
+        const castle = Game.rooms[name];
+        if (!((_b = castle.controller) === null || _b === void 0 ? void 0 : _b.my) || !((_c = castle.memory.remoteRooms) === null || _c === void 0 ? void 0 : _c.some((r) => r.roomName === room.name)))
+            continue;
+        chronicle(`Raiders razed a waystation in the ${wildsName(room.name)}. ${castleName(name)}'s gold spills into the mud.`);
+        return;
+    }
+}
+function heraldKills(room) {
+    var _a, _b;
+    const raw = room.getEventLog(true);
+    if (!raw.includes(`"event":${EVENT_OBJECT_DESTROYED},`))
+        return;
+    const events = JSON.parse(raw);
+    for (const e of events) {
+        if (e.event !== EVENT_OBJECT_DESTROYED)
+            continue;
+        if (e.data.type === STRUCTURE_CONTAINER)
+            heraldRazed(room, events, e.objectId);
+        if (e.data.type !== "creep")
+            continue;
+        const ours = events
+            .filter((a) => a.event === EVENT_ATTACK && a.data.targetId === e.objectId)
+            .map((a) => Game.getObjectById(a.objectId))
+            .filter((o) => !!o && o.my);
+        if (ours.length === 0)
+            continue;
+        const creeps = [...new Set(ours.filter((o) => o instanceof Creep))];
+        const alone = creeps.length === 1 && creeps.length === new Set(ours).size;
+        const dead = (_a = room.find(FIND_TOMBSTONES).find((t) => t.creep.id === e.objectId)) === null || _a === void 0 ? void 0 : _a.creep;
+        chronicleKill(room, alone ? creeps[0].name : undefined, dead);
+        if (creeps.length === 0) {
+            roomCries[room.name] = "Huzzah!";
+            continue;
+        }
+        for (const c of creeps) {
+            creepCries[c.name] = KILL_CRIES[(Game.time + c.name.length) % KILL_CRIES.length];
+            c.memory.kills = ((_b = c.memory.kills) !== null && _b !== void 0 ? _b : 0) + 1;
+        }
+    }
+}
+
+const UPGRADER_STORAGE_FLOOR = 10000;
+const KEEP_FUND_FLOOR = 45000;
+const UPGRADER_DOWNGRADE_GUARD = 5000;
+function nearDowngrade(room) {
+    const ctrl = room.controller;
+    return !!ctrl && ctrl.my && ctrl.ticksToDowngrade < UPGRADER_DOWNGRADE_GUARD;
+}
+function savingForKeep(room) {
+    var _a;
+    const exp = Memory.expansion;
+    if (exp && exp.homeRoom === room.name && exp.phase !== "established")
+        return true;
+    return ((_a = Memory.expansionSavings) === null || _a === void 0 ? void 0 : _a.room) === room.name;
+}
+function upgraderStorageFloor(room) {
+    return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
+}
+function wallsFunded(room) {
+    const storage = room.storage;
+    if (!storage) {
+        return !room.find(FIND_CONSTRUCTION_SITES).some((s) => s.structureType === STRUCTURE_STORAGE);
+    }
+    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room);
+}
+function upgradingFunded(room) {
+    const storage = room.storage;
+    if (!storage)
+        return true;
+    return storage.store[RESOURCE_ENERGY] > upgraderStorageFloor(room) || nearDowngrade(room);
+}
+
 let assignmentCacheTick = -1;
 const assignedContainerIdsByRoomAndRole = {};
 let roomStructuresCacheTick = -1;
@@ -4064,10 +4109,10 @@ function barrierTargetFn(room) {
         const k = `${s.pos.x},${s.pos.y}`;
         if (town.has(k))
             return townTarget;
-        if (s.structureType === STRUCTURE_WALL)
-            return perimeter;
         if (!perimeterSet || perimeterSet.has(k))
             return perimeter;
+        if (s.structureType === STRUCTURE_WALL)
+            return 0;
         if (coveredTiles().has(k) || k in nukeTiles)
             return onTop;
         return 0;
@@ -19347,10 +19392,14 @@ function clearWayForRing(room) {
     if (room.find(FIND_HOSTILE_CREEPS).length > 0)
         return false;
     const tiles = new Set(ring);
-    for (const s of room.find(FIND_STRUCTURES)) {
+    const structures = room.find(FIND_STRUCTURES);
+    const standing = new Set();
+    for (const s of structures) {
         const k = `${s.pos.x},${s.pos.y}`;
         if (!tiles.has(k))
             continue;
+        if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART)
+            standing.add(k);
         const door = doors.has(k);
         const swap = (door && s.structureType === STRUCTURE_WALL) ||
             (!door &&
@@ -19361,6 +19410,20 @@ function clearWayForRing(room) {
             continue;
         if (s.destroy() === OK) {
             console.log(`[perimeter] ${room.name}: removed the ${s.structureType} at ${k} for a ${door ? "door" : "wall"}`);
+            return true;
+        }
+    }
+    if (standing.size < tiles.size)
+        return false;
+    const town = townBarrierTiles(room.memory.town);
+    for (const s of structures) {
+        if (s.structureType !== STRUCTURE_WALL || !s.hits)
+            continue;
+        const k = `${s.pos.x},${s.pos.y}`;
+        if (tiles.has(k) || town.has(k))
+            continue;
+        if (s.destroy() === OK) {
+            console.log(`[perimeter] ${room.name}: removed a wall left from an older ring at ${k}`);
             return true;
         }
     }
