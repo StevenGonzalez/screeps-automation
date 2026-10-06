@@ -164,7 +164,8 @@ const PERIMETER_FULL_TARGET_STORAGE = 100_000;
 // Repair goal for a wall or rampart. A rampart over another structure is
 // on-top; one on the stored perimeter ring gets the perimeter goal; any other
 // rampart (a stale ring from an older plan, a hand-placed one) gets 0 and is
-// left to decay. Until a room has a stored ring, every bare rampart counts as
+// left to decay. A wall off the ring is left from an older ring too, and gets
+// 0. Until a room has a stored ring, every wall and bare rampart counts as
 // perimeter so nothing is dropped by mistake. The town's walls and ramparts
 // (cottages, fountain, watch posts) are kept at a low goal of their own; they
 // are homes, not fortifications.
@@ -199,8 +200,8 @@ export function barrierTargetFn(room: Room): (s: AnyStructure) => number {
     if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART) return 0;
     const k = `${s.pos.x},${s.pos.y}`;
     if (town.has(k)) return townTarget;
-    if (s.structureType === STRUCTURE_WALL) return perimeter;
     if (!perimeterSet || perimeterSet.has(k)) return perimeter;
+    if (s.structureType === STRUCTURE_WALL) return 0;
     if (coveredTiles().has(k) || k in nukeTiles) return onTop;
     return 0;
   };

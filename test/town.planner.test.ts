@@ -275,7 +275,7 @@ describe("findCottage", () => {
 });
 
 describe("barrierTargetFn", () => {
-  it("keeps town walls and ramparts at the town goal, other walls at the perimeter goal", () => {
+  it("keeps town walls and ramparts at the town goal, the ring's at the perimeter goal", () => {
     const room = makeRoom({ rcl: 7, storage: 500_000 });
     planTown(room as unknown as Room);
     const town = room.memory.town!;
@@ -288,8 +288,10 @@ describe("barrierTargetFn", () => {
     expect(at("constructedWall", wall)).toBe(TOWN.barrierHits);
     expect(at("rampart", c.door)).toBe(TOWN.barrierHits);
     expect(at("rampart", town.posts[0])).toBe(TOWN.barrierHits);
-    expect(at("constructedWall", "3,3")).toBeGreaterThan(TOWN.barrierHits);
+    expect(at("constructedWall", room.memory.perimeterTiles![0])).toBeGreaterThan(TOWN.barrierHits);
     expect(at("rampart", room.memory.perimeterTiles![0])).toBeGreaterThan(TOWN.barrierHits);
+    // A wall on neither is left from an older ring.
+    expect(at("constructedWall", "3,3")).toBe(0);
   });
 });
 

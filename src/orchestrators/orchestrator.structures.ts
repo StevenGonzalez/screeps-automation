@@ -16,6 +16,7 @@ import {
 import { planDefensivePerimeter, perimeterDoorTiles } from "../planning/planner.rampart";
 import { planTown } from "../planning/planner.town";
 import { isSourceSafe } from "../services/services.creep";
+import { townBarrierTiles } from "../services/services.town";
 import { remoteRoadsEnabled } from "../services/services.remote";
 import { getActiveRemoteRooms, getPickedRemoteRoomNames } from "./orchestrator.spawning";
 
@@ -775,8 +776,9 @@ const RAMPART_TO_WALL_MAX_HITS = 100_000;
 
 /**
  * Swaps one ring tile to what the plan wants: a rampart where a wall is
- * planned, or a wall where a road now needs a door. One per run, and none
- * while enemies are in the room, the same as clearWayForBlueprint.
+ * planned, or a wall where a road now needs a door. Once the ring stands
+ * closed, takes down a wall left from an older ring instead. One per run,
+ * and none while enemies are in the room, the same as clearWayForBlueprint.
  */
 export function clearWayForRing(room: Room): boolean {
   const ring = room.memory.perimeterTiles;
@@ -785,9 +787,12 @@ export function clearWayForRing(room: Room): boolean {
   if (room.find(FIND_HOSTILE_CREEPS).length > 0) return false;
 
   const tiles = new Set(ring);
-  for (const s of room.find(FIND_STRUCTURES)) {
+  const structures = room.find(FIND_STRUCTURES);
+  const standing = new Set<string>();
+  for (const s of structures) {
     const k = `${s.pos.x},${s.pos.y}`;
     if (!tiles.has(k)) continue;
+    if (s.structureType === STRUCTURE_WALL || s.structureType === STRUCTURE_RAMPART) standing.add(k);
     const door = doors.has(k);
     const swap =
       (door && s.structureType === STRUCTURE_WALL) ||
@@ -798,6 +803,22 @@ export function clearWayForRing(room: Room): boolean {
     if (!swap) continue;
     if (s.destroy() === OK) {
       console.log(`[perimeter] ${room.name}: removed the ${s.structureType} at ${k} for a ${door ? "door" : "wall"}`);
+      return true;
+    }
+  }
+
+  // A wall that is neither on the ring nor the town's is left from an older
+  // ring. Inside the castle it stands in the way of its walkers, and the
+  // blacksmiths no longer mend it, so it comes down once the ring that
+  // replaced it is closed. A wall without hits is the server's own.
+  if (standing.size < tiles.size) return false;
+  const town = townBarrierTiles(room.memory.town);
+  for (const s of structures) {
+    if (s.structureType !== STRUCTURE_WALL || !s.hits) continue;
+    const k = `${s.pos.x},${s.pos.y}`;
+    if (tiles.has(k) || town.has(k)) continue;
+    if (s.destroy() === OK) {
+      console.log(`[perimeter] ${room.name}: removed a wall left from an older ring at ${k}`);
       return true;
     }
   }

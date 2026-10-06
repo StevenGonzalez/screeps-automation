@@ -144,7 +144,11 @@ The structure pass runs every 50 ticks, in `processRoomStructures`:
    rampart instead, so our creeps can pass. When nothing else was torn down
    this pass, one ring tile is swapped to what the plan wants: a rampart
    under 100,000 hits where a wall is planned, or a wall where a door is now
-   needed. Stronger ramparts are kept.
+   needed. Stronger ramparts are kept. Once every ring tile has its wall or
+   door, a wall left from an older ring (one on neither the ring nor the
+   town) is taken down instead, one per pass. The blacksmiths stop mending
+   such walls as soon as the new ring is stored. Embercrag had six of them
+   standing among its buildings after the keep was laid out.
 
 Construction (`applyPlannedConstruction`) then builds what is missing, in
 the usual priority order.

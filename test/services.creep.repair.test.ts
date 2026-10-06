@@ -12,6 +12,7 @@ g.FIND_CONSTRUCTION_SITES = 111;
 g.STRUCTURE_STORAGE = "storage";
 
 import {
+  barrierTargetFn,
   findMostCriticalRepairTarget,
   findTowerDefenseRepairTarget,
   findTowerRepairTarget,
@@ -74,6 +75,15 @@ describe("findMostCriticalRepairTarget ramparts", () => {
     const stale = rampart("stale", 5, 5, 500);
     const room = makeRoom({ level: 8, structures: [stale], perimeter: ["20,20"] });
     expect(repairFor(room)).toBeNull();
+  });
+
+  it("gives a wall off the stored ring no goal, and the perimeter's until a ring is stored", () => {
+    const wall = { ...rampart("wall", 5, 5, 500), structureType: "constructedWall" } as AnyStructure;
+    const onRing = { ...rampart("ring", 20, 20, 500), structureType: "constructedWall" } as AnyStructure;
+    const ringed = barrierTargetFn(makeRoom({ level: 8, structures: [], perimeter: ["20,20"] }));
+    expect(ringed(wall)).toBe(0);
+    expect(ringed(onRing)).toBeGreaterThan(0);
+    expect(barrierTargetFn(makeRoom({ level: 8, structures: [] }))(wall)).toBe(ringed(onRing));
   });
 
   it("repairs every bare rampart as perimeter until a ring is stored", () => {

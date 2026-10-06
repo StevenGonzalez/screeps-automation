@@ -218,6 +218,27 @@ describe("clearWayForRing", () => {
     expect(wall.destroyed).toBe(true);
   });
 
+  it("takes down a wall left from an older ring once the ring is closed, but not the town's", () => {
+    const ringWalls = [built("constructedWall", 20, 20), built("constructedWall", 21, 20)];
+    const doors = [built("rampart", 25, 26, true, 3000), built("rampart", 25, 2, true, 3000)];
+    const old = built("constructedWall", 30, 30, undefined, 130_000);
+    const fountain = built("constructedWall", 31, 31);
+    const server = { ...built("constructedWall", 0, 30), hits: undefined as unknown as number };
+    const open = ringRoom([ringWalls[0], ...doors, old, fountain, server]);
+    open.memory.town = { posts: [], square: [], cottages: [], fountain: "31,31" } as unknown as RoomMemory["town"];
+    expect(clearWayForRing(open)).toBe(false);
+    expect(old.destroyed).toBe(false);
+
+    const closed = ringRoom([...ringWalls, ...doors, old, fountain, server]);
+    closed.memory.town = open.memory.town;
+    expect(clearWayForRing(closed)).toBe(true);
+    expect(old.destroyed).toBe(true);
+    const tidy = ringRoom([...ringWalls, ...doors, fountain, server]);
+    tidy.memory.town = open.memory.town;
+    expect(clearWayForRing(tidy)).toBe(false);
+    expect([...ringWalls, ...doors, fountain, server].some((s) => s.destroyed)).toBe(false);
+  });
+
   it("takes down one at a time, and nothing with enemies in the room", () => {
     const ramparts = [built("rampart", 20, 20, true, 3000), built("rampart", 21, 20, true, 3000)];
     clearWayForRing(ringRoom(ramparts, [{}]));
