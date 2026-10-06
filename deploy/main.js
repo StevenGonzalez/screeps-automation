@@ -1689,6 +1689,10 @@ function cryMending(creep) {
     freshCries();
     creepCries[creep.name] = "Wounded!";
 }
+function cryFarewell(creep) {
+    freshCries();
+    creepCries[creep.name] = "Farewell!";
+}
 const REFUGE_WINDOW = 1500;
 function heraldRefuge(creep, remote, refuge) {
     var _a, _b;
@@ -11487,6 +11491,10 @@ function runRemoteHauler(creep) {
         creep.suicide();
         return;
     }
+    if (tooOldForTheRoad(creep)) {
+        retire(creep, homeRoom);
+        return;
+    }
     const tookDamage = creep.memory._hp !== undefined && creep.hits < creep.memory._hp;
     creep.memory._hp = creep.hits;
     if (tookDamage && creep.room.name !== homeRoom) {
@@ -11495,6 +11503,7 @@ function runRemoteHauler(creep) {
             flagRemoteDamage(creep);
     }
     if (creep.memory.remoteBackoffUntil && creep.memory.remoteBackoffUntil > Game.time) {
+        delete creep.memory.tripFrom;
         if (creep.store[RESOURCE_ENERGY] > 0)
             depositEnergy(creep, homeRoom);
         else if (!standsIn(creep, homeRoom))
@@ -11512,6 +11521,7 @@ function runRemoteHauler(creep) {
         flagRemotePlayer(creep);
     if (isAssignedRemoteContested(creep) || threats.length > 0) {
         cryFlight(creep);
+        delete creep.memory.tripFrom;
         if (creep.store[RESOURCE_ENERGY] > 0) {
             depositEnergy(creep, homeRoom);
         }
@@ -11526,6 +11536,10 @@ function runRemoteHauler(creep) {
     if (creep.memory.working && creep.store[RESOURCE_ENERGY] === 0) {
         creep.memory.working = false;
         setFillTarget(creep, undefined);
+        if (timeTrip(creep)) {
+            retire(creep, homeRoom);
+            return;
+        }
     }
     else if (!creep.memory.working &&
         (creep.store.getFreeCapacity(RESOURCE_ENERGY) === 0 ||
@@ -11541,6 +11555,30 @@ function runRemoteHauler(creep) {
             tendRemoteRoad(creep);
         depositEnergy(creep, homeRoom);
     }
+}
+function timeTrip(creep) {
+    if (creep.memory.tripFrom !== undefined)
+        creep.memory.trip = Game.time - creep.memory.tripFrom;
+    creep.memory.tripFrom = Game.time;
+    if (!tooOldForTheRoad(creep))
+        return false;
+    cryFarewell(creep);
+    return true;
+}
+function tooOldForTheRoad(creep) {
+    const { trip, tripFrom } = creep.memory;
+    if (trip === undefined || tripFrom === undefined || creep.ticksToLive === undefined)
+        return false;
+    return creep.ticksToLive + Game.time - tripFrom < trip;
+}
+function retire(creep, homeRoom) {
+    if (creep.room.name !== homeRoom) {
+        moveToRoom$5(creep, homeRoom);
+        return;
+    }
+    const spawn = creep.pos.findClosestByRange(FIND_MY_SPAWNS);
+    if (spawn && spawn.recycleCreep(creep) === ERR_NOT_IN_RANGE)
+        creep.moveTo(spawn, { range: 1, reusePath: 20 });
 }
 const ROAD_REPAIR_THRESHOLD = 0.8;
 function tendRemoteRoad(creep) {
