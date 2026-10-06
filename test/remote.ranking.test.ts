@@ -701,7 +701,8 @@ describe("a remote two castles share", () => {
 describe("a source two castles contend for", () => {
   // The castle in W3N5 lists the home's remote too, and its peddler works the
   // remote's one source. The home last picked the source `pickedAgo` ticks ago.
-  function contested(pickedAgo: number | undefined, otherCapacity: number, theirPeddler = true): Room {
+  // `theirBusy` creeps of the other castle's own take up its spawn time.
+  function contested(pickedAgo: number | undefined, otherCapacity: number, theirPeddler = true, theirBusy = 0): Room {
     const r = remote("W4N5", [30]);
     if (pickedAgo !== undefined) r.sources[0].pickedAt = clock - pickedAgo;
     const theirs = creep(ROLE_REMOTE_MINER, 9, {
@@ -709,16 +710,22 @@ describe("a source two castles contend for", () => {
       targetRoom: "W4N5",
       remoteSourceId: "W4N5-s0" as Id<Source>,
     });
-    const room = home({ remotes: [r], creeps: theirPeddler ? [theirs] : [] });
+    const busy = Array.from({ length: theirBusy }, () => creep(ROLE_UPGRADER, 16, { homeRoom: "W3N5" }));
+    const room = home({ remotes: [r], creeps: [...(theirPeddler ? [theirs] : []), ...busy] });
+    otherCastle(otherCapacity);
+    return room;
+  }
+
+  // The castle in W3N5, with the home's remote W4N5 on its list too.
+  function otherCastle(capacity: number, level = 4) {
     (g.Game as { rooms: Record<string, unknown> }).rooms.W3N5 = {
       name: "W3N5",
-      controller: { my: true, level: 4, owner: { username: "Me" } },
-      energyAvailable: otherCapacity,
-      energyCapacityAvailable: otherCapacity,
+      controller: { my: true, level, owner: { username: "Me" } },
+      energyAvailable: capacity,
+      energyCapacityAvailable: capacity,
       memory: { remoteRooms: [remote("W4N5", [30])] },
       find: (type: number) => (type === g.FIND_MY_SPAWNS ? [{ id: "spawnB" }] : []),
     };
-    return room;
   }
 
   it("takes back a source a smaller castle's peddler took up while its own was gone", () => {
@@ -739,6 +746,36 @@ describe("a source two castles contend for", () => {
     expect(sourceIds(getActiveRemoteRooms(contested(undefined, 2300, false)))).toEqual([]);
     clock += 1;
     expect(sourceIds(getActiveRemoteRooms(contested(undefined, 800, false)))).toEqual(["W4N5-s0"]);
+  });
+
+  // Simon dug on in the Crow Glen for a thousand ticks after Embercrag let his
+  // source go, and Thornbarrow's barracks stood idle beside it.
+  it("takes up a source a bigger castle let go, though that castle's peddler is still there", () => {
+    expect(sourceIds(getActiveRemoteRooms(contested(undefined, 2300, true, 23)))).toEqual(["W4N5-s0"]);
+    clock += 1;
+    expect(sourceIds(getActiveRemoteRooms(contested(undefined, 2300, true)))).toEqual([]);
+  });
+
+  it("weighs a source a smaller castle could take up after one only it can reach", () => {
+    const shared = remote("W4N5", [30]);
+    const own = remote("W6N5", [40]);
+    // Spawn time for one source of the two, so the nearer would be taken on profit.
+    const busy = Array.from({ length: 16 }, () => creep(ROLE_UPGRADER, 16));
+    const room = home({ remotes: [shared, own], creeps: busy });
+    otherCastle(800);
+    expect(sourceIds(getActiveRemoteRooms(room))).toEqual(["W6N5-s0"]);
+
+    // A castle below level 3 sends no vendors out to take it up.
+    clock += 1;
+    const again = home({ remotes: [remote("W4N5", [30]), remote("W6N5", [40])], creeps: busy });
+    otherCastle(800, 2);
+    expect(sourceIds(getActiveRemoteRooms(again))).toEqual(["W4N5-s0"]);
+  });
+
+  it("ranks the sources it works by profit, whichever it weighed first", () => {
+    const room = home({ remotes: [remote("W6N5", [40]), remote("W4N5", [30])], spawns: 2 });
+    otherCastle(800);
+    expect(getActiveRemoteRooms(room).map((r) => r.roomName)).toEqual(["W4N5", "W6N5"]);
   });
 });
 

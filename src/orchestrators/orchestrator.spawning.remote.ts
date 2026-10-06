@@ -404,6 +404,10 @@ function pickRemoteSources(room: Room): Map<string, number> {
       .filter((c) => {
         if (c.memory.homeRoom === room.name) return false;
         const other = Game.rooms[c.memory.homeRoom ?? ""];
+        // A bigger castle's peddler holds its source through that castle's
+        // picks, added below. One left on a source its castle let go does not
+        // keep a smaller castle from it.
+        if (other && outranks(other, room)) return false;
         const s = c.memory.remoteSourceId && remoteSourceData(room, c.memory.targetRoom, c.memory.remoteSourceId);
         const reclaim = Game.time - ((s && s.pickedAt) ?? 0) <= REMOTE_RECLAIM_HOLD;
         return !(other && outranks(room, other) && reclaim);
@@ -427,23 +431,29 @@ function pickRemoteSources(room: Room): Map<string, number> {
   // with it. Grimford and Embercrag each lost a source of a remote that way.
   const held = (s: RemoteSourceData) =>
     s.pickedAt === undefined ? mined.has(s.sourceId) : Game.time - s.pickedAt <= REMOTE_PICK_HOLD;
-  const plans: Array<{ source: RemoteSourceData; profit: number; spawnTime: number }> = [];
+  // Sources a smaller castle could work instead are weighed after those only
+  // this castle can reach. Weighed by profit alone, Embercrag kept a source of
+  // the Crow Glen it had taken up from Thornbarrow and let the Witch Weald go
+  // when its spawn time ran short: two thousand gold rotted in the Weald's
+  // container beside Percival, and Thornbarrow's barracks stood idle.
+  const plans: Array<{ source: RemoteSourceData; shared: boolean; profit: number; spawnTime: number }> = [];
   for (const r of room.memory.remoteRooms ?? []) {
     if (!isRemoteEligible(room, r, "reserve", true)) continue;
+    const shared = smallerCastleCouldWork(room, r.roomName);
     for (const s of r.sources) {
       if (minedElsewhere.has(s.sourceId) || shed.has(s.sourceId)) continue;
       if (lowCpu && !mined.has(s.sourceId) && !held(s)) continue;
       const plan = planRemoteSource(room, r, s);
-      if (plan.profit > 0) plans.push({ source: s, ...plan });
+      if (plan.profit > 0) plans.push({ source: s, shared, ...plan });
     }
   }
-  plans.sort((a, b) => b.profit - a.profit);
+  plans.sort((a, b) => Number(a.shared) - Number(b.shared) || b.profit - a.profit);
 
   const headroom = remoteSpawnCapacity(room) * REMOTE_PICK_HEADROOM;
   let budget = remoteSpawnBudget(room);
-  const picked = new Map<string, number>();
+  const taken: typeof plans = [];
   for (const p of plans) {
-    if (picked.size >= MAX_REMOTE_SOURCES) break;
+    if (taken.length >= MAX_REMOTE_SOURCES) break;
     const reserve = held(p.source) ? 0 : headroom;
     if (p.spawnTime > budget - reserve) {
       // Marked as weighed and not picked, so its peddler no longer stands in.
@@ -451,9 +461,12 @@ function pickRemoteSources(room: Room): Map<string, number> {
       continue;
     }
     budget -= p.spawnTime;
-    picked.set(p.source.sourceId, picked.size);
+    taken.push(p);
     p.source.pickedAt = Game.time;
   }
+  // Ranked by profit alone, so the best remote is still raised for first.
+  taken.sort((a, b) => b.profit - a.profit);
+  const picked = new Map(taken.map((p, i) => [p.source.sourceId, i]));
   remotePickCache[room.name] = { tick: Game.time, remotes: room.memory.remoteRooms, picked };
   return picked;
 }
@@ -888,6 +901,17 @@ function outranks(castle: Room, other: Room): boolean {
     castle.energyCapacityAvailable > other.energyCapacityAvailable ||
     (castle.energyCapacityAvailable === other.energyCapacityAvailable && castle.name < other.name)
   );
+}
+
+// Whether a smaller castle of ours that works remotes has this remote on its
+// list, and so could take up a source of it that this castle leaves.
+function smallerCastleCouldWork(room: Room, roomName: string): boolean {
+  for (const name in Game.rooms) {
+    const other = Game.rooms[name];
+    if (!other.controller?.my || other.controller.level < 3 || !outranks(room, other)) continue;
+    if (other.memory.remoteRooms?.some((r) => r.roomName === roomName)) return true;
+  }
+  return false;
 }
 
 // Whether this home works the remote source.
