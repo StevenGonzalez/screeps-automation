@@ -19393,6 +19393,12 @@ function clearWayForRing(room) {
         return false;
     const tiles = new Set(ring);
     const structures = room.find(FIND_STRUCTURES);
+    const occupied = new Set();
+    for (const s of structures) {
+        if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART) {
+            occupied.add(`${s.pos.x},${s.pos.y}`);
+        }
+    }
     const standing = new Set();
     for (const s of structures) {
         const k = `${s.pos.x},${s.pos.y}`;
@@ -19403,6 +19409,7 @@ function clearWayForRing(room) {
         const door = doors.has(k);
         const swap = (door && s.structureType === STRUCTURE_WALL) ||
             (!door &&
+                !occupied.has(k) &&
                 s.structureType === STRUCTURE_RAMPART &&
                 s.my &&
                 s.hits <= RAMPART_TO_WALL_MAX_HITS);
