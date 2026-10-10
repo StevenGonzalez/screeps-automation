@@ -206,6 +206,15 @@ describe("clearWayForRing", () => {
     expect(rampart.destroyed).toBe(false);
   });
 
+  it("keeps a rampart over a container where the ring wants a wall", () => {
+    // No wall can stand on the container, so the rampart is raised again
+    // over it and torn down again, every pass.
+    const container = built("container", 20, 20);
+    const rampart = built("rampart", 20, 20, true, 3000);
+    expect(clearWayForRing(ringRoom([container, rampart]))).toBe(false);
+    expect(rampart.destroyed).toBe(false);
+  });
+
   it("keeps the rampart doors where roads cross", () => {
     const doors = [built("rampart", 25, 26, true, 3000), built("rampart", 25, 2, true, 3000)];
     clearWayForRing(ringRoom(doors));

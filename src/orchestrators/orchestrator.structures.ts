@@ -788,6 +788,15 @@ export function clearWayForRing(room: Room): boolean {
 
   const tiles = new Set(ring);
   const structures = room.find(FIND_STRUCTURES);
+  // No wall can be built where another structure stands, such as the
+  // controller's container. A rampart there stays, or it would be torn down
+  // and raised again over the container every pass.
+  const occupied = new Set<string>();
+  for (const s of structures) {
+    if (s.structureType !== STRUCTURE_WALL && s.structureType !== STRUCTURE_RAMPART) {
+      occupied.add(`${s.pos.x},${s.pos.y}`);
+    }
+  }
   const standing = new Set<string>();
   for (const s of structures) {
     const k = `${s.pos.x},${s.pos.y}`;
@@ -797,6 +806,7 @@ export function clearWayForRing(room: Room): boolean {
     const swap =
       (door && s.structureType === STRUCTURE_WALL) ||
       (!door &&
+        !occupied.has(k) &&
         s.structureType === STRUCTURE_RAMPART &&
         (s as StructureRampart).my &&
         s.hits <= RAMPART_TO_WALL_MAX_HITS);
