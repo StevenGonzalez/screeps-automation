@@ -1560,6 +1560,65 @@ const PERIMETER_PLANNER = {
     replanInterval: 1500,
 };
 
+function isHighwayRoom$2(roomName) {
+    const m = roomName.match(/^[WE](\d+)[NS](\d+)$/);
+    if (!m)
+        return false;
+    return parseInt(m[1], 10) % 10 === 0 || parseInt(m[2], 10) % 10 === 0;
+}
+function exitsOf(roomName) {
+    var _a;
+    return Object.values((_a = Game.map.describeExits(roomName)) !== null && _a !== void 0 ? _a : {});
+}
+function castleNames() {
+    return new Set(Object.keys(Game.rooms).filter((rn) => { var _a; return (_a = Game.rooms[rn].controller) === null || _a === void 0 ? void 0 : _a.my; }));
+}
+function crossable(roomName, castles, me) {
+    var _a, _b, _c, _d, _e, _f;
+    if (castles.has(roomName))
+        return true;
+    if (isSourceKeeperRoom(roomName) || isHighwayRoom$2(roomName))
+        return false;
+    const owner = (_d = (_c = (_b = (_a = Game.rooms[roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username) !== null && _d !== void 0 ? _d : (_f = (_e = Memory.intel) === null || _e === void 0 ? void 0 : _e[roomName]) === null || _f === void 0 ? void 0 : _f.owner;
+    return !owner || owner === me;
+}
+const reachCache = {};
+function remoteReach(homeName) {
+    var _a, _b, _c;
+    const hit = reachCache[homeName];
+    if (hit && hit.tick === Game.time)
+        return hit.rooms;
+    const castles = castleNames();
+    const me = (_c = (_b = (_a = Game.rooms[homeName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
+    const minable = (rn) => !castles.has(rn) && !isSourceKeeperRoom(rn) && !isHighwayRoom$2(rn);
+    const rooms = new Set();
+    for (const near of exitsOf(homeName)) {
+        if (minable(near))
+            rooms.add(near);
+        if (!crossable(near, castles, me))
+            continue;
+        for (const far of exitsOf(near)) {
+            if (far === homeName || !minable(far))
+                continue;
+            if (exitsOf(far).some((rn) => rn !== homeName && castles.has(rn)))
+                continue;
+            rooms.add(far);
+        }
+    }
+    reachCache[homeName] = { tick: Game.time, rooms };
+    return rooms;
+}
+function remoteWay(homeName, remoteName) {
+    var _a, _b, _c;
+    const castles = castleNames();
+    const me = (_c = (_b = (_a = Game.rooms[homeName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
+    const way = new Set([homeName, remoteName]);
+    for (const near of exitsOf(homeName)) {
+        if (crossable(near, castles, me) && exitsOf(near).includes(remoteName))
+            way.add(near);
+    }
+    return way;
+}
 const REMOTE_ROAD_MIN_RCL = 4;
 function remoteRoadsEnabled(home) {
     var _a, _b;
@@ -1602,11 +1661,12 @@ function getRemoteSourcePathLength(home, remote, src) {
     if (fresh || lastSearchTick[home.name] === Game.time)
         return src.pathLength;
     lastSearchTick[home.name] = Game.time;
+    const way = remoteWay(home.name, remote.roomName);
     const result = PathFinder.search(origin.pos, { pos: target.pos, range: 1 }, {
         plainCost: 2,
         swampCost: 10,
         maxOps: 4000,
-        roomCallback: (rn) => rn === home.name || rn === remote.roomName ? roadCostMatrix(rn) : false,
+        roomCallback: (rn) => (way.has(rn) ? roadCostMatrix(rn) : false),
     });
     src.pathKey = key;
     src.pathTick = Game.time;
@@ -10090,8 +10150,8 @@ function pruneRemoteRooms(room) {
     const remotes = room.memory.remoteRooms;
     if (!remotes || remotes.length === 0)
         return;
-    const adjacent = new Set(Object.values(Game.map.describeExits(room.name)));
-    const keep = remotes.filter((r) => { var _a, _b; return adjacent.has(r.roomName) && !((_b = (_a = Game.rooms[r.roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my); });
+    const reach = remoteReach(room.name);
+    const keep = remotes.filter((r) => { var _a, _b; return reach.has(r.roomName) && !((_b = (_a = Game.rooms[r.roomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.my); });
     if (keep.length !== remotes.length)
         room.memory.remoteRooms = keep;
 }
@@ -10132,15 +10192,11 @@ function discoverAdjacentRooms(room) {
             room.memory.pendingScoutRooms.push(remote.roomName);
         }
     }
-    const exits = Game.map.describeExits(room.name);
-    for (const dir in exits) {
-        const adjacentName = exits[dir];
-        if (!adjacentName || knownNames.has(adjacentName))
+    for (const name of remoteReach(room.name)) {
+        if (knownNames.has(name))
             continue;
-        if (isSourceKeeperRoom(adjacentName) || isHighwayRoom$2(adjacentName))
-            continue;
-        room.memory.pendingScoutRooms.push(adjacentName);
-        knownNames.add(adjacentName);
+        room.memory.pendingScoutRooms.push(name);
+        knownNames.add(name);
     }
 }
 function refreshVisibleRemoteRooms(room) {
@@ -10250,12 +10306,6 @@ function cleanupEstablishedExpansion() {
         delete Memory.expansion;
     }
 }
-function isHighwayRoom$2(roomName) {
-    const m = roomName.match(/^[WE](\d+)[NS](\d+)$/);
-    if (!m)
-        return false;
-    return parseInt(m[1], 10) % 10 === 0 || parseInt(m[2], 10) % 10 === 0;
-}
 
 const SCOUT_HOSTILE_DURATION = 2000;
 const SCOUT_TRAVEL_BUDGET = 300;
@@ -10364,7 +10414,7 @@ function surveyRoom(creep, homeRoomName, targetRoomName) {
         return;
     }
     let entry = homeRoomMemory.remoteRooms.find((r) => r.roomName === targetRoomName);
-    if (!entry && !isAdjacent(homeRoomName, targetRoomName))
+    if (!entry && !inRemoteReach(homeRoomName, targetRoomName))
         return;
     if (!entry) {
         entry = { roomName: targetRoomName, sources: [], lastSeen: Game.time, hostile: false };
@@ -10395,8 +10445,8 @@ function surveyRoom(creep, homeRoomName, targetRoomName) {
         });
     }
 }
-function isAdjacent(homeRoomName, roomName) {
-    return Object.values(Game.map.describeExits(homeRoomName)).includes(roomName);
+function inRemoteReach(homeRoomName, roomName) {
+    return remoteReach(homeRoomName).has(roomName);
 }
 const UNREACHABLE_RETRY_TICKS = 10000;
 function markRoomUnreachable(homeRoomName, targetRoomName) {
@@ -10409,7 +10459,7 @@ function markRoomUnreachable(homeRoomName, targetRoomName) {
     if (!mem.remoteRooms)
         mem.remoteRooms = [];
     let entry = mem.remoteRooms.find((r) => r.roomName === targetRoomName);
-    if (!entry && !isAdjacent(homeRoomName, targetRoomName)) {
+    if (!entry && !inRemoteReach(homeRoomName, targetRoomName)) {
         if (!mem.scoutSkipUntil)
             mem.scoutSkipUntil = {};
         mem.scoutSkipUntil[targetRoomName] = Game.time + UNREACHABLE_RETRY_TICKS;
