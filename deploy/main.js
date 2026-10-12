@@ -5579,10 +5579,49 @@ function coreGapCovered(room) {
     }
     return carried >= room.energyCapacityAvailable - room.energyAvailable;
 }
+function throneRunnerTarget(creep) {
+    var _a;
+    const throne = throneFedFromStorage(creep.room);
+    if (!throne || ((_a = creep.memory.homeRoom) !== null && _a !== void 0 ? _a : creep.room.name) !== creep.room.name)
+        return null;
+    let runner;
+    let porters = 0;
+    for (const c of creep.room.find(FIND_MY_CREEPS)) {
+        if (c.memory.role !== ROLE_HAULER || c.spawning)
+            continue;
+        porters++;
+        if (runner === undefined || c.name < runner)
+            runner = c.name;
+    }
+    return porters >= 2 && runner === creep.name ? throne : null;
+}
+function runThrone(creep, throne) {
+    creep.memory.assignedContainerId = undefined;
+    creep.memory.coreRelief = undefined;
+    setHaulFrom(creep, undefined);
+    if (creep.store[RESOURCE_ENERGY] > 0) {
+        setFillTarget(creep, throne.id);
+        if (throne.store.getFreeCapacity(RESOURCE_ENERGY) > 0)
+            transferEnergyTo(creep, throne);
+        else if (!creep.pos.inRangeTo(throne, 1))
+            creep.moveTo(throne, { range: 1, reusePath: 20 });
+        return;
+    }
+    setFillTarget(creep, undefined);
+    const storage = creep.room.storage;
+    if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(storage, { reusePath: 20 });
+    }
+}
 function runHauler(creep) {
     var _a, _b;
     if ((creep.memory.boostCompound || ((_a = creep.memory.boostQueue) === null || _a === void 0 ? void 0 : _a.length)) && seekBoost(creep))
         return;
+    const throne = throneRunnerTarget(creep);
+    if (throne && getThreatInfo(creep.room).score === 0) {
+        runThrone(creep, throne);
+        return;
+    }
     const assignedId = creep.memory.assignedContainerId;
     if (assignedId &&
         (!Game.getObjectById(assignedId) || !getMinerContainerIds(creep.room).includes(assignedId))) {
@@ -17728,13 +17767,31 @@ function buildUpgraderBody(availableEnergy) {
         body.push(WORK);
     return body;
 }
+function buildLinkFedUpgraderBody(availableEnergy) {
+    const group = [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE];
+    const groupCost = calculateBodyPartCost(group);
+    const groups = Math.min(Math.floor(MAX_BODY_PART_COUNT / group.length), Math.floor(availableEnergy / groupCost));
+    if (groups === 0)
+        return buildUpgraderBody(availableEnergy);
+    const body = [];
+    for (let i = 0; i < groups; i++)
+        body.push(...group);
+    let left = availableEnergy - groups * groupCost;
+    while (left >= BODYPART_COST[WORK] && body.length < MAX_BODY_PART_COUNT) {
+        body.push(WORK);
+        left -= BODYPART_COST[WORK];
+    }
+    return body;
+}
 function spawnUpgrader(room, spawn) {
-    var _a, _b;
+    var _a, _b, _c;
     const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
     const allowedEnergy = bodyBudget(room, rcl >= 8 ? "capacity" : "available");
     const body = rcl >= 8
         ? buildRcl8UpgraderBody(allowedEnergy)
-        : buildUpgraderBody(allowedEnergy);
+        : ((_c = room.memory.controllerLinkIds) === null || _c === void 0 ? void 0 : _c.length)
+            ? buildLinkFedUpgraderBody(allowedEnergy)
+            : buildUpgraderBody(allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
     let queue = [];
