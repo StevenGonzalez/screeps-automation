@@ -9,6 +9,7 @@ g.OK = 0;
 import {
   getUpgraderPopulationTarget,
   buildUpgraderBody,
+  buildLinkFedUpgraderBody,
 } from "../src/orchestrators/orchestrator.spawning.economy";
 import { waitForFullBody, creepName, trackedSpawn } from "../src/orchestrators/orchestrator.spawning.shared";
 import {
@@ -99,6 +100,32 @@ describe("upgrader body", () => {
 
   it("stays within 50 parts", () => {
     expect(buildUpgraderBody(12_900).length).toBeLessThanOrEqual(50);
+  });
+});
+
+describe("link-fed upgrader body", () => {
+  const cost = (body: string[]) => body.reduce((n, p) => n + (BODYPART_COST as Record<string, number>)[p], 0);
+  const count = (body: string[], part: string) => body.filter((p) => p === part).length;
+
+  // Embercrag at RCL 7: 5,600 energy, a link beside the throne.
+  it("puts five WORK to each CARRY and MOVE, and the rest in WORK", () => {
+    const body = buildLinkFedUpgraderBody(5600);
+    expect(body).toHaveLength(50);
+    expect(count(body, WORK)).toBe(36);
+    expect(count(body, CARRY)).toBe(7);
+    expect(count(body, MOVE)).toBe(7);
+    expect(cost(body)).toBeLessThanOrEqual(5600);
+  });
+
+  // Grimford at RCL 6: 2,300 energy.
+  it("carries more WORK than the walking body for the same gold", () => {
+    expect(count(buildLinkFedUpgraderBody(2300), WORK)).toBe(20);
+    expect(count(buildUpgraderBody(2300), WORK)).toBeLessThan(20);
+    expect(cost(buildLinkFedUpgraderBody(2300))).toBeLessThanOrEqual(2300);
+  });
+
+  it("falls back to the walking body when a group is out of reach", () => {
+    expect(buildLinkFedUpgraderBody(550)).toEqual(buildUpgraderBody(550));
   });
 });
 

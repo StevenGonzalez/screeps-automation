@@ -731,6 +731,26 @@ export function buildUpgraderBody(availableEnergy: number): BodyPartConstant[] {
   return body;
 }
 
+// Where a link feeds the throne an enchanter takes its next load in the tick it
+// runs low and never walks for gold, so half its body in CARRY and MOVE is
+// wasted. Groups of five WORK to a CARRY and a MOVE, as at RCL 8, and what is
+// left in WORK: Embercrag's 50-part enchanter carried 25 WORK where it could
+// carry 36, and the realm pays a creep's CPU for each.
+export function buildLinkFedUpgraderBody(availableEnergy: number): BodyPartConstant[] {
+  const group: BodyPartConstant[] = [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE];
+  const groupCost = calculateBodyPartCost(group);
+  const groups = Math.min(Math.floor(MAX_BODY_PART_COUNT / group.length), Math.floor(availableEnergy / groupCost));
+  if (groups === 0) return buildUpgraderBody(availableEnergy);
+  const body: BodyPartConstant[] = [];
+  for (let i = 0; i < groups; i++) body.push(...group);
+  let left = availableEnergy - groups * groupCost;
+  while (left >= BODYPART_COST[WORK] && body.length < MAX_BODY_PART_COUNT) {
+    body.push(WORK);
+    left -= BODYPART_COST[WORK];
+  }
+  return body;
+}
+
 export function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   const rcl = room.controller?.level ?? 0;
 
@@ -738,7 +758,9 @@ export function spawnUpgrader(room: Room, spawn: StructureSpawn): boolean {
   const body =
     rcl >= 8
       ? buildRcl8UpgraderBody(allowedEnergy)
-      : buildUpgraderBody(allowedEnergy);
+      : room.memory.controllerLinkIds?.length
+        ? buildLinkFedUpgraderBody(allowedEnergy)
+        : buildUpgraderBody(allowedEnergy);
   if (room.energyAvailable < calculateBodyPartCost(body)) return false;
 
   let queue: string[] = [];
