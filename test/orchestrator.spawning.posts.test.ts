@@ -7,7 +7,7 @@ g.FIND_MY_CREEPS = 107;
 g.UPGRADE_CONTROLLER_POWER = 1;
 g.TERRAIN_MASK_WALL = 1;
 
-const { buildMinerBody, shouldSpawnHauler, shouldSpawnMiner } = await import("../src/orchestrators/orchestrator.spawning.economy");
+const { buildMinerBody, getHaulerPlan, shouldSpawnHauler, shouldSpawnMiner } = await import("../src/orchestrators/orchestrator.spawning.economy");
 const { ROLE_MINER, ROLE_HAULER, ROLE_UPGRADER } = await import("../src/config/config.roles");
 
 const ROOM = "W1N1";
@@ -166,23 +166,35 @@ describe("porters for a young keep", () => {
   });
 
   // Stormkeep: three 15-WORK enchanters, the throne 19 steps from storage.
-  it("keeps to the throne only the runners the trip needs", () => {
+  function stormkeep(): Room {
     const enchanters = Array.from({ length: 3 }, () => ({
       memory: { role: ROLE_UPGRADER },
       getActiveBodyparts: () => 15,
     }));
     const room = keep(1800, [creep(ROLE_MINER, 5, 0, "c1"), creep(ROLE_MINER, 5, 0, "c2")], undefined, 19) as unknown as {
       storage: unknown;
-      memory: RoomMemory;
       find: (type: number) => unknown[];
     };
     room.storage = { id: "storage19", pos: { x: 5, y: 5 }, store: { energy: 460_000 } };
     const find = room.find;
     room.find = (type: number) => (type === g.FIND_MY_CREEPS ? enchanters : find(type));
+    return room as unknown as Room;
+  }
 
-    shouldSpawnHauler(room as unknown as Room);
+  // Two runners of 900 carried 1800 a 40-tick trip to enchanters spending 45
+  // a tick, and the throne stood empty a quarter of the time.
+  it("gives the runners more than the enchanters spend in a trip", () => {
+    const room = stormkeep();
+    const plan = getHaulerPlan(room)!;
 
-    expect(room.memory.throneRunners).toBe(2);
+    expect(plan.carryEach * room.memory.throneRunners! * 50).toBeGreaterThan(45 * 40 * 1.1);
+  });
+
+  it("plans the throne runners on top of the source porters", () => {
+    const room = stormkeep();
+    const plan = getHaulerPlan(room)!;
+
+    expect(plan.count).toBe(2 + room.memory.throneRunners!);
   });
 });
 
