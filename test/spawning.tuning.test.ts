@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 g.FIND_MY_SPAWNS = 108;
+g.FIND_SOURCES = 105;
+g.FIND_STRUCTURES = 107;
 g.FIND_CONSTRUCTION_SITES = 111;
 g.STRUCTURE_STORAGE = "storage";
 g.OK = 0;
@@ -10,6 +12,7 @@ import {
   getUpgraderPopulationTarget,
   buildUpgraderBody,
   buildLinkFedUpgraderBody,
+  chooseUpgraderBody,
 } from "../src/orchestrators/orchestrator.spawning.economy";
 import { waitForFullBody, creepName, trackedSpawn } from "../src/orchestrators/orchestrator.spawning.shared";
 import {
@@ -126,6 +129,25 @@ describe("link-fed upgrader body", () => {
 
   it("falls back to the walking body when a group is out of reach", () => {
     expect(buildLinkFedUpgraderBody(550)).toEqual(buildUpgraderBody(550));
+  });
+
+  // Stormkeep at RCL 5: no link yet, porters stock the throne from 530k.
+  function stockedThrone(stored: number): Room {
+    const room = storageRoom(stored);
+    room.memory.upgradeContainerId = "throne1" as Id<StructureContainer>;
+    (g.Game as Record<string, unknown>).getObjectById = (id: string) =>
+      id === "throne1" ? { id, store: { energy: 0 } } : null;
+    return room;
+  }
+
+  it("seats the WORK-heavy body where porters stock the throne from storage", () => {
+    const body = chooseUpgraderBody(stockedThrone(530_000), 1800);
+    expect(body).toEqual(buildLinkFedUpgraderBody(1800));
+    expect(count(body, WORK)).toBe(15);
+  });
+
+  it("sends the walking body when storage cannot stock the throne", () => {
+    expect(chooseUpgraderBody(stockedThrone(25_000), 1800)).toEqual(buildUpgraderBody(1800));
   });
 });
 
