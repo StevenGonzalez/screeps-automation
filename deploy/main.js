@@ -5580,20 +5580,19 @@ function coreGapCovered(room) {
     return carried >= room.energyCapacityAvailable - room.energyAvailable;
 }
 function throneRunnerTarget(creep) {
-    var _a;
+    var _a, _b;
     const throne = throneFedFromStorage(creep.room);
     if (!throne || ((_a = creep.memory.homeRoom) !== null && _a !== void 0 ? _a : creep.room.name) !== creep.room.name)
         return null;
-    let runner;
-    let porters = 0;
+    const porters = [];
     for (const c of creep.room.find(FIND_MY_CREEPS)) {
-        if (c.memory.role !== ROLE_HAULER || c.spawning)
-            continue;
-        porters++;
-        if (runner === undefined || c.name < runner)
-            runner = c.name;
+        if (c.memory.role === ROLE_HAULER && !c.spawning)
+            porters.push(c.name);
     }
-    return porters >= 2 && runner === creep.name ? throne : null;
+    porters.sort();
+    const runners = Math.min((_b = creep.room.memory.throneRunners) !== null && _b !== void 0 ? _b : 1, porters.length - 1);
+    const rank = porters.indexOf(creep.name);
+    return rank >= 0 && rank < runners ? throne : null;
 }
 function runThrone(creep, throne) {
     creep.memory.assignedContainerId = undefined;
@@ -17455,7 +17454,6 @@ function getHaulerPlan(room) {
     const minerContainers = containers.filter((c) => minerContainerIds.has(c.id));
     const spawn = getSpawnForRoom(room);
     let requiredCarry = 0;
-    let dugTotal = 0;
     if (spawn) {
         const distances = getContainerDistances(room, spawn, minerContainers);
         const upgradeId = ((_c = room.memory.controllerLinkIds) === null || _c === void 0 ? void 0 : _c.length) ? undefined : room.memory.upgradeContainerId;
@@ -17468,9 +17466,9 @@ function getHaulerPlan(room) {
             const roundTrip = dist * 2;
             const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, (_f = dug[c.id]) !== null && _f !== void 0 ? _f : 0));
             requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
-            dugTotal += output;
         }
     }
+    let throneCarry = 0;
     const throne = throneFedFromStorage(room);
     if (throne && room.storage) {
         let spend = 0;
@@ -17478,16 +17476,21 @@ function getHaulerPlan(room) {
             if (c.memory.role === ROLE_UPGRADER)
                 spend += c.getActiveBodyparts(WORK) * UPGRADE_CONTROLLER_POWER;
         }
-        if (spend > dugTotal) {
+        if (spend > 0) {
             const walk = (_g = getContainerDistances(room, room.storage, [throne])[throne.id]) !== null && _g !== void 0 ? _g : 0;
-            requiredCarry += ((spend - dugTotal) * walk * 2) / HAULER_SPAWN.CARRY_CAPACITY;
+            throneCarry = Math.ceil((spend * walk * 2 * HAULER_CARRY_MARGIN) / HAULER_SPAWN.CARRY_CAPACITY);
         }
     }
     const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
     const idealRepeats = Math.min(Math.floor(MAX_BODY_PART_COUNT / 3), Math.floor(bodyBudget(room, "capacity") / 150));
     const carryPerIdealHauler = Math.max(1, idealRepeats * 2);
-    const count = Math.min(HAULER_SPAWN.MAX_HAULERS, Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler)));
-    const share = count > 0 ? 2 * Math.ceil(neededCarry / count / 2) : 0;
+    const throneRunners = Math.ceil(throneCarry / carryPerIdealHauler);
+    if (throneRunners > 0)
+        room.memory.throneRunners = throneRunners;
+    else
+        delete room.memory.throneRunners;
+    const count = Math.min(HAULER_SPAWN.MAX_HAULERS, Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler)) + throneRunners);
+    const share = count > 0 ? 2 * Math.ceil((neededCarry + throneCarry) / count / 2) : 0;
     const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
     return { count, carryEach };
 }
