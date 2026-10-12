@@ -54,12 +54,21 @@ describe("remote source path cache", () => {
   const container = { id: "cont1", pos: { x: 11, y: 10, roomName: REMOTE } };
   let search: ReturnType<typeof vi.fn>;
 
+  // HOME borders REMOTE and W2N1; W2N1 borders W2N2, a room two out.
+  const EXITS: Record<string, Record<string, string>> = {
+    [HOME]: { "1": REMOTE, "7": "W2N1" },
+    W2N1: { "1": "W2N2", "3": HOME },
+    W2N2: { "5": "W2N1" },
+  };
+
   function setup(result: { incomplete: boolean; path: Array<{ x: number; y: number; roomName: string }> }) {
     search = vi.fn(() => result);
     g.PathFinder = { search, CostMatrix: FakeCostMatrix };
+    g.Memory = {};
     g.Game = {
       time: clock,
       rooms: {},
+      map: { describeExits: (rn: string) => EXITS[rn] ?? {} },
       getObjectById: (id: string) => (id === "src1" ? source : id === "cont1" ? container : null),
     };
     const home = { name: HOME, storage, find: () => [] } as unknown as Room;
@@ -107,6 +116,14 @@ describe("remote source path cache", () => {
     const cb = search.mock.calls[0][2].roomCallback as (rn: string) => unknown;
     expect(cb("W9N9")).toBe(false);
     expect(cb(REMOTE)).toBeInstanceOf(FakeCostMatrix);
+  });
+
+  it("lets the search cross the room between home and a remote two rooms out", () => {
+    const { home, src } = setup({ incomplete: false, path });
+    getRemoteSourcePathLength(home, { roomName: "W2N2", sources: [src], lastSeen: 0, hostile: false }, src);
+    const cb = search.mock.calls[0][2].roomCallback as (rn: string) => unknown;
+    expect(cb("W2N1")).toBeInstanceOf(FakeCostMatrix);
+    expect(cb(REMOTE)).toBe(false);
   });
 });
 

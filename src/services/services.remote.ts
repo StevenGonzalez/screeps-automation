@@ -1,6 +1,71 @@
 // Remote mining bookkeeping shared by spawning, which decides which remote
 // sources are worth working, and structures, which lays roads to them.
 
+import { isSourceKeeperRoom } from "./services.combat";
+
+function isHighwayRoom(roomName: string): boolean {
+  const m = roomName.match(/^[WE](\d+)[NS](\d+)$/);
+  if (!m) return false;
+  return parseInt(m[1], 10) % 10 === 0 || parseInt(m[2], 10) % 10 === 0;
+}
+
+function exitsOf(roomName: string): string[] {
+  return Object.values(Game.map.describeExits(roomName) ?? {}) as string[];
+}
+
+function castleNames(): Set<string> {
+  return new Set(Object.keys(Game.rooms).filter((rn) => Game.rooms[rn].controller?.my));
+}
+
+// A room a castle's creeps may cross on the way to a remote: one of our own,
+// or one no other lord holds, and neither a source keeper's nor a highway.
+function crossable(roomName: string, castles: Set<string>, me: string | undefined): boolean {
+  if (castles.has(roomName)) return true;
+  if (isSourceKeeperRoom(roomName) || isHighwayRoom(roomName)) return false;
+  const owner = Game.rooms[roomName]?.controller?.owner?.username ?? Memory.intel?.[roomName]?.owner;
+  return !owner || owner === me;
+}
+
+const reachCache: Record<string, { tick: number; rooms: Set<string> }> = {};
+
+// Rooms a castle may mine: every room next door, and every room next door to
+// one of those that borders no other castle of ours. Walls cut most of the
+// realm's exits, and Embercrag had one remote while its second spawn stood
+// idle and the free room past that remote went unworked. A room bordering
+// another castle is that castle's to work: the bigger castle picks first, and
+// would take the smaller one's sources only to haul them a room further.
+export function remoteReach(homeName: string): Set<string> {
+  const hit = reachCache[homeName];
+  if (hit && hit.tick === Game.time) return hit.rooms;
+  const castles = castleNames();
+  const me = Game.rooms[homeName]?.controller?.owner?.username;
+  const minable = (rn: string) => !castles.has(rn) && !isSourceKeeperRoom(rn) && !isHighwayRoom(rn);
+  const rooms = new Set<string>();
+  for (const near of exitsOf(homeName)) {
+    if (minable(near)) rooms.add(near);
+    if (!crossable(near, castles, me)) continue;
+    for (const far of exitsOf(near)) {
+      if (far === homeName || !minable(far)) continue;
+      if (exitsOf(far).some((rn) => rn !== homeName && castles.has(rn))) continue;
+      rooms.add(far);
+    }
+  }
+  reachCache[homeName] = { tick: Game.time, rooms };
+  return rooms;
+}
+
+// The rooms a castle's creeps walk to reach a remote: home, the remote, and
+// any room between that borders both.
+function remoteWay(homeName: string, remoteName: string): Set<string> {
+  const castles = castleNames();
+  const me = Game.rooms[homeName]?.controller?.owner?.username;
+  const way = new Set([homeName, remoteName]);
+  for (const near of exitsOf(homeName)) {
+    if (crossable(near, castles, me) && exitsOf(near).includes(remoteName)) way.add(near);
+  }
+  return way;
+}
+
 // Roads out to a remote pay once the home has storage to haul into and the
 // energy to spare on sites. Before that the haulers walk.
 const REMOTE_ROAD_MIN_RCL = 4;
@@ -40,8 +105,8 @@ function roadCostMatrix(roomName: string): CostMatrix {
 // remote source's container, or the source itself before the container is
 // up. Cached on the source's memory entry along with the path's tiles in the
 // remote room, which is where remote roads get laid. The search is confined
-// to the home and the remote so the length is the trip haulers actually make
-// and every tile is in a room we plan for. Needs vision of the target, so a
+// to the home, the remote and any room between, so the length is the trip
+// haulers actually make. Needs vision of the target, so a
 // source we cannot see keeps its cached value, if any.
 export function getRemoteSourcePathLength(
   home: Room,
@@ -63,6 +128,7 @@ export function getRemoteSourcePathLength(
   if (fresh || lastSearchTick[home.name] === Game.time) return src.pathLength;
   lastSearchTick[home.name] = Game.time;
 
+  const way = remoteWay(home.name, remote.roomName);
   const result = PathFinder.search(
     origin.pos,
     { pos: target.pos, range: 1 },
@@ -70,8 +136,7 @@ export function getRemoteSourcePathLength(
       plainCost: 2,
       swampCost: 10,
       maxOps: 4000,
-      roomCallback: (rn) =>
-        rn === home.name || rn === remote.roomName ? roadCostMatrix(rn) : false,
+      roomCallback: (rn) => (way.has(rn) ? roadCostMatrix(rn) : false),
     }
   );
   src.pathKey = key;

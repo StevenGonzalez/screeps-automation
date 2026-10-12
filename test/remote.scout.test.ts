@@ -380,6 +380,58 @@ describe("pruneRemoteRooms", () => {
   });
 });
 
+describe("a castle's reach", () => {
+  // HOME's neighbours W1N2 and W2N1 lead on to W1N3 and W3N1. W2N2, past
+  // W1N2, borders the castle W3N2. W8N1 is another lord's, so W8N2 past it
+  // is out of reach.
+  const WORLD: Record<string, Record<string, string>> = {
+    [HOME]: { "1": "W1N2", "3": "W8N1", "7": "W2N1" },
+    W1N2: { "1": "W1N3", "5": HOME, "7": "W2N2" },
+    W2N1: { "3": HOME, "7": "W3N1" },
+    W2N2: { "3": "W1N2", "7": "W3N2" },
+    W8N1: { "1": "W8N2", "7": HOME },
+    W1N3: { "5": "W1N2" },
+    W3N1: { "3": "W2N1" },
+    W8N2: { "5": "W8N1" },
+  };
+
+  beforeEach(() => {
+    (g.Game as any).map.describeExits = (rn: string) => WORLD[rn] ?? {};
+    (g.Game as any).rooms = {
+      [HOME]: { name: HOME, controller: { my: true, owner: { username: ME } } },
+      W3N2: { name: "W3N2", controller: { my: true, owner: { username: ME } } },
+    };
+    (g.Game as any).time += 1;
+    (g.Memory as any).intel = { W8N1: { owner: "Rival" } };
+  });
+
+  // Embercrag had one remote while its second spawn stood idle, and the
+  // free room past that remote went unworked.
+  it("takes in the rooms past its neighbours", () => {
+    const room = { name: HOME, memory: { remoteRooms: [], pendingScoutRooms: [] } } as unknown as Room;
+    discoverAdjacentRooms(room);
+    expect(room.memory.pendingScoutRooms!.sort()).toEqual(["W1N2", "W1N3", "W2N1", "W3N1", "W8N1"]);
+  });
+
+  it("leaves a room bordering another castle to that castle", () => {
+    const room = { name: HOME, memory: { remoteRooms: [], pendingScoutRooms: [] } } as unknown as Room;
+    discoverAdjacentRooms(room);
+    expect(room.memory.pendingScoutRooms).not.toContain("W2N2");
+  });
+
+  it("goes past no other lord's room", () => {
+    const room = { name: HOME, memory: { remoteRooms: [], pendingScoutRooms: [] } } as unknown as Room;
+    discoverAdjacentRooms(room);
+    expect(room.memory.pendingScoutRooms).not.toContain("W8N2");
+  });
+
+  it("makes a remote of a room two out that a raven surveys", () => {
+    homeMem.pendingScoutRooms = ["W1N3"];
+    runScout(scoutIn("W1N3"));
+    expect(homeMem.remoteRooms!.map((r) => r.roomName)).toEqual(["W1N3"]);
+  });
+});
+
 describe("collectRoomMemoryGarbage", () => {
   it("keeps referenced rooms and drops strays", () => {
     homeMem.remoteRooms = [{ roomName: "W1N2", sources: [], lastSeen: 0, hostile: false }];

@@ -11,6 +11,7 @@ import {
   markRemoteInvader,
   clearRemoteInvaderEntry,
 } from "../services/services.creep";
+import { remoteReach } from "../services/services.remote";
 
 declare global {
   interface RoomMemory {
@@ -288,14 +289,15 @@ export function discoverDeepRooms(room: Room): void {
   }
 }
 
-// Remotes are only mined next door to home: deep scouting used to turn every
-// surveyed room into one. A room we now own is a colony, not a remote to drain.
+// Remotes are only mined within the castle's reach (see remoteReach): deep
+// scouting used to turn every surveyed room into one. A room we now own is a
+// colony, not a remote to drain.
 export function pruneRemoteRooms(room: Room): void {
   const remotes = room.memory.remoteRooms;
   if (!remotes || remotes.length === 0) return;
-  const adjacent = new Set(Object.values(Game.map.describeExits(room.name)));
+  const reach = remoteReach(room.name);
   const keep = remotes.filter(
-    (r) => adjacent.has(r.roomName) && !Game.rooms[r.roomName]?.controller?.my
+    (r) => reach.has(r.roomName) && !Game.rooms[r.roomName]?.controller?.my
   );
   if (keep.length !== remotes.length) room.memory.remoteRooms = keep;
 }
@@ -349,17 +351,12 @@ export function discoverAdjacentRooms(room: Room) {
     }
   }
 
-  // Every adjacent room is a candidate; spawning ranks them by profit and
+  // Every room in reach is a candidate; spawning ranks them by profit and
   // works as many as the home can afford (see getActiveRemoteRooms).
-  const exits = Game.map.describeExits(room.name);
-  for (const dir in exits) {
-    const adjacentName = exits[dir as ExitKey];
-    if (!adjacentName || knownNames.has(adjacentName)) continue;
-
-    if (isSourceKeeperRoom(adjacentName) || isHighwayRoom(adjacentName)) continue;
-
-    room.memory.pendingScoutRooms.push(adjacentName);
-    knownNames.add(adjacentName);
+  for (const name of remoteReach(room.name)) {
+    if (knownNames.has(name)) continue;
+    room.memory.pendingScoutRooms.push(name);
+    knownNames.add(name);
   }
 }
 
@@ -469,9 +466,3 @@ function cleanupEstablishedExpansion() {
 }
 
 type ExitKey = "1" | "3" | "5" | "7";
-
-function isHighwayRoom(roomName: string): boolean {
-  const m = roomName.match(/^[WE](\d+)[NS](\d+)$/);
-  if (!m) return false;
-  return parseInt(m[1], 10) % 10 === 0 || parseInt(m[2], 10) % 10 === 0;
-}

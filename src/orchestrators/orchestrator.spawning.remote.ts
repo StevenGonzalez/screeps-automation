@@ -140,8 +140,7 @@ export function getPickedRemoteRoomNames(room: Room): Set<string> {
   return out;
 }
 
-// A hard ceiling on remote sources per home, whatever the budget says. Remotes
-// are adjacent rooms only, so this is at most four rooms' worth anyway.
+// A hard ceiling on remote sources per home, whatever the budget says.
 const MAX_REMOTE_SOURCES = 6;
 
 // Share of the home's spawn time remotes may plan on. The rest is headroom for

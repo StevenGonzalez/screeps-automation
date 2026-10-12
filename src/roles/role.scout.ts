@@ -5,6 +5,7 @@ import {
 import { recordRoomIntel } from "../orchestrators/orchestrator.military";
 import { applyRemoteControllerStatus } from "../orchestrators/orchestrator.memory";
 import { isArmedHostile } from "../services/services.combat";
+import { remoteReach } from "../services/services.remote";
 
 const SCOUT_HOSTILE_DURATION = 2000;
 // Ticks a raven walks towards one room before giving it up. Three rooms out, a
@@ -130,8 +131,8 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
   }
 
   let entry = homeRoomMemory.remoteRooms.find((r) => r.roomName === targetRoomName);
-  // Deep-scouted rooms only feed intel; remotes are mined next door to home.
-  if (!entry && !isAdjacent(homeRoomName, targetRoomName)) return;
+  // Deep-scouted rooms only feed intel; remotes are mined within reach of home.
+  if (!entry && !inRemoteReach(homeRoomName, targetRoomName)) return;
   if (!entry) {
     entry = { roomName: targetRoomName, sources: [], lastSeen: Game.time, hostile: false };
     homeRoomMemory.remoteRooms.push(entry);
@@ -166,8 +167,8 @@ function surveyRoom(creep: Creep, homeRoomName: string, targetRoomName: string) 
   }
 }
 
-function isAdjacent(homeRoomName: string, roomName: string): boolean {
-  return Object.values(Game.map.describeExits(homeRoomName)).includes(roomName);
+function inRemoteReach(homeRoomName: string, roomName: string): boolean {
+  return remoteReach(homeRoomName).has(roomName);
 }
 
 const UNREACHABLE_RETRY_TICKS = 10000;
@@ -183,7 +184,7 @@ function markRoomUnreachable(homeRoomName: string, targetRoomName: string) {
   if (!mem.remoteRooms) mem.remoteRooms = [];
   let entry = mem.remoteRooms.find((r) => r.roomName === targetRoomName);
   // A deep room is only remembered as "don't retry yet", not as a remote.
-  if (!entry && !isAdjacent(homeRoomName, targetRoomName)) {
+  if (!entry && !inRemoteReach(homeRoomName, targetRoomName)) {
     if (!mem.scoutSkipUntil) mem.scoutSkipUntil = {};
     mem.scoutSkipUntil[targetRoomName] = Game.time + UNREACHABLE_RETRY_TICKS;
     return;
