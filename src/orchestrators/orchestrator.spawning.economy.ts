@@ -266,11 +266,13 @@ function getContainerDistances(
     return cache.distances;
   }
   const distances: Record<string, number> = {};
+  const matrix = walkMatrix(room);
   for (const c of containers) {
     const result = PathFinder.search(from.pos, { pos: c.pos, range: 1 }, {
       plainCost: 2,
       swampCost: 10,
       maxOps: 2000,
+      roomCallback: (roomName) => (roomName === room.name ? matrix : false),
     });
     distances[c.id] = result.incomplete ? 999 : result.path.length;
   }
@@ -282,6 +284,24 @@ function getContainerDistances(
   }
   containerDistanceCache[key] = { distances, cachedAt: Game.time };
   return distances;
+}
+
+// The castle's ground as its porters walk it: round its walls and buildings,
+// along its roads. Measured over open ground, Stormkeep's throne stood 19 steps
+// from storage while its runners walked 25, round the walls before the throne
+// and the barracks' extensions, and they were planned a quarter short.
+function walkMatrix(room: Room): CostMatrix {
+  const matrix = new PathFinder.CostMatrix();
+  for (const s of room.find(FIND_STRUCTURES)) {
+    if (s.structureType === STRUCTURE_ROAD) {
+      if (matrix.get(s.pos.x, s.pos.y) === 0) matrix.set(s.pos.x, s.pos.y, 1);
+    } else if (s.structureType === STRUCTURE_RAMPART) {
+      if (!(s as StructureRampart).my) matrix.set(s.pos.x, s.pos.y, 255);
+    } else if ((OBSTACLE_OBJECT_TYPES as string[]).includes(s.structureType)) {
+      matrix.set(s.pos.x, s.pos.y, 255);
+    }
+  }
+  return matrix;
 }
 
 // Haulers carry this much more than the sources' output strictly needs, for
@@ -381,8 +401,12 @@ export function getHaulerPlan(room: Room): HaulerPlan | null {
     HAULER_SPAWN.MAX_HAULERS,
     Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler)) + throneRunners
   );
+  // Every porter is raised the same size, so each is big enough for a runner's
+  // share of the throne run. Split evenly with the source porters, who needed
+  // less, Stormkeep's three runners carried 48 parts of the 59 the run asked.
   const share = count > 0 ? 2 * Math.ceil((neededCarry + throneCarry) / count / 2) : 0;
-  const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
+  const runnerShare = throneRunners > 0 ? 2 * Math.ceil(throneCarry / throneRunners / 2) : 0;
+  const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share, runnerShare));
   return { count, carryEach };
 }
 

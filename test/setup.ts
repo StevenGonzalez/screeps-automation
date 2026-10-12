@@ -69,6 +69,11 @@ const GAME_CONSTANTS: Record<string, unknown> = {
   POWER_BANK_DECAY: 5000,
   HARVEST_POWER: 2,
   HARVEST_DEPOSIT_POWER: 1,
+  OBSTACLE_OBJECT_TYPES: [
+    "spawn", "creep", "powerCreep", "source", "mineral", "deposit", "controller", "constructedWall",
+    "extension", "link", "storage", "tower", "observer", "powerSpawn", "powerBank", "lab",
+    "terminal", "nuker", "factory", "invaderCore",
+  ],
 };
 
 for (const [name, value] of Object.entries(GAME_CONSTANTS)) {

@@ -84,6 +84,7 @@ function makeRoom(creeps: Creep[], energyAvailable: number) {
   const storage = {
     id: "storage1",
     structureType: "storage",
+    pos: { x: 25, y: 30 },
     store: { energy: 815_300, getFreeCapacity: () => 100_000 },
   };
 
@@ -128,6 +129,12 @@ function makeRoom(creeps: Creep[], energyAvailable: number) {
   };
   g.Memory = { creeps: {}, rooms: { [ROOM]: room.memory } };
   g.PathFinder = {
+    CostMatrix: class {
+      get() {
+        return 0;
+      }
+      set() {}
+    },
     search: () => ({ incomplete: false, path: new Array(20).fill({ x: 0, y: 0 }) }),
   };
 

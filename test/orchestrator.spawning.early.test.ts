@@ -142,6 +142,12 @@ function makeRoom(setup: RoomSetup) {
   };
   g.Memory = { creeps: {}, rooms: { [ROOM]: room.memory } };
   g.PathFinder = {
+    CostMatrix: class {
+      get() {
+        return 0;
+      }
+      set() {}
+    },
     search: () => ({ incomplete: false, path: new Array(10).fill({ x: 0, y: 0 }) }),
   };
 

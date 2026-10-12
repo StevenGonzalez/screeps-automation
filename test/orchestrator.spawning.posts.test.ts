@@ -4,6 +4,7 @@ const g = globalThis as Record<string, unknown>;
 
 g.FIND_MY_SPAWNS = 108;
 g.FIND_MY_CREEPS = 107;
+g.FIND_STRUCTURES = 101;
 g.UPGRADE_CONTROLLER_POWER = 1;
 g.TERRAIN_MASK_WALL = 1;
 
@@ -64,6 +65,12 @@ function keep(capacity: number, creeps: Creep[], seats?: number, controllerWalk?
   };
   g.Memory = { creeps: {}, rooms: { [ROOM]: room.memory } };
   g.PathFinder = {
+    CostMatrix: class {
+      get() {
+        return 0;
+      }
+      set() {}
+    },
     search: (from: { x: number }) => ({
       incomplete: false,
       path: new Array(from.x === 5 ? controllerWalk : 10).fill({ x: 0, y: 0 }),
@@ -195,6 +202,47 @@ describe("porters for a young keep", () => {
     const plan = getHaulerPlan(room)!;
 
     expect(plan.count).toBe(2 + room.memory.throneRunners!);
+  });
+
+  // Two source porters needed little; split evenly with them, Stormkeep's
+  // three runners carried 48 parts of the 59 the run asked.
+  it("makes every porter big enough for a runner's share of the run", () => {
+    const room = stormkeep();
+    const plan = getHaulerPlan(room)!;
+
+    expect(plan.carryEach * room.memory.throneRunners!).toBeGreaterThanOrEqual((45 * (19 * 2 + 2) * 1.25) / 50);
+  });
+
+  // Stormkeep's throne is 19 steps from storage over open ground and 25 round
+  // the walls and extensions between them.
+  it("measures the run round the castle's buildings", () => {
+    const room = stormkeep() as unknown as { find: (type: number) => unknown[]; storage: { id: string } };
+    // A storage of its own, as the walks are cached by where they start.
+    room.storage.id = "storageWalled";
+    const find = room.find;
+    const wall = { structureType: "constructedWall", pos: { x: 6, y: 6 } };
+    room.find = (type: number) => (type === g.FIND_STRUCTURES ? [wall] : find(type));
+    class Matrix {
+      cells = new Map<string, number>();
+      get(x: number, y: number) {
+        return this.cells.get(`${x},${y}`) ?? 0;
+      }
+      set(x: number, y: number, v: number) {
+        this.cells.set(`${x},${y}`, v);
+      }
+    }
+    g.PathFinder = {
+      CostMatrix: Matrix,
+      search: (from: { x: number }, _to: unknown, opts: { roomCallback: (name: string) => Matrix | false }) => {
+        const walled = (opts.roomCallback(ROOM) as Matrix).get(6, 6) === 255;
+        const steps = from.x === 5 ? (walled ? 25 : 19) : 10;
+        return { incomplete: false, path: new Array(steps).fill({ x: 0, y: 0 }) };
+      },
+    };
+    const plan = getHaulerPlan(room as unknown as Room)!;
+
+    // 45 a tick over a 52-tick trip, with the margin, is 59 CARRY.
+    expect(plan.carryEach * (room as unknown as Room).memory.throneRunners!).toBeGreaterThanOrEqual(59);
   });
 });
 
