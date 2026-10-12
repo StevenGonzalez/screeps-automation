@@ -4666,6 +4666,25 @@ function findFullestMinerContainer(creep, atLeast, range = Infinity) {
     return fullest;
 }
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
+const THRONE_STOCK_SPARE = 20000;
+function throneFedFromStorage(room) {
+    var _a;
+    const storage = room.storage;
+    const id = room.memory.upgradeContainerId;
+    if (!storage || !id || ((_a = room.memory.controllerLinkIds) === null || _a === void 0 ? void 0 : _a.length))
+        return null;
+    if (getMinerContainerIds(room).some((m) => m === id))
+        return null;
+    if (storage.store[RESOURCE_ENERGY] - upgraderStorageFloor(room) < THRONE_STOCK_SPARE)
+        return null;
+    return Game.getObjectById(id);
+}
+function throneWantsStock(creep) {
+    const throne = throneFedFromStorage(creep.room);
+    if (!throne)
+        return false;
+    return throne.store[RESOURCE_ENERGY] + energyClaimedByOthers(throne.id, creep) < UPGRADE_CONTAINER_REFILL_BELOW;
+}
 function findDepositTargetExcludingMiner(creep, coreFed = false) {
     var _a;
     const minerIds = getMinerContainerIds(creep.room).map((id) => id.toString());
@@ -5748,6 +5767,12 @@ function collectEnergy$1(creep, storageModel) {
                     return false;
                 creep.memory.coreRelief = true;
             }
+            if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+                creep.moveTo(storage, { reusePath: 20 });
+            }
+            return true;
+        }
+        if (storage && throneWantsStock(creep)) {
             if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
                 creep.moveTo(storage, { reusePath: 20 });
             }
@@ -17378,7 +17403,7 @@ function getContainerDistances(room, from, containers) {
 const HAULER_CARRY_MARGIN = 1.5;
 const MIN_HAULER_CARRY = 4;
 function getHaulerPlan(room) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     const containerIds = (_a = room.memory.containerIds) !== null && _a !== void 0 ? _a : [];
     if (containerIds.length === 0)
         return null;
@@ -17391,6 +17416,7 @@ function getHaulerPlan(room) {
     const minerContainers = containers.filter((c) => minerContainerIds.has(c.id));
     const spawn = getSpawnForRoom(room);
     let requiredCarry = 0;
+    let dugTotal = 0;
     if (spawn) {
         const distances = getContainerDistances(room, spawn, minerContainers);
         const upgradeId = ((_c = room.memory.controllerLinkIds) === null || _c === void 0 ? void 0 : _c.length) ? undefined : room.memory.upgradeContainerId;
@@ -17403,6 +17429,19 @@ function getHaulerPlan(room) {
             const roundTrip = dist * 2;
             const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, (_f = dug[c.id]) !== null && _f !== void 0 ? _f : 0));
             requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
+            dugTotal += output;
+        }
+    }
+    const throne = throneFedFromStorage(room);
+    if (throne && room.storage) {
+        let spend = 0;
+        for (const c of room.find(FIND_MY_CREEPS)) {
+            if (c.memory.role === ROLE_UPGRADER)
+                spend += c.getActiveBodyparts(WORK) * UPGRADE_CONTROLLER_POWER;
+        }
+        if (spend > dugTotal) {
+            const walk = (_g = getContainerDistances(room, room.storage, [throne])[throne.id]) !== null && _g !== void 0 ? _g : 0;
+            requiredCarry += ((spend - dugTotal) * walk * 2) / HAULER_SPAWN.CARRY_CAPACITY;
         }
     }
     const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
