@@ -365,4 +365,23 @@ describe("the porter kept to the throne run", () => {
 
     expect(creep.memory.coreRelief).toBe(true);
   });
+
+  it("sends as many porters as the plan keeps to the throne", () => {
+    const creep = throneCastle(0, "courier2", ["courier1", "courier3"]);
+    creep.room.memory.throneRunners = 2;
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual(["storage1"]);
+    expect(creep.memory.coreRelief).toBeUndefined();
+  });
+
+  it("leaves one porter to the core however many the plan asks", () => {
+    const creep = throneCastle(0, "courier2", ["courier1"]);
+    creep.room.memory.throneRunners = 3;
+
+    runHauler(creep);
+
+    expect(creep.memory.coreRelief).toBe(true);
+  });
 });

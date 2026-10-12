@@ -331,6 +331,8 @@ declare global {
     plannedStructures?: Record<string, string[]>;
     plannedStructuresMeta?: Record<string, { createdAt: number }>;
     upgradeContainerId?: Id<StructureContainer>;
+    // Porters kept to the throne run, as the porter plan last set it.
+    throneRunners?: number;
     pendingScoutRooms?: string[];
     remoteRooms?: RemoteRoomData[];
     castleAnchor?: { x: number; y: number };

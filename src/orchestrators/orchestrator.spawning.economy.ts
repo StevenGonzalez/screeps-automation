@@ -313,10 +313,11 @@ interface HaulerPlan {
 // spilling, before its storage and again after it. The longer of the two walks
 // is planned for.
 //
-// While the treasury holds a surplus and no link feeds the throne, the porters
-// also carry from storage what the enchanters spend beyond the sources' yield.
-// Stormkeep's two porters were busy with its sources and core, so its throne
-// container stood empty beside 520k in storage.
+// While the treasury holds a surplus and no link feeds the throne, porters kept
+// to the throne run carry from storage all the enchanters spend, and are
+// planned on top of the rest. Stormkeep's porters were busy with its sources
+// and core, so its throne container stood empty beside 520k in storage; one
+// runner brought 20 a tick to enchanters that could spend 36.
 function getHaulerPlan(room: Room): HaulerPlan | null {
   const containerIds = room.memory.containerIds ?? [];
   if (containerIds.length === 0) return null;
@@ -332,7 +333,6 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
 
   const spawn = getSpawnForRoom(room);
   let requiredCarry = 0;
-  let dugTotal = 0;
   if (spawn) {
     const distances = getContainerDistances(room, spawn, minerContainers);
     const upgradeId = room.memory.controllerLinkIds?.length ? undefined : room.memory.upgradeContainerId;
@@ -347,18 +347,18 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
       const roundTrip = dist * 2;
       const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, dug[c.id] ?? 0));
       requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
-      dugTotal += output;
     }
   }
+  let throneCarry = 0;
   const throne = throneFedFromStorage(room);
   if (throne && room.storage) {
     let spend = 0;
     for (const c of room.find(FIND_MY_CREEPS)) {
       if (c.memory.role === ROLE_UPGRADER) spend += c.getActiveBodyparts(WORK) * UPGRADE_CONTROLLER_POWER;
     }
-    if (spend > dugTotal) {
+    if (spend > 0) {
       const walk = getContainerDistances(room, room.storage, [throne])[throne.id] ?? 0;
-      requiredCarry += ((spend - dugTotal) * walk * 2) / HAULER_SPAWN.CARRY_CAPACITY;
+      throneCarry = Math.ceil((spend * walk * 2 * HAULER_CARRY_MARGIN) / HAULER_SPAWN.CARRY_CAPACITY);
     }
   }
   const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
@@ -369,11 +369,14 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
   );
   const carryPerIdealHauler = Math.max(1, idealRepeats * 2);
 
+  const throneRunners = Math.ceil(throneCarry / carryPerIdealHauler);
+  if (throneRunners > 0) room.memory.throneRunners = throneRunners;
+  else delete room.memory.throneRunners;
   const count = Math.min(
     HAULER_SPAWN.MAX_HAULERS,
-    Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler))
+    Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler)) + throneRunners
   );
-  const share = count > 0 ? 2 * Math.ceil(neededCarry / count / 2) : 0;
+  const share = count > 0 ? 2 * Math.ceil((neededCarry + throneCarry) / count / 2) : 0;
   const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
   return { count, carryEach };
 }

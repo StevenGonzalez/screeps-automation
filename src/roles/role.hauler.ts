@@ -53,19 +53,20 @@ function coreGapCovered(room: Room): boolean {
 // alone. Left to porters with nothing else to do, the run was never taken at
 // Stormkeep: its one spawn never rested, so every porter was out filling the
 // core, and the throne's container stood empty in twelve samples of twelve
-// with 545k in storage. The others and the barmaid keep the core and the
-// sources; a castle with a single porter keeps it for them.
+// with 545k in storage. The porter plan sets how many keep to it (one until it
+// has run), first by name; at least one porter is always left to the core and
+// the sources, with the barmaid.
 function throneRunnerTarget(creep: Creep): StructureContainer | null {
   const throne = throneFedFromStorage(creep.room);
   if (!throne || (creep.memory.homeRoom ?? creep.room.name) !== creep.room.name) return null;
-  let runner: string | undefined;
-  let porters = 0;
+  const porters: string[] = [];
   for (const c of creep.room.find(FIND_MY_CREEPS)) {
-    if (c.memory.role !== ROLE_HAULER || c.spawning) continue;
-    porters++;
-    if (runner === undefined || c.name < runner) runner = c.name;
+    if (c.memory.role === ROLE_HAULER && !c.spawning) porters.push(c.name);
   }
-  return porters >= 2 && runner === creep.name ? throne : null;
+  porters.sort();
+  const runners = Math.min(creep.room.memory.throneRunners ?? 1, porters.length - 1);
+  const rank = porters.indexOf(creep.name);
+  return rank >= 0 && rank < runners ? throne : null;
 }
 
 function runThrone(creep: Creep, throne: StructureContainer): void {

@@ -156,8 +156,12 @@ describe("porters for a young keep", () => {
       room.find = (type: number) => (type === g.FIND_MY_CREEPS ? enchanters : find(type));
       return room as unknown as Room;
     };
-    expect(shouldSpawnHauler(castle(519_670))).toBe(true);
-    expect(shouldSpawnHauler(castle(519_670, ["link1"]))).toBe(false);
+    const rich = castle(519_670);
+    expect(shouldSpawnHauler(rich)).toBe(true);
+    expect(rich.memory.throneRunners).toBeGreaterThanOrEqual(1);
+    const linked = castle(519_670, ["link1"]);
+    expect(shouldSpawnHauler(linked)).toBe(false);
+    expect(linked.memory.throneRunners).toBeUndefined();
     expect(shouldSpawnHauler(castle(25_000))).toBe(false);
   });
 });
