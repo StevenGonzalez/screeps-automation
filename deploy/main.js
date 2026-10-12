@@ -17478,7 +17478,7 @@ function getHaulerPlan(room) {
         }
         if (spend > 0) {
             const walk = (_g = getContainerDistances(room, room.storage, [throne])[throne.id]) !== null && _g !== void 0 ? _g : 0;
-            throneCarry = Math.ceil((spend * walk * 2 * HAULER_CARRY_MARGIN) / HAULER_SPAWN.CARRY_CAPACITY);
+            throneCarry = Math.ceil((spend * (walk * 2 + 2)) / HAULER_SPAWN.CARRY_CAPACITY);
         }
     }
     const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
