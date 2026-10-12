@@ -17799,11 +17799,13 @@ function getContainerDistances(room, from, containers) {
         return cache.distances;
     }
     const distances = {};
+    const matrix = walkMatrix(room);
     for (const c of containers) {
         const result = PathFinder.search(from.pos, { pos: c.pos, range: 1 }, {
             plainCost: 2,
             swampCost: 10,
             maxOps: 2000,
+            roomCallback: (roomName) => (roomName === room.name ? matrix : false),
         });
         distances[c.id] = result.incomplete ? 999 : result.path.length;
     }
@@ -17814,6 +17816,23 @@ function getContainerDistances(room, from, containers) {
     }
     containerDistanceCache[key] = { distances, cachedAt: Game.time };
     return distances;
+}
+function walkMatrix(room) {
+    const matrix = new PathFinder.CostMatrix();
+    for (const s of room.find(FIND_STRUCTURES)) {
+        if (s.structureType === STRUCTURE_ROAD) {
+            if (matrix.get(s.pos.x, s.pos.y) === 0)
+                matrix.set(s.pos.x, s.pos.y, 1);
+        }
+        else if (s.structureType === STRUCTURE_RAMPART) {
+            if (!s.my)
+                matrix.set(s.pos.x, s.pos.y, 255);
+        }
+        else if (OBSTACLE_OBJECT_TYPES.includes(s.structureType)) {
+            matrix.set(s.pos.x, s.pos.y, 255);
+        }
+    }
+    return matrix;
 }
 const HAULER_CARRY_MARGIN = 1.5;
 const MIN_HAULER_CARRY = 4;
@@ -17869,7 +17888,8 @@ function getHaulerPlan(room) {
         delete room.memory.throneRunners;
     const count = Math.min(HAULER_SPAWN.MAX_HAULERS, Math.max(minerContainers.length, Math.ceil(neededCarry / carryPerIdealHauler)) + throneRunners);
     const share = count > 0 ? 2 * Math.ceil((neededCarry + throneCarry) / count / 2) : 0;
-    const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share));
+    const runnerShare = throneRunners > 0 ? 2 * Math.ceil(throneCarry / throneRunners / 2) : 0;
+    const carryEach = Math.min(carryPerIdealHauler, Math.max(MIN_HAULER_CARRY, share, runnerShare));
     return { count, carryEach };
 }
 function minerWorkByContainer(room) {
