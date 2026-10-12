@@ -17440,6 +17440,7 @@ function getContainerDistances(room, from, containers) {
 }
 const HAULER_CARRY_MARGIN = 1.5;
 const MIN_HAULER_CARRY = 4;
+const THRONE_RUN_MARGIN = 1.25;
 function getHaulerPlan(room) {
     var _a, _b, _c, _d, _e, _f, _g;
     const containerIds = (_a = room.memory.containerIds) !== null && _a !== void 0 ? _a : [];
@@ -17478,7 +17479,7 @@ function getHaulerPlan(room) {
         }
         if (spend > 0) {
             const walk = (_g = getContainerDistances(room, room.storage, [throne])[throne.id]) !== null && _g !== void 0 ? _g : 0;
-            throneCarry = Math.ceil((spend * (walk * 2 + 2)) / HAULER_SPAWN.CARRY_CAPACITY);
+            throneCarry = Math.ceil((spend * (walk * 2 + 2) * THRONE_RUN_MARGIN) / HAULER_SPAWN.CARRY_CAPACITY);
         }
     }
     const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
