@@ -17786,15 +17786,20 @@ function buildLinkFedUpgraderBody(availableEnergy) {
     }
     return body;
 }
-function spawnUpgrader(room, spawn) {
+function chooseUpgraderBody(room, allowedEnergy) {
     var _a, _b, _c;
+    if (((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) >= 8)
+        return buildRcl8UpgraderBody(allowedEnergy);
+    if (((_c = room.memory.controllerLinkIds) === null || _c === void 0 ? void 0 : _c.length) || throneFedFromStorage(room)) {
+        return buildLinkFedUpgraderBody(allowedEnergy);
+    }
+    return buildUpgraderBody(allowedEnergy);
+}
+function spawnUpgrader(room, spawn) {
+    var _a, _b;
     const rcl = (_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0;
     const allowedEnergy = bodyBudget(room, rcl >= 8 ? "capacity" : "available");
-    const body = rcl >= 8
-        ? buildRcl8UpgraderBody(allowedEnergy)
-        : ((_c = room.memory.controllerLinkIds) === null || _c === void 0 ? void 0 : _c.length)
-            ? buildLinkFedUpgraderBody(allowedEnergy)
-            : buildUpgraderBody(allowedEnergy);
+    const body = chooseUpgraderBody(room, allowedEnergy);
     if (room.energyAvailable < calculateBodyPartCost(body))
         return false;
     let queue = [];
