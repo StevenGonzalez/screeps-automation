@@ -317,7 +317,11 @@ interface HaulerPlan {
 // to the throne run carry from storage all the enchanters spend, and are
 // planned on top of the rest. Stormkeep's porters were busy with its sources
 // and core, so its throne container stood empty beside 520k in storage; one
-// runner brought 20 a tick to enchanters that could spend 36.
+// runner brought 20 a tick to enchanters that could spend 36. The run is
+// planned to the trip, a tick each to load and unload, without the margin the
+// sources' porters keep: a runner never waits at a container or runs errands,
+// and Stormkeep's third runner took the spawn time its remote in the south
+// needed, which was dropped.
 function getHaulerPlan(room: Room): HaulerPlan | null {
   const containerIds = room.memory.containerIds ?? [];
   if (containerIds.length === 0) return null;
@@ -358,7 +362,7 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
     }
     if (spend > 0) {
       const walk = getContainerDistances(room, room.storage, [throne])[throne.id] ?? 0;
-      throneCarry = Math.ceil((spend * walk * 2 * HAULER_CARRY_MARGIN) / HAULER_SPAWN.CARRY_CAPACITY);
+      throneCarry = Math.ceil((spend * (walk * 2 + 2)) / HAULER_SPAWN.CARRY_CAPACITY);
     }
   }
   const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);

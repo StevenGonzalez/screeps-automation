@@ -164,6 +164,26 @@ describe("porters for a young keep", () => {
     expect(linked.memory.throneRunners).toBeUndefined();
     expect(shouldSpawnHauler(castle(25_000))).toBe(false);
   });
+
+  // Stormkeep: three 15-WORK enchanters, the throne 19 steps from storage.
+  it("keeps to the throne only the runners the trip needs", () => {
+    const enchanters = Array.from({ length: 3 }, () => ({
+      memory: { role: ROLE_UPGRADER },
+      getActiveBodyparts: () => 15,
+    }));
+    const room = keep(1800, [creep(ROLE_MINER, 5, 0, "c1"), creep(ROLE_MINER, 5, 0, "c2")], undefined, 19) as unknown as {
+      storage: unknown;
+      memory: RoomMemory;
+      find: (type: number) => unknown[];
+    };
+    room.storage = { id: "storage19", pos: { x: 5, y: 5 }, store: { energy: 460_000 } };
+    const find = room.find;
+    room.find = (type: number) => (type === g.FIND_MY_CREEPS ? enchanters : find(type));
+
+    shouldSpawnHauler(room as unknown as Room);
+
+    expect(room.memory.throneRunners).toBe(2);
+  });
 });
 
 describe("miners for a young keep", () => {
