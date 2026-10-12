@@ -11,6 +11,7 @@ import * as scoreSystem from "./orchestrators/orchestrator.score";
 import * as structuresSystem from "./orchestrators/orchestrator.structures";
 import * as towerSystem from "./orchestrators/orchestrator.tower";
 import * as terminalSystem from "./orchestrators/orchestrator.terminal";
+import * as goldDesk from "./orchestrators/orchestrator.golddesk";
 import * as militarySystem from "./orchestrators/orchestrator.military";
 import * as nukeSystem from "./orchestrators/orchestrator.nukes";
 import * as nukerSystem from "./orchestrators/orchestrator.nuker";
@@ -101,6 +102,7 @@ export function loop() {
   if (!heavyShed()) runSafe("factory", () => factorySystem.loop());
   runSafe("links", () => linksSystem.loop());
   runSafe("towers", () => towerSystem.loop());
+  runSafe("golddesk", () => goldDesk.loop());
   runSafe("terminal", () => terminalSystem.loop());
   runSafe("military", () => militarySystem.loop());
   runSafe("nukes", () => nukeSystem.loop());

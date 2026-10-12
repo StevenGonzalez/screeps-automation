@@ -68,6 +68,7 @@ function makeFiller(room: Room, cargo: Record<string, number>) {
 }
 
 beforeEach(() => {
+  g.Memory = {};
   g.Game = {
     time: 1,
     getObjectById: (id: string) => (id === "min1" ? { mineralType: "H" } : null),

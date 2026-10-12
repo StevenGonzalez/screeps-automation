@@ -68,6 +68,7 @@ function makeFiller(
 
 beforeEach(() => {
   g.Game = { time: 1, getObjectById: () => null };
+  g.Memory = {};
   relayLink = null;
   coreTarget = null;
 });
@@ -108,6 +109,16 @@ describe("filler terminal energy", () => {
 
     const loaded = makeFiller(0, { terminalEnergy: 31_000, pendingSend });
     expect(getTerminalEnergyJob(loaded.room, loaded.room.storage)).toBeNull();
+  });
+
+  // Gold the desk bought to sell again: drained to storage, the enchanters
+  // would spend it.
+  it("leaves the gold desk's held gold in the terminal", () => {
+    g.Memory = { goldDesk: { held: { W1N1: 20_000 } } };
+    const held = makeFiller(0, { terminalEnergy: 32_000 });
+    expect(getTerminalEnergyJob(held.room, held.room.storage)).toBeNull();
+    const over = makeFiller(0, { terminalEnergy: 40_000 });
+    expect(getTerminalEnergyJob(over.room, over.room.storage)?.kind).toBe("drain");
   });
 
   it("does nothing inside the working band", () => {

@@ -293,3 +293,75 @@ describe("raw resource sales", () => {
     expect(deals).toEqual(["power:1000"]);
   });
 });
+
+describe("gold trades", () => {
+  // Gold's daily averages as shard1 stood on 2026-10-12: usually 86.4, today 35.
+  const SLUMP = [52.1, 53, 74.4, 93.4, 84.3, 78.2, 91.5, 86.4, 97.1, 101.1, 105.7, 103.3, 102.8, 55.8, 35];
+
+  function setup(opts: { stored: number; bid: number; goldDesk?: object; sells?: object[] }) {
+    const deals: string[] = [];
+    const terminal = { id: "t1", my: true, cooldown: 0, store: store({ energy: 50_000 }), send: () => 0 };
+    const room = {
+      name: "W1N1",
+      controller: { my: true },
+      storage: { store: store({ energy: opts.stored }) },
+      terminal,
+      memory: { terminalId: "t1" },
+      find: () => [],
+    };
+    g.Memory = opts.goldDesk ? { goldDesk: opts.goldDesk } : {};
+    // Far enough on that the desk's cached history has expired.
+    clock += 100_000;
+    g.Game = {
+      time: clock + 1,
+      rooms: { W1N1: room },
+      getObjectById: (id: string) => (id === "t1" ? terminal : null),
+      map: { getRoomLinearDistance: () => 2 },
+      gcl: { level: 1 },
+      market: {
+        credits: 5_944_916,
+        orders: {},
+        getAllOrders: () => [
+          { id: "bid", type: "buy", resourceType: "energy", price: opts.bid, amount: 20_000, roomName: "W3N1" },
+          ...(opts.sells ?? []),
+        ],
+        getHistory: () => SLUMP.map((avgPrice) => ({ avgPrice })),
+        calcTransactionCost: (amount: number) => Math.ceil(amount * 0.05),
+        deal: (id: string, amount: number) => {
+          deals.push(`${id}:${amount}`);
+          return 0;
+        },
+      },
+    };
+    return deals;
+  }
+
+  it("keeps surplus gold while it sells under its usual price", () => {
+    const deals = setup({ stored: 500_000, bid: 36.5 });
+    loop();
+    expect(deals).toEqual([]);
+  });
+
+  it("sells surplus gold once a bid nets its usual price", () => {
+    const deals = setup({ stored: 500_000, bid: 95 });
+    loop();
+    expect(deals).toEqual(["bid:5000"]);
+  });
+
+  it("sells held gold to a bid that pays its floor", () => {
+    const goldDesk = { held: { W1N1: 10_000 }, heldCost: 365_000, invested: 0, seenAt: clock };
+    const low = setup({ stored: 50_000, bid: 70, goldDesk: { ...goldDesk, held: { W1N1: 10_000 } } });
+    loop();
+    expect(low).toEqual([]);
+    const deals = setup({ stored: 50_000, bid: 80, goldDesk });
+    loop();
+    expect(deals).toEqual(["bid:5000"]);
+  });
+
+  it("buys gold offered nearby under the cheap price, counting what its carrying burns", () => {
+    const sells = [{ id: "ask", type: "sell", resourceType: "energy", price: 45, amount: 20_000, roomName: "W3N1" }];
+    const deals = setup({ stored: 20_000, bid: 36.5, sells });
+    loop();
+    expect(deals).toEqual(["ask:5000"]);
+  });
+});

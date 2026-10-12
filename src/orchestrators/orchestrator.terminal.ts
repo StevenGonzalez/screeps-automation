@@ -1,6 +1,7 @@
 import { NUKER_GHODIUM_RESERVE } from "./orchestrator.nuker";
 import { MANAGED_COMMODITIES } from "../config/config.factory";
 import { incomingSends, labMineralNeed, labMineralShortfall } from "../services/services.labs";
+import { deskSpendRoom, goldBuyCap, GOLD_DESK, heldGold, heldSellFloor, usualGoldPrice } from "./orchestrator.golddesk";
 
 declare global {
   interface Memory {
@@ -71,16 +72,17 @@ const MARKET_MAKER_CONFIG = {
   REPRICE_TOLERANCE: 0.15,
 };
 
+// Prices are the gold desk's: surplus sells at no less than gold's usual
+// price, held gold at no less than its floor, and gold is bought only while
+// it is cheap. SELL_MIN_PRICE only values the gold a deal burns when the
+// market has no history.
 const ENERGY_TRADE_CONFIG = {
   INTERVAL: 100,
   SELL_STORAGE_THRESHOLD: 400_000,
   SELL_KEEP: 350_000,
   SELL_MIN_PRICE: 2,
   SELL_MAX_AMOUNT: 5_000,
-  BUY_STORAGE_THRESHOLD: 30_000,
-  BUY_MAX_PRICE: 1,
   BUY_MAX_AMOUNT: 5_000,
-  MIN_CREDITS_TO_BUY: 50_000,
 };
 
 const PRICE_HISTORY_LEN = 20;
@@ -804,35 +806,43 @@ function tradeEnergy(room: Room, terminal: StructureTerminal): boolean {
 
   if (room.memory.pendingSend) return false;
 
-  if (storageEnergy > ENERGY_TRADE_CONFIG.SELL_STORAGE_THRESHOLD) {
+  const inTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
+  const spare = inTerminal - TERMINAL_CONFIG.MIN_TERMINAL_ENERGY;
+  const held = heldGold(room.name);
+
+  // Held gold goes to any lord whose bid pays its floor.
+  const heldFloor = heldSellFloor();
+  const heldLot = Math.min(held, spare, ENERGY_TRADE_CONFIG.SELL_MAX_AMOUNT);
+  if (heldFloor !== undefined && heldLot >= 1000) {
+    if (sellEnergyToMarket(room, terminal, heldLot, heldFloor)) return true;
+  }
+
+  // Surplus sells only at gold's usual price or better: below it, the gold is
+  // worth more kept than the credits it would bring.
+  const usual = usualGoldPrice();
+  if (usual !== undefined && storageEnergy > ENERGY_TRADE_CONFIG.SELL_STORAGE_THRESHOLD) {
     const surplus = storageEnergy - ENERGY_TRADE_CONFIG.SELL_KEEP;
-    const inTerminal = terminal.store.getUsedCapacity(RESOURCE_ENERGY) ?? 0;
-    const sellable = Math.min(
-      surplus,
-      inTerminal - TERMINAL_CONFIG.MIN_TERMINAL_ENERGY,
-      ENERGY_TRADE_CONFIG.SELL_MAX_AMOUNT
-    );
+    const sellable = Math.min(surplus, spare - held, ENERGY_TRADE_CONFIG.SELL_MAX_AMOUNT);
     if (sellable >= 1000) {
-      if (sellEnergyToMarket(room, terminal, sellable)) return true;
+      if (sellEnergyToMarket(room, terminal, sellable, usual)) return true;
     }
   }
 
-  if (
-    storageEnergy < ENERGY_TRADE_CONFIG.BUY_STORAGE_THRESHOLD &&
-    Game.market.credits > ENERGY_TRADE_CONFIG.MIN_CREDITS_TO_BUY
-  ) {
-    if (buyCheapEnergy(room, terminal)) return true;
+  const cap = goldBuyCap();
+  if (cap !== undefined && storageEnergy < GOLD_DESK.FEED_BELOW) {
+    if (buyCheapEnergy(room, terminal, cap)) return true;
   }
 
   return false;
 }
 
-function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: number): boolean {
+/** Sells gold to the bid that nets the most, if it nets at least `floor` a unit. */
+function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: number, floor: number): boolean {
   let best: Order | null = null;
   const orders = getMarketOrders(RESOURCE_ENERGY, (o) => {
     if (o.type !== ORDER_BUY || o.resourceType !== RESOURCE_ENERGY) return false;
     if (!o.roomName || o.amount <= 0) return false;
-    if (o.price < ENERGY_TRADE_CONFIG.SELL_MIN_PRICE) return false;
+    if (o.price < floor) return false;
     return (
       Game.map.getRoomLinearDistance(room.name, o.roomName) < TERMINAL_CONFIG.MAX_TRADE_DISTANCE
     );
@@ -841,7 +851,7 @@ function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: num
   const energyValue = energyUnitValue();
   const net = (o: Order) =>
     o.price - energyCostPerUnit(Math.min(amount, o.amount), room.name, o.roomName!) * energyValue;
-  let bestNet = ENERGY_TRADE_CONFIG.SELL_MIN_PRICE;
+  let bestNet = floor;
   for (const o of orders) {
     const n = net(o);
     if (n >= bestNet && (!best || n > bestNet)) {
@@ -859,18 +869,22 @@ function sellEnergyToMarket(room: Room, terminal: StructureTerminal, amount: num
   if (result === OK) {
     recordPrice(RESOURCE_ENERGY, best.price);
     console.log(
-      `[Terminal] ${room.name}: Sold ${dealAmount} surplus energy @ ${best.price.toFixed(2)}`
+      `[Terminal] ${room.name}: Sold ${dealAmount} energy @ ${best.price.toFixed(2)}`
     );
     return true;
   }
   return false;
 }
 
-function buyCheapEnergy(room: Room, terminal: StructureTerminal): boolean {
+/**
+ * Deals for gold whose price, counting the gold its carrying burns, is at most
+ * `cap` a unit that arrives, within what the gold desk may still spend.
+ */
+function buyCheapEnergy(room: Room, terminal: StructureTerminal, cap: number): boolean {
   const orders = getMarketOrders(RESOURCE_ENERGY, (o) => {
     if (o.type !== ORDER_SELL || o.resourceType !== RESOURCE_ENERGY) return false;
     if (!o.roomName || o.amount <= 0) return false;
-    if (o.price > ENERGY_TRADE_CONFIG.BUY_MAX_PRICE) return false;
+    if (o.price > cap) return false;
     if (
       Game.map.getRoomLinearDistance(room.name, o.roomName) >= TERMINAL_CONFIG.MAX_TRADE_DISTANCE
     ) {
@@ -882,20 +896,20 @@ function buyCheapEnergy(room: Room, terminal: StructureTerminal): boolean {
       room.name,
       o.roomName
     );
-    return ratio < 1 && o.price / (1 - ratio) <= ENERGY_TRADE_CONFIG.BUY_MAX_PRICE;
+    return ratio < 1 && o.price / (1 - ratio) <= cap;
   });
   if (orders.length === 0) return false;
   orders.sort((a, b) => a.price - b.price);
   const best = orders[0];
 
-  const want = Math.min(best.amount, ENERGY_TRADE_CONFIG.BUY_MAX_AMOUNT);
+  const want = Math.min(best.amount, ENERGY_TRADE_CONFIG.BUY_MAX_AMOUNT, Math.floor(deskSpendRoom() / best.price));
   const amount = affordableTradeAmount(terminal, room.name, best.roomName!, want);
   if (amount < 1000) return false;
 
   const result = Game.market.deal(best.id, amount, room.name);
   if (result === OK) {
     console.log(
-      `[Terminal] ${room.name}: Bought ${amount} energy @ ${best.price.toFixed(2)} (room low)`
+      `[Terminal] ${room.name}: Bought ${amount} energy @ ${best.price.toFixed(2)} (gold cheap)`
     );
     return true;
   }

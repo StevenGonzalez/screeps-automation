@@ -55,6 +55,7 @@ import { describeBlueprint } from "./planning/planner.blueprint";
 import { showBlueprint } from "./orchestrators/orchestrator.visuals";
 import { townClock } from "./services/services.town";
 import { describeBooks } from "./services/services.exchequer";
+import { describeDesk } from "./orchestrators/orchestrator.golddesk";
 
 const VALID_FORMATIONS: SquadFormation[] = ["line", "box", "wedge", "scatter"];
 const VALID_TACTICS: SquadTactic[] = ["assault", "siege", "raid", "defend", "retreat"];
@@ -883,6 +884,10 @@ export function setupConsole() {
           `  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`
         );
       }
+    },
+
+    desk: () => {
+      for (const line of describeDesk()) console.log(`[GoldDesk] ${line}`);
     },
 
     ledger: () => {

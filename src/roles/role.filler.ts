@@ -7,6 +7,7 @@ import { getThreatInfo } from "../services/services.combat";
 import { findRelayLink } from "../orchestrators/orchestrator.links";
 import { setFillTarget } from "../services/services.coordination";
 import { terminalStockJob } from "../orchestrators/orchestrator.terminal";
+import { heldGold } from "../orchestrators/orchestrator.golddesk";
 
 // Power spawn upkeep, done only once spawns/extensions/towers are full.
 const POWER_SPAWN_POWER_LOW = 50;
@@ -146,7 +147,8 @@ type TerminalEnergyJob = { kind: "fill" | "drain"; terminal: StructureTerminal }
 /**
  * Whether the terminal needs energy from storage or holds more than it should.
  * A queued energy send raises the target to what the send has to load, so the
- * filler helps load it and never drains it.
+ * filler helps load it and never drains it. Gold the desk holds for resale
+ * stays in the terminal on top of the target.
  */
 export function getTerminalEnergyJob(
   room: Room,
@@ -156,7 +158,7 @@ export function getTerminalEnergyJob(
   if (!terminal || !storage) return null;
   const pending = room.memory.pendingSend;
   const want = Math.max(
-    TERMINAL_ENERGY_TARGET,
+    TERMINAL_ENERGY_TARGET + heldGold(room.name),
     pending?.resource === RESOURCE_ENERGY ? pending.loadTarget : 0
   );
   const have = terminal.store[RESOURCE_ENERGY] ?? 0;
