@@ -5291,7 +5291,7 @@ const LINK_TRANSFER_THRESHOLD = 400;
 const LINK_MIN_TRANSFER = 150;
 const LINK_SINK_HEADROOM = 100;
 const CONTROLLER_LINK_LOW = 400;
-function loop$l() {
+function loop$m() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -5838,7 +5838,7 @@ function collectEnergy$1(creep, storageModel) {
 const NUKER_GHODIUM_RESERVE = NUKER_GHODIUM_CAPACITY;
 const STORAGE_ENERGY_SURPLUS = 250000;
 const MAX_FILL_PER_TICK = 1000;
-function loop$k() {
+function loop$l() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -6304,6 +6304,327 @@ function labMineralShortfall(room) {
     return shortfall;
 }
 
+const GOLD_DESK = {
+    INTERVAL: 50,
+    BOOK_EVERY: 10,
+    BUY_BELOW: 0.6,
+    WITHDRAW_ABOVE: 0.75,
+    BID_STEP: 0.01,
+    BID_LOT: 20000,
+    REPRICE_TOLERANCE: 0.02,
+    BUDGET: 2000000,
+    CREDIT_RESERVE: 3000000,
+    HOLD_SHARE: 0.5,
+    HOLD_CAP: 100000,
+    ASK_FLOOR: 0.8,
+    MIN_MARGIN: 1.3,
+    UNDERCUT: 0.01,
+    FEED_BELOW: 350000,
+    MIN_LOT: 1000,
+    ORDER_FEE: 0.05,
+};
+const TERMINAL_WORKING_GOLD = 1000;
+const HISTORY_TTL = 100;
+let historyAt = -Infinity;
+let usualCache;
+let todayCache;
+function readHistory() {
+    if (Game.time - historyAt < HISTORY_TTL)
+        return;
+    historyAt = Game.time;
+    const days = Game.market.getHistory(RESOURCE_ENERGY);
+    if (days.length === 0) {
+        usualCache = todayCache = undefined;
+        return;
+    }
+    const prices = days.map((d) => d.avgPrice).sort((a, b) => a - b);
+    const mid = prices.length >> 1;
+    usualCache = prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+    todayCache = days[days.length - 1].avgPrice;
+}
+function usualGoldPrice() {
+    readHistory();
+    return usualCache;
+}
+function todaysGoldPrice() {
+    readHistory();
+    return todayCache;
+}
+function desk() {
+    if (!Memory.goldDesk) {
+        Memory.goldDesk = {
+            held: {},
+            heldCost: 0,
+            invested: 0,
+            bought: 0,
+            boughtFor: 0,
+            sold: 0,
+            soldFor: 0,
+            seenAt: Game.time - 1,
+        };
+    }
+    return Memory.goldDesk;
+}
+function heldGold(roomName) {
+    var _a, _b;
+    return (_b = (_a = Memory.goldDesk) === null || _a === void 0 ? void 0 : _a.held[roomName]) !== null && _b !== void 0 ? _b : 0;
+}
+function totalHeld(d) {
+    let n = 0;
+    for (const r in d.held)
+        n += d.held[r];
+    return n;
+}
+function heldUnitCost(d) {
+    const n = totalHeld(d);
+    return n > 0 ? d.heldCost / n : 0;
+}
+function heldSellFloor() {
+    const usual = usualGoldPrice();
+    if (usual === undefined)
+        return undefined;
+    return Math.max(usual * GOLD_DESK.ASK_FLOOR, heldUnitCost(desk()) * GOLD_DESK.MIN_MARGIN);
+}
+function goldBuyCap() {
+    const usual = usualGoldPrice();
+    const today = todaysGoldPrice();
+    if (usual === undefined || today === undefined)
+        return undefined;
+    const cap = usual * GOLD_DESK.BUY_BELOW;
+    return today <= cap ? cap : undefined;
+}
+function myGoldOrders(type) {
+    return Object.values(Game.market.orders).filter((o) => o.type === type && o.resourceType === RESOURCE_ENERGY);
+}
+function deskSpendRoom() {
+    const d = desk();
+    let owed = 0;
+    for (const o of myGoldOrders(ORDER_BUY))
+        owed += o.remainingAmount * o.price;
+    return Math.max(0, Math.min(GOLD_DESK.BUDGET - d.invested - owed, Game.market.credits - GOLD_DESK.CREDIT_RESERVE - owed));
+}
+function bookTrades() {
+    const d = desk();
+    const seen = d.seenAt;
+    const fresh = (t) => {
+        var _a, _b;
+        return t.time > seen &&
+            t.time < Game.time &&
+            t.resourceType === RESOURCE_ENERGY &&
+            !!t.order &&
+            ((_a = t.sender) === null || _a === void 0 ? void 0 : _a.username) !== ((_b = t.recipient) === null || _b === void 0 ? void 0 : _b.username);
+    };
+    for (const t of Game.market.incomingTransactions) {
+        if (!fresh(t))
+            continue;
+        const price = t.order.price;
+        d.bought += t.amount;
+        d.boughtFor += t.amount * price;
+        d.invested += t.amount * price;
+        const room = t.to;
+        const hold = Math.max(0, Math.min(Math.floor(t.amount * GOLD_DESK.HOLD_SHARE), GOLD_DESK.HOLD_CAP - heldGold(room)));
+        if (hold > 0) {
+            d.held[room] = heldGold(room) + hold;
+            d.heldCost += hold * price;
+        }
+    }
+    for (const t of Game.market.outgoingTransactions) {
+        if (!fresh(t))
+            continue;
+        const price = t.order.price;
+        d.sold += t.amount;
+        d.soldFor += t.amount * price;
+        const fromHeld = Math.min(heldGold(t.from), t.amount);
+        if (fromHeld > 0) {
+            d.heldCost -= fromHeld * heldUnitCost(d);
+            d.held[t.from] -= fromHeld;
+            d.invested -= fromHeld * price;
+        }
+    }
+    d.seenAt = Game.time - 1;
+}
+function settleHeld(d) {
+    var _a, _b;
+    for (const name in d.held) {
+        const terminal = (_a = Game.rooms[name]) === null || _a === void 0 ? void 0 : _a.terminal;
+        const has = (terminal === null || terminal === void 0 ? void 0 : terminal.my) ? Math.max(0, ((_b = terminal.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) - TERMINAL_WORKING_GOLD) : 0;
+        if (d.held[name] > has) {
+            const lost = d.held[name] - has;
+            d.heldCost -= lost * heldUnitCost(d);
+            d.held[name] = has;
+        }
+        if (d.held[name] <= 0)
+            delete d.held[name];
+    }
+    if (totalHeld(d) === 0)
+        d.heldCost = 0;
+}
+function bestRivalPrice(type) {
+    let best;
+    for (const o of Game.market.getAllOrders({ resourceType: RESOURCE_ENERGY })) {
+        if (o.type !== type || o.amount <= 0 || o.id in Game.market.orders)
+            continue;
+        if (best === undefined || (type === ORDER_BUY ? o.price > best : o.price < best))
+            best = o.price;
+    }
+    return best;
+}
+function round3(n) {
+    return Math.round(n * 1000) / 1000;
+}
+function manageBid() {
+    const usual = usualGoldPrice();
+    const today = todaysGoldPrice();
+    if (usual === undefined || today === undefined)
+        return;
+    const bids = myGoldOrders(ORDER_BUY);
+    if (today > usual * GOLD_DESK.WITHDRAW_ABOVE) {
+        for (const o of bids) {
+            Game.market.cancelOrder(o.id);
+            console.log(`[GoldDesk] Withdrew the bid at ${o.roomName}: gold is back at ${today.toFixed(1)}`);
+        }
+        return;
+    }
+    const cap = usual * GOLD_DESK.BUY_BELOW;
+    const rival = bestRivalPrice(ORDER_BUY);
+    const price = round3(Math.min(cap, (rival !== null && rival !== void 0 ? rival : 0) + GOLD_DESK.BID_STEP));
+    const room = deskSpendRoom();
+    const bid = bids[0];
+    if (bid) {
+        if (Math.abs(bid.price - price) / price > GOLD_DESK.REPRICE_TOLERANCE) {
+            const fee = Math.max(0, price - bid.price) * bid.remainingAmount * GOLD_DESK.ORDER_FEE;
+            if (fee <= room && Game.market.changeOrderPrice(bid.id, price) === OK) {
+                desk().invested += fee;
+                console.log(`[GoldDesk] Moved the bid at ${bid.roomName} from ${bid.price} to ${price}`);
+            }
+            return;
+        }
+        if (bid.remainingAmount < GOLD_DESK.MIN_LOT) {
+            const add = Math.floor(Math.min(GOLD_DESK.BID_LOT - bid.remainingAmount, room / (bid.price * (1 + GOLD_DESK.ORDER_FEE))));
+            if (add >= GOLD_DESK.MIN_LOT && Game.market.extendOrder(bid.id, add) === OK) {
+                desk().invested += add * bid.price * GOLD_DESK.ORDER_FEE;
+            }
+        }
+        return;
+    }
+    if (today > cap)
+        return;
+    const castle = poorestTerminalCastle();
+    if (!castle)
+        return;
+    const amount = Math.floor(Math.min(GOLD_DESK.BID_LOT, room / (price * (1 + GOLD_DESK.ORDER_FEE))));
+    if (amount < GOLD_DESK.MIN_LOT)
+        return;
+    const result = Game.market.createOrder({
+        type: ORDER_BUY,
+        resourceType: RESOURCE_ENERGY,
+        price,
+        totalAmount: amount,
+        roomName: castle.name,
+    });
+    if (result === OK) {
+        desk().invested += amount * price * GOLD_DESK.ORDER_FEE;
+        console.log(`[GoldDesk] Bid ${price} for ${amount} gold at ${castle.name} (usual ${usual.toFixed(1)}, today ${today.toFixed(1)})`);
+    }
+}
+function poorestTerminalCastle() {
+    var _a, _b, _c, _d;
+    let best;
+    for (const name in Game.rooms) {
+        const room = Game.rooms[name];
+        if (!((_a = room.controller) === null || _a === void 0 ? void 0 : _a.my) || !((_b = room.terminal) === null || _b === void 0 ? void 0 : _b.my) || !room.storage)
+            continue;
+        if (room.terminal.store.getFreeCapacity() < GOLD_DESK.BID_LOT)
+            continue;
+        const stored = (_c = room.storage.store[RESOURCE_ENERGY]) !== null && _c !== void 0 ? _c : 0;
+        if (stored >= GOLD_DESK.FEED_BELOW)
+            continue;
+        if (!best || stored < ((_d = best.storage.store[RESOURCE_ENERGY]) !== null && _d !== void 0 ? _d : 0))
+            best = room;
+    }
+    return best;
+}
+function manageAsks() {
+    const d = desk();
+    const usual = usualGoldPrice();
+    const today = todaysGoldPrice();
+    const floor = heldSellFloor();
+    if (usual === undefined || today === undefined || floor === undefined)
+        return;
+    if (today < usual * GOLD_DESK.ASK_FLOOR)
+        return;
+    const rival = bestRivalPrice(ORDER_SELL);
+    const price = round3(Math.max(floor, rival !== undefined ? rival - GOLD_DESK.UNDERCUT : usual));
+    const asks = myGoldOrders(ORDER_SELL);
+    for (const name in d.held) {
+        const held = d.held[name];
+        const ask = asks.find((o) => o.roomName === name);
+        if (ask) {
+            if (Math.abs(ask.price - price) / price > GOLD_DESK.REPRICE_TOLERANCE) {
+                const fee = Math.max(0, price - ask.price) * ask.remainingAmount * GOLD_DESK.ORDER_FEE;
+                if (Game.market.credits - fee >= GOLD_DESK.CREDIT_RESERVE && Game.market.changeOrderPrice(ask.id, price) === OK) {
+                    d.invested += fee;
+                }
+            }
+            const add = held - ask.remainingAmount;
+            if (add >= GOLD_DESK.MIN_LOT) {
+                const fee = add * ask.price * GOLD_DESK.ORDER_FEE;
+                if (Game.market.credits - fee >= GOLD_DESK.CREDIT_RESERVE && Game.market.extendOrder(ask.id, add) === OK) {
+                    d.invested += fee;
+                }
+            }
+            continue;
+        }
+        if (held < GOLD_DESK.MIN_LOT)
+            continue;
+        const fee = held * price * GOLD_DESK.ORDER_FEE;
+        if (Game.market.credits - fee < GOLD_DESK.CREDIT_RESERVE)
+            continue;
+        const result = Game.market.createOrder({
+            type: ORDER_SELL,
+            resourceType: RESOURCE_ENERGY,
+            price,
+            totalAmount: held,
+            roomName: name,
+        });
+        if (result === OK) {
+            d.invested += fee;
+            console.log(`[GoldDesk] Offered ${held} held gold at ${name} for ${price} (cost ${heldUnitCost(d).toFixed(1)})`);
+        }
+    }
+}
+function loop$k() {
+    if (!Game.market)
+        return;
+    if (Game.time % GOLD_DESK.BOOK_EVERY === 0)
+        bookTrades();
+    if (Game.time % GOLD_DESK.INTERVAL !== 0)
+        return;
+    const d = desk();
+    settleHeld(d);
+    manageBid();
+    manageAsks();
+}
+function describeDesk() {
+    var _a, _b, _c, _d;
+    const d = desk();
+    const usual = usualGoldPrice();
+    const today = todaysGoldPrice();
+    const lines = [
+        `gold usual ${(_a = usual === null || usual === void 0 ? void 0 : usual.toFixed(1)) !== null && _a !== void 0 ? _a : "?"}, today ${(_b = today === null || today === void 0 ? void 0 : today.toFixed(1)) !== null && _b !== void 0 ? _b : "?"}, credits ${Math.round(Game.market.credits)}`,
+        `bought ${d.bought} for ${Math.round(d.boughtFor)}, sold ${d.sold} for ${Math.round(d.soldFor)}, invested ${Math.round(d.invested)}`,
+    ];
+    for (const name in d.held)
+        lines.push(`held at ${name}: ${d.held[name]}`);
+    if (totalHeld(d) > 0)
+        lines.push(`held cost ${heldUnitCost(d).toFixed(1)} a unit, floor ${(_d = (_c = heldSellFloor()) === null || _c === void 0 ? void 0 : _c.toFixed(1)) !== null && _d !== void 0 ? _d : "?"}`);
+    for (const o of Object.values(Game.market.orders)) {
+        if (o.resourceType === RESOURCE_ENERGY)
+            lines.push(`${o.type} ${o.remainingAmount} at ${o.roomName} for ${o.price}`);
+    }
+    return lines;
+}
+
 const TERMINAL_CONFIG = {
     MINERAL_SELL_THRESHOLD: 1000,
     MINERAL_MAX_TRADE_AMOUNT: 1000,
@@ -6356,10 +6677,7 @@ const ENERGY_TRADE_CONFIG = {
     SELL_KEEP: 350000,
     SELL_MIN_PRICE: 2,
     SELL_MAX_AMOUNT: 5000,
-    BUY_STORAGE_THRESHOLD: 30000,
-    BUY_MAX_PRICE: 1,
     BUY_MAX_AMOUNT: 5000,
-    MIN_CREDITS_TO_BUY: 50000,
 };
 const PRICE_HISTORY_LEN = 20;
 const BASE_MINERALS = ['H', 'O', 'Z', 'K', 'U', 'L', 'X'];
@@ -6959,36 +7277,45 @@ function tradeEnergy(room, terminal) {
     const storageEnergy = (_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0;
     if (room.memory.pendingSend)
         return false;
-    if (storageEnergy > ENERGY_TRADE_CONFIG.SELL_STORAGE_THRESHOLD) {
+    const inTerminal = (_c = terminal.store.getUsedCapacity(RESOURCE_ENERGY)) !== null && _c !== void 0 ? _c : 0;
+    const spare = inTerminal - TERMINAL_CONFIG.MIN_TERMINAL_ENERGY;
+    const held = heldGold(room.name);
+    const heldFloor = heldSellFloor();
+    const heldLot = Math.min(held, spare, ENERGY_TRADE_CONFIG.SELL_MAX_AMOUNT);
+    if (heldFloor !== undefined && heldLot >= 1000) {
+        if (sellEnergyToMarket(room, terminal, heldLot, heldFloor))
+            return true;
+    }
+    const usual = usualGoldPrice();
+    if (usual !== undefined && storageEnergy > ENERGY_TRADE_CONFIG.SELL_STORAGE_THRESHOLD) {
         const surplus = storageEnergy - ENERGY_TRADE_CONFIG.SELL_KEEP;
-        const inTerminal = (_c = terminal.store.getUsedCapacity(RESOURCE_ENERGY)) !== null && _c !== void 0 ? _c : 0;
-        const sellable = Math.min(surplus, inTerminal - TERMINAL_CONFIG.MIN_TERMINAL_ENERGY, ENERGY_TRADE_CONFIG.SELL_MAX_AMOUNT);
+        const sellable = Math.min(surplus, spare - held, ENERGY_TRADE_CONFIG.SELL_MAX_AMOUNT);
         if (sellable >= 1000) {
-            if (sellEnergyToMarket(room, terminal, sellable))
+            if (sellEnergyToMarket(room, terminal, sellable, usual))
                 return true;
         }
     }
-    if (storageEnergy < ENERGY_TRADE_CONFIG.BUY_STORAGE_THRESHOLD &&
-        Game.market.credits > ENERGY_TRADE_CONFIG.MIN_CREDITS_TO_BUY) {
-        if (buyCheapEnergy(room, terminal))
+    const cap = goldBuyCap();
+    if (cap !== undefined && storageEnergy < GOLD_DESK.FEED_BELOW) {
+        if (buyCheapEnergy(room, terminal, cap))
             return true;
     }
     return false;
 }
-function sellEnergyToMarket(room, terminal, amount) {
+function sellEnergyToMarket(room, terminal, amount, floor) {
     let best = null;
     const orders = getMarketOrders(RESOURCE_ENERGY, (o) => {
         if (o.type !== ORDER_BUY || o.resourceType !== RESOURCE_ENERGY)
             return false;
         if (!o.roomName || o.amount <= 0)
             return false;
-        if (o.price < ENERGY_TRADE_CONFIG.SELL_MIN_PRICE)
+        if (o.price < floor)
             return false;
         return (Game.map.getRoomLinearDistance(room.name, o.roomName) < TERMINAL_CONFIG.MAX_TRADE_DISTANCE);
     });
     const energyValue = energyUnitValue();
     const net = (o) => o.price - energyCostPerUnit(Math.min(amount, o.amount), room.name, o.roomName) * energyValue;
-    let bestNet = ENERGY_TRADE_CONFIG.SELL_MIN_PRICE;
+    let bestNet = floor;
     for (const o of orders) {
         const n = net(o);
         if (n >= bestNet && (!best || n > bestNet)) {
@@ -7005,36 +7332,36 @@ function sellEnergyToMarket(room, terminal, amount) {
     const result = Game.market.deal(best.id, dealAmount, room.name);
     if (result === OK) {
         recordPrice(RESOURCE_ENERGY, best.price);
-        console.log(`[Terminal] ${room.name}: Sold ${dealAmount} surplus energy @ ${best.price.toFixed(2)}`);
+        console.log(`[Terminal] ${room.name}: Sold ${dealAmount} energy @ ${best.price.toFixed(2)}`);
         return true;
     }
     return false;
 }
-function buyCheapEnergy(room, terminal) {
+function buyCheapEnergy(room, terminal, cap) {
     const orders = getMarketOrders(RESOURCE_ENERGY, (o) => {
         if (o.type !== ORDER_SELL || o.resourceType !== RESOURCE_ENERGY)
             return false;
         if (!o.roomName || o.amount <= 0)
             return false;
-        if (o.price > ENERGY_TRADE_CONFIG.BUY_MAX_PRICE)
+        if (o.price > cap)
             return false;
         if (Game.map.getRoomLinearDistance(room.name, o.roomName) >= TERMINAL_CONFIG.MAX_TRADE_DISTANCE) {
             return false;
         }
         const ratio = energyCostPerUnit(Math.min(o.amount, ENERGY_TRADE_CONFIG.BUY_MAX_AMOUNT), room.name, o.roomName);
-        return ratio < 1 && o.price / (1 - ratio) <= ENERGY_TRADE_CONFIG.BUY_MAX_PRICE;
+        return ratio < 1 && o.price / (1 - ratio) <= cap;
     });
     if (orders.length === 0)
         return false;
     orders.sort((a, b) => a.price - b.price);
     const best = orders[0];
-    const want = Math.min(best.amount, ENERGY_TRADE_CONFIG.BUY_MAX_AMOUNT);
+    const want = Math.min(best.amount, ENERGY_TRADE_CONFIG.BUY_MAX_AMOUNT, Math.floor(deskSpendRoom() / best.price));
     const amount = affordableTradeAmount(terminal, room.name, best.roomName, want);
     if (amount < 1000)
         return false;
     const result = Game.market.deal(best.id, amount, room.name);
     if (result === OK) {
-        console.log(`[Terminal] ${room.name}: Bought ${amount} energy @ ${best.price.toFixed(2)} (room low)`);
+        console.log(`[Terminal] ${room.name}: Bought ${amount} energy @ ${best.price.toFixed(2)} (gold cheap)`);
         return true;
     }
     return false;
@@ -7254,7 +7581,7 @@ function getTerminalEnergyJob(room, storage) {
     if (!terminal || !storage)
         return null;
     const pending = room.memory.pendingSend;
-    const want = Math.max(TERMINAL_ENERGY_TARGET, (pending === null || pending === void 0 ? void 0 : pending.resource) === RESOURCE_ENERGY ? pending.loadTarget : 0);
+    const want = Math.max(TERMINAL_ENERGY_TARGET + heldGold(room.name), (pending === null || pending === void 0 ? void 0 : pending.resource) === RESOURCE_ENERGY ? pending.loadTarget : 0);
     const have = (_a = terminal.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0;
     if (have < want &&
         ((_b = storage.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) > TERMINAL_FILL_STORAGE_FLOOR &&
@@ -22011,6 +22338,10 @@ function setupConsole() {
                 console.log(`  ${name.padEnd(14)} avg=${s.ema.toFixed(2)} last=${s.last.toFixed(2)} peak=${s.peak.toFixed(2)}`);
             }
         },
+        desk: () => {
+            for (const line of describeDesk())
+                console.log(`[GoldDesk] ${line}`);
+        },
         ledger: () => {
             var _a;
             const all = (_a = Memory.exchequer) !== null && _a !== void 0 ? _a : {};
@@ -22238,13 +22569,14 @@ function loop() {
         runSafe("labs", () => loop$b());
     if (!heavyShed())
         runSafe("factory", () => loop$a());
-    runSafe("links", () => loop$l());
+    runSafe("links", () => loop$m());
     runSafe("towers", () => loop$5());
+    runSafe("golddesk", () => loop$k());
     runSafe("terminal", () => loop$j());
     runSafe("military", () => loop$i());
     runSafe("nukes", () => loop$4());
     if (!heavyShed())
-        runSafe("nuker", () => loop$k());
+        runSafe("nuker", () => loop$l());
     runSafe("sourcekeeper", () => loop$d());
     runSafe("powercreep", () => loop$3());
     if (!heavyShed())
