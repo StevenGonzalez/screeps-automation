@@ -38,6 +38,7 @@ export {
   findEmptiestTower,
   findCoreFillTarget,
   throneWantsStock,
+  throneFedFromStorage,
 } from "./services.creep.energy";
 export {
   findClosestConstructionSite,

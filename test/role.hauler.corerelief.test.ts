@@ -306,3 +306,63 @@ describe("hauler stocking the throne from storage", () => {
     expect(withdrawn).toEqual([]);
   });
 });
+
+describe("the porter kept to the throne run", () => {
+  // Stormkeep: its one spawn never rests, so a porter left free only for the
+  // throne run never took it. One of two porters keeps to it alone.
+  function throneCastle(carrying: number, name = "courier1", otherPorters = ["courier2"]) {
+    const { creep, room } = scenario(carrying, 300);
+    (creep as unknown as { name: string }).name = name;
+    const upgradeContainer = {
+      id: "up1",
+      structureType: "container",
+      pos: { x: 10, y: 6 },
+      store: { energy: 0, getFreeCapacity: () => 2000 },
+    };
+    room.memory.upgradeContainerId = "up1" as Id<StructureContainer>;
+    const game = g.Game as { getObjectById: (id: string) => unknown };
+    const byId = game.getObjectById;
+    game.getObjectById = (id: string) => (id === "up1" ? upgradeContainer : byId(id));
+    const others = otherPorters.map((n) => ({ name: n, spawning: false, memory: { role: ROLE_HAULER }, store: { energy: 0 } }));
+    const filler = { name: "stuffer1", spawning: false, memory: { role: ROLE_FILLER }, store: { energy: 0 } };
+    const find = room.find.bind(room);
+    (room as unknown as { find: unknown }).find = (type: number) =>
+      type === g.FIND_MY_CREEPS ? [creep, filler, ...others] : find(type);
+    return creep;
+  }
+
+  it("takes its load from storage though the core is short", () => {
+    const creep = throneCastle(0);
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual(["storage1"]);
+    expect(creep.memory.coreRelief).toBeUndefined();
+    expect(creep.memory.assignedContainerId).toBeUndefined();
+  });
+
+  it("carries the load to the throne, not the core", () => {
+    const creep = throneCastle(1300);
+
+    runHauler(creep);
+
+    expect(transferred).toEqual(["up1"]);
+  });
+
+  it("leaves the other porters to the core", () => {
+    const creep = throneCastle(0, "courier3");
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual(["storage1"]);
+    expect(creep.memory.coreRelief).toBe(true);
+  });
+
+  it("keeps a lone porter on the core and the sources", () => {
+    const creep = throneCastle(0, "courier1", []);
+
+    runHauler(creep);
+
+    expect(creep.memory.coreRelief).toBe(true);
+  });
+});

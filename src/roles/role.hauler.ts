@@ -15,9 +15,10 @@ import {
   upgradeController,
   getMinerContainerIds,
   throneWantsStock,
+  throneFedFromStorage,
 } from "../services/services.creep";
 import { getThreatInfo, seekBoost } from "../services/services.combat";
-import { ROLE_FILLER } from "../config/config.roles";
+import { ROLE_FILLER, ROLE_HAULER } from "../config/config.roles";
 import { energyLeftFor, findHandoffTarget, setFillTarget, setHaulFrom } from "../services/services.coordination";
 
 // How far a hauler detours to hand energy to a worker before banking it.
@@ -48,8 +49,50 @@ function coreGapCovered(room: Room): boolean {
   return carried >= room.energyCapacityAvailable - room.energyAvailable;
 }
 
+// One porter of a castle whose throne is stocked from storage keeps to that run
+// alone. Left to porters with nothing else to do, the run was never taken at
+// Stormkeep: its one spawn never rested, so every porter was out filling the
+// core, and the throne's container stood empty in twelve samples of twelve
+// with 545k in storage. The others and the barmaid keep the core and the
+// sources; a castle with a single porter keeps it for them.
+function throneRunnerTarget(creep: Creep): StructureContainer | null {
+  const throne = throneFedFromStorage(creep.room);
+  if (!throne || (creep.memory.homeRoom ?? creep.room.name) !== creep.room.name) return null;
+  let runner: string | undefined;
+  let porters = 0;
+  for (const c of creep.room.find(FIND_MY_CREEPS)) {
+    if (c.memory.role !== ROLE_HAULER || c.spawning) continue;
+    porters++;
+    if (runner === undefined || c.name < runner) runner = c.name;
+  }
+  return porters >= 2 && runner === creep.name ? throne : null;
+}
+
+function runThrone(creep: Creep, throne: StructureContainer): void {
+  creep.memory.assignedContainerId = undefined;
+  creep.memory.coreRelief = undefined;
+  setHaulFrom(creep, undefined);
+  if (creep.store[RESOURCE_ENERGY] > 0) {
+    setFillTarget(creep, throne.id);
+    if (throne.store.getFreeCapacity(RESOURCE_ENERGY) > 0) transferEnergyTo(creep, throne);
+    else if (!creep.pos.inRangeTo(throne, 1)) creep.moveTo(throne, { range: 1, reusePath: 20 });
+    return;
+  }
+  setFillTarget(creep, undefined);
+  const storage = creep.room.storage!;
+  if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+    creep.moveTo(storage, { reusePath: 20 });
+  }
+}
+
 export function runHauler(creep: Creep) {
   if ((creep.memory.boostCompound || creep.memory.boostQueue?.length) && seekBoost(creep)) return;
+
+  const throne = throneRunnerTarget(creep);
+  if (throne && getThreatInfo(creep.room).score === 0) {
+    runThrone(creep, throne);
+    return;
+  }
 
   // Drop an assignment whose container is gone or is no longer a miner
   // container, so the hauler picks up the replacement.
