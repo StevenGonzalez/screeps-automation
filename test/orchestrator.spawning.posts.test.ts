@@ -3,10 +3,12 @@ import { describe, it, expect } from "vitest";
 const g = globalThis as Record<string, unknown>;
 
 g.FIND_MY_SPAWNS = 108;
+g.FIND_MY_CREEPS = 107;
+g.UPGRADE_CONTROLLER_POWER = 1;
 g.TERRAIN_MASK_WALL = 1;
 
 const { buildMinerBody, shouldSpawnHauler, shouldSpawnMiner } = await import("../src/orchestrators/orchestrator.spawning.economy");
-const { ROLE_MINER, ROLE_HAULER } = await import("../src/config/config.roles");
+const { ROLE_MINER, ROLE_HAULER, ROLE_UPGRADER } = await import("../src/config/config.roles");
 
 const ROOM = "W1N1";
 let clock = 1_000;
@@ -125,6 +127,38 @@ describe("porters for a young keep", () => {
     };
     expect(shouldSpawnHauler(castle([]))).toBe(true);
     expect(shouldSpawnHauler(castle(["link1"]))).toBe(false);
+  });
+
+  // Stormkeep at RCL 5: 520k in storage, three 12-WORK enchanters spending
+  // more than its sources dig, and porters sized for the sources alone. The
+  // throne's container stood empty.
+  it("plans for carrying the treasury's surplus out to the throne", () => {
+    const crew = () => [
+      creep(ROLE_MINER, 5, 0, "c1"),
+      creep(ROLE_MINER, 5, 0, "c2"),
+      creep(ROLE_HAULER, 0, 6),
+      creep(ROLE_HAULER, 0, 6),
+      creep(ROLE_HAULER, 0, 6),
+    ];
+    const enchanters = Array.from({ length: 3 }, () => ({
+      memory: { role: ROLE_UPGRADER },
+      getActiveBodyparts: () => 12,
+    }));
+    const castle = (stored: number, links: string[] = []) => {
+      const room = keep(550, crew(), undefined, 8) as unknown as {
+        storage: unknown;
+        memory: RoomMemory;
+        find: (type: number) => unknown[];
+      };
+      room.storage = { id: `storage${stored}`, pos: { x: 40, y: 40 }, store: { energy: stored } };
+      room.memory.controllerLinkIds = links as Id<StructureLink>[];
+      const find = room.find;
+      room.find = (type: number) => (type === g.FIND_MY_CREEPS ? enchanters : find(type));
+      return room as unknown as Room;
+    };
+    expect(shouldSpawnHauler(castle(519_670))).toBe(true);
+    expect(shouldSpawnHauler(castle(519_670, ["link1"]))).toBe(false);
+    expect(shouldSpawnHauler(castle(25_000))).toBe(false);
   });
 });
 

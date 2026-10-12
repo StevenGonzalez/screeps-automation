@@ -252,3 +252,57 @@ describe("hauler stocking the container by the throne", () => {
     expect(transferred).toEqual(["storage1"]);
   });
 });
+
+describe("hauler stocking the throne from storage", () => {
+  // Stormkeep: 520k in storage at RCL 5, no link to the throne, its porters
+  // idle between source runs, and the throne's container empty.
+  function idleBesideTreasury(stock = 0) {
+    const { creep, room } = scenario(0, 2300);
+    const upgradeContainer = {
+      id: "up1",
+      structureType: "container",
+      pos: { x: 10, y: 6 },
+      store: { energy: stock, getFreeCapacity: () => 2000 - stock },
+    };
+    room.memory.upgradeContainerId = "up1" as Id<StructureContainer>;
+    const game = g.Game as { creeps: Record<string, Creep>; getObjectById: (id: string) => unknown };
+    const byId = game.getObjectById;
+    game.getObjectById = (id: string) => (id === "up1" ? upgradeContainer : byId(id));
+    return { creep, room };
+  }
+
+  it("takes a load from storage when the throne runs low", () => {
+    const { creep } = idleBesideTreasury();
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual(["storage1"]);
+    expect(creep.memory.coreRelief).toBeUndefined();
+  });
+
+  it("leaves storage be while the throne's container holds the mark", () => {
+    const { creep } = idleBesideTreasury(1200);
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual([]);
+  });
+
+  it("leaves the throne to its link once one feeds it", () => {
+    const { creep, room } = idleBesideTreasury();
+    room.memory.controllerLinkIds = ["link1" as Id<StructureLink>];
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual([]);
+  });
+
+  it("leaves storage be when the treasury holds no surplus above its floor", () => {
+    const { creep, room } = idleBesideTreasury();
+    (room.storage as unknown as { store: { energy: number } }).store.energy = 25_000;
+
+    runHauler(creep);
+
+    expect(withdrawn).toEqual([]);
+  });
+});

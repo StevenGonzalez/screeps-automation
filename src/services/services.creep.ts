@@ -37,6 +37,7 @@ export {
   findDepositTargetExcludingMiner,
   findEmptiestTower,
   findCoreFillTarget,
+  throneWantsStock,
 } from "./services.creep.energy";
 export {
   findClosestConstructionSite,

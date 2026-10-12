@@ -7,7 +7,7 @@ import {
   getMinerContainerIds,
 } from "./services.creep.room";
 import { energyClaimedByOthers, energyLeftFor, setHaulFrom } from "./services.coordination";
-import { upgradingFunded } from "./services.treasury";
+import { upgraderStorageFloor, upgradingFunded } from "./services.treasury";
 
 export function findEnergyDepositTarget(
   creep: Creep,
@@ -346,6 +346,34 @@ export function findFullestMinerContainer(
 // two enchanters that could spend 16 a tick. They spent under half that, and
 // walked twenty tiles to storage and back for the rest.
 const UPGRADE_CONTAINER_REFILL_BELOW = 1000;
+
+// Gold above the treasury's floor before the porters carry it out to the
+// throne's container themselves. Until a link feeds the throne, the porters
+// stocked it only with what the keep's own sources dug. Stormkeep banked 520k
+// at RCL 5 while its three enchanters, able to spend 36 a tick, found that
+// container empty and walked twenty tiles round its walls to storage for each
+// load, and spent 13.
+const THRONE_STOCK_SPARE = 20_000;
+
+/**
+ * The throne's container when the porters should stock it from storage: no
+ * link feeds the throne yet and the treasury holds a surplus above its floor.
+ */
+export function throneFedFromStorage(room: Room): StructureContainer | null {
+  const storage = room.storage;
+  const id = room.memory.upgradeContainerId;
+  if (!storage || !id || room.memory.controllerLinkIds?.length) return null;
+  if (getMinerContainerIds(room).some((m) => m === id)) return null;
+  if (storage.store[RESOURCE_ENERGY] - upgraderStorageFloor(room) < THRONE_STOCK_SPARE) return null;
+  return Game.getObjectById(id);
+}
+
+/** Whether this porter should take a load from storage to the throne. */
+export function throneWantsStock(creep: Creep): boolean {
+  const throne = throneFedFromStorage(creep.room);
+  if (!throne) return false;
+  return throne.store[RESOURCE_ENERGY] + energyClaimedByOthers(throne.id, creep) < UPGRADE_CONTAINER_REFILL_BELOW;
+}
 
 // coreFed: a barmaid feeds the spawn and extensions from storage, so the
 // porter need not wait for them to be full before it stocks the container by

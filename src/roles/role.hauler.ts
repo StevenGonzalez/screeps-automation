@@ -14,6 +14,7 @@ import {
   repairStructure,
   upgradeController,
   getMinerContainerIds,
+  throneWantsStock,
 } from "../services/services.creep";
 import { getThreatInfo, seekBoost } from "../services/services.combat";
 import { ROLE_FILLER } from "../config/config.roles";
@@ -282,6 +283,15 @@ function collectEnergy(creep: Creep, storageModel: boolean): boolean {
         if (coreGapCovered(creep.room)) return false;
         creep.memory.coreRelief = true;
       }
+      if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+        creep.moveTo(storage, { reusePath: 20 });
+      }
+      return true;
+    }
+    // Nothing to haul and the throne running low while the treasury holds a
+    // surplus: take a load out to it. The delivery leg puts it in the throne's
+    // container, which stands below the mark this checked.
+    if (storage && throneWantsStock(creep)) {
       if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
         creep.moveTo(storage, { reusePath: 20 });
       }

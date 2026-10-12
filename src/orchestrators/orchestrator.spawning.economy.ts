@@ -16,6 +16,7 @@ import {
   isEnergyEmergency,
   keptUp,
 } from "../services/services.creep";
+import { throneFedFromStorage } from "../services/services.creep.energy";
 import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { countOpenTilesAround, getSources } from "../services/services.creep";
@@ -253,7 +254,7 @@ const containerDistanceCache: Record<
 
 function getContainerDistances(
   room: Room,
-  from: StructureSpawn | StructureContainer,
+  from: StructureSpawn | StructureStorage | StructureContainer,
   containers: StructureContainer[]
 ): Record<string, number> {
   // Keyed on where the walk starts and the container set as well as the room:
@@ -311,6 +312,11 @@ interface HaulerPlan {
 // the spawn's walk alone, its porters left that source's container full and
 // spilling, before its storage and again after it. The longer of the two walks
 // is planned for.
+//
+// While the treasury holds a surplus and no link feeds the throne, the porters
+// also carry from storage what the enchanters spend beyond the sources' yield.
+// Stormkeep's two porters were busy with its sources and core, so its throne
+// container stood empty beside 520k in storage.
 function getHaulerPlan(room: Room): HaulerPlan | null {
   const containerIds = room.memory.containerIds ?? [];
   if (containerIds.length === 0) return null;
@@ -326,6 +332,7 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
 
   const spawn = getSpawnForRoom(room);
   let requiredCarry = 0;
+  let dugTotal = 0;
   if (spawn) {
     const distances = getContainerDistances(room, spawn, minerContainers);
     const upgradeId = room.memory.controllerLinkIds?.length ? undefined : room.memory.upgradeContainerId;
@@ -340,6 +347,18 @@ function getHaulerPlan(room: Room): HaulerPlan | null {
       const roundTrip = dist * 2;
       const output = Math.min(HAULER_SPAWN.SOURCE_OUTPUT, HARVEST_POWER * Math.max(workTarget, dug[c.id] ?? 0));
       requiredCarry += (output * roundTrip) / HAULER_SPAWN.CARRY_CAPACITY;
+      dugTotal += output;
+    }
+  }
+  const throne = throneFedFromStorage(room);
+  if (throne && room.storage) {
+    let spend = 0;
+    for (const c of room.find(FIND_MY_CREEPS)) {
+      if (c.memory.role === ROLE_UPGRADER) spend += c.getActiveBodyparts(WORK) * UPGRADE_CONTROLLER_POWER;
+    }
+    if (spend > dugTotal) {
+      const walk = getContainerDistances(room, room.storage, [throne])[throne.id] ?? 0;
+      requiredCarry += ((spend - dugTotal) * walk * 2) / HAULER_SPAWN.CARRY_CAPACITY;
     }
   }
   const neededCarry = Math.ceil(requiredCarry * HAULER_CARRY_MARGIN);
