@@ -3743,6 +3743,11 @@ function savingForKeep(room) {
 function upgraderStorageFloor(room) {
     return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
 }
+function upgradingSpare(room) {
+    var _a, _b;
+    const stored = (_b = (_a = room.storage) === null || _a === void 0 ? void 0 : _a.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0;
+    return nearDowngrade(room) ? stored : Math.max(0, stored - upgraderStorageFloor(room) - 1);
+}
 function wallsFunded(room) {
     const storage = room.storage;
     if (!storage) {
@@ -7551,7 +7556,7 @@ function runFiller(creep) {
         return;
     }
     const relay = coreTarget ? null : findRelayLink(creep.room);
-    const terminalJob = coreTarget || relay ? null : getTerminalEnergyJob(creep.room, storage);
+    const terminalJob = coreTarget || relay ? null : getTerminalEnergyJob(creep.room, storage, creep.store[RESOURCE_ENERGY]);
     const powerSpawn = coreTarget ? null : getPowerSpawn(creep.room);
     const target = (_b = coreTarget !== null && coreTarget !== void 0 ? coreTarget : ((terminalJob === null || terminalJob === void 0 ? void 0 : terminalJob.kind) === "fill" ? terminalJob.terminal : null)) !== null && _b !== void 0 ? _b : (!relay && !terminalJob && powerSpawn && powerSpawnWantsEnergy(powerSpawn, storage)
         ? powerSpawn
@@ -7560,8 +7565,9 @@ function runFiller(creep) {
         if (powerSpawn && loadPower(creep, powerSpawn, storage))
             return;
         if (!target) {
-            if (relay && storage && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-                if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+            const load = relay ? relayLoad(creep, relay) : 0;
+            if (load > 0 && storage) {
+                if (creep.withdraw(storage, RESOURCE_ENERGY, load) === ERR_NOT_IN_RANGE) {
                     creep.moveTo(storage, { reusePath: 20 });
                 }
                 return;
@@ -7639,7 +7645,12 @@ function getCoreFillTarget(creep) {
         setFillTarget(creep, target.id);
     return target;
 }
-function getTerminalEnergyJob(room, storage) {
+function relayLoad(creep, relay) {
+    var _a;
+    const load = Math.min((_a = relay.store.getFreeCapacity(RESOURCE_ENERGY)) !== null && _a !== void 0 ? _a : 0, creep.store.getFreeCapacity(RESOURCE_ENERGY));
+    return load <= upgradingSpare(creep.room) ? load : 0;
+}
+function getTerminalEnergyJob(room, storage, carried = 0) {
     var _a, _b;
     const terminal = room.terminal;
     if (!terminal || !storage)
@@ -7648,7 +7659,7 @@ function getTerminalEnergyJob(room, storage) {
     const want = Math.max(TERMINAL_ENERGY_TARGET + heldGold(room.name), (pending === null || pending === void 0 ? void 0 : pending.resource) === RESOURCE_ENERGY ? pending.loadTarget : 0);
     const have = (_a = terminal.store[RESOURCE_ENERGY]) !== null && _a !== void 0 ? _a : 0;
     if (have < want &&
-        ((_b = storage.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) > TERMINAL_FILL_STORAGE_FLOOR &&
+        ((_b = storage.store[RESOURCE_ENERGY]) !== null && _b !== void 0 ? _b : 0) + carried > TERMINAL_FILL_STORAGE_FLOOR &&
         terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
         return { kind: "fill", terminal };
     }
