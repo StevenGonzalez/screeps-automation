@@ -87,9 +87,17 @@ describe("filler terminal energy", () => {
   });
 
   it("leaves the terminal alone when storage is near empty", () => {
-    const { creep, calls } = makeFiller(0, { storageEnergy: 15_000, terminalEnergy: 0 });
+    const { creep, calls } = makeFiller(0, { storageEnergy: 4_000, terminalEnergy: 0 });
     runFiller(creep);
     expect(calls).toEqual([]);
+  });
+
+  // The enchanters hold storage near 10k, so a floor above that starves the
+  // terminal for good and shuts the castle out of the market.
+  it("feeds the terminal from a storage at the treasury floor", () => {
+    const { creep, calls } = makeFiller(0, { storageEnergy: 8_000, terminalEnergy: 1_000 });
+    runFiller(creep);
+    expect(calls).toEqual(["withdraw:storage1"]);
   });
 
   it("drains a terminal holding delivered energy into storage", () => {

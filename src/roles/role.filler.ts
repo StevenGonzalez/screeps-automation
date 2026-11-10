@@ -18,8 +18,11 @@ const POWER_SPAWN_ENERGY_STORAGE_FLOOR = 100000;
 const TERMINAL_ENERGY_TARGET = 10_000;
 // Energy above target + slack (a network delivery, a market buy) goes to storage.
 const TERMINAL_ENERGY_DRAIN_SLACK = 5_000;
-// Storage keeps at least this much before feeding the terminal.
-const TERMINAL_FILL_STORAGE_FLOOR = 20_000;
+// Storage keeps at least this much before feeding the terminal. It sits under
+// the treasury floor the enchanters spend down to: at 20k, three castles'
+// storages never reached it, their terminals stayed empty, and Thornbarrow held
+// 189k hydrogen it could not sell.
+const TERMINAL_FILL_STORAGE_FLOOR = 5_000;
 
 export function runFiller(creep: Creep) {
   const storage = creep.room.storage;
