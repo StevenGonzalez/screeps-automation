@@ -9,6 +9,7 @@ import { findRelayLink } from "../orchestrators/orchestrator.links";
 import { setFillTarget } from "../services/services.coordination";
 import { terminalStockJob } from "../orchestrators/orchestrator.terminal";
 import { heldGold } from "../orchestrators/orchestrator.golddesk";
+import { upgradingSpare } from "../services/services.treasury";
 
 // Power spawn upkeep, done only once spawns/extensions/towers are full.
 const POWER_SPAWN_POWER_LOW = 50;
@@ -48,7 +49,8 @@ export function runFiller(creep: Creep) {
   // before topping up the power spawn's energy.
   const relay = coreTarget ? null : findRelayLink(creep.room);
   // Then keep the terminal at its working energy, ahead of the power spawn.
-  const terminalJob = coreTarget || relay ? null : getTerminalEnergyJob(creep.room, storage);
+  const terminalJob =
+    coreTarget || relay ? null : getTerminalEnergyJob(creep.room, storage, creep.store[RESOURCE_ENERGY]);
   const powerSpawn = coreTarget ? null : getPowerSpawn(creep.room);
   const target: AnyStoreStructure | null =
     coreTarget ??
@@ -60,8 +62,9 @@ export function runFiller(creep: Creep) {
   if (creep.store[RESOURCE_ENERGY] === 0) {
     if (powerSpawn && loadPower(creep, powerSpawn, storage)) return;
     if (!target) {
-      if (relay && storage && relay.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
-        if (creep.withdraw(storage, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
+      const load = relay ? relayLoad(creep, relay) : 0;
+      if (load > 0 && storage) {
+        if (creep.withdraw(storage, RESOURCE_ENERGY, load) === ERR_NOT_IN_RANGE) {
           creep.moveTo(storage, { reusePath: 20 });
         }
         return;
@@ -146,17 +149,33 @@ function getCoreFillTarget(creep: Creep): AnyStoreStructure | null {
   return target;
 }
 
+/**
+ * Gold to take from storage for the relay: what the link can hold, and only if
+ * storage stays funded afterwards. A full load taken near the treasury floor
+ * dropped storage under it, which switched the relay off, so the barmaid put the
+ * load back and took it again every tick.
+ */
+function relayLoad(creep: Creep, relay: StructureLink): number {
+  const load = Math.min(
+    relay.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0,
+    creep.store.getFreeCapacity(RESOURCE_ENERGY)
+  );
+  return load <= upgradingSpare(creep.room) ? load : 0;
+}
+
 type TerminalEnergyJob = { kind: "fill" | "drain"; terminal: StructureTerminal };
 
 /**
  * Whether the terminal needs energy from storage or holds more than it should.
  * A queued energy send raises the target to what the send has to load, so the
  * filler helps load it and never drains it. Gold the desk holds for resale
- * stays in the terminal on top of the target.
+ * stays in the terminal on top of the target. A load already carried counts as
+ * still in storage, or taking it could end the job and send it straight back.
  */
 export function getTerminalEnergyJob(
   room: Room,
-  storage: StructureStorage | undefined
+  storage: StructureStorage | undefined,
+  carried = 0
 ): TerminalEnergyJob | null {
   const terminal = room.terminal;
   if (!terminal || !storage) return null;
@@ -168,7 +187,7 @@ export function getTerminalEnergyJob(
   const have = terminal.store[RESOURCE_ENERGY] ?? 0;
   if (
     have < want &&
-    (storage.store[RESOURCE_ENERGY] ?? 0) > TERMINAL_FILL_STORAGE_FLOOR &&
+    (storage.store[RESOURCE_ENERGY] ?? 0) + carried > TERMINAL_FILL_STORAGE_FLOOR &&
     terminal.store.getFreeCapacity(RESOURCE_ENERGY) > 0
   ) {
     return { kind: "fill", terminal };

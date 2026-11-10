@@ -100,6 +100,14 @@ describe("filler terminal energy", () => {
     expect(calls).toEqual(["withdraw:storage1"]);
   });
 
+  // Taking a load can drop storage under the floor. Without counting the load,
+  // the job ends and the barmaid carries it back to take again next tick.
+  it("delivers a load it took from storage down past the floor", () => {
+    const { creep, calls } = makeFiller(1_600, { storageEnergy: 3_500, terminalEnergy: 1_000 });
+    runFiller(creep);
+    expect(calls).toEqual(["transfer:terminal1"]);
+  });
+
   it("drains a terminal holding delivered energy into storage", () => {
     const { creep, calls } = makeFiller(0, { terminalEnergy: 40_000 });
     runFiller(creep);

@@ -35,13 +35,15 @@ function makeLink(free: number) {
 
 function makeFiller(energy: number) {
   const calls: string[] = [];
+  const taken: (number | undefined)[] = [];
   const creep = {
     room: { name: "W1N1", storage, memory: {} },
     memory: {},
     pos: { isNearTo: () => true, findClosestByRange: () => null },
-    store: { energy },
-    withdraw: (t: { id: string }) => {
+    store: { energy, getFreeCapacity: () => 1600 - energy },
+    withdraw: (t: { id: string }, _resource: string, amount?: number) => {
       calls.push(`withdraw:${t.id}`);
+      taken.push(amount);
       return g.OK;
     },
     transfer: (t: { id: string }) => {
@@ -50,11 +52,19 @@ function makeFiller(energy: number) {
     },
     moveTo: () => g.OK,
   } as unknown as Creep;
-  return { creep, calls };
+  return { creep, calls, taken };
+}
+
+function withStorage(creep: Creep, energy: number) {
+  (creep.room as unknown as { storage: unknown }).storage = {
+    ...storage,
+    store: { energy, getFreeCapacity: () => 900_000 },
+  };
 }
 
 beforeEach(() => {
   g.Game = { time: 1, getObjectById: () => null };
+  g.Memory = {};
   relayLink = null;
   coreTarget = null;
 });
@@ -63,6 +73,37 @@ describe("filler storage-link relay", () => {
   it("draws from storage when idle and the relay is wanted", () => {
     relayLink = makeLink(800);
     const { creep, calls } = makeFiller(0);
+
+    runFiller(creep);
+
+    expect(calls).toEqual(["withdraw:storage1"]);
+  });
+
+  it("takes only what the link can hold", () => {
+    relayLink = makeLink(300);
+    const { creep, taken } = makeFiller(0);
+
+    runFiller(creep);
+
+    expect(taken).toEqual([300]);
+  });
+
+  // A full load dropped storage under the floor, the relay switched off, and
+  // the barmaid carried the load back and took it again, every tick.
+  it("leaves storage alone when the link's load would cross the treasury floor", () => {
+    relayLink = makeLink(800);
+    const { creep, calls } = makeFiller(0);
+    withStorage(creep, 10_500);
+
+    runFiller(creep);
+
+    expect(calls).toEqual([]);
+  });
+
+  it("refills the link when storage stays above the floor", () => {
+    relayLink = makeLink(800);
+    const { creep, calls } = makeFiller(0);
+    withStorage(creep, 10_801);
 
     runFiller(creep);
 

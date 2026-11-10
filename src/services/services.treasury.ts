@@ -28,6 +28,12 @@ export function upgraderStorageFloor(room: Room): number {
   return savingForKeep(room) ? KEEP_FUND_FLOOR : UPGRADER_STORAGE_FLOOR;
 }
 
+/** Gold that can leave storage with upgrading still funded afterwards. */
+export function upgradingSpare(room: Room): number {
+  const stored = room.storage?.store[RESOURCE_ENERGY] ?? 0;
+  return nearDowngrade(room) ? stored : Math.max(0, stored - upgraderStorageFloor(room) - 1);
+}
+
 /**
  * Whether the castle can spend gold raising its walls. The walls draw on the
  * same treasury as the throne, above the same floor: blacksmiths raising a ring
