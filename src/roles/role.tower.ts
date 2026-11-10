@@ -2,7 +2,8 @@ import { findTowerRepairTarget, findTowerDefenseRepairTarget } from "../services
 import { summarizeHostiles } from "../services/services.combat";
 
 // Peacetime repair only spends the top of the tank, so a raid that arrives
-// mid-repair still meets towers that can fire for a good while.
+// mid-repair still meets towers that can fire for a good while. The share spent
+// must stay above what a tower has to lose before it is refilled (TOWER_TOP_UP_FREE).
 const TOWER_REPAIR_ENERGY_THRESHOLD = 0.7;
 const TOWER_DEFENSE_REPAIR_MIN_ENERGY = 400;
 

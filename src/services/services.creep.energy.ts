@@ -436,6 +436,19 @@ export function findEmptiestTower(room: Room): StructureTower | null {
   );
 }
 
+// A tower repairing in peace spends ten gold a shot. Topped up after every shot,
+// barmaids spent most of their ticks crossing the core to deliver 10-80 gold.
+// Must stay under the 30% of the tank that tower repair is allowed to spend (see
+// TOWER_REPAIR_ENERGY_THRESHOLD in role.tower), or repair stops before any tower
+// is low enough to be refilled.
+const TOWER_TOP_UP_FREE = 250;
+
+/** Energy a core structure can take, or 0 when the room left is not worth a trip. */
+export function coreFillSpace(s: AnyStoreStructure): number {
+  const free = s.store.getFreeCapacity(RESOURCE_ENERGY) ?? 0;
+  return s.structureType === STRUCTURE_TOWER && free < TOWER_TOP_UP_FREE ? 0 : free;
+}
+
 // Skips anything other creeps are already bringing enough energy to fill, so
 // haulers, the filler and builders spread across the core instead of all
 // walking to the same extension.
@@ -446,7 +459,7 @@ export function findCoreFillTarget(creep: Creep): AnyStoreStructure | null {
         s.structureType === STRUCTURE_EXTENSION ||
         s.structureType === STRUCTURE_TOWER) &&
       "store" in s &&
-      (s as AnyStoreStructure).store.getFreeCapacity(RESOURCE_ENERGY) > energyClaimedByOthers(s.id, creep)
+      coreFillSpace(s as AnyStoreStructure) > energyClaimedByOthers(s.id, creep)
   );
   if (targets.length === 0) return null;
   return (creep.pos.findClosestByPath(targets, { ignoreCreeps: true }) as AnyStoreStructure | null) ?? null;

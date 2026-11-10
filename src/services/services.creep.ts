@@ -37,6 +37,7 @@ export {
   findDepositTargetExcludingMiner,
   findEmptiestTower,
   findCoreFillTarget,
+  coreFillSpace,
   throneWantsStock,
   throneFedFromStorage,
 } from "./services.creep.energy";

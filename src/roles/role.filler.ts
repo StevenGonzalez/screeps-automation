@@ -1,6 +1,7 @@
 import {
   findEmptiestTower,
   findCoreFillTarget,
+  coreFillSpace,
   getRoomStructures,
 } from "../services/services.creep";
 import { getThreatInfo } from "../services/services.combat";
@@ -134,7 +135,7 @@ function getCoreFillTarget(creep: Creep): AnyStoreStructure | null {
     if (
       cached &&
       cached.room?.name === creep.room.name &&
-      cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+      coreFillSpace(cached) > 0
     ) {
       return cached;
     }
