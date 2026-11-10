@@ -4795,9 +4795,10 @@ function coreFillSpace(s) {
 }
 function findCoreFillTarget(creep) {
     var _a;
-    const targets = getRoomStructures(creep.room).filter((s) => (s.structureType === STRUCTURE_SPAWN ||
-        s.structureType === STRUCTURE_EXTENSION ||
-        s.structureType === STRUCTURE_TOWER) &&
+    const room = creep.room;
+    const coreFull = room.energyAvailable >= room.energyCapacityAvailable;
+    const targets = getRoomStructures(room).filter((s) => (s.structureType === STRUCTURE_TOWER ||
+        (!coreFull && (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION))) &&
         "store" in s &&
         coreFillSpace(s) > energyClaimedByOthers(s.id, creep));
     if (targets.length === 0)
