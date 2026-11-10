@@ -21,6 +21,7 @@ import { BODY_PATTERNS, MAX_BODY_PART_COUNT } from "../config/config.spawning";
 import { getRoomMemory } from "../services/services.memory";
 import { countOpenTilesAround, getSources } from "../services/services.creep";
 import { upgraderStorageFloor, wallsFunded } from "../services/services.treasury";
+import { getThreatInfo } from "../services/services.combat";
 import { labsNeedTending } from "../services/services.labs";
 import {
   buildScaledBody,
@@ -616,9 +617,13 @@ export function shouldSpawnRepairer(room: Room): boolean {
   return needed;
 }
 
-function getFillerPopulationTarget(room: Room): number {
+// One barmaid of 1600 carry refills a castle's core many times faster than its
+// spawns draw it. A second is kept only under threat, when the towers empty
+// fast: in peace it spent 0.45 CPU a tick waiting, with remotes laid off for
+// want of CPU.
+export function getFillerPopulationTarget(room: Room): number {
   if (!room.storage) return 0;
-  return (room.controller?.level ?? 0) >= 7 ? 2 : 1;
+  return (room.controller?.level ?? 0) >= 7 && getThreatInfo(room).score > 0 ? 2 : 1;
 }
 
 // Fillers work beside the spawn, so the lead is just the time to build one.
