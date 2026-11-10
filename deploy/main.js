@@ -30,7 +30,6 @@ const ROLE_DEPOSIT_HAULER = "caravan";
 const ROLE_SK_GUARDIAN = "lancer";
 const ROLE_SK_MINER = "delver";
 const ROLE_SK_HAULER = "packmule";
-const ROLE_SCORE_HUNTER = "seeker";
 const ROLE_UNCLAIMER = "usurper";
 const ROLE_TOWNSFOLK = "townsfolk";
 const ROLE_MINSTREL = "minstrel";
@@ -63,7 +62,6 @@ const ROLE_TITLES = {
     [ROLE_SK_GUARDIAN]: "Lancer",
     [ROLE_SK_MINER]: "Delver",
     [ROLE_SK_HAULER]: "Packmule",
-    [ROLE_SCORE_HUNTER]: "Seeker",
     [ROLE_UNCLAIMER]: "Usurper",
     [ROLE_TOWNSFOLK]: "Yeoman",
     [ROLE_MINSTREL]: "Minstrel",
@@ -5351,7 +5349,7 @@ const LINK_TRANSFER_THRESHOLD = 400;
 const LINK_MIN_TRANSFER = 150;
 const LINK_SINK_HEADROOM = 100;
 const CONTROLLER_LINK_LOW = 400;
-function loop$m() {
+function loop$l() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -5898,7 +5896,7 @@ function collectEnergy$1(creep, storageModel) {
 const NUKER_GHODIUM_RESERVE = NUKER_GHODIUM_CAPACITY;
 const STORAGE_ENERGY_SURPLUS = 250000;
 const MAX_FILL_PER_TICK = 1000;
-function loop$l() {
+function loop$k() {
     var _a;
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -6653,7 +6651,7 @@ function manageAsks() {
         }
     }
 }
-function loop$k() {
+function loop$j() {
     if (!Game.market)
         return;
     if (Game.time % GOLD_DESK.BOOK_EVERY === 0)
@@ -6769,7 +6767,7 @@ function getMarketHistoryAvg(resource) {
     historyAvgCache[resource] = avg;
     return avg;
 }
-function loop$j() {
+function loop$i() {
     var _a;
     if (Game.time % NETWORK_CONFIG.PLAN_INTERVAL === 0) {
         planNetworkBalancing();
@@ -9769,7 +9767,7 @@ const RETREAT_THRESHOLD$1 = {
     defend: 0.3,
     retreat: 1.1,
 };
-function loop$i() {
+function loop$h() {
     var _a, _b, _c, _d, _e;
     runWarCouncil();
     runDefenseCouncil();
@@ -9961,7 +9959,7 @@ const SCOUT_BFS_DEPTH = 3;
 const SCOUT_REFRESH_INTERVAL = 10000;
 const MAX_PENDING_SCOUT_ROOMS = 4;
 const BFS_RUN_INTERVAL = 200;
-function loop$h() {
+function loop$g() {
     cleanupDeadCreeps();
     initializeMemory();
     for (const roomName in Game.rooms) {
@@ -10725,7 +10723,7 @@ function updateRemoteContainerMemory(creep, source, container) {
 const PIXEL_TALLY_WINDOW = 5000;
 const PIXEL_REFILL_WINDOW = 5000;
 const PIXEL_REFILL_SLACK = 200;
-function loop$g() {
+function loop$f() {
     processPixelGeneration();
 }
 function processPixelGeneration() {
@@ -10779,220 +10777,6 @@ const BODY_PATTERNS = {
     [ROLE_UPGRADER]: [WORK, WORK, CARRY, MOVE],
 };
 const MAX_BODY_PART_COUNT = 50;
-
-function getScoreFindConstant() {
-    return typeof FIND_SCORES !== "undefined" ? FIND_SCORES : undefined;
-}
-function scoreHunterSupported() {
-    return getScoreFindConstant() !== undefined;
-}
-function loop$f() {
-    var _a, _b;
-    const findConstant = getScoreFindConstant();
-    if (findConstant === undefined)
-        return;
-    const targets = (_a = Memory.scoreTargets) !== null && _a !== void 0 ? _a : (Memory.scoreTargets = {});
-    const patrol = (_b = Memory.scorePatrol) !== null && _b !== void 0 ? _b : (Memory.scorePatrol = { seen: {} });
-    for (const roomName in Game.rooms) {
-        const room = Game.rooms[roomName];
-        patrol.seen[roomName] = Game.time;
-        const scores = room.find(findConstant);
-        const seenIds = new Set();
-        for (const s of scores) {
-            seenIds.add(s.id);
-            const existing = targets[s.id];
-            targets[s.id] = {
-                roomName,
-                x: s.pos.x,
-                y: s.pos.y,
-                value: s.score,
-                expiresAt: Game.time + s.ticksToDecay,
-                claimedBy: existing === null || existing === void 0 ? void 0 : existing.claimedBy,
-            };
-        }
-        for (const id in targets) {
-            if (targets[id].roomName === roomName && !seenIds.has(id))
-                delete targets[id];
-        }
-    }
-    for (const id in targets) {
-        if (Game.time > targets[id].expiresAt)
-            delete targets[id];
-    }
-    for (const id in targets) {
-        const claimant = targets[id].claimedBy;
-        if (claimant && !Game.creeps[claimant])
-            targets[id].claimedBy = undefined;
-    }
-    for (const rn in patrol.seen) {
-        if (Game.time - patrol.seen[rn] > SEEN_TTL)
-            delete patrol.seen[rn];
-    }
-}
-const SEEN_TTL = 50000;
-const SCORE_SCOUT_RADIUS = 4;
-function homeHasObserver(home) {
-    var _a, _b;
-    return !!((_b = (_a = Game.rooms[home]) === null || _a === void 0 ? void 0 : _a.memory) === null || _b === void 0 ? void 0 : _b.observerId);
-}
-function getUnclaimedScoreTargetCount() {
-    const targets = Memory.scoreTargets;
-    if (!targets)
-        return 0;
-    let count = 0;
-    for (const id in targets)
-        if (!targets[id].claimedBy)
-            count++;
-    return count;
-}
-function getScoreTarget(id) {
-    var _a;
-    return (_a = Memory.scoreTargets) === null || _a === void 0 ? void 0 : _a[id];
-}
-function findNearestScoreInRoom(creep) {
-    const findConstant = getScoreFindConstant();
-    if (findConstant === undefined)
-        return undefined;
-    const scores = creep.room.find(findConstant);
-    let best;
-    let bestRange = Infinity;
-    for (const s of scores) {
-        const range = creep.pos.getRangeTo(s.pos);
-        if (range < bestRange) {
-            bestRange = range;
-            best = s;
-        }
-    }
-    return best === null || best === void 0 ? void 0 : best.pos;
-}
-function estimateTravelTicks(fromRoom, toRoom) {
-    if (fromRoom === toRoom)
-        return 0;
-    return Game.map.getRoomLinearDistance(fromRoom, toRoom) * 50 + 25;
-}
-const TRAVEL_SAFETY_MARGIN = 1.3;
-function claimNearestScoreTarget(creep) {
-    var _a;
-    const targets = Memory.scoreTargets;
-    if (!targets)
-        return undefined;
-    let bestId;
-    let bestRate = -Infinity;
-    for (const id in targets) {
-        const t = targets[id];
-        if (t.claimedBy)
-            continue;
-        const travel = estimateTravelTicks(creep.room.name, t.roomName) * TRAVEL_SAFETY_MARGIN;
-        const remaining = t.expiresAt - Game.time;
-        if (travel >= remaining)
-            continue;
-        if (travel >= ((_a = creep.ticksToLive) !== null && _a !== void 0 ? _a : CREEP_LIFE_TIME))
-            continue;
-        const rate = t.value / Math.max(travel, 1);
-        if (rate > bestRate) {
-            bestRate = rate;
-            bestId = id;
-        }
-    }
-    if (bestId)
-        targets[bestId].claimedBy = creep.name;
-    return bestId;
-}
-function pickPatrolRoom(creep) {
-    var _a, _b, _c, _d, _e;
-    const home = creep.memory.homeRoom;
-    if (!home)
-        return undefined;
-    if (homeHasObserver(home))
-        return undefined;
-    const myName = (_c = (_b = (_a = Game.rooms[home]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
-    const region = safeRegionRooms(home, myName, SCORE_SCOUT_RADIUS);
-    if (region.length === 0)
-        return undefined;
-    const fleet = [];
-    for (const name in Game.creeps) {
-        const c = Game.creeps[name];
-        if (c.memory.role === ROLE_SCORE_HUNTER && c.memory.homeRoom === home)
-            fleet.push(c);
-    }
-    fleet.sort((a, b) => (a.name < b.name ? -1 : 1));
-    const seen = (_e = (_d = Memory.scorePatrol) === null || _d === void 0 ? void 0 : _d.seen) !== null && _e !== void 0 ? _e : {};
-    const reserved = new Set();
-    for (const c of fleet) {
-        const pick = bestRoom(region, seen, c.pos.roomName, reserved);
-        if (c.name === creep.name) {
-            return pick !== null && pick !== void 0 ? pick : bestRoom(region, seen, creep.pos.roomName, new Set());
-        }
-        if (pick)
-            reserved.add(pick);
-    }
-    return undefined;
-}
-function bestRoom(region, seen, fromRoom, reserved) {
-    var _a;
-    let best;
-    let bestScore = -Infinity;
-    for (const room of region) {
-        if (room === fromRoom || reserved.has(room))
-            continue;
-        const staleness = Game.time - ((_a = seen[room]) !== null && _a !== void 0 ? _a : 0);
-        const s = staleness - Game.map.getRoomLinearDistance(fromRoom, room) * 50;
-        if (s > bestScore) {
-            bestScore = s;
-            best = room;
-        }
-    }
-    return best;
-}
-function getScoreScanRooms(homeRoomName, range) {
-    var _a, _b, _c;
-    const myName = (_c = (_b = (_a = Game.rooms[homeRoomName]) === null || _a === void 0 ? void 0 : _a.controller) === null || _b === void 0 ? void 0 : _b.owner) === null || _c === void 0 ? void 0 : _c.username;
-    return safeRegionRooms(homeRoomName, myName, range);
-}
-function safeRegionRooms(home, myName, range) {
-    const result = [];
-    const visited = new Set([home]);
-    let frontier = [home];
-    const homeStatus = Game.map.getRoomStatus(home).status;
-    for (let depth = 0; depth < range; depth++) {
-        const next = [];
-        for (const rn of frontier) {
-            const exits = Game.map.describeExits(rn);
-            for (const nb of Object.values(exits)) {
-                if (!nb || visited.has(nb))
-                    continue;
-                visited.add(nb);
-                if (isHostileOwned(nb, myName) || isSourceKeeperRoom(nb) || isDeathTrapRoom(nb))
-                    continue;
-                if (Game.map.getRoomStatus(nb).status !== homeStatus)
-                    continue;
-                result.push(nb);
-                next.push(nb);
-            }
-        }
-        frontier = next;
-    }
-    return result;
-}
-const SCORE_THREAT_TOLERANCE = 12;
-function isDeathTrapRoom(roomName) {
-    var _a, _b;
-    const intel = (_a = Memory.intel) === null || _a === void 0 ? void 0 : _a[roomName];
-    if (!intel)
-        return false;
-    return ((_b = intel.hostileCombatParts) !== null && _b !== void 0 ? _b : 0) >= SCORE_THREAT_TOLERANCE;
-}
-function isHostileOwned(roomName, myName) {
-    var _a, _b;
-    const owner = (_b = (_a = Memory.intel) === null || _a === void 0 ? void 0 : _a[roomName]) === null || _b === void 0 ? void 0 : _b.owner;
-    if (!owner)
-        return false;
-    if (owner === myName)
-        return false;
-    if (isAlly(owner))
-        return false;
-    return true;
-}
 
 function getRoomMemory(room) {
     return room.memory;
@@ -11702,38 +11486,6 @@ function spawnScout(room, spawn) {
         return false;
     const res = trackedSpawn(room, spawn, [MOVE], {
         memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
-    });
-    return res === OK;
-}
-const BASELINE_SCORE_PATROLLERS = 3;
-const MAX_SCORE_HUNTERS_PER_ROOM = 8;
-const ROOMS_PER_HUNTER = 3;
-const BASELINE_SCORE_COLLECTORS = 2;
-function shouldSpawnScoreHunter(room) {
-    if (!scoreHunterSupported())
-        return false;
-    if (getThreatInfo(room).score > 0)
-        return false;
-    if (room.energyAvailable < bodyBudget(room, "capacity"))
-        return false;
-    const unclaimed = getUnclaimedScoreTargetCount();
-    let target;
-    if (homeHasObserver(room.name)) {
-        target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_COLLECTORS, unclaimed));
-    }
-    else {
-        const scanRooms = getScoreScanRooms(room.name, SCORE_SCOUT_RADIUS).length;
-        if (unclaimed === 0 && scanRooms === 0)
-            return false;
-        const coverageNeed = Math.ceil(scanRooms / ROOMS_PER_HUNTER);
-        target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_PATROLLERS, unclaimed, coverageNeed));
-    }
-    const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter((c) => !c.spawning && c.memory.homeRoom === room.name);
-    return owned.length + getRoomSpawningCount(room, ROLE_SCORE_HUNTER) < target;
-}
-function spawnScoreHunter(room, spawn) {
-    const res = trackedSpawn(room, spawn, [MOVE], {
-        memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
     });
     return res === OK;
 }
@@ -14474,52 +14226,6 @@ function moveToRoom(creep, targetRoom) {
     creep.moveTo(new RoomPosition(25, 25, targetRoom), { reusePath: 30, range: 20 });
 }
 
-function runScoreHunter(creep) {
-    const localScore = findNearestScoreInRoom(creep);
-    if (localScore) {
-        if (!creep.pos.isEqualTo(localScore)) {
-            creep.moveTo(localScore, { reusePath: 5, visualizePathStyle: { stroke: "#ffff00" } });
-        }
-        return;
-    }
-    let targetId = creep.memory.targetId;
-    let target = targetId ? getScoreTarget(targetId) : undefined;
-    if (targetId && !target) {
-        creep.memory.targetId = undefined;
-        targetId = undefined;
-    }
-    if (!targetId) {
-        targetId = claimNearestScoreTarget(creep);
-        if (!targetId) {
-            patrol(creep);
-            return;
-        }
-        creep.memory.targetId = targetId;
-        target = getScoreTarget(targetId);
-    }
-    if (!target)
-        return;
-    const pos = new RoomPosition(target.x, target.y, target.roomName);
-    if (!creep.pos.isEqualTo(pos)) {
-        creep.moveTo(pos, { reusePath: 20, visualizePathStyle: { stroke: "#ffff00" } });
-    }
-}
-function patrol(creep) {
-    if (!creep.memory.targetRoom || creep.room.name === creep.memory.targetRoom) {
-        creep.memory.targetRoom = pickPatrolRoom(creep);
-    }
-    const dest = creep.memory.targetRoom;
-    if (dest && creep.room.name !== dest) {
-        creep.moveTo(new RoomPosition(25, 25, dest), { reusePath: 30 });
-        return;
-    }
-    if (!dest) {
-        const ctrl = creep.room.controller;
-        if (ctrl && !creep.pos.inRangeTo(ctrl, 3))
-            creep.moveTo(ctrl, { range: 3, reusePath: 30 });
-    }
-}
-
 function runUnclaimer(creep) {
     var _a, _b;
     const targetRoom = creep.memory.targetRoom;
@@ -16105,7 +15811,6 @@ const ROLE_HANDLERS = {
     [ROLE_SK_GUARDIAN]: runSkGuardian,
     [ROLE_SK_MINER]: runSkMiner,
     [ROLE_SK_HAULER]: runSkHauler,
-    [ROLE_SCORE_HUNTER]: runScoreHunter,
     [ROLE_UNCLAIMER]: runUnclaimer,
     [ROLE_TOWNSFOLK]: runTownsfolk,
     [ROLE_MINSTREL]: runMinstrel,
@@ -18056,7 +17761,7 @@ function getFillerPopulationTarget(room) {
     var _a, _b;
     if (!room.storage)
         return 0;
-    return ((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) >= 7 ? 2 : 1;
+    return ((_b = (_a = room.controller) === null || _a === void 0 ? void 0 : _a.level) !== null && _b !== void 0 ? _b : 0) >= 7 && getThreatInfo(room).score > 0 ? 2 : 1;
 }
 function shouldSpawnFiller(room) {
     const fillers = getCreepsByRoleInRoom(ROLE_FILLER, room).filter((c) => !c.spawning && !isRetiring(c, spawnLeadTicks(c.body.length, 0))).length;
@@ -18642,8 +18347,6 @@ function processRoomSpawning(room, spawn) {
     if (shouldSpawnUpgrader(room) && spawnUpgrader(room, spawn))
         return;
     if (!blockaded && spawnTownsfolk(room, spawn))
-        return;
-    if (!blockaded && shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn))
         return;
     const economyCritical = isEconomyCritical(room);
     if (!blockaded && !economyCritical && ((_b = Memory.expansion) === null || _b === void 0 ? void 0 : _b.homeRoom) === room.name) {
@@ -20582,9 +20285,6 @@ const COLLECTING_TIMEOUT = 300;
 const SQUAD_ATTACKERS = 2;
 const SQUAD_HEALERS = 3;
 const OBSERVER_SCAN_RANGE = 10;
-const SCORE_SCAN_RANGE = 5;
-const HIGHWAY_SCAN_EVERY = 5;
-const SCORE_SCAN_REBUILD_INTERVAL = 1500;
 const POWER_PROCESS_ENERGY_FLOOR = 100000;
 const POWER_OP_MIN_RCL = 8;
 const POWER_ATTACKER_ATTACK_PARTS = 25;
@@ -20614,23 +20314,7 @@ function runObserver(room) {
         room.memory.observerId = undefined;
         return;
     }
-    if (scoreHunterSupported() && Game.time % HIGHWAY_SCAN_EVERY !== 0) {
-        if (scanScoreRegion(room, observer))
-            return;
-    }
     scanHighways(room, observer);
-}
-function scanScoreRegion(room, observer) {
-    let queue = room.memory.scoreScanQueue;
-    if (!queue || queue.length === 0 || Game.time % SCORE_SCAN_REBUILD_INTERVAL === 0) {
-        queue = room.memory.scoreScanQueue = getScoreScanRooms(room.name, SCORE_SCAN_RANGE);
-        if (queue.length === 0)
-            return false;
-    }
-    const target = queue.shift();
-    queue.push(target);
-    observer.observeRoom(target);
-    return true;
 }
 function scanHighways(room, observer) {
     if (!room.memory.observerScanQueue || room.memory.observerScanQueue.length === 0) {
@@ -22623,12 +22307,11 @@ function loop() {
     const heavyShed = () => bucketCritical || cpuFraction(Game.cpu.getUsed() - tickStart) >= CPU_SKIP_HEAVY_THRESHOLD;
     runSafe("memory parse", () => Memory);
     runSafe("herald", () => heraldRooms());
-    runSafe("memory", () => loop$h());
+    runSafe("memory", () => loop$g());
     runSafe("rebrand", () => migrateRoleNames());
     runSafe("strategy", () => loop$9());
     runSafe("allies", () => runAllies());
     runSafe("expansion", () => loop$8());
-    runSafe("score", () => loop$f());
     runSafe("creeps", () => loop$c());
     runSafe("spawning", () => loop$7());
     if (!bucketCritical)
@@ -22639,20 +22322,20 @@ function loop() {
         runSafe("labs", () => loop$b());
     if (!heavyShed())
         runSafe("factory", () => loop$a());
-    runSafe("links", () => loop$m());
+    runSafe("links", () => loop$l());
     runSafe("towers", () => loop$5());
-    runSafe("golddesk", () => loop$k());
-    runSafe("terminal", () => loop$j());
-    runSafe("military", () => loop$i());
+    runSafe("golddesk", () => loop$j());
+    runSafe("terminal", () => loop$i());
+    runSafe("military", () => loop$h());
     runSafe("nukes", () => loop$4());
     if (!heavyShed())
-        runSafe("nuker", () => loop$l());
+        runSafe("nuker", () => loop$k());
     runSafe("sourcekeeper", () => loop$d());
     runSafe("powercreep", () => loop$3());
     if (!heavyShed())
         runSafe("observer", () => loop$2());
     if (!heavyShed())
-        runSafe("pixels", () => loop$g());
+        runSafe("pixels", () => loop$f());
     const cpuBeforeVisuals = Game.cpu.getUsed() - tickStart;
     const visualsDue = Game.time - lastVisualsDrawn >= VISUALS_MIN_INTERVAL;
     if (!bucketCritical && (visualsDue || cpuFraction(cpuBeforeVisuals) < CPU_SKIP_VISUALS_THRESHOLD)) {
