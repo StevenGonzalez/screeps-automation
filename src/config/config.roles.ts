@@ -33,7 +33,6 @@ export const ROLE_DEPOSIT_HAULER = "caravan";
 export const ROLE_SK_GUARDIAN = "lancer";
 export const ROLE_SK_MINER = "delver";
 export const ROLE_SK_HAULER = "packmule";
-export const ROLE_SCORE_HUNTER = "seeker";
 export const ROLE_UNCLAIMER = "usurper";
 // The townsfolk of the castle's quarter: militia archers who sleep in the
 // cottages and man the walls, and lookouts posted in the neighbouring rooms.
@@ -71,7 +70,6 @@ export const ROLE_TITLES: Record<string, string> = {
   [ROLE_SK_GUARDIAN]: "Lancer",
   [ROLE_SK_MINER]: "Delver",
   [ROLE_SK_HAULER]: "Packmule",
-  [ROLE_SCORE_HUNTER]: "Seeker",
   [ROLE_UNCLAIMER]: "Usurper",
   [ROLE_TOWNSFOLK]: "Yeoman",
   [ROLE_MINSTREL]: "Minstrel",

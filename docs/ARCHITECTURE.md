@@ -256,7 +256,7 @@ stored in `memory.role` and shown in `Game.arca` output; the right is what it do
 | **minstrel** | `role.minstrel.ts` | Walks round the market square on a feast day singing a ballad of the realm, then leaves |
 
 (Source Keeper roles: **delver** (`role.sk_miner.ts`), **packmule** (`role.sk_hauler.ts`),
-**lancer** (`role.sk_guardian.ts`). The season-only score chaser is **seeker** (`role.scoreHunter.ts`).)
+**lancer** (`role.sk_guardian.ts`).)
 
 ### Names, cries and signs
 

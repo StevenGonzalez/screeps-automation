@@ -5,7 +5,7 @@ const g = globalThis as Record<string, unknown>;
 // Every system is a stub, so the test sees only which ones the CPU guard in
 // main lets run.
 const systems = [
-  "creep", "labs", "factory", "links", "memory", "strategy", "expansion", "spawning", "score",
+  "creep", "labs", "factory", "links", "memory", "strategy", "expansion", "spawning",
   "structures", "tower", "terminal", "military", "nukes", "nuker", "sourcekeeper", "powercreep",
   "observer", "visuals", "exchequer", "herald",
 ] as const;
@@ -20,7 +20,6 @@ vi.mock("../src/orchestrators/orchestrator.strategy", () => ({ loop: () => loops
 vi.mock("../src/orchestrators/orchestrator.expansion", () => ({ loop: () => loops.expansion() }));
 vi.mock("../src/orchestrators/orchestrator.pixels", () => ({ loop: vi.fn(), inPixelRefill: () => false }));
 vi.mock("../src/orchestrators/orchestrator.spawning", () => ({ loop: () => loops.spawning() }));
-vi.mock("../src/orchestrators/orchestrator.score", () => ({ loop: () => loops.score() }));
 vi.mock("../src/orchestrators/orchestrator.structures", () => ({ loop: () => loops.structures() }));
 vi.mock("../src/orchestrators/orchestrator.tower", () => ({ loop: () => loops.tower() }));
 vi.mock("../src/orchestrators/orchestrator.terminal", () => ({ loop: () => loops.terminal() }));

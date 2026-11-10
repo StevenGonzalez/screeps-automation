@@ -3,7 +3,6 @@ import {
   ROLE_REMOTE_MINER,
   ROLE_REMOTE_HAULER,
   ROLE_RESERVER,
-  ROLE_SCORE_HUNTER,
   ROLE_SETTLER,
   ROLE_CONQUEROR,
   ROLE_KNIGHT,
@@ -15,7 +14,6 @@ import {
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
 } from "../config/config.roles";
-import { getThreatInfo } from "../services/services.combat";
 import { castleName, chronicle, wildsName } from "../services/services.chronicle";
 import { spreadWord } from "../services/services.herald";
 import { inPixelRefill } from "./orchestrator.pixels";
@@ -25,13 +23,6 @@ import {
   remotePaved,
   remoteRoadsEnabled,
 } from "../services/services.remote";
-import {
-  getUnclaimedScoreTargetCount,
-  getScoreScanRooms,
-  scoreHunterSupported,
-  homeHasObserver,
-  SCORE_SCOUT_RADIUS,
-} from "./orchestrator.score";
 import {
   calculateBodyPartCost,
   getCreepsByRole,
@@ -492,58 +483,6 @@ export function spawnScout(room: Room, spawn: StructureSpawn): boolean {
 
   const res = trackedSpawn(room, spawn, [MOVE], {
     memory: { role: ROLE_SCOUT, homeRoom: room.name, targetRoom: target },
-  });
-  return res === OK;
-}
-
-const BASELINE_SCORE_PATROLLERS = 3;
-
-const MAX_SCORE_HUNTERS_PER_ROOM = 8;
-
-// Without an observer, hunters are the vision system: each one buys sight, reach, and coverage
-// density at once. Scale the fleet to the region so freshness holds; roughly one hunter per this
-// many reachable rooms. Hunters are last in the spawn priority, so economy creeps still win the
-// spawn and spare capacity naturally throttles this.
-const ROOMS_PER_HUNTER = 3;
-
-// With an observer, hunters stop scouting and become pure collectors. Keep a small standing fleet
-// staged near home so a target the observer finds is claimed within a tick or two, then scale up
-// to the number of unclaimed targets actually waiting.
-const BASELINE_SCORE_COLLECTORS = 2;
-
-export function shouldSpawnScoreHunter(room: Room): boolean {
-  if (!scoreHunterSupported()) return false;
-  if (getThreatInfo(room).score > 0) return false;
-  if (room.energyAvailable < bodyBudget(room, "capacity")) return false;
-
-  const unclaimed = getUnclaimedScoreTargetCount();
-  let target: number;
-  if (homeHasObserver(room.name)) {
-    // Observer handles discovery; size the collector fleet to the work in flight.
-    target = Math.min(MAX_SCORE_HUNTERS_PER_ROOM, Math.max(BASELINE_SCORE_COLLECTORS, unclaimed));
-  } else {
-    // No observer: hunters are the sensor grid. Spawn if there's a known target or a safe region
-    // to search, and scale to cover that region. (Don't gate on pickPatrolRoom here: it only
-    // resolves a destination for a creep already in the live fleet, so a not-yet-spawned hunter
-    // would deadlock at zero.)
-    const scanRooms = getScoreScanRooms(room.name, SCORE_SCOUT_RADIUS).length;
-    if (unclaimed === 0 && scanRooms === 0) return false;
-    const coverageNeed = Math.ceil(scanRooms / ROOMS_PER_HUNTER);
-    target = Math.min(
-      MAX_SCORE_HUNTERS_PER_ROOM,
-      Math.max(BASELINE_SCORE_PATROLLERS, unclaimed, coverageNeed)
-    );
-  }
-
-  const owned = getCreepsByRole(ROLE_SCORE_HUNTER).filter(
-    (c) => !c.spawning && c.memory.homeRoom === room.name
-  );
-  return owned.length + getRoomSpawningCount(room, ROLE_SCORE_HUNTER) < target;
-}
-
-export function spawnScoreHunter(room: Room, spawn: StructureSpawn): boolean {
-  const res = trackedSpawn(room, spawn, [MOVE], {
-    memory: { role: ROLE_SCORE_HUNTER, homeRoom: room.name },
   });
   return res === OK;
 }

@@ -40,8 +40,6 @@ import {
 import {
   shouldSpawnScout,
   spawnScout,
-  shouldSpawnScoreHunter,
-  spawnScoreHunter,
   shouldSpawnRemoteMiner,
   spawnRemoteMiner,
   shouldSpawnRemoteHauler,
@@ -236,8 +234,6 @@ export function processRoomSpawning(room: Room, spawn: StructureSpawn) {
   // gate: storage settles near the upgraders' 10k floor, so the
   // economy-critical line below would never let it grow.
   if (!blockaded && spawnTownsfolk(room, spawn)) return;
-
-  if (!blockaded && shouldSpawnScoreHunter(room) && spawnScoreHunter(room, spawn)) return;
 
   const economyCritical = isEconomyCritical(room);
 

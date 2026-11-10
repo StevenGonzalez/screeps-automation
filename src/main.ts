@@ -7,7 +7,6 @@ import * as strategySystem from "./orchestrators/orchestrator.strategy";
 import * as expansionSystem from "./orchestrators/orchestrator.expansion";
 import * as pixelsSystem from "./orchestrators/orchestrator.pixels";
 import * as spawningSystem from "./orchestrators/orchestrator.spawning";
-import * as scoreSystem from "./orchestrators/orchestrator.score";
 import * as structuresSystem from "./orchestrators/orchestrator.structures";
 import * as towerSystem from "./orchestrators/orchestrator.tower";
 import * as terminalSystem from "./orchestrators/orchestrator.terminal";
@@ -81,7 +80,6 @@ export function loop() {
   runSafe("strategy", () => strategySystem.loop());
   runSafe("allies", () => runAllies());
   runSafe("expansion", () => expansionSystem.loop());
-  runSafe("score", () => scoreSystem.loop());
   runSafe("creeps", () => creepRunnerSystem.loop());
   runSafe("spawning", () => spawningSystem.loop());
 

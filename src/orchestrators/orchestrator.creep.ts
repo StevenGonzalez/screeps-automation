@@ -27,7 +27,6 @@ import {
   ROLE_SK_GUARDIAN,
   ROLE_SK_MINER,
   ROLE_SK_HAULER,
-  ROLE_SCORE_HUNTER,
   ROLE_UNCLAIMER,
   ROLE_TOWNSFOLK,
   ROLE_MINSTREL,
@@ -60,7 +59,6 @@ import { runDepositHauler } from "../roles/role.deposithauler";
 import { runSkGuardian } from "../roles/role.sk_guardian";
 import { runSkMiner } from "../roles/role.sk_miner";
 import { runSkHauler } from "../roles/role.sk_hauler";
-import { runScoreHunter } from "../roles/role.scoreHunter";
 import { runUnclaimer } from "../roles/role.unclaimer";
 import { runTownsfolk } from "../roles/role.townsfolk";
 import { runMinstrel } from "../roles/role.minstrel";
@@ -99,7 +97,6 @@ const ROLE_HANDLERS: Record<string, (creep: Creep) => void> = {
   [ROLE_SK_GUARDIAN]: runSkGuardian,
   [ROLE_SK_MINER]: runSkMiner,
   [ROLE_SK_HAULER]: runSkHauler,
-  [ROLE_SCORE_HUNTER]: runScoreHunter,
   [ROLE_UNCLAIMER]: runUnclaimer,
   [ROLE_TOWNSFOLK]: runTownsfolk,
   [ROLE_MINSTREL]: runMinstrel,

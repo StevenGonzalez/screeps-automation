@@ -349,7 +349,6 @@ declare global {
     observerId?: Id<StructureObserver>;
     powerSpawnId?: Id<StructurePowerSpawn>;
     observerScanQueue?: string[];
-    scoreScanQueue?: string[];
     nukeDefense?: { tiles: Record<string, number>; updatedAt: number };
     nukeAlert?: { count: number; land: number };
     blockade?: {

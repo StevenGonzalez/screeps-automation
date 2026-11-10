@@ -3,7 +3,6 @@ import {
   ROLE_POWER_HEALER,
   ROLE_POWER_CARRIER,
 } from "../config/config.roles";
-import { getScoreScanRooms, scoreHunterSupported } from "./orchestrator.score";
 
 const POWER_BANK_MIN_POWER = 2000;
 const POWER_BANK_MIN_TICKS = 3000;
@@ -16,12 +15,6 @@ const COLLECTING_TIMEOUT = 300;
 const SQUAD_ATTACKERS = 2;
 const SQUAD_HEALERS = 3;
 const OBSERVER_SCAN_RANGE = 10;
-const SCORE_SCAN_RANGE = 5;
-// Fraction of observer ticks handed to highway (power/deposit) scanning while a scoring season is
-// active; the rest go to score discovery. 1-in-5 keeps power banks/deposits visible without
-// starving the score sweep the way an even 50/50 split did.
-const HIGHWAY_SCAN_EVERY = 5;
-const SCORE_SCAN_REBUILD_INTERVAL = 1500;
 const POWER_PROCESS_ENERGY_FLOOR = 100000;
 // Viability estimate for a power bank op. Healers cost more than an RCL7 room
 // can spend, so only RCL8 rooms run them. Attack parts per attacker match the
@@ -51,22 +44,7 @@ function runObserver(room: Room) {
   const observer = Game.getObjectById(room.memory.observerId) as StructureObserver | null;
   if (!observer) { room.memory.observerId = undefined; return; }
 
-  if (scoreHunterSupported() && Game.time % HIGHWAY_SCAN_EVERY !== 0) {
-    if (scanScoreRegion(room, observer)) return;
-  }
   scanHighways(room, observer);
-}
-
-function scanScoreRegion(room: Room, observer: StructureObserver): boolean {
-  let queue = room.memory.scoreScanQueue;
-  if (!queue || queue.length === 0 || Game.time % SCORE_SCAN_REBUILD_INTERVAL === 0) {
-    queue = room.memory.scoreScanQueue = getScoreScanRooms(room.name, SCORE_SCAN_RANGE);
-    if (queue.length === 0) return false;
-  }
-  const target = queue.shift()!;
-  queue.push(target);
-  observer.observeRoom(target);
-  return true;
 }
 
 function scanHighways(room: Room, observer: StructureObserver): void {
