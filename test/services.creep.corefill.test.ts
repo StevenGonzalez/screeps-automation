@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const g = globalThis as Record<string, unknown>;
 
@@ -46,6 +46,25 @@ describe("core fill targets", () => {
     const extension = building("e", "extension", 10);
     expect(findCoreFillTarget(fillerIn([building("t", "tower", 80), extension]))).toBe(extension);
     expect(coreFillSpace(building("s", "spawn", 1) as unknown as AnyStoreStructure)).toBe(1);
+  });
+
+  it("reads no extension's store while the spawns and extensions are full", () => {
+    const read = vi.fn(() => 0);
+    const extension = { id: "e", structureType: "extension", store: { getFreeCapacity: read } };
+    const tower = building("t", "tower", 400);
+    const creep = fillerIn([extension, tower]);
+    Object.assign(creep.room, { energyAvailable: 5600, energyCapacityAvailable: 5600 });
+
+    expect(findCoreFillTarget(creep)).toBe(tower);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("looks at the extensions once any of them has room", () => {
+    const extension = building("e", "extension", 100);
+    const creep = fillerIn([extension]);
+    Object.assign(creep.room, { energyAvailable: 5500, energyCapacityAvailable: 5600 });
+
+    expect(findCoreFillTarget(creep)).toBe(extension);
   });
 
   // The cached target is what held a barmaid at one tower, giving back the ten

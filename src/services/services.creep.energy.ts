@@ -453,11 +453,14 @@ export function coreFillSpace(s: AnyStoreStructure): number {
 // haulers, the filler and builders spread across the core instead of all
 // walking to the same extension.
 export function findCoreFillTarget(creep: Creep): AnyStoreStructure | null {
-  const targets = getRoomStructures(creep.room).filter(
+  // With the spawns and extensions full only a tower can want energy. Reading
+  // every extension's store was the dearest part of a barmaid's idle tick.
+  const room = creep.room;
+  const coreFull = room.energyAvailable >= room.energyCapacityAvailable;
+  const targets = getRoomStructures(room).filter(
     (s): s is AnyStoreStructure =>
-      (s.structureType === STRUCTURE_SPAWN ||
-        s.structureType === STRUCTURE_EXTENSION ||
-        s.structureType === STRUCTURE_TOWER) &&
+      (s.structureType === STRUCTURE_TOWER ||
+        (!coreFull && (s.structureType === STRUCTURE_SPAWN || s.structureType === STRUCTURE_EXTENSION))) &&
       "store" in s &&
       coreFillSpace(s as AnyStoreStructure) > energyClaimedByOthers(s.id, creep)
   );
