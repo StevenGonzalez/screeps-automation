@@ -7531,7 +7531,7 @@ const POWER_SPAWN_POWER_LOW = 50;
 const POWER_SPAWN_ENERGY_STORAGE_FLOOR = 100000;
 const TERMINAL_ENERGY_TARGET = 10000;
 const TERMINAL_ENERGY_DRAIN_SLACK = 5000;
-const TERMINAL_FILL_STORAGE_FLOOR = 20000;
+const TERMINAL_FILL_STORAGE_FLOOR = 5000;
 function runFiller(creep) {
     var _a, _b;
     const storage = creep.room.storage;
