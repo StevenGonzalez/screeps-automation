@@ -4782,13 +4782,19 @@ function findEmptiestTower(room) {
         return null;
     return towers.reduce((a, b) => a.store.getUsedCapacity(RESOURCE_ENERGY) < b.store.getUsedCapacity(RESOURCE_ENERGY) ? a : b);
 }
+const TOWER_TOP_UP_FREE = 250;
+function coreFillSpace(s) {
+    var _a;
+    const free = (_a = s.store.getFreeCapacity(RESOURCE_ENERGY)) !== null && _a !== void 0 ? _a : 0;
+    return s.structureType === STRUCTURE_TOWER && free < TOWER_TOP_UP_FREE ? 0 : free;
+}
 function findCoreFillTarget(creep) {
     var _a;
     const targets = getRoomStructures(creep.room).filter((s) => (s.structureType === STRUCTURE_SPAWN ||
         s.structureType === STRUCTURE_EXTENSION ||
         s.structureType === STRUCTURE_TOWER) &&
         "store" in s &&
-        s.store.getFreeCapacity(RESOURCE_ENERGY) > energyClaimedByOthers(s.id, creep));
+        coreFillSpace(s) > energyClaimedByOthers(s.id, creep));
     if (targets.length === 0)
         return null;
     return (_a = creep.pos.findClosestByPath(targets, { ignoreCreeps: true })) !== null && _a !== void 0 ? _a : null;
@@ -7623,7 +7629,7 @@ function getCoreFillTarget(creep) {
         const cached = Game.getObjectById(cachedId);
         if (cached &&
             ((_a = cached.room) === null || _a === void 0 ? void 0 : _a.name) === creep.room.name &&
-            cached.store.getFreeCapacity(RESOURCE_ENERGY) > 0) {
+            coreFillSpace(cached) > 0) {
             return cached;
         }
         setFillTarget(creep, undefined);
