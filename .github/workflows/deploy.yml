@@ -43,8 +43,3 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Build bundle for ${GITHUB_SHA::7} [skip ci]"
           git push origin HEAD:main
-      # After the bundle is saved: World must not depend on the Season server.
-      - name: Deploy to Season
-        run: |
-          echo '{"token":"${{ secrets.SCREEPS_TOKEN }}","protocol":"https","hostname":"screeps.com","port":443,"path":"/season","branch":"default"}' > screeps.json
-          yarn deploy
